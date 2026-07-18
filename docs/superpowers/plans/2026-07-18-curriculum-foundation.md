@@ -73,7 +73,7 @@ Expected: `main` pushed to origin (this makes `main` a valid PR base on the user
 Invoke `superpowers:using-git-worktrees`. It must first detect whether execution is already isolated and prefer a native worktree tool when available. When the git fallback is needed, verify the existing `.worktrees/` directory is ignored, then run:
 
 ```bash
-git check-ignore -q .worktrees
+git check-ignore -q --no-index .worktrees/
 git worktree add .worktrees/curriculum-foundation -b feature/curriculum-foundation main
 cd .worktrees/curriculum-foundation
 git status --short
