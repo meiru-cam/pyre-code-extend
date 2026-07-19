@@ -2883,6 +2883,454 @@
           "section": "2 Architecture (GLM-4.5 technical report)"
         }
       ]
+    },
+    {
+      "id": "moe_topk_router",
+      "title": "Top-k MoE Router",
+      "titleZh": "Top-k MoE Router",
+      "difficulty": "Medium",
+      "functionName": "moe_topk_router",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Implement token-choice top-k routing.\n\nSignature: 'moe_topk_router(router_logits, k) -> (expert_indices, expert_weights)'\n\n'router_logits' is a floating tensor of shape '(tokens, experts)'. Validate '1 <= k <= experts'. Compute softmax over the expert dimension, select the largest 'k' probabilities independently for each token, and renormalize only the selected probabilities to sum to one. Return long indices and floating weights, both shaped '(tokens, k)', on the input device. Preserve gradient flow from weights to router logits.\n\nThe explicit full softmax makes the selection-probability contract easy to inspect. Some frontier routers use sigmoid scores, group-limited selection, routing biases, or a route scale instead. This exercise is therefore a reusable baseline—not a claim of checkpoint equivalence.\n\nSoftmax is monotone, and normalizing after selection cancels the probability mass assigned to unselected experts. Therefore selecting logits and applying softmax only to those selected logits is numerically equivalent to this contract. The evaluator grades the observable routes and normalized weights; the full-softmax order remains an explanatory baseline for connecting routing probabilities to auxiliary losses.\n\nOptional code reading: start at DeepSeek-V3 'Gate.forward' and Qwen3-MoE 'Qwen3MoeTopKRouter.forward'; compare their score functions and auxiliary objectives after your implementation if useful.",
+      "descriptionZh": "Implement token-choice top-k routing.\n\nSignature: 'moe_topk_router(router_logits, k) -> (expert_indices, expert_weights)'\n\n'router_logits' is a floating tensor of shape '(tokens, experts)'. Validate '1 <= k <= experts'. Compute softmax over the expert dimension, select the largest 'k' probabilities independently for each token, and renormalize only the selected probabilities to sum to one. Return long indices and floating weights, both shaped '(tokens, k)', on the input device. Preserve gradient flow from weights to router logits.\n\nThe explicit full softmax makes the selection-probability contract easy to inspect. Some frontier routers use sigmoid scores, group-limited selection, routing biases, or a route scale instead. This exercise is therefore a reusable baseline—not a claim of checkpoint equivalence.\n\nSoftmax is monotone, and normalizing after selection cancels the probability mass assigned to unselected experts. Therefore selecting logits and applying softmax only to those selected logits is numerically equivalent to this contract. The evaluator grades the observable routes and normalized weights; the full-softmax order remains an explanatory baseline for connecting routing probabilities to auxiliary losses.\n\nOptional code reading: start at DeepSeek-V3 'Gate.forward' and Qwen3-MoE 'Qwen3MoeTopKRouter.forward'; compare their score functions and auxiliary objectives after your implementation if useful.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Hand-calculated selection and normalization",
+          "code": "\nimport torch\nlogits = torch.tensor([[0.0, 1.0, 2.0], [3.0, 1.0, 2.0]], dtype=torch.float64)\nindices, weights = {fn}(logits, 2)\nprobs = torch.softmax(logits, dim=-1)\nexpected_values, expected_indices = torch.topk(probs, 2, dim=-1)\nexpected_values = expected_values / expected_values.sum(-1, keepdim=True)\nassert torch.equal(indices, expected_indices)\nassert torch.allclose(weights, expected_values, atol=1e-12)\n",
+          "behavior": "routing.selection"
+        },
+        {
+          "name": "Rejects invalid k",
+          "code": "\nimport torch\nfor k in (0, 4, -1):\n    try:\n        {fn}(torch.randn(2, 3), k)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError('invalid k must raise ValueError')\n",
+          "behavior": "edge.empty_or_boundary"
+        },
+        {
+          "name": "Independent seeded oracle and structure",
+          "visibility": "unshown",
+          "behavior": "routing.normalization"
+        },
+        {
+          "name": "Each token has its own route and ties follow torch topk",
+          "visibility": "unshown",
+          "behavior": "routing.selection"
+        },
+        {
+          "name": "Selected weights retain router gradients",
+          "visibility": "unshown",
+          "behavior": "training.router_gradient"
+        },
+        {
+          "name": "Expert permutation preserves selected meanings",
+          "visibility": "unshown",
+          "behavior": "state.invariant"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which dimension represents experts? Is each token routed independently? After discarding experts, do the retained probabilities still sum to one?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Apply softmax on dim=-1, use topk on that same dimension, then divide each retained weight row by its own sum. Return topk's indices first and do not detach the weights."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "softmax",
+        "moe",
+        "moe_load_balance"
+      ],
+      "modelConnections": [
+        "DeepSeek-V3 Gate.forward implements group-limited top-k routing with softmax or sigmoid scores, optional routing bias, and route scaling; unlike this exercise, its softmax branch does not renormalize the selected weights.",
+        "Kimi K2 is an MoE with 384 experts, 8 selected experts per token, and a shared expert; SGLang's Kimi-compatible DeepseekV2MoE wires router logits into configurable grouped TopK and fused expert backends.",
+        "GLM-4.5's Transformers implementation uses Glm4MoeTopkRouter for group-limited selection, optional normalization, routing scale, and Glm4MoeMoE expert execution.",
+        "Qwen3-MoE computes router logits, softmax routing weights, and top-k experts, and can normalize selected weights when norm_topk_prob is enabled."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Activates only k experts per token, making conditional capacity much larger than dense compute.",
+          "Normalized selected gates give an interpretable convex mixture and differentiable gate values."
+        ],
+        "cons": [
+          "Hard top-k indices are discontinuous and receive no ordinary gradient through the selection decision.",
+          "Token-choice routing can overload popular experts and requires balancing or capacity policy.",
+          "A full softmax over all experts can be more expensive than specialized grouped or sigmoid routers."
+        ]
+      },
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/deepseek-ai/DeepSeek-V3",
+          "commit": "9b4e9788e4a3a731f7567338ed15d3ec549ce03b",
+          "path": "inference/model.py",
+          "symbol": "Gate.forward",
+          "license": "MIT",
+          "adapted": "Per-token scoring, top-k expert indices, selected routing weights, and optional renormalization.",
+          "simplifications": "Softmax only; no grouped selection, sigmoid branch, routing bias, route scale, shared experts, or expert parallelism."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/huggingface/transformers",
+          "commit": "7ea2320c76117e6742364808a666ef6f2fb40a67",
+          "path": "src/transformers/models/qwen3_moe/modeling_qwen3_moe.py",
+          "symbol": "Qwen3MoeTopKRouter.forward and Qwen3MoeSparseMoeBlock.forward",
+          "license": "Apache-2.0",
+          "adapted": "Softmax, per-token top-k selection, and selected-weight normalization boundary.",
+          "simplifications": "Standalone logits function with no router projection, expert module, shared expert, padding mask, or fused kernels."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/MoonshotAI/Kimi-K2",
+          "commit": "1b4022bbb7187cf4011a8bdf0b4cd10e2daa26c4",
+          "path": "docs/deploy_guidance.md",
+          "symbol": "expert-parallel deployment options",
+          "license": "Modified MIT",
+          "adapted": "Production context for expert-parallel routing and dispatch.",
+          "simplifications": "No distributed runtime or Kimi checkpoint-compatible router."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/sgl-project/sglang",
+          "commit": "d4801be447738522d2c62b49857c83787293be6f",
+          "path": "python/sglang/srt/models/deepseek_v2.py",
+          "symbol": "MoEGate.forward and DeepseekV2MoE.__init__/forward",
+          "license": "Apache-2.0",
+          "adapted": "The Kimi-compatible runtime boundary from router GEMM through configurable grouped TopK into fused experts.",
+          "simplifications": "No quantization, fused kernels, shared-expert fusion, expert parallelism, or device-specific routing backends."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/huggingface/transformers",
+          "commit": "7ea2320c76117e6742364808a666ef6f2fb40a67",
+          "path": "src/transformers/models/glm4_moe/modeling_glm4_moe.py",
+          "symbol": "Glm4MoeTopkRouter.forward and Glm4MoeMoE.forward",
+          "license": "Apache-2.0",
+          "adapted": "Group-limited top-k selection, optional selected-weight normalization, route scaling, and the router-to-expert API.",
+          "simplifications": "No router projection, group restriction, correction bias, shared experts, or model wrapper."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2412.19437",
+          "section": "2.1 Basic Architecture"
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2505.09388",
+          "section": "2.1 Model Architecture"
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2507.20534",
+          "section": "2.3 Model Architecture"
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2508.06471",
+          "section": "2.1 Architecture"
+        }
+      ]
+    },
+    {
+      "id": "moe_capacity_dispatch",
+      "title": "Capacity-aware MoE Dispatch",
+      "titleZh": "Capacity-aware MoE Dispatch",
+      "difficulty": "Hard",
+      "functionName": "moe_capacity_dispatch",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Implement sparse dispatch, expert execution, and weighted gather.\n\nSignature: 'moe_capacity_dispatch(x, expert_indices, expert_weights, experts, capacity) -> (output, stats)'\n\n'x' has shape '(tokens, d_model)'; both route tensors have shape '(tokens, k)'. 'experts' is an ordered sequence of modules mapping '(n, d_model)' to the same shape. Consider assignments in token-major, then route-slot order. Each expert accepts at most its own non-negative integer 'capacity'; later overflow assignments are dropped. Batch all accepted rows for one expert into one call, multiply its results by route weights, and add every accepted route back to its original token. Return one output row per input token plus:\n\n'{\"accepted\": int, \"dropped\": int, \"loads\": list[int]}'\n\nThis is a dropping capacity policy. A common capacity-factor conversion is 'capacity = ceil(capacity_factor * tokens * k / num_experts)': factor 1.0 allocates the average balanced load, while larger values trade padding/memory for fewer drops. Dropless systems keep all assignments but face irregular load and communication; fixed-capacity padding makes collective shapes regular but wastes compute; dropping bounds work but can lose token signal. Utilization should be read as each load divided by capacity alongside the drop rate. Real expert-parallel runtimes also exchange tokens across devices and often fuse sorting, all-to-all, expert kernels, and gather.\n\nShared experts are a separate always-on branch in models such as DeepSeek and Kimi. They are intentionally absent from this function's routed 'experts' list and from its accepted/dropped/load statistics.\n\nOptional code reading: DeepSeek-V3 'MoE.forward' shows routed and shared experts; Qwen3-MoE's sparse block shows expert masking and indexed accumulation. The exercise makes capacity and sparse-call behavior more explicit than either inference loop.",
+      "descriptionZh": "Implement sparse dispatch, expert execution, and weighted gather.\n\nSignature: 'moe_capacity_dispatch(x, expert_indices, expert_weights, experts, capacity) -> (output, stats)'\n\n'x' has shape '(tokens, d_model)'; both route tensors have shape '(tokens, k)'. 'experts' is an ordered sequence of modules mapping '(n, d_model)' to the same shape. Consider assignments in token-major, then route-slot order. Each expert accepts at most its own non-negative integer 'capacity'; later overflow assignments are dropped. Batch all accepted rows for one expert into one call, multiply its results by route weights, and add every accepted route back to its original token. Return one output row per input token plus:\n\n'{\"accepted\": int, \"dropped\": int, \"loads\": list[int]}'\n\nThis is a dropping capacity policy. A common capacity-factor conversion is 'capacity = ceil(capacity_factor * tokens * k / num_experts)': factor 1.0 allocates the average balanced load, while larger values trade padding/memory for fewer drops. Dropless systems keep all assignments but face irregular load and communication; fixed-capacity padding makes collective shapes regular but wastes compute; dropping bounds work but can lose token signal. Utilization should be read as each load divided by capacity alongside the drop rate. Real expert-parallel runtimes also exchange tokens across devices and often fuse sorting, all-to-all, expert kernels, and gather.\n\nShared experts are a separate always-on branch in models such as DeepSeek and Kimi. They are intentionally absent from this function's routed 'experts' list and from its accepted/dropped/load statistics.\n\nOptional code reading: DeepSeek-V3 'MoE.forward' shows routed and shared experts; Qwen3-MoE's sparse block shows expert masking and indexed accumulation. The exercise makes capacity and sparse-call behavior more explicit than either inference loop.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Token-major capacity and weighted accumulation",
+          "code": "\nimport torch\nimport torch.nn as nn\ndef expert(scale):\n    layer=nn.Linear(2,2,bias=False)\n    with torch.no_grad(): layer.weight.copy_(torch.eye(2)*scale)\n    return layer\nx=torch.tensor([[1.,2.],[3.,4.]])\nindices=torch.tensor([[0,1],[0,1]])\nweights=torch.tensor([[.75,.25],[.4,.6]])\nout,stats={fn}(x,indices,weights,[expert(1.),expert(10.)],capacity=1)\nassert torch.allclose(out,torch.tensor([[3.25,6.5],[0.,0.]]))\nassert stats=={'accepted':2,'dropped':2,'loads':[1,1]}\n",
+          "behavior": "capacity.overflow"
+        },
+        {
+          "name": "Capacity zero drops all work",
+          "code": "\nimport torch\nimport torch.nn as nn\nclass FailsIfCalled(nn.Module):\n    def forward(self,x): raise AssertionError('unused expert was called')\nx=torch.randn(3,4)\nout,stats={fn}(x,torch.zeros(3,1,dtype=torch.long),torch.ones(3,1),[FailsIfCalled()],0)\nassert torch.equal(out,torch.zeros_like(x))\nassert stats=={'accepted':0,'dropped':3,'loads':[0]}\n",
+          "behavior": "edge.empty_or_boundary"
+        },
+        {
+          "name": "Independent dense oracle and token conservation",
+          "visibility": "unshown",
+          "behavior": "dispatch.token_conservation"
+        },
+        {
+          "name": "Only used experts run, once each",
+          "visibility": "unshown",
+          "behavior": "experts.sparsity"
+        },
+        {
+          "name": "Gradients reach accepted experts and gates only",
+          "visibility": "unshown",
+          "behavior": "gradient.flow"
+        },
+        {
+          "name": "Expert permutation preserves output and statistics meaning",
+          "visibility": "unshown",
+          "behavior": "state.invariant"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Is capacity global or per expert? In what order do assignments consume it? Can one token receive output from multiple accepted routes? Which experts should never be called?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "First scan token then slot, recording accepted (token, slot) pairs in one list per expert and updating per-expert loads. For each non-empty list, index-select its token batch, call that expert once, multiply by matching gate weights, and index_add results to output."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "moe",
+        "moe_topk_router"
+      ],
+      "modelConnections": [
+        "DeepSeek-V3 MoE.forward selects routed experts, executes only locally hosted experts, sums routed results, and adds always-on shared-expert output.",
+        "Qwen3-MoE builds per-expert token masks, executes experts on selected token rows, weights them, and index-adds them into final hidden states.",
+        "Kimi K2 deployment exposes DeepEP and expert-parallel controls; SGLang's Kimi-compatible DeepseekV2MoE connects TopK output to fused/shared expert execution.",
+        "GLM-4.5's Glm4MoeExperts and Glm4MoeMoE implement selected-token expert execution, weighted gather, and a shared-expert branch."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Per-expert capacity bounds worst-case expert compute and communication.",
+          "One batched call per used expert preserves sparse execution while avoiding per-token kernel launches.",
+          "Explicit statistics make overflow and utilization observable during tests and training."
+        ],
+        "cons": [
+          "Dropping overflow routes loses model signal and can bias training toward early assignments.",
+          "Token-major acceptance is deterministic but may be less fair than prioritized or randomized policies.",
+          "Python indexing and materialized route lists do not represent fused distributed production performance."
+        ]
+      },
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/deepseek-ai/DeepSeek-V3",
+          "commit": "9b4e9788e4a3a731f7567338ed15d3ec549ce03b",
+          "path": "inference/model.py",
+          "symbol": "MoE.forward",
+          "license": "MIT",
+          "adapted": "Sparse expert selection/execution, weighted gather, and shared-expert contrast.",
+          "simplifications": "Single process, no shared expert, no expert ownership, no all-reduce, and an explicit dropping capacity."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/huggingface/transformers",
+          "commit": "7ea2320c76117e6742364808a666ef6f2fb40a67",
+          "path": "src/transformers/models/qwen3_moe/modeling_qwen3_moe.py",
+          "symbol": "Qwen3MoeSparseMoeBlock.forward",
+          "license": "Apache-2.0",
+          "adapted": "Per-expert token selection, weighted expert outputs, and index_add gather.",
+          "simplifications": "No shared expert/gate, sequence flattening, compiler accommodation, or model wrapper."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/MoonshotAI/Kimi-K2",
+          "commit": "1b4022bbb7187cf4011a8bdf0b4cd10e2daa26c4",
+          "path": "docs/deploy_guidance.md",
+          "symbol": "DeepEP and expert-parallel launch options",
+          "license": "Modified MIT",
+          "adapted": "System context for dynamic expert-parallel dispatch and load balancing.",
+          "simplifications": "Local deterministic tensors with no collective communication or placement."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/sgl-project/sglang",
+          "commit": "d4801be447738522d2c62b49857c83787293be6f",
+          "path": "python/sglang/srt/models/deepseek_v2.py",
+          "symbol": "DeepseekV2MoE.__init__ and forward",
+          "license": "Apache-2.0",
+          "adapted": "Kimi-compatible TopK-to-fused-expert dispatch and explicit shared-expert fusion choices.",
+          "simplifications": "No fused kernel, quantization, expert parallel collective, redundant placement, or shared expert."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/huggingface/transformers",
+          "commit": "7ea2320c76117e6742364808a666ef6f2fb40a67",
+          "path": "src/transformers/models/glm4_moe/modeling_glm4_moe.py",
+          "symbol": "Glm4MoeExperts.forward and Glm4MoeMoE.forward",
+          "license": "Apache-2.0",
+          "adapted": "Selected-token expert execution, weighted index-add gather, and routed/shared branch composition.",
+          "simplifications": "Adds explicit dropping capacity and omits shared experts, routing groups, and the transformer block."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2101.03961",
+          "section": "2.2 Improved Training and Inference Efficiency"
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2405.04434",
+          "section": "2.1.2 Device-Limited Routing"
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2507.20534",
+          "section": "2.4.2 Parallelism for Model Scaling"
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2508.06471",
+          "section": "2.1 Architecture"
+        }
+      ]
+    },
+    {
+      "id": "tiny_moe_train_step",
+      "title": "Train a TinyMoE Router and Experts",
+      "titleZh": "Train a TinyMoE Router and Experts",
+      "difficulty": "Hard",
+      "functionName": "tiny_moe_train_step",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Implement one complete MoE training step.\n\nSignature: 'tiny_moe_train_step(model, optimizer, x, targets, balance_weight=0.01, z_weight=0.001) -> dict'\n\n'model(x)' returns '(logits, router_logits)', with router logits shaped '(tokens, experts)'. Compute:\n\n- 'task_loss = cross_entropy(logits, targets)'\n- 'importance = softmax(router_logits, -1).mean(0)'\n- 'balance_loss = num_experts * sum(importance ** 2)'\n- 'z_loss = mean(logsumexp(router_logits, -1) ** 2)'\n- 'loss = task_loss + balance_weight * balance_loss + z_weight * z_loss'\n\nCall 'optimizer.zero_grad()', forward once, backward on the total loss once, and 'optimizer.step()' once. Return exactly 'loss', 'task_loss', 'balance_loss', and 'z_loss' as detached scalar tensors.\n\nHow routing learns: task gradients reach selected gate values and expert computation in a sparse model; the soft importance penalty provides a differentiable pressure against probability collapse; router z-loss discourages excessively large logits. Hard top-k index changes themselves are not ordinarily differentiable. Production systems additionally use token-count objectives, routing bias updates, noisy routing, capacity policy, expert-parallel collectives, and extensive utilization telemetry. A falling total loss alone does not prove healthy routing: inspect per-expert load, drops, gate entropy, specialization, and task quality.\n\nOptional code reading: Qwen3-MoE's causal-LM forward integrates router auxiliary loss with the task loss. DeepSeek-V3 documents auxiliary-loss-free bias-based balancing, which is deliberately different from this exercise.",
+      "descriptionZh": "Implement one complete MoE training step.\n\nSignature: 'tiny_moe_train_step(model, optimizer, x, targets, balance_weight=0.01, z_weight=0.001) -> dict'\n\n'model(x)' returns '(logits, router_logits)', with router logits shaped '(tokens, experts)'. Compute:\n\n- 'task_loss = cross_entropy(logits, targets)'\n- 'importance = softmax(router_logits, -1).mean(0)'\n- 'balance_loss = num_experts * sum(importance ** 2)'\n- 'z_loss = mean(logsumexp(router_logits, -1) ** 2)'\n- 'loss = task_loss + balance_weight * balance_loss + z_weight * z_loss'\n\nCall 'optimizer.zero_grad()', forward once, backward on the total loss once, and 'optimizer.step()' once. Return exactly 'loss', 'task_loss', 'balance_loss', and 'z_loss' as detached scalar tensors.\n\nHow routing learns: task gradients reach selected gate values and expert computation in a sparse model; the soft importance penalty provides a differentiable pressure against probability collapse; router z-loss discourages excessively large logits. Hard top-k index changes themselves are not ordinarily differentiable. Production systems additionally use token-count objectives, routing bias updates, noisy routing, capacity policy, expert-parallel collectives, and extensive utilization telemetry. A falling total loss alone does not prove healthy routing: inspect per-expert load, drops, gate entropy, specialization, and task quality.\n\nOptional code reading: Qwen3-MoE's causal-LM forward integrates router auxiliary loss with the task loss. DeepSeek-V3 documents auxiliary-loss-free bias-based balancing, which is deliberately different from this exercise.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Loss formulas and detached metric contract",
+          "code": "\nimport torch\nimport torch.nn as nn\nimport torch.nn.functional as F\nclass FixedModel(nn.Module):\n    def __init__(self):\n        super().__init__()\n        self.logits=nn.Parameter(torch.tensor([[2.,0.,-1.],[0.,1.,3.]]))\n        self.router=nn.Parameter(torch.tensor([[1.,0.],[2.,-1.]]))\n    def forward(self,x): return self.logits,self.router\nmodel=FixedModel(); optimizer=torch.optim.SGD(model.parameters(),lr=0.0)\ntargets=torch.tensor([0,2])\nbefore_logits=model.logits.detach().clone(); before_router=model.router.detach().clone()\ntask=F.cross_entropy(before_logits,targets)\nimportance=torch.softmax(before_router,-1).mean(0)\nbalance=2*importance.square().sum()\nz=torch.logsumexp(before_router,-1).square().mean()\nexpected=task+.2*balance+.03*z\nmetrics={fn}(model,optimizer,torch.empty(2,0),targets,.2,.03)\nassert set(metrics)=={'loss','task_loss','balance_loss','z_loss'}\nfor value in metrics.values():\n    assert isinstance(value,torch.Tensor) and value.ndim==0 and not value.requires_grad\nassert torch.allclose(metrics['task_loss'],task)\nassert torch.allclose(metrics['balance_loss'],balance)\nassert torch.allclose(metrics['z_loss'],z)\nassert torch.allclose(metrics['loss'],expected)\n",
+          "behavior": "training.load_balance"
+        },
+        {
+          "name": "Exactly one zero, backward update, and step",
+          "code": "\nimport torch\nimport torch.nn as nn\nclass CountingSGD(torch.optim.SGD):\n    def __init__(self,params,lr): super().__init__(params,lr=lr); self.zero_calls=0; self.step_calls=0\n    def zero_grad(self,*args,**kwargs): self.zero_calls+=1; return super().zero_grad(*args,**kwargs)\n    def step(self,*args,**kwargs): self.step_calls+=1; return super().step(*args,**kwargs)\nclass Model(nn.Module):\n    def __init__(self):\n        super().__init__(); self.trunk=nn.Linear(3,3,bias=False); self.head=nn.Linear(3,2,bias=False); self.router=nn.Linear(3,2,bias=False); self.forward_calls=0; self.backward_calls=0\n        def count_backward(gradient):\n            self.backward_calls+=1\n            return gradient\n        self.trunk.weight.register_hook(count_backward)\n    def forward(self,x):\n        self.forward_calls+=1; hidden=self.trunk(x); return self.head(hidden),self.router(hidden)\ntorch.manual_seed(59)\nmodel=Model(); optimizer=CountingSGD(model.parameters(),.05)\nx=torch.randn(4,3); targets=torch.tensor([0,1,1,0])\nbefore=[p.detach().clone() for p in model.parameters()]\n{fn}(model,optimizer,x,targets)\nassert model.forward_calls==1 and model.backward_calls==1\nassert optimizer.zero_calls==1 and optimizer.step_calls==1\nassert all(p.grad is not None for p in model.parameters())\nassert any(not torch.equal(old,p) for old,p in zip(before,model.parameters()))\n",
+          "behavior": "contract.signature"
+        },
+        {
+          "name": "Exact parameter delta matches independent PyTorch step",
+          "visibility": "unshown",
+          "behavior": "training.router_gradient"
+        },
+        {
+          "name": "Router and expert gradients remain observable",
+          "visibility": "unshown",
+          "behavior": "gradient.flow"
+        },
+        {
+          "name": "Seeded tiny domains train repeatably",
+          "visibility": "unshown",
+          "behavior": "state.invariant"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which terms must remain attached when total loss is built? Over which dimension is expert importance averaged? When should old gradients be cleared, and how many optimizer updates belong to one training step?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Clear gradients, run the model, compute cross entropy, mean softmax probability per expert, E times its squared sum, and mean squared logsumexp. Backpropagate their weighted sum, step once, then detach each scalar only while constructing the metrics dictionary."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "cross_entropy",
+        "moe_topk_router",
+        "moe_capacity_dispatch",
+        "moe_load_balance",
+        "adam"
+      ],
+      "modelConnections": [
+        "Qwen3-MoE adds a router load-balancing auxiliary loss to language-model loss during training when router logits are requested.",
+        "DeepSeek-V3 replaces a conventional global auxiliary objective with auxiliary-loss-free routing-bias updates plus a small sequence-wise balance term; this exercise intentionally teaches the simpler differentiable baseline.",
+        "Kimi K2 reports large-scale MoE pretraining with MuonClip stability work, while SGLang's Kimi-compatible runtime makes its grouped routing and expert execution boundaries inspectable.",
+        "GLM-4.5's implementation exposes router logits and sparse/shared MoE composition; its training report shows why specialization also depends on data mixture and distributed optimization."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "One explicit step exposes how task, balancing, and stability gradients combine.",
+          "Soft importance balancing is fully differentiable and has a clear uniform minimum of one.",
+          "Exact optimizer-delta tests verify training behavior rather than accepting plausible metric output."
+        ],
+        "cons": [
+          "Soft probability balance does not guarantee equal hard top-k loads or prevent capacity overflow.",
+          "The z-loss target depends on router parameterization and its coefficient needs tuning.",
+          "A single local step omits expert parallelism, mixed precision, accumulation, clipping, scheduling, and checkpoint state."
+        ]
+      },
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/huggingface/transformers",
+          "commit": "7ea2320c76117e6742364808a666ef6f2fb40a67",
+          "path": "src/transformers/models/qwen3_moe/modeling_qwen3_moe.py",
+          "symbol": "load_balancing_loss_func and Qwen3MoeForCausalLM.forward",
+          "license": "Apache-2.0",
+          "adapted": "Router probability balancing and integration of an auxiliary router term with task loss.",
+          "simplifications": "A standalone single-step function and soft-importance-square objective instead of Qwen's top-k token-frequency product."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/deepseek-ai/DeepSeek-V3",
+          "commit": "9b4e9788e4a3a731f7567338ed15d3ec549ce03b",
+          "path": "inference/model.py",
+          "symbol": "Gate.forward and MoE.forward",
+          "license": "MIT",
+          "adapted": "Separation between router logits/scores, routed expert computation, and weighted combination.",
+          "simplifications": "Training-only losses absent from the inference file are specified independently from cited papers."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/MoonshotAI/Kimi-K2",
+          "commit": "1b4022bbb7187cf4011a8bdf0b4cd10e2daa26c4",
+          "path": "README.md",
+          "symbol": "Large-Scale Training and MuonClip sections",
+          "license": "Modified MIT",
+          "adapted": "Context that optimizer stability and MoE training must be evaluated together at scale.",
+          "simplifications": "Plain optimizer API with no Muon, clipping, distributed state, or mixed precision."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/sgl-project/sglang",
+          "commit": "d4801be447738522d2c62b49857c83787293be6f",
+          "path": "python/sglang/srt/models/deepseek_v2.py",
+          "symbol": "MoEGate and DeepseekV2MoE",
+          "license": "Apache-2.0",
+          "adapted": "Inspectable Kimi-compatible router, TopK, fused expert, and shared-expert runtime boundaries.",
+          "simplifications": "The exercise trains a tiny local model and does not reproduce this inference runtime or its kernels."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/huggingface/transformers",
+          "commit": "7ea2320c76117e6742364808a666ef6f2fb40a67",
+          "path": "src/transformers/models/glm4_moe/modeling_glm4_moe.py",
+          "symbol": "Glm4MoeTopkRouter.forward and Glm4MoeMoE.forward",
+          "license": "Apache-2.0",
+          "adapted": "The router's explicit logits output and the separation between sparse routed experts and the shared branch.",
+          "simplifications": "The exercise exposes router logits to its loss directly and omits the transformer, shared expert, grouped sigmoid router, and distributed optimizer."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2202.08906",
+          "section": "2.4 Router z-loss"
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2412.19437",
+          "section": "2.2.2 Auxiliary-Loss-Free Load Balancing"
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2507.20534",
+          "section": "2.1 MuonClip and 2.5 Training recipe"
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2508.06471",
+          "section": "2 Pre-Training"
+        }
+      ]
     }
   ]
 }

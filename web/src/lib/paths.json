@@ -91,6 +91,16 @@
       "prerequisites": ["attention-position"]
     },
     {
+      "id": "moe-training",
+      "titleEn": "MoE Architecture and Training",
+      "titleZh": "MoE Architecture and Training",
+      "descriptionEn": "Implement token-choice routing, capacity-aware sparse dispatch, and a complete TinyMoE training step; connect utilization and stability tradeoffs to pinned DeepSeek, Kimi, GLM, and Qwen code.",
+      "descriptionZh": "Implement token-choice routing, capacity-aware sparse dispatch, and a complete TinyMoE training step; connect utilization and stability tradeoffs to pinned DeepSeek, Kimi, GLM, and Qwen code.",
+      "icon": "Network",
+      "problems": ["moe", "moe_load_balance", "moe_topk_router", "moe_capacity_dispatch", "tiny_moe_train_step"],
+      "prerequisites": ["transformer-internals"]
+    },
+    {
       "id": "graph-neural-networks",
       "titleEn": "Graph Neural Networks",
       "titleZh": "图神经网络",
