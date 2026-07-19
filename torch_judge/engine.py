@@ -6,6 +6,7 @@ import time
 import traceback
 from typing import Any
 
+from torch_judge.harness import HarnessFailure
 from torch_judge.tasks import get_task, TASKS
 from torch_judge.progress import mark_solved, mark_attempted
 
@@ -15,6 +16,16 @@ _RED = "\033[91m"
 _YELLOW = "\033[93m"
 _DIM = "\033[90m"
 _BOLD = "\033[1m"
+
+
+def _reported_failure(test: dict[str, Any], raw_message: str) -> str:
+    if test.get("visibility", "visible") != "unshown":
+        return raw_message
+    return test.get("failure_message") or (
+        f"Behavior check failed: {test['behavior']}"
+        if test.get("behavior")
+        else "Evaluator case failed."
+    )
 
 
 def _get_user_namespace() -> dict[str, Any]:
@@ -76,18 +87,31 @@ def check(task_id: str) -> None:
             total_time += elapsed
             passed += 1
             print(f"  {_GREEN}✅ [{i}/{total}] {test['name']}{_RESET} {_DIM}({elapsed*1000:.1f}ms){_RESET}")
+        except HarnessFailure as error:
+            print(f"  {_RED}💥 Evaluator harness failure{_RESET}")
+            print(f"     {_RED}{error}{_RESET}")
+            print(f"{'─' * 50}")
+            print(f"  {_YELLOW}This attempt was not graded. Please report the evaluator issue.{_RESET}\n")
+            return
         except AssertionError as e:
             elapsed = time.perf_counter() - t0
-            msg = str(e) or "Assertion failed"
+            msg = _reported_failure(test, str(e) or "Assertion failed")
             print(f"  {_RED}❌ [{i}/{total}] {test['name']}{_RESET}")
+            if test.get("visibility") == "unshown" and test.get("behavior"):
+                print(f"     {_DIM}Behavior: {test['behavior']}{_RESET}")
             print(f"     {_RED}{msg}{_RESET}")
         except Exception as e:
             elapsed = time.perf_counter() - t0
             print(f"  {_RED}💥 [{i}/{total}] {test['name']}{_RESET}")
-            print(f"     {_RED}{type(e).__name__}: {e}{_RESET}")
-            tb = traceback.format_exc()
-            short_tb = "\n".join(tb.strip().split("\n")[-3:])
-            print(f"     {_DIM}{short_tb}{_RESET}")
+            if test.get("visibility") == "unshown":
+                if test.get("behavior"):
+                    print(f"     {_DIM}Behavior: {test['behavior']}{_RESET}")
+                print(f"     {_RED}{_reported_failure(test, str(e))}{_RESET}")
+            else:
+                print(f"     {_RED}{type(e).__name__}: {e}{_RESET}")
+                tb = traceback.format_exc()
+                short_tb = "\n".join(tb.strip().split("\n")[-3:])
+                print(f"     {_DIM}{short_tb}{_RESET}")
 
     print(f"{'─' * 50}")
 

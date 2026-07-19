@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/Badge';
 import { useLocale } from '@/context/LocaleContext';
 import { getHintLevels } from '@/lib/hints';
 import type { Problem } from '@/lib/types';
+import { ProblemInformation } from './ProblemInformation';
 
 function parseInline(text: string): (string | JSX.Element)[] {
   const parts: (string | JSX.Element)[] = [];
@@ -82,6 +83,8 @@ export function DescriptionTab({ problem }: DescriptionTabProps) {
       {description && (
         <div className="space-y-1">{renderDescription(description)}</div>
       )}
+
+      <ProblemInformation problem={problem} />
 
       {hintLevels.length > 0 ? (
         <div className="space-y-3">

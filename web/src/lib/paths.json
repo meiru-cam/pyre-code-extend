@@ -81,6 +81,16 @@
       "prerequisites": []
     },
     {
+      "id": "advanced-attention",
+      "titleEn": "Advanced Attention in Frontier Models",
+      "titleZh": "Advanced Attention in Frontier Models",
+      "descriptionEn": "Implement QK normalization, hybrid local/global masking, and a configurable GQA attention block; connect each tradeoff to pinned Qwen, Llama, Gemma, Mistral, Kimi, and GLM sources.",
+      "descriptionZh": "Implement QK normalization, hybrid local/global masking, and a configurable GQA attention block; connect each tradeoff to pinned Qwen, Llama, Gemma, Mistral, Kimi, and GLM sources.",
+      "icon": "ScanEye",
+      "problems": ["gqa", "sliding_window", "qk_norm", "hybrid_attention_schedule", "mla", "frontier_attention_block"],
+      "prerequisites": ["attention-position"]
+    },
+    {
       "id": "graph-neural-networks",
       "titleEn": "Graph Neural Networks",
       "titleZh": "图神经网络",
