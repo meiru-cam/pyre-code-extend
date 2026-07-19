@@ -101,11 +101,31 @@ def check(task_id: str) -> None:
         print(f"  {_DIM}Keep going! Use hint(\"{task_id}\") if you're stuck.{_RESET}\n")
 
 
-def hint(task_id: str) -> None:
-    """Show a hint for the given task."""
+def hint(task_id: str, level: int | None = None) -> None:
+    """Show a hint. New-style tasks have independent levels."""
     task = get_task(task_id)
     if task is None:
         print(f"{_RED}Unknown task '{task_id}'.{_RESET}")
+        return
+    hints = task.get("hints")
+    if hints:
+        chosen = 1 if level is None else level
+        match = next((item for item in hints if item["level"] == chosen), None)
+        if match is None:
+            available = ", ".join(
+                str(item["level"]) for item in sorted(hints, key=lambda item: item["level"])
+            )
+            print(
+                f"{_YELLOW}No level {chosen} hint for '{task_id}'. "
+                f"Available levels: {available}{_RESET}"
+            )
+            return
+        label = "Guiding questions" if match["kind"] == "questions" else "Analysis"
+        print(
+            f"\n{_YELLOW}💡 Hint (level {match['level']} — {label}) "
+            f"for {task['title']}:{_RESET}"
+        )
+        print(f"   {match['content']}\n")
         return
     print(f"\n{_YELLOW}💡 Hint for {task['title']}:{_RESET}")
     print(f"   {task['hint']}\n")
