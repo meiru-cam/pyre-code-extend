@@ -14,7 +14,7 @@ import time
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from torch_judge.tasks import get_task
 
@@ -28,6 +28,12 @@ _stdout_lock = threading.Lock()
 # ---------------------------------------------------------------------------
 
 _DB_PATH = os.environ.get("DB_PATH", str(Path(__file__).parent.parent / "data" / "pyre.db"))
+
+
+def _ensure_column(conn: sqlite3.Connection, table: str, column: str, decl: str) -> None:
+    columns = [row[1] for row in conn.execute(f"PRAGMA table_info({table})")]
+    if column not in columns:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
 
 
 def _get_db() -> sqlite3.Connection:
@@ -67,6 +73,28 @@ def _get_db() -> sqlite3.Connection:
             FOREIGN KEY (user_id) REFERENCES users(id)
         )
     """)
+    _ensure_column(conn, "progress", "contract_version", "INTEGER NOT NULL DEFAULT 1")
+    _ensure_column(conn, "submissions", "contract_version", "INTEGER NOT NULL DEFAULT 1")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS progress_revisions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            task_id TEXT NOT NULL,
+            contract_version INTEGER NOT NULL,
+            status TEXT NOT NULL CHECK (status IN ('todo', 'attempted', 'solved')),
+            best_time_ms REAL,
+            attempts INTEGER DEFAULT 0,
+            solved_at TEXT,
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            UNIQUE(user_id, task_id, contract_version)
+        )
+    """)
+    conn.execute("""
+        INSERT OR IGNORE INTO progress_revisions
+            (user_id, task_id, contract_version, status, best_time_ms, attempts, solved_at)
+        SELECT user_id, task_id, contract_version, status, best_time_ms, attempts, solved_at
+        FROM progress
+    """)
     conn.commit()
     return conn
 
@@ -88,6 +116,9 @@ class TestResult(BaseModel):
     execTimeMs: float
     error: str | None = None
     output: str | None = None
+    behavior: str | None = None
+    visibility: str = "visible"
+    testIndex: int
 
 
 class GradeResponse(BaseModel):
@@ -119,6 +150,22 @@ def _validate_code(code: str) -> str | None:
     return None
 
 
+def _finalize_result(result: TestResult, test: dict, test_index: int) -> TestResult:
+    """Attach behavior metadata and mask unshown-case details."""
+    result.behavior = test.get("behavior")
+    result.visibility = test.get("visibility", "visible")
+    result.testIndex = test_index
+    if result.visibility == "unshown":
+        result.output = None
+        if not result.passed:
+            result.error = test.get("failure_message") or (
+                f"Behavior check failed: {result.behavior}"
+                if result.behavior
+                else "Evaluator case failed."
+            )
+    return result
+
+
 def _execute_tests(code: str, task: dict, test_indices: list[int] | None = None, capture_output: bool = True) -> GradeResponse:
     import torch, math
     err = _validate_code(code)
@@ -145,9 +192,13 @@ def _execute_tests(code: str, task: dict, test_indices: list[int] | None = None,
         return GradeResponse(passed=0, total=0, allPassed=False, results=[], totalTimeMs=0.0, error=f"Function '{fn_name}' not found in submitted code")
 
     all_tests = task.get("tests", [])
-    tests = [all_tests[i] for i in test_indices if 0 <= i < len(all_tests)] if test_indices is not None else all_tests
+    indexed_tests = (
+        [(index, all_tests[index]) for index in test_indices if 0 <= index < len(all_tests)]
+        if test_indices is not None
+        else list(enumerate(all_tests))
+    )
 
-    if test_indices is not None and len(test_indices) > 0 and len(tests) == 0:
+    if test_indices is not None and len(test_indices) > 0 and len(indexed_tests) == 0:
         return GradeResponse(
             passed=0, total=0, allPassed=False, results=[], totalTimeMs=0.0,
             error=f"All provided test indices are out of range (valid range: 0..{len(all_tests) - 1})",
@@ -157,7 +208,7 @@ def _execute_tests(code: str, task: dict, test_indices: list[int] | None = None,
     passed = 0
     total_time_ms = 0.0
 
-    for test in tests:
+    for test_index, test in indexed_tests:
         _torch = __import__("torch")
         test_ns: dict[str, Any] = {
             "torch": _torch,
@@ -181,16 +232,38 @@ def _execute_tests(code: str, task: dict, test_indices: list[int] | None = None,
                     exec(test_code, test_ns)
                     exec_time_ms = (time.perf_counter() - start) * 1000
                     output = captured.getvalue() or None
-                    results.append(TestResult(name=test["name"], passed=True, execTimeMs=exec_time_ms, output=output))
+                    results.append(_finalize_result(
+                        TestResult(
+                            name=test["name"], passed=True, execTimeMs=exec_time_ms,
+                            output=output, testIndex=test_index,
+                        ),
+                        test,
+                        test_index,
+                    ))
                     passed += 1
                 except AssertionError as e:
                     exec_time_ms = (time.perf_counter() - start) * 1000
                     output = captured.getvalue() or None
-                    results.append(TestResult(name=test["name"], passed=False, execTimeMs=exec_time_ms, error=str(e), output=output))
+                    results.append(_finalize_result(
+                        TestResult(
+                            name=test["name"], passed=False, execTimeMs=exec_time_ms,
+                            error=str(e), output=output, testIndex=test_index,
+                        ),
+                        test,
+                        test_index,
+                    ))
                 except Exception as e:
                     exec_time_ms = (time.perf_counter() - start) * 1000
                     output = captured.getvalue() or None
-                    results.append(TestResult(name=test["name"], passed=False, execTimeMs=exec_time_ms, error=f"{type(e).__name__}: {e}", output=output))
+                    results.append(_finalize_result(
+                        TestResult(
+                            name=test["name"], passed=False, execTimeMs=exec_time_ms,
+                            error=f"{type(e).__name__}: {e}", output=output,
+                            testIndex=test_index,
+                        ),
+                        test,
+                        test_index,
+                    ))
                 finally:
                     sys.stdout = old_stdout
         else:
@@ -198,14 +271,35 @@ def _execute_tests(code: str, task: dict, test_indices: list[int] | None = None,
             try:
                 exec(test_code, test_ns)
                 exec_time_ms = (time.perf_counter() - start) * 1000
-                results.append(TestResult(name=test["name"], passed=True, execTimeMs=exec_time_ms))
+                results.append(_finalize_result(
+                    TestResult(
+                        name=test["name"], passed=True, execTimeMs=exec_time_ms,
+                        testIndex=test_index,
+                    ),
+                    test,
+                    test_index,
+                ))
                 passed += 1
             except AssertionError as e:
                 exec_time_ms = (time.perf_counter() - start) * 1000
-                results.append(TestResult(name=test["name"], passed=False, execTimeMs=exec_time_ms, error=str(e)))
+                results.append(_finalize_result(
+                    TestResult(
+                        name=test["name"], passed=False, execTimeMs=exec_time_ms,
+                        error=str(e), testIndex=test_index,
+                    ),
+                    test,
+                    test_index,
+                ))
             except Exception as e:
                 exec_time_ms = (time.perf_counter() - start) * 1000
-                results.append(TestResult(name=test["name"], passed=False, execTimeMs=exec_time_ms, error=f"{type(e).__name__}: {e}"))
+                results.append(_finalize_result(
+                    TestResult(
+                        name=test["name"], passed=False, execTimeMs=exec_time_ms,
+                        error=f"{type(e).__name__}: {e}", testIndex=test_index,
+                    ),
+                    test,
+                    test_index,
+                ))
         total_time_ms += exec_time_ms
 
     return GradeResponse(passed=passed, total=len(results), allPassed=passed == len(results), results=results, totalTimeMs=total_time_ms)
@@ -258,6 +352,8 @@ class ProgressEntry(BaseModel):
     bestTimeMs: float | None = None
     attempts: int
     solvedAt: str | None = None
+    contractVersion: int = 1
+    completedVersions: list[int] = Field(default_factory=list)
 
 
 class SaveProgressRequest(BaseModel):
@@ -282,14 +378,94 @@ def get_or_create_user(request: UserRequest) -> dict[str, int]:
 @app.get("/progress/{user_id}")
 def get_progress(user_id: int) -> dict[str, ProgressEntry]:
     with _get_db() as conn:
-        rows = conn.execute(
-            "SELECT task_id, status, best_time_ms, attempts, solved_at FROM progress WHERE user_id = ?",
-            (user_id,)
-        ).fetchall()
-    return {
-        row[0]: ProgressEntry(status=row[1], bestTimeMs=row[2], attempts=row[3], solvedAt=row[4])
-        for row in rows
-    }
+        task_ids = [
+            row[0]
+            for row in conn.execute(
+                "SELECT DISTINCT task_id FROM progress_revisions WHERE user_id = ?",
+                (user_id,),
+            ).fetchall()
+        ]
+        result: dict[str, ProgressEntry] = {}
+        for task_id in task_ids:
+            contract_version = (get_task(task_id) or {}).get("version", 1)
+            current = conn.execute(
+                "SELECT status, best_time_ms, attempts, solved_at FROM progress_revisions "
+                "WHERE user_id = ? AND task_id = ? AND contract_version = ?",
+                (user_id, task_id, contract_version),
+            ).fetchone()
+            completed = [
+                row[0]
+                for row in conn.execute(
+                    "SELECT contract_version FROM progress_revisions "
+                    "WHERE user_id = ? AND task_id = ? AND status = 'solved' "
+                    "ORDER BY contract_version",
+                    (user_id, task_id),
+                ).fetchall()
+            ]
+            if current is None:
+                result[task_id] = ProgressEntry(
+                    status="todo",
+                    attempts=0,
+                    contractVersion=contract_version,
+                    completedVersions=completed,
+                )
+            else:
+                result[task_id] = ProgressEntry(
+                    status=current[0],
+                    bestTimeMs=current[1],
+                    attempts=current[2],
+                    solvedAt=current[3],
+                    contractVersion=contract_version,
+                    completedVersions=completed,
+                )
+    return result
+
+
+def _save_revision_progress(
+    conn: sqlite3.Connection,
+    *,
+    user_id: int,
+    task_id: str,
+    contract_version: int,
+    status: str,
+    exec_time_ms: float | None,
+) -> None:
+    existing = conn.execute(
+        "SELECT status, best_time_ms FROM progress_revisions "
+        "WHERE user_id = ? AND task_id = ? AND contract_version = ?",
+        (user_id, task_id, contract_version),
+    ).fetchone()
+    if existing:
+        existing_status, existing_best = existing
+        next_status = "solved" if status == "solved" else (
+            "solved" if existing_status == "solved" else status
+        )
+        best = existing_best
+        if status == "solved" and exec_time_ms is not None:
+            best = min(existing_best, exec_time_ms) if existing_best is not None else exec_time_ms
+        conn.execute(
+            "UPDATE progress_revisions SET status = ?, best_time_ms = ?, "
+            "attempts = attempts + 1, "
+            "solved_at = CASE WHEN ? = 'solved' "
+            "THEN COALESCE(solved_at, datetime('now')) ELSE solved_at END "
+            "WHERE user_id = ? AND task_id = ? AND contract_version = ?",
+            (next_status, best, next_status, user_id, task_id, contract_version),
+        )
+        return
+    conn.execute(
+        "INSERT INTO progress_revisions "
+        "(user_id, task_id, contract_version, status, best_time_ms, attempts, solved_at) "
+        "VALUES (?, ?, ?, ?, ?, 1, "
+        "CASE WHEN ? = 'solved' THEN datetime('now') ELSE NULL END)",
+        (
+            user_id,
+            task_id,
+            contract_version,
+            status,
+            exec_time_ms if status == "solved" else None,
+            status,
+        ),
+    )
 
 
 @app.post("/progress")
@@ -299,6 +475,15 @@ def save_progress(request: SaveProgressRequest) -> dict[str, str]:
         if not row:
             raise HTTPException(status_code=404, detail="User not found")
         user_id = row[0]
+        contract_version = (get_task(request.taskId) or {}).get("version", 1)
+        _save_revision_progress(
+            conn,
+            user_id=user_id,
+            task_id=request.taskId,
+            contract_version=contract_version,
+            status=request.status,
+            exec_time_ms=request.execTimeMs,
+        )
         existing = conn.execute(
             "SELECT status, best_time_ms FROM progress WHERE user_id = ? AND task_id = ?",
             (user_id, request.taskId)
@@ -311,30 +496,43 @@ def save_progress(request: SaveProgressRequest) -> dict[str, str]:
                 else:
                     best = existing_best_time if existing_best_time is not None else request.execTimeMs
                 conn.execute(
-                    "UPDATE progress SET status = ?, best_time_ms = ?, attempts = attempts + 1, solved_at = COALESCE(solved_at, datetime('now')) WHERE user_id = ? AND task_id = ?",
-                    ("solved", best, user_id, request.taskId)
+                    "UPDATE progress SET status = ?, best_time_ms = ?, "
+                    "attempts = attempts + 1, "
+                    "solved_at = COALESCE(solved_at, datetime('now')), "
+                    "contract_version = ? WHERE user_id = ? AND task_id = ?",
+                    ("solved", best, contract_version, user_id, request.taskId)
                 )
             else:
                 next_status = existing_status if existing_status == "solved" and request.status in ("todo", "attempted") else request.status
                 conn.execute(
-                    "UPDATE progress SET status = ?, attempts = attempts + 1 WHERE user_id = ? AND task_id = ?",
-                    (next_status, user_id, request.taskId)
+                    "UPDATE progress SET status = ?, attempts = attempts + 1, "
+                    "contract_version = ? WHERE user_id = ? AND task_id = ?",
+                    (next_status, contract_version, user_id, request.taskId)
                 )
         else:
             if request.status == "solved":
                 conn.execute(
-                    "INSERT INTO progress (user_id, task_id, status, best_time_ms, attempts, solved_at) VALUES (?, ?, ?, ?, 1, datetime('now'))",
-                    (user_id, request.taskId, request.status, request.execTimeMs)
+                    "INSERT INTO progress "
+                    "(user_id, task_id, status, best_time_ms, attempts, solved_at, contract_version) "
+                    "VALUES (?, ?, ?, ?, 1, datetime('now'), ?)",
+                    (user_id, request.taskId, request.status, request.execTimeMs, contract_version)
                 )
             else:
                 conn.execute(
-                    "INSERT INTO progress (user_id, task_id, status, best_time_ms, attempts, solved_at) VALUES (?, ?, ?, ?, 1, NULL)",
-                    (user_id, request.taskId, request.status, None)
+                    "INSERT INTO progress "
+                    "(user_id, task_id, status, best_time_ms, attempts, solved_at, contract_version) "
+                    "VALUES (?, ?, ?, ?, 1, NULL, ?)",
+                    (user_id, request.taskId, request.status, None, contract_version)
                 )
         if request.code is not None:
             conn.execute(
-                "INSERT INTO submissions (user_id, task_id, code, passed, exec_time_ms) VALUES (?, ?, ?, ?, ?)",
-                (user_id, request.taskId, request.code, 1 if request.allPassed else 0, request.execTimeMs)
+                "INSERT INTO submissions "
+                "(user_id, task_id, code, passed, exec_time_ms, contract_version) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    user_id, request.taskId, request.code,
+                    1 if request.allPassed else 0, request.execTimeMs, contract_version,
+                )
             )
     return {"ok": "true"}
 
@@ -343,12 +541,16 @@ def save_progress(request: SaveProgressRequest) -> dict[str, str]:
 def get_submissions(user_id: int, task_id: str) -> list[dict]:
     with _get_db() as conn:
         rows = conn.execute(
-            "SELECT id, passed, exec_time_ms, submitted_at, code FROM submissions "
+            "SELECT id, passed, exec_time_ms, submitted_at, code, contract_version "
+            "FROM submissions "
             "WHERE user_id = ? AND task_id = ? ORDER BY submitted_at DESC LIMIT 50",
             (user_id, task_id)
         ).fetchall()
     return [
-        {"id": r[0], "passed": bool(r[1]), "execTimeMs": r[2], "submittedAt": r[3], "code": r[4]}
+        {
+            "id": r[0], "passed": bool(r[1]), "execTimeMs": r[2],
+            "submittedAt": r[3], "code": r[4], "contractVersion": r[5],
+        }
         for r in rows
     ]
 
@@ -356,4 +558,3 @@ def get_submissions(user_id: int, task_id: str) -> list[dict]:
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
-
