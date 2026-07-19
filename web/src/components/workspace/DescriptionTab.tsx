@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Lightbulb, ChevronDown, ChevronRight } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { useLocale } from '@/context/LocaleContext';
+import { getHintLevels } from '@/lib/hints';
 import type { Problem } from '@/lib/types';
 
 function parseInline(text: string): (string | JSX.Element)[] {
@@ -59,10 +60,12 @@ interface DescriptionTabProps {
 
 export function DescriptionTab({ problem }: DescriptionTabProps) {
   const [hintOpen, setHintOpen] = useState(false);
+  const [openLevels, setOpenLevels] = useState<Record<number, boolean>>({});
   const { locale, t } = useLocale();
 
   const description = locale === 'zh' ? problem.descriptionZh : problem.descriptionEn;
   const hint = locale === 'zh' && problem.hintZh ? problem.hintZh : problem.hint;
+  const hintLevels = getHintLevels(problem);
 
   return (
     <div className="px-7 py-6 space-y-6">
@@ -80,7 +83,46 @@ export function DescriptionTab({ problem }: DescriptionTabProps) {
         <div className="space-y-1">{renderDescription(description)}</div>
       )}
 
-      {hint && (
+      {hintLevels.length > 0 ? (
+        <div className="space-y-3">
+          {hintLevels.map((level) => {
+            const label = level.kind === 'questions' ? 'Guiding questions' : 'Analysis';
+            const open = !!openLevels[level.level];
+            return (
+              <div key={level.level}>
+                <button
+                  onClick={() => setOpenLevels((previous) => ({
+                    ...previous,
+                    [level.level]: !previous[level.level],
+                  }))}
+                  className="flex items-center gap-2 text-sm text-text-2 hover:text-accent transition-colors"
+                >
+                  <Lightbulb className="w-4 h-4" />
+                  <span>{`${t('hint')} ${level.level} · ${label}`}</span>
+                  {open ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                </button>
+                {open && (
+                  <div
+                    className="mt-2 p-3 px-3.5 rounded-[9px] text-sm text-text-2 leading-relaxed space-y-1"
+                    style={{
+                      background: 'color-mix(in oklab, var(--accent) 4%, var(--bg))',
+                      border: '1px solid var(--accent-line)',
+                      borderLeft: '3px solid var(--accent)',
+                    }}
+                  >
+                    <span className="mono text-[10.5px] tracking-[0.12em] uppercase text-accent font-semibold block mb-1">
+                      ⚑ HINT · LEVEL {level.level}
+                    </span>
+                    {level.content.split('\n').map((line, index) => (
+                      <p key={index}>{parseInline(line)}</p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : hint ? (
         <div>
           <button
             onClick={() => setHintOpen(!hintOpen)}
@@ -106,7 +148,7 @@ export function DescriptionTab({ problem }: DescriptionTabProps) {
             </div>
           )}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

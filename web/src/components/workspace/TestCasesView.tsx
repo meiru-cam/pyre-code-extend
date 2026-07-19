@@ -16,7 +16,11 @@ export function TestCasesView({ tests, functionName }: TestCasesViewProps) {
   const { t } = useLocale();
   const { selectedCaseIndex, setSelectedCaseIndex, customTests, addCustomTest, removeCustomTest, updateCustomTest } = useProblemStore();
 
-  const sampleTests = tests.slice(0, 2);
+  const sampleTests = tests
+    .filter((test): test is Test & { code: string } => (
+      test.visibility !== 'unshown' && typeof test.code === 'string'
+    ))
+    .slice(0, 2);
   const allCases = [
     ...sampleTests.map((t, i) => ({ name: `Case ${i + 1}`, code: t.code, custom: false })),
     ...customTests.map((ct, i) => ({ name: ct.name || `${t('customTest')} ${i + 1}`, code: ct.code, custom: true })),

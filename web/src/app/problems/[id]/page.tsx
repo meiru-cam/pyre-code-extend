@@ -19,6 +19,7 @@ import { useLocale } from '@/context/LocaleContext';
 import { useTheme } from '@/context/ThemeContext';
 import type { Problem, ProgressMap, SubmissionResult, LearningPath, LearningPathProblemSummary, SubmissionHistory } from '@/lib/types';
 import { loadCodeDraft, saveCodeDraft } from '@/lib/codeDraft';
+import { visibleTestIndices } from '@/lib/hints';
 
 function FlameGlyph() {
   return (
@@ -142,7 +143,7 @@ function WorkspacePageNew() {
     setIsRunning(true);
     setRunResult(null);
     try {
-      const testIndices = problem.tests.slice(0, 2).map((_, i) => i);
+      const testIndices = visibleTestIndices(problem.tests).slice(0, 2);
       const res = await fetch('/api/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
