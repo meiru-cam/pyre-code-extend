@@ -9,7 +9,8 @@
     "dev:all": "concurrently -n grading,web -c cyan,green \"node ../scripts/run-python.js -m uvicorn grading_service.main:app --reload\" \"next dev\"",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "vitest run"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
@@ -38,6 +39,7 @@
     "eslint-config-next": "^15.2.2",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.3",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "vitest": "^4.1.10"
   }
 }

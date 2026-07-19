@@ -15,40 +15,46 @@ OUTPUT = ROOT / "web" / "src" / "lib" / "problems.json"
 sys.path.insert(0, str(ROOT))
 
 from torch_judge.tasks import TASKS, list_tasks
+from torch_judge.tasks._schema import validate_task
 
-REQUIRED_TASK_KEYS = (
-    "title",
-    "title_zh",
-    "difficulty",
-    "function_name",
-    "hint",
-    "hint_zh",
-    "description_en",
-    "description_zh",
-    "tests",
+
+_OPTIONAL_FIELDS = (
+    ("hints", "hints"),
+    ("advisory_prerequisites", "advisoryPrerequisites"),
+    ("model_connections", "modelConnections"),
+    ("pro_con_analysis", "proConAnalysis"),
+    ("sources", "sources"),
 )
 
 
-def _validate_task(task_id: str, task: dict[str, Any]) -> None:
-    missing = [key for key in REQUIRED_TASK_KEYS if key not in task]
-    if missing:
-        raise ValueError(f"Task '{task_id}' is missing required keys: {', '.join(missing)}")
+def _test_entry(test: dict[str, Any]) -> dict[str, Any]:
+    if test.get("visibility") == "unshown":
+        return {"name": test["name"], "visibility": "unshown", "behavior": test["behavior"]}
+    entry: dict[str, Any] = {"name": test["name"], "code": test["code"]}
+    if "behavior" in test:
+        entry["behavior"] = test["behavior"]
+    return entry
 
 
 def _problem_entry(task_id: str, task: dict[str, Any]) -> dict[str, Any]:
-    _validate_task(task_id, task)
-    return {
+    validate_task(task_id, task, known_ids=set(TASKS))
+    entry = {
         "id": task_id,
         "title": task["title"],
-        "titleZh": task["title_zh"],
+        "titleZh": task.get("title_zh", task["title"]),
         "difficulty": task["difficulty"],
         "functionName": task["function_name"],
-        "hint": task["hint"],
-        "hintZh": task["hint_zh"],
+        "hint": task.get("hint", ""),
+        "hintZh": task.get("hint_zh", task.get("hint", "")),
         "descriptionEn": task["description_en"],
-        "descriptionZh": task["description_zh"],
-        "tests": task["tests"],
+        "descriptionZh": task.get("description_zh", task["description_en"]),
+        "version": task.get("version", 1),
+        "tests": [_test_entry(test) for test in task["tests"]],
     }
+    for task_key, output_key in _OPTIONAL_FIELDS:
+        if task_key in task:
+            entry[output_key] = task[task_key]
+    return entry
 
 
 def _load_existing_order(output_path: Path) -> list[str]:

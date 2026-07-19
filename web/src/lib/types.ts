@@ -2,7 +2,31 @@ import type { Locale } from '@/lib/i18n';
 
 export interface Test {
   name: string;
-  code: string;
+  code?: string;
+  behavior?: string;
+  visibility?: 'visible' | 'unshown';
+}
+
+export interface HintLevel {
+  level: number;
+  kind: 'questions' | 'analysis';
+  content: string;
+}
+
+export interface SourceRef {
+  kind: 'code' | 'paper';
+  url: string;
+  commit?: string;
+  path?: string;
+  symbol?: string;
+  line?: number;
+  section?: string;
+  equation?: string;
+  figure?: string;
+  pages?: string;
+  license?: string;
+  adapted?: string;
+  simplifications?: string;
 }
 
 export interface Problem {
@@ -16,6 +40,12 @@ export interface Problem {
   descriptionEn: string;
   descriptionZh: string;
   tests: Test[];
+  version?: number;
+  hints?: HintLevel[];
+  advisoryPrerequisites?: string[];
+  modelConnections?: string[];
+  proConAnalysis?: { pros: string[]; cons: string[] };
+  sources?: SourceRef[];
 }
 
 export interface TestResult {
@@ -24,6 +54,9 @@ export interface TestResult {
   execTimeMs: number;
   error?: string;
   output?: string;
+  behavior?: string;
+  visibility?: string;
+  testIndex?: number;
 }
 
 export interface SubmissionResult {
@@ -40,6 +73,8 @@ export interface ProblemProgress {
   bestTimeMs?: number;
   attempts: number;
   solvedAt?: string;
+  contractVersion?: number;
+  completedVersions?: number[];
 }
 
 export interface ProgressMap {
@@ -76,6 +111,7 @@ export interface SubmissionHistory {
   execTimeMs: number | null;
   submittedAt: string;
   code: string;
+  contractVersion?: number;
 }
 
 export interface AiHelpConfig {

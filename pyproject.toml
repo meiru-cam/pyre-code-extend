@@ -27,7 +27,7 @@ dependencies = [
     "fastapi",
     "uvicorn",
     "torch",
-    "numpy",
+    "numpy<2",
     "pydantic",
 ]
 

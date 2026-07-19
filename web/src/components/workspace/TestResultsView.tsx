@@ -4,6 +4,7 @@ import { CheckCircle, XCircle, Clock } from 'lucide-react';
 import { PythonCode } from '@/lib/pythonHighlight';
 import { useLocale } from '@/context/LocaleContext';
 import { useProblemStore } from '@/store/problemStore';
+import { resultTestIndex } from '@/lib/hints';
 import type { SubmissionResult, Test } from '@/lib/types';
 
 interface TestResultsViewProps {
@@ -55,7 +56,8 @@ export function TestResultsView({ result, tests, functionName }: TestResultsView
 
   const activeIndex = Math.min(selectedCaseIndex, result.results.length - 1);
   const activeResult = result.results[activeIndex];
-  const activeTest = activeIndex < tests.length ? tests[activeIndex] : null;
+  const metadataIndex = activeResult ? resultTestIndex(activeResult, activeIndex) : -1;
+  const activeTest = metadataIndex >= 0 && metadataIndex < tests.length ? tests[metadataIndex] : null;
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -124,16 +126,30 @@ export function TestResultsView({ result, tests, functionName }: TestResultsView
                 {activeResult.passed ? 'PASS' : 'FAIL'}
               </span>
               <span className="mono text-[11px] text-text-3">{activeResult.execTimeMs.toFixed(1)}ms</span>
+              {activeResult.behavior && (
+                <span
+                  className="mono text-[11px] px-1.5 py-0.5 rounded"
+                  style={{ background: 'var(--bg-sunken)', border: '1px solid var(--line)' }}
+                >
+                  {activeResult.behavior}
+                </span>
+              )}
             </div>
 
             {/* Test code */}
-            {activeTest && (
+            {activeTest?.code && (
               <div>
                 <h4 className="eyebrow mb-1.5">{t('testCasesTab')}</h4>
                 <pre className="p-3 rounded-lg text-xs font-mono overflow-x-auto whitespace-pre-wrap break-words leading-relaxed" style={{ background: 'var(--bg-sunken)' }}>
                   <PythonCode code={formatTestCode(activeTest.code, functionName)} />
                 </pre>
               </div>
+            )}
+
+            {activeTest && !activeTest.code && (
+              <p className="text-xs text-text-3">
+                Unshown evaluator case — the check runs during grading, but its inputs are not displayed.
+              </p>
             )}
 
             {/* Error with expected/got diff */}

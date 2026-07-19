@@ -10,6 +10,7 @@
       "hintZh": "1. `log_probs = logits - logsumexp(logits, dim=-1, keepdim=True)`\n2. `return -log_probs[arange(B), targets].mean()`",
       "descriptionEn": "Implement cross-entropy loss for classification.\n\nCross-entropy measures the difference between predicted logits and true class labels. It is the standard loss for classification tasks.\n\n**Signature:** `cross_entropy_loss(logits, targets) -> Tensor`\n\n**Parameters:**\n- `logits` — raw scores (B, C) where C is the number of classes\n- `targets` — ground-truth class indices (B,)\n\n**Returns:** scalar mean loss\n\n**Constraints:**\n- Must be numerically stable (handle large logits)\n- Use log-sum-exp trick for stability",
       "descriptionZh": "实现分类交叉熵损失。\n\n交叉熵衡量预测 logits 与真实类别标签之间的差异，是分类任务的标准损失函数。\n\n**签名:** `cross_entropy_loss(logits, targets) -> Tensor`\n\n**参数:**\n- `logits` — 原始分数 (B, C)，C 为类别数\n- `targets` — 真实类别索引 (B,)\n\n**返回:** 标量平均损失\n\n**约束:**\n- 必须数值稳定（处理大 logits）\n- 使用 log-sum-exp 技巧保证稳定性",
+      "version": 1,
       "tests": [
         {
           "name": "Matches F.cross_entropy",
@@ -39,6 +40,7 @@
       "hintZh": "训练：`mask = (rand_like(x) > p).float()` → `x * mask / (1-p)`\n推理：直接返回 `x`",
       "descriptionEn": "Implement dropout as an nn.Module.\n\nDropout randomly zeroes elements during training and scales survivors by `1/(1-p)` to maintain expected values. During eval, it is an identity.\n\n**Signature:** `MyDropout(p=0.5)` (nn.Module)\n\n**Forward:** `forward(x) -> Tensor`\n- `x` — input tensor of any shape\n\n**Returns:** tensor with dropout applied (training) or unchanged (eval)\n\n**Constraints:**\n- Training: zero with probability p, scale by `1/(1-p)`\n- Eval: return input unchanged",
       "descriptionZh": "实现 Dropout（nn.Module）。\n\nDropout 在训练时以概率 p 随机将元素置零，并将存活元素缩放 `1/(1-p)` 以保持期望值不变。推理时为恒等映射。\n\n**签名:** `MyDropout(p=0.5)`（nn.Module）\n\n**前向传播:** `forward(x) -> Tensor`\n- `x` — 任意形状的输入张量\n\n**返回:** 应用 dropout 后的张量（训练）或原始输入（推理）\n\n**约束:**\n- 训练模式：以概率 p 置零，缩放 `1/(1-p)`\n- 推理模式：返回原始输入",
+      "version": 1,
       "tests": [
         {
           "name": "Eval mode is identity",
@@ -68,6 +70,7 @@
       "hintZh": "`self.weight = nn.Parameter(...)` 形状 `(num_embeddings, embedding_dim)`\n前向：`return self.weight[indices]`",
       "descriptionEn": "Implement an embedding lookup layer as an nn.Module.\n\nAn embedding layer maps integer indices to dense vectors via a learnable weight matrix, used as the first layer in NLP models.\n\n**Signature:** `MyEmbedding(num_embeddings, embedding_dim)` (nn.Module)\n\n**Forward:** `forward(indices) -> Tensor`\n- `indices` — integer tensor of any shape\n\n**Returns:** embedded vectors with an extra trailing dimension of size embedding_dim\n\n**Constraints:**\n- Store weights as `nn.Parameter` of shape (num_embeddings, embedding_dim)\n- Forward is simply `weight[indices]`",
       "descriptionZh": "实现嵌入查找层（nn.Module）。\n\n嵌入层通过可学习的权重矩阵将整数索引映射为稠密向量，是 NLP 模型的第一层。\n\n**签名:** `MyEmbedding(num_embeddings, embedding_dim)`（nn.Module）\n\n**前向传播:** `forward(indices) -> Tensor`\n- `indices` — 任意形状的整数张量\n\n**返回:** 嵌入向量，末尾增加 embedding_dim 维度\n\n**约束:**\n- 权重存储为 `nn.Parameter`，形状 (num_embeddings, embedding_dim)\n- 前向传播即 `weight[indices]`",
+      "version": 1,
       "tests": [
         {
           "name": "Weight shape",
@@ -97,6 +100,7 @@
       "hintZh": "精确版：`0.5 * x * (1 + torch.erf(x / sqrt(2)))`\n近似版：`0.5*x*(1+tanh(sqrt(2/π)*(x+0.044715*x³)))`",
       "descriptionEn": "Implement the GELU activation function.\n\nGELU (Gaussian Error Linear Unit) smoothly gates inputs based on their value, used in transformers like BERT and GPT.\n\n**Signature:** `my_gelu(x) -> Tensor`\n\n**Parameters:**\n- `x` — input tensor of any shape\n\n**Returns:** element-wise GELU activation, same shape as input\n\n**Constraints:**\n- Exact formula: `x * 0.5 * (1 + erf(x / sqrt(2)))`\n- Must match `F.gelu` within 1e-4\n- `gelu(0) = 0`",
       "descriptionZh": "实现 GELU 激活函数。\n\nGELU（高斯误差线性单元）根据输入值平滑地进行门控，广泛用于 BERT 和 GPT 等 Transformer。\n\n**签名:** `my_gelu(x) -> Tensor`\n\n**参数:**\n- `x` — 任意形状的输入张量\n\n**返回:** 逐元素 GELU 激活，形状与输入相同\n\n**约束:**\n- 精确公式：`x * 0.5 * (1 + erf(x / sqrt(2)))`\n- 必须与 `F.gelu` 误差在 1e-4 以内\n- `gelu(0) = 0`",
+      "version": 1,
       "tests": [
         {
           "name": "Matches F.gelu",
@@ -126,6 +130,7 @@
       "hintZh": "1. optimizer.zero_grad() 一次\n2. 对每个微批次：前向 → loss/n → 反向\n3. optimizer.step()\n   除以 n 确保累积梯度与单次全批次更新一致。",
       "descriptionEn": "Implement gradient accumulation over micro-batches.\n\nGradient accumulation simulates a large batch by accumulating gradients from multiple smaller batches before a single optimizer step.\n\n**Signature:** `accumulated_step(model, optimizer, loss_fn, micro_batches) -> float`\n\n**Parameters:**\n- `model` — nn.Module\n- `optimizer` — torch optimizer\n- `loss_fn` — loss function\n- `micro_batches` — list of (x, y) tuples\n\n**Returns:** total loss as a float\n\n**Constraints:**\n- Scale each micro-batch loss by `1/n` before backward\n- Must match a single full-batch update numerically",
       "descriptionZh": "实现微批次梯度累积。\n\n梯度累积通过在多个小批次上累积梯度后执行一次优化器步骤，模拟大批次训练。\n\n**签名:** `accumulated_step(model, optimizer, loss_fn, micro_batches) -> float`\n\n**参数:**\n- `model` — nn.Module\n- `optimizer` — torch 优化器\n- `loss_fn` — 损失函数\n- `micro_batches` — (x, y) 元组列表\n\n**返回:** 总损失（浮点数）\n\n**约束:**\n- 每个微批次损失在反向传播前除以 `n`\n- 必须与单次全批次更新数值一致",
+      "version": 1,
       "tests": [
         {
           "name": "Matches full batch update",
@@ -151,6 +156,7 @@
       "hintZh": "1. total_norm = sqrt(Σ p.grad.norm()²)\n2. clip_coef = max_norm / total_norm\n3. 若 total_norm > max_norm：所有梯度乘以 clip_coef\n4. 返回原始 total_norm（float）",
       "descriptionEn": "Implement gradient norm clipping.\n\nGradient clipping rescales all parameter gradients when their combined L2 norm exceeds a threshold, preventing exploding gradients.\n\n**Signature:** `clip_grad_norm(parameters, max_norm) -> float`\n\n**Parameters:**\n- `parameters` — list of tensors with `.grad` attributes\n- `max_norm` — maximum allowed gradient norm\n\n**Returns:** original total gradient norm (float)\n\n**Constraints:**\n- Total norm = `sqrt(sum(p.grad.norm()^2))`\n- Only clip if total norm > max_norm\n- Preserve gradient direction",
       "descriptionZh": "实现梯度范数裁剪。\n\n梯度裁剪在所有参数梯度的 L2 范数超过阈值时进行缩放，防止梯度爆炸。\n\n**签名:** `clip_grad_norm(parameters, max_norm) -> float`\n\n**参数:**\n- `parameters` — 带 `.grad` 属性的张量列表\n- `max_norm` — 允许的最大梯度范数\n\n**返回:** 原始总梯度范数（浮点数）\n\n**约束:**\n- 总范数 = `sqrt(sum(p.grad.norm()^2))`\n- 仅在总范数 > max_norm 时裁剪\n- 保持梯度方向不变",
+      "version": 1,
       "tests": [
         {
           "name": "Clips to max_norm",
@@ -180,6 +186,7 @@
       "hintZh": "`relu(x) = max(0, x)` 逐元素 → `x * (x > 0)`",
       "descriptionEn": "Implement the ReLU activation function.\n\nReLU (Rectified Linear Unit) outputs the input directly if positive, otherwise zero. It is the most widely used activation in deep learning.\n\n**Signature:** `relu(x) -> Tensor`\n\n**Parameters:**\n- `x` — input tensor of any shape\n\n**Returns:** element-wise ReLU activation, same shape as input\n\n**Constraints:**\n- `relu(x) = max(0, x)` element-wise\n- Must support gradient flow\n- Must be efficient on large tensors",
       "descriptionZh": "实现 ReLU 激活函数。\n\nReLU（修正线性单元）在输入为正时直接输出，否则输出零，是深度学习中最广泛使用的激活函数。\n\n**签名:** `relu(x) -> Tensor`\n\n**参数:**\n- `x` — 任意形状的输入张量\n\n**返回:** 逐元素 ReLU 激活，形状与输入相同\n\n**约束:**\n- `relu(x) = max(0, x)` 逐元素\n- 必须支持梯度流\n- 在大张量上必须高效",
+      "version": 1,
       "tests": [
         {
           "name": "Basic values",
@@ -209,6 +216,7 @@
       "hintZh": "1. `x_max = x.max(dim=dim, keepdim=True).values`\n2. `e_x = exp(x - x_max)`\n3. `return e_x / e_x.sum(dim=dim, keepdim=True)`",
       "descriptionEn": "Implement the softmax function.\n\nSoftmax converts raw logits into a probability distribution by exponentiating and normalizing, used in classification and attention.\n\n**Signature:** `my_softmax(x, dim=-1) -> Tensor`\n\n**Parameters:**\n- `x` — input tensor of any shape\n- `dim` — dimension along which to compute softmax\n\n**Returns:** probability tensor (sums to 1 along dim), same shape as input\n\n**Constraints:**\n- Subtract max for numerical stability before exp\n- Must handle large values without NaN/Inf",
       "descriptionZh": "实现 softmax 函数。\n\nSoftmax 通过指数化和归一化将原始 logits 转换为概率分布，用于分类和注意力机制。\n\n**签名:** `my_softmax(x, dim=-1) -> Tensor`\n\n**参数:**\n- `x` — 任意形状的输入张量\n- `dim` — 计算 softmax 的维度\n\n**返回:** 概率张量（沿 dim 求和为 1），形状与输入相同\n\n**约束:**\n- 在 exp 之前减去最大值以保证数值稳定\n- 必须处理大值而不产生 NaN/Inf",
+      "version": 1,
       "tests": [
         {
           "name": "Basic 1-D",
@@ -238,6 +246,7 @@
       "hintZh": "`fan_in = weight.shape[1]` → `std = sqrt(2 / fan_in)`\n`weight.normal_(0, std)` 原地操作 → 返回 `weight`",
       "descriptionEn": "Implement Kaiming (He) weight initialization.\n\nKaiming initialization sets weight variance based on fan-in to preserve signal magnitude through ReLU networks, preventing vanishing/exploding activations.\n\n**Signature:** `kaiming_init(weight) -> Tensor`\n\n**Parameters:**\n- `weight` — tensor to initialize in-place (out_features, in_features)\n\n**Returns:** the same tensor (in-place operation)\n\n**Constraints:**\n- `std = sqrt(2 / fan_in)` where `fan_in = weight.shape[1]`\n- Fill with `normal(0, std)`\n- Smaller fan_in should give larger std",
       "descriptionZh": "实现 Kaiming（He）权重初始化。\n\nKaiming 初始化根据 fan-in 设置权重方差，以在 ReLU 网络中保持信号幅度，防止激活值消失或爆炸。\n\n**签名:** `kaiming_init(weight) -> Tensor`\n\n**参数:**\n- `weight` — 需要原地初始化的张量 (out_features, in_features)\n\n**返回:** 同一张量（原地操作）\n\n**约束:**\n- `std = sqrt(2 / fan_in)`，其中 `fan_in = weight.shape[1]`\n- 用 `normal(0, std)` 填充\n- 更小的 fan_in 应产生更大的 std",
+      "version": 1,
       "tests": [
         {
           "name": "Mean approximately 0",
@@ -267,6 +276,7 @@
       "hintZh": "1. m = β1·m + (1-β1)·g,  v = β2·v + (1-β2)·g²\n2. 偏差校正：m̂ = m/(1-β1ᵗ),  v̂ = v/(1-β2ᵗ)\n3. p -= lr · m̂ / (√v̂ + ε)",
       "descriptionEn": "Implement the Adam optimizer from scratch.\n\nAdam combines momentum (1st moment) and RMSProp (2nd moment) with bias correction for adaptive per-parameter learning rates.\n\n**Signature:** `MyAdam(params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8)`\n\n**Methods:**\n- `step()` — update parameters using bias-corrected moments\n- `zero_grad()` — zero all parameter gradients\n\n**Constraints:**\n- Must match `torch.optim.Adam` numerically\n- Bias correction: `m_hat = m / (1 - beta1^t)`",
       "descriptionZh": "从零实现 Adam 优化器。\n\nAdam 结合了动量（一阶矩）和 RMSProp（二阶矩），并通过偏差校正实现自适应的逐参数学习率。\n\n**签名:** `MyAdam(params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8)`\n\n**方法:**\n- `step()` — 使用偏差校正后的矩更新参数\n- `zero_grad()` — 将所有参数梯度清零\n\n**约束:**\n- 必须与 `torch.optim.Adam` 数值一致\n- 偏差校正: `m_hat = m / (1 - beta1^t)`",
+      "version": 1,
       "tests": [
         {
           "name": "Parameters change after step",
@@ -292,6 +302,7 @@
       "hintZh": "训练：`mean/var = x.mean/var(dim=0)`，用 `momentum` 更新运行统计量\n推理：直接使用 `running_mean/running_var`\n两者：`gamma * (x - mean) / sqrt(var + eps) + beta`",
       "descriptionEn": "Implement Batch Normalization with train/eval modes.\n\nBatchNorm normalizes activations per feature using batch statistics during training and running statistics during inference, stabilizing deep network training.\n\n**Signature:** `my_batch_norm(x, gamma, beta, running_mean, running_var, eps=1e-5, momentum=0.1, training=True) -> Tensor`\n\n**Parameters:**\n- `x` — input tensor (N, D)\n- `gamma`, `beta` — learnable affine parameters (D,)\n- `running_mean`, `running_var` — running statistics (D,), updated in-place during training\n\n**Returns:** normalized and affine-transformed tensor, same shape as x\n\n**Constraints:**\n- Training: use batch stats, update running stats with momentum\n- Inference: use running stats only\n- Use `unbiased=False` for batch variance",
       "descriptionZh": "实现带训练/推理模式的批归一化。\n\nBatchNorm 在训练时使用批统计量、推理时使用运行统计量对每个特征进行归一化，从而稳定深度网络训练。\n\n**签名:** `my_batch_norm(x, gamma, beta, running_mean, running_var, eps=1e-5, momentum=0.1, training=True) -> Tensor`\n\n**参数:**\n- `x` — 输入张量 (N, D)\n- `gamma`, `beta` — 可学习的仿射参数 (D,)\n- `running_mean`, `running_var` — 运行统计量 (D,)，训练时原地更新\n\n**返回:** 归一化并仿射变换后的张量，形状与 x 相同\n\n**约束:**\n- 训练模式：使用批统计量，用 momentum 更新运行统计量\n- 推理模式：仅使用运行统计量\n- 批方差使用 `unbiased=False`",
+      "version": 1,
       "tests": [
         {
           "name": "Training mode — zero mean per feature",
@@ -321,6 +332,7 @@
       "hintZh": "1. beams = [(score=0.0, seq=[start_token])]\n2. 每步：用所有 token 扩展每个候选 → 按累积分保留前 beam_width 个\n3. 所有候选以 eos_token 结尾或达到 max_len 时停止\n4. 返回得分最高的序列",
       "descriptionEn": "Implement beam search decoding for sequence generation.\n\nBeam search maintains multiple candidate sequences (beams) at each step, expanding and pruning to find the highest-scoring sequence.\n\n**Signature:** `beam_search(log_prob_fn, start_token, max_len, beam_width, eos_token) -> list[int]`\n\n**Parameters:**\n- `log_prob_fn` — callable that takes a token sequence tensor and returns log-probabilities over vocabulary\n- `start_token` — integer start token\n- `beam_width` — number of beams to keep\n- `eos_token` — end-of-sequence token\n\n**Returns:** list of token IDs for the best sequence\n\n**Constraints:**\n- Stop when all beams end with eos or max_len is reached\n- Return the highest-scoring complete sequence",
       "descriptionZh": "实现序列生成的束搜索解码。\n\n束搜索在每一步维护多个候选序列（束），通过扩展和剪枝找到得分最高的序列。\n\n**签名:** `beam_search(log_prob_fn, start_token, max_len, beam_width, eos_token) -> list[int]`\n\n**参数:**\n- `log_prob_fn` — 接受 token 序列张量并返回词表上对数概率的可调用对象\n- `start_token` — 起始 token 整数\n- `beam_width` — 保留的束数量\n- `eos_token` — 序列结束 token\n\n**返回:** 最佳序列的 token ID 列表\n\n**约束:**\n- 当所有束以 eos 结尾或达到 max_len 时停止\n- 返回得分最高的完整序列",
+      "version": 1,
       "tests": [
         {
           "name": "Returns list starting with start_token",
@@ -350,6 +362,7 @@
       "hintZh": "1. 手动对输入进行零填充（不用 F.pad）\n2. `x.unfold(2, kH, stride).unfold(3, kW, stride)` → 块 `(B, C, H_out, W_out, kH, kW)`\n3. `(patches * weight).sum((-3,-2,-1)) + bias`",
       "descriptionEn": "Implement 2D convolution from scratch.\n\nConvolution slides a kernel over a 2D input, computing weighted sums at each position. It is the fundamental operation in CNNs.\n\n**Signature:** `my_conv2d(x, weight, bias=None, stride=1, padding=0) -> Tensor`\n\n**Parameters:**\n- `x` — input tensor (B, C_in, H, W)\n- `weight` — kernel tensor (C_out, C_in, kH, kW)\n- `bias` — optional bias (C_out,)\n- `stride`, `padding` — integer stride and zero-padding\n\n**Returns:** convolved output tensor\n\n**Constraints:**\n- Must match `F.conv2d` numerically\n- Support stride and padding parameters",
       "descriptionZh": "从零实现二维卷积。\n\n卷积将卷积核在二维输入上滑动，在每个位置计算加权和，是 CNN 的基本操作。\n\n**签名:** `my_conv2d(x, weight, bias=None, stride=1, padding=0) -> Tensor`\n\n**参数:**\n- `x` — 输入张量 (B, C_in, H, W)\n- `weight` — 卷积核张量 (C_out, C_in, kH, kW)\n- `bias` — 可选偏置 (C_out,)\n- `stride`, `padding` — 整数步幅和零填充\n\n**返回:** 卷积输出张量\n\n**约束:**\n- 必须与 `F.conv2d` 数值一致\n- 支持 stride 和 padding 参数",
+      "version": 1,
       "tests": [
         {
           "name": "Output shape",
@@ -383,6 +396,7 @@
       "hintZh": "1. step < warmup_steps → lr = max_lr * step / warmup_steps\n2. step >= total_steps → lr = min_lr\n3. progress = (step - warmup_steps) / (total_steps - warmup_steps)\n   → min_lr + 0.5*(max_lr-min_lr)*(1 + cos(π·progress))",
       "descriptionEn": "Implement a cosine learning rate schedule with linear warmup.\n\nThis scheduler linearly ramps the LR during warmup, then decays it following a cosine curve. Widely used in transformer training.\n\n**Signature:** `cosine_lr_schedule(step, total_steps, warmup_steps, max_lr, min_lr=0.0) -> float`\n\n**Parameters:**\n- `step` — current training step\n- `total_steps` — total number of steps\n- `warmup_steps` — number of warmup steps\n- `max_lr`, `min_lr` — peak and minimum learning rates\n\n**Returns:** learning rate as a float\n\n**Constraints:**\n- Warmup: linear from 0 to max_lr\n- Decay: `min_lr + 0.5*(max_lr-min_lr)*(1+cos(pi*progress))`",
       "descriptionZh": "实现带线性预热的余弦学习率调度。\n\n该调度器在预热阶段线性增加学习率，之后按余弦曲线衰减，广泛用于 Transformer 训练。\n\n**签名:** `cosine_lr_schedule(step, total_steps, warmup_steps, max_lr, min_lr=0.0) -> float`\n\n**参数:**\n- `step` — 当前训练步数\n- `total_steps` — 总步数\n- `warmup_steps` — 预热步数\n- `max_lr`, `min_lr` — 峰值和最小学习率\n\n**返回:** 浮点数学习率\n\n**约束:**\n- 预热阶段：从 0 线性增加到 max_lr\n- 衰减阶段：`min_lr + 0.5*(max_lr-min_lr)*(1+cos(pi*progress))`",
+      "version": 1,
       "tests": [
         {
           "name": "Start of warmup",
@@ -416,6 +430,7 @@
       "hintZh": "Q 来自 `x_q`，K/V 来自 `x_kv`。投影 → reshape 为 `(B, H, S, d_k)` → 缩放点积（无因果遮蔽）→ 拼接各头 → `W_o`。",
       "descriptionEn": "Implement multi-head cross-attention as an nn.Module.\n\nCross-attention lets a decoder attend to encoder outputs: Q comes from one sequence, K/V from another. No causal mask is applied.\n\n**Signature:** `MultiHeadCrossAttention(d_model, num_heads)` (nn.Module)\n\n**Forward:** `forward(x_q, x_kv) -> Tensor`\n- `x_q` — query input (B, S_q, d_model)\n- `x_kv` — key/value input (B, S_kv, d_model)\n\n**Returns:** attention output (B, S_q, d_model)\n\n**Constraints:**\n- Use separate W_q, W_k, W_v, W_o linear projections\n- Q and KV can have different sequence lengths",
       "descriptionZh": "实现多头交叉注意力（nn.Module）。\n\n交叉注意力让解码器关注编码器输出：Q 来自一个序列，K/V 来自另一个序列，不使用因果掩码。\n\n**签名:** `MultiHeadCrossAttention(d_model, num_heads)`（nn.Module）\n\n**前向传播:** `forward(x_q, x_kv) -> Tensor`\n- `x_q` — 查询输入 (B, S_q, d_model)\n- `x_kv` — 键/值输入 (B, S_kv, d_model)\n\n**返回:** 注意力输出 (B, S_q, d_model)\n\n**约束:**\n- 使用独立的 W_q、W_k、W_v、W_o 线性投影\n- Q 和 KV 可以有不同的序列长度",
+      "version": 1,
       "tests": [
         {
           "name": "Output shape",
@@ -449,6 +464,7 @@
       "hintZh": "1. `mean = x.mean(dim=-1, keepdim=True)`\n2. `var = x.var(dim=-1, keepdim=True, unbiased=False)`\n3. `x_norm = (x - mean) / sqrt(var + eps)` → `gamma * x_norm + beta`",
       "descriptionEn": "Implement Layer Normalization.\n\nLayerNorm normalizes each sample across the feature dimension, stabilizing training without dependence on batch size.\n\n**Signature:** `my_layer_norm(x, gamma, beta, eps=1e-5) -> Tensor`\n\n**Parameters:**\n- `x` — input tensor (..., D)\n- `gamma` — scale parameter (D,)\n- `beta` — shift parameter (D,)\n- `eps` — epsilon for numerical stability\n\n**Returns:** normalized tensor, same shape as x\n\n**Constraints:**\n- Normalize over the last dimension\n- Use `unbiased=False` for variance\n- Must match `F.layer_norm`",
       "descriptionZh": "实现层归一化。\n\nLayerNorm 对每个样本沿特征维度进行归一化，不依赖批大小即可稳定训练。\n\n**签名:** `my_layer_norm(x, gamma, beta, eps=1e-5) -> Tensor`\n\n**参数:**\n- `x` — 输入张量 (..., D)\n- `gamma` — 缩放参数 (D,)\n- `beta` — 偏移参数 (D,)\n- `eps` — 数值稳定性的 epsilon\n\n**返回:** 归一化后的张量，形状与 x 相同\n\n**约束:**\n- 沿最后一个维度归一化\n- 方差使用 `unbiased=False`\n- 必须与 `F.layer_norm` 一致",
+      "version": 1,
       "tests": [
         {
           "name": "Shape and basic behavior",
@@ -474,6 +490,7 @@
       "hintZh": "`weight` 形状 `(out, in)`，初始化 `randn * 1/sqrt(in_features)`\n`bias` 形状 `(out,)`，初始化为零\n前向：`x @ weight.T + bias`",
       "descriptionEn": "Implement a simple linear (fully connected) layer from scratch.\n\nA linear layer computes `y = x @ W^T + b` with learnable weight and bias tensors.\n\n**Signature:** `SimpleLinear(in_features, out_features)` (class)\n\n**Method:** `forward(x) -> Tensor`\n- `x` — input tensor (*, in_features)\n\n**Returns:** output tensor (*, out_features)\n\n**Constraints:**\n- Weight shape: (out_features, in_features) with Kaiming scaling\n- Bias shape: (out_features,) initialized to zeros\n- Both must have `requires_grad=True`",
       "descriptionZh": "从零实现简单线性（全连接）层。\n\n线性层使用可学习的权重和偏置张量计算 `y = x @ W^T + b`。\n\n**签名:** `SimpleLinear(in_features, out_features)`（类）\n\n**方法:** `forward(x) -> Tensor`\n- `x` — 输入张量 (*, in_features)\n\n**返回:** 输出张量 (*, out_features)\n\n**约束:**\n- 权重形状：(out_features, in_features)，使用 Kaiming 缩放\n- 偏置形状：(out_features,)，初始化为零\n- 两者都必须 `requires_grad=True`",
+      "version": 1,
       "tests": [
         {
           "name": "Weight & bias shape",
@@ -499,6 +516,7 @@
       "hintZh": "closed_form：X 增加全 1 列 → `lstsq(X_aug, y)` → 拆分 `w, b`\ngradient_descent：`grad_w = (2/N) * X.T @ (X@w+b - y)`，`w -= lr*grad_w`\nnn_linear：`nn.Linear(D,1)` + `MSELoss` + `optimizer.step()` 循环",
       "descriptionEn": "Implement linear regression three ways: closed-form, gradient descent, and nn.Linear.\n\nThis task covers the fundamental approaches to fitting a linear model, from the normal equation to autograd-based training.\n\n**Signature:** `LinearRegression()` (class)\n\n**Methods:**\n- `closed_form(X, y) -> (w, b)` — solve via normal equation\n- `gradient_descent(X, y, lr, steps) -> (w, b)` — manual gradient updates\n- `nn_linear(X, y, lr, steps) -> (w, b)` — PyTorch autograd training loop\n\n**Constraints:**\n- All three methods should converge to similar weights\n- Closed-form should not use autograd\n- X is (N, D), y is (N,), returns w (D,) and b (scalar)",
       "descriptionZh": "用三种方式实现线性回归：闭式解、梯度下降和 nn.Linear。\n\n本题涵盖拟合线性模型的基本方法，从正规方程到基于 autograd 的训练。\n\n**签名:** `LinearRegression()`（类）\n\n**方法:**\n- `closed_form(X, y) -> (w, b)` — 通过正规方程求解\n- `gradient_descent(X, y, lr, steps) -> (w, b)` — 手动梯度更新\n- `nn_linear(X, y, lr, steps) -> (w, b)` — PyTorch autograd 训练循环\n\n**约束:**\n- 三种方法应收敛到相近的权重\n- 闭式解不应使用 autograd\n- X 为 (N, D)，y 为 (N,)，返回 w (D,) 和 b（标量）",
+      "version": 1,
       "tests": [
         {
           "name": "Closed-form returns correct shapes",
@@ -536,6 +554,7 @@
       "hintZh": "1. `linear.weight/bias` 设 `requires_grad_(False)` 冻结\n2. `lora_A`: `(rank, in)`，`lora_B`: `(out, rank)` 初始化为零\n3. 前向：`linear(x) + (x @ lora_A.T @ lora_B.T) * (alpha/rank)`",
       "descriptionEn": "Implement LoRA (Low-Rank Adaptation) for a linear layer.\n\nLoRA freezes the base weights and adds trainable low-rank matrices A and B, enabling efficient fine-tuning with far fewer parameters.\n\n**Signature:** `LoRALinear(in_features, out_features, rank, alpha=1.0)` (nn.Module)\n\n**Forward:** `forward(x) -> Tensor`\n- `x` — input tensor (*, in_features)\n\n**Returns:** `linear(x) + (x @ A^T @ B^T) * (alpha/rank)`\n\n**Constraints:**\n- Base `nn.Linear` weights must be frozen (requires_grad=False)\n- `lora_A`: (rank, in_features), `lora_B`: (out_features, rank) initialized to zeros\n- Only LoRA params should receive gradients",
       "descriptionZh": "实现线性层的 LoRA（低秩适配）。\n\nLoRA 冻结基础权重并添加可训练的低秩矩阵 A 和 B，以极少的参数实现高效微调。\n\n**签名:** `LoRALinear(in_features, out_features, rank, alpha=1.0)`（nn.Module）\n\n**前向传播:** `forward(x) -> Tensor`\n- `x` — 输入张量 (*, in_features)\n\n**返回:** `linear(x) + (x @ A^T @ B^T) * (alpha/rank)`\n\n**约束:**\n- 基础 `nn.Linear` 权重必须冻结（requires_grad=False）\n- `lora_A`：(rank, in_features)，`lora_B`：(out_features, rank) 初始化为零\n- 只有 LoRA 参数应接收梯度",
+      "version": 1,
       "tests": [
         {
           "name": "Base weights frozen",
@@ -569,6 +588,7 @@
       "hintZh": "`gate_proj(d→d_ff)`、`up_proj(d→d_ff)`、`down_proj(d_ff→d)`。前向：`down_proj(silu(gate_proj(x)) * up_proj(x))`。`silu(x) = x * sigmoid(x)`。",
       "descriptionEn": "Implement a SwiGLU MLP as an nn.Module.\n\nSwiGLU is a gated MLP variant used in LLaMA and other modern LLMs: it applies SiLU gating to one projection and element-wise multiplies with another.\n\n**Signature:** `SwiGLUMLP(d_model, d_ff)` (nn.Module)\n\n**Forward:** `forward(x) -> Tensor`\n- `x` — input tensor (*, d_model)\n\n**Returns:** output tensor (*, d_model)\n\n**Constraints:**\n- Three projections: gate_proj(d, d_ff), up_proj(d, d_ff), down_proj(d_ff, d)\n- `forward(x) = down_proj(silu(gate_proj(x)) * up_proj(x))`\n- SiLU(x) = x * sigmoid(x)",
       "descriptionZh": "实现 SwiGLU MLP（nn.Module）。\n\nSwiGLU 是 LLaMA 等现代 LLM 使用的门控 MLP 变体：对一个投影应用 SiLU 门控，与另一个投影逐元素相乘。\n\n**签名:** `SwiGLUMLP(d_model, d_ff)`（nn.Module）\n\n**前向传播:** `forward(x) -> Tensor`\n- `x` — 输入张量 (*, d_model)\n\n**返回:** 输出张量 (*, d_model)\n\n**约束:**\n- 三个投影：gate_proj(d, d_ff)、up_proj(d, d_ff)、down_proj(d_ff, d)\n- `forward(x) = down_proj(silu(gate_proj(x)) * up_proj(x))`\n- SiLU(x) = x * sigmoid(x)",
+      "version": 1,
       "tests": [
         {
           "name": "Parameter shapes",
@@ -602,6 +622,7 @@
       "hintZh": "`rms = sqrt(x.pow(2).mean(dim=-1, keepdim=True) + eps)`\n`return x / rms * weight`  ← 无需减均值",
       "descriptionEn": "Implement RMSNorm (Root Mean Square Layer Normalization).\n\nRMSNorm is a simpler alternative to LayerNorm that skips mean subtraction, normalizing only by the root mean square of activations.\n\n**Signature:** `rms_norm(x, weight, eps=1e-6) -> Tensor`\n\n**Parameters:**\n- `x` — input tensor (..., D)\n- `weight` — learnable scale parameter (D,)\n- `eps` — epsilon for numerical stability\n\n**Returns:** normalized tensor, same shape as x\n\n**Constraints:**\n- `RMS(x) = sqrt(mean(x^2) + eps)` over last dim\n- Output: `x / RMS(x) * weight`",
       "descriptionZh": "实现 RMSNorm（均方根层归一化）。\n\nRMSNorm 是 LayerNorm 的简化替代，跳过均值减法，仅通过激活值的均方根进行归一化。\n\n**签名:** `rms_norm(x, weight, eps=1e-6) -> Tensor`\n\n**参数:**\n- `x` — 输入张量 (..., D)\n- `weight` — 可学习的缩放参数 (D,)\n- `eps` — 数值稳定性的 epsilon\n\n**返回:** 归一化后的张量，形状与 x 相同\n\n**约束:**\n- `RMS(x) = sqrt(mean(x^2) + eps)` 沿最后一维\n- 输出：`x / RMS(x) * weight`",
+      "version": 1,
       "tests": [
         {
           "name": "Basic behavior",
@@ -635,6 +656,7 @@
       "hintZh": "1. logits /= temperature\n2. top-k：将低于第 k 大值的 logits 设为 -inf\n3. top-p：降序排列 → softmax 概率 cumsum → 遮蔽 cumsum > p 的部分 → 设为 -inf\n4. 从 softmax(logits) 中采样",
       "descriptionEn": "Implement top-k / top-p (nucleus) sampling for language model decoding.\n\nThese sampling strategies filter the vocabulary to high-probability tokens before sampling, balancing diversity and quality in text generation.\n\n**Signature:** `sample_top_k_top_p(logits, top_k=0, top_p=1.0, temperature=1.0) -> int`\n\n**Parameters:**\n- `logits` — raw logits over vocabulary (V,)\n- `top_k` — keep only top-k tokens (0 = disabled)\n- `top_p` — keep tokens with cumulative prob <= p (1.0 = disabled)\n- `temperature` — temperature scaling\n\n**Returns:** sampled token index (int)\n\n**Constraints:**\n- Apply temperature first, then top-k, then top-p\n- `top_k=1` must always return argmax",
       "descriptionZh": "实现语言模型解码的 top-k / top-p（核）采样。\n\n这些采样策略在采样前将词表过滤为高概率 token，在文本生成中平衡多样性和质量。\n\n**签名:** `sample_top_k_top_p(logits, top_k=0, top_p=1.0, temperature=1.0) -> int`\n\n**参数:**\n- `logits` — 词表上的原始 logits (V,)\n- `top_k` — 仅保留 top-k 个 token（0 = 禁用）\n- `top_p` — 保留累积概率 <= p 的 token（1.0 = 禁用）\n- `temperature` — 温度缩放\n\n**返回:** 采样的 token 索引（整数）\n\n**约束:**\n- 先应用温度，再 top-k，再 top-p\n- `top_k=1` 必须始终返回 argmax",
+      "version": 1,
       "tests": [
         {
           "name": "top_k=1 always returns argmax",
@@ -668,6 +690,7 @@
       "hintZh": "`(B,C,H,W)` → reshape 为 `(B, n_h, P, n_w, P, C)` → permute → `(B, num_patches, C*P*P)` → `nn.Linear(C*P*P, embed_dim)`。",
       "descriptionEn": "Implement ViT patch embedding as an nn.Module.\n\nPatch embedding splits an image into fixed-size patches and projects each patch into an embedding vector, forming the input sequence for Vision Transformers.\n\n**Signature:** `PatchEmbedding(img_size, patch_size, in_channels, embed_dim)` (nn.Module)\n\n**Forward:** `forward(x) -> Tensor`\n- `x` — image tensor (B, C, H, W)\n\n**Returns:** patch embeddings (B, num_patches, embed_dim)\n\n**Constraints:**\n- `num_patches = (img_size / patch_size)^2`\n- Store `self.num_patches` as an attribute\n- Project with `nn.Linear(C * P * P, embed_dim)`",
       "descriptionZh": "实现 ViT 图像块嵌入（nn.Module）。\n\n图像块嵌入将图像分割为固定大小的块，并将每个块投影为嵌入向量，形成 Vision Transformer 的输入序列。\n\n**签名:** `PatchEmbedding(img_size, patch_size, in_channels, embed_dim)`（nn.Module）\n\n**前向传播:** `forward(x) -> Tensor`\n- `x` — 图像张量 (B, C, H, W)\n\n**返回:** 图像块嵌入 (B, num_patches, embed_dim)\n\n**约束:**\n- `num_patches = (img_size / patch_size)^2`\n- 将 `self.num_patches` 存储为属性\n- 使用 `nn.Linear(C * P * P, embed_dim)` 投影",
+      "version": 1,
       "tests": [
         {
           "name": "Output shape",
@@ -701,6 +724,7 @@
       "hintZh": "`scores = torch.bmm(Q, K.transpose(1, 2)) / sqrt(d_k)` → `torch.bmm(softmax(scores, dim=-1), V)`。",
       "descriptionEn": "Implement scaled dot-product attention.\n\nThis is the core attention mechanism: compute similarity scores between queries and keys, then use them to weight values.\n\n**Signature:** `scaled_dot_product_attention(Q, K, V) -> Tensor`\n\n**Parameters:**\n- `Q` — query tensor (B, S_q, D)\n- `K` — key tensor (B, S_k, D)\n- `V` — value tensor (B, S_k, D_v)\n\n**Returns:** weighted values tensor (B, S_q, D_v)\n\n**Constraints:**\n- Scale scores by `1/sqrt(d_k)`\n- Support cross-attention (S_q != S_k)",
       "descriptionZh": "实现缩放点积注意力。\n\n这是核心注意力机制：计算查询和键之间的相似度分数，然后用它们对值进行加权。\n\n**签名:** `scaled_dot_product_attention(Q, K, V) -> Tensor`\n\n**参数:**\n- `Q` — 查询张量 (B, S_q, D)\n- `K` — 键张量 (B, S_k, D)\n- `V` — 值张量 (B, S_k, D_v)\n\n**返回:** 加权后的值张量 (B, S_q, D_v)\n\n**约束:**\n- 分数需除以 `sqrt(d_k)` 进行缩放\n- 支持交叉注意力（S_q != S_k）",
+      "version": 1,
       "tests": [
         {
           "name": "Output shape",
@@ -730,6 +754,7 @@
       "hintZh": "train：每个词拆分为字符 + `</w>`，统计相邻对频率，合并最高频对，重复\nencode：按学习到的合并顺序将文本拆分为子词 token",
       "descriptionEn": "Implement Byte-Pair Encoding (BPE) tokenization.\n\nBPE iteratively merges the most frequent adjacent symbol pairs to build a subword vocabulary, widely used in modern language models.\n\n**Signature:** `SimpleBPE()` (class)\n\n**Methods:**\n- `train(corpus: list[str], num_merges: int)` — learn merge rules from a word list\n- `encode(text: str) -> list[str]` — tokenize text into subword tokens\n\n**Constraints:**\n- Append `</w>` to mark word boundaries\n- `self.merges` stores learned pairs in order\n- `encode` applies merges sequentially",
       "descriptionZh": "实现字节对编码（BPE）分词。\n\nBPE 通过迭代合并最频繁的相邻符号对来构建子词词表，广泛用于现代语言模型。\n\n**签名:** `SimpleBPE()`（类）\n\n**方法:**\n- `train(corpus: list[str], num_merges: int)` — 从词列表中学习合并规则\n- `encode(text: str) -> list[str]` — 将文本分词为子词 token\n\n**约束:**\n- 使用 `</w>` 标记词边界\n- `self.merges` 按顺序存储学习到的合并对\n- `encode` 按顺序应用合并规则",
+      "version": 1,
       "tests": [
         {
           "name": "Correct number of merges",
@@ -767,6 +792,7 @@
       "hintZh": "标准注意力 + 因果遮蔽。`torch.triu(ones, diagonal=1)` 得到上三角 → softmax 前填 `-inf`。",
       "descriptionEn": "Implement causal (masked) self-attention.\n\nLike standard attention but prevents each position from attending to future positions, essential for autoregressive models like GPT.\n\n**Signature:** `causal_attention(Q, K, V) -> Tensor`\n\n**Parameters:**\n- `Q` — query tensor (B, S, D)\n- `K` — key tensor (B, S, D)\n- `V` — value tensor (B, S, D)\n\n**Returns:** causally masked attention output (B, S, D)\n\n**Constraints:**\n- Mask future positions with `-inf` before softmax\n- Position 0 should only see itself",
       "descriptionZh": "实现因果（掩码）自注意力。\n\n与标准注意力类似，但阻止每个位置关注未来位置，这对 GPT 等自回归模型至关重要。\n\n**签名:** `causal_attention(Q, K, V) -> Tensor`\n\n**参数:**\n- `Q` — 查询张量 (B, S, D)\n- `K` — 键张量 (B, S, D)\n- `V` — 值张量 (B, S, D)\n\n**返回:** 因果掩码注意力输出 (B, S, D)\n\n**约束:**\n- 在 softmax 之前用 `-inf` 掩盖未来位置\n- 位置 0 只能看到自身",
+      "version": 1,
       "tests": [
         {
           "name": "Output shape",
@@ -800,6 +826,7 @@
       "hintZh": "1. chosen_logratios = β·(π_chosen - ref_chosen)\n2. rejected_logratios = β·(π_rejected - ref_rejected)\n3. loss = -log(sigmoid(chosen_logratios - rejected_logratios)).mean()",
       "descriptionEn": "Implement the DPO (Direct Preference Optimization) loss.\n\nDPO aligns language models with human preferences without reinforcement learning, using paired chosen/rejected log-probabilities.\n\n**Signature:** `dpo_loss(policy_chosen_logps, policy_rejected_logps, ref_chosen_logps, ref_rejected_logps, beta=0.1) -> Tensor`\n\n**Parameters:**\n- `policy_chosen_logps` — policy log-probs for chosen responses (B,)\n- `policy_rejected_logps` — policy log-probs for rejected responses (B,)\n- `ref_chosen_logps`, `ref_rejected_logps` — reference model log-probs (B,)\n- `beta` — temperature scaling factor\n\n**Returns:** scalar loss\n\n**Constraints:**\n- `L = -log(sigmoid(beta * ((pi_c - ref_c) - (pi_r - ref_r)))).mean()`",
       "descriptionZh": "实现 DPO（直接偏好优化）损失。\n\nDPO 无需强化学习即可将语言模型与人类偏好对齐，使用配对的选中/拒绝对数概率。\n\n**签名:** `dpo_loss(policy_chosen_logps, policy_rejected_logps, ref_chosen_logps, ref_rejected_logps, beta=0.1) -> Tensor`\n\n**参数:**\n- `policy_chosen_logps` — 策略模型对选中回复的对数概率 (B,)\n- `policy_rejected_logps` — 策略模型对拒绝回复的对数概率 (B,)\n- `ref_chosen_logps`, `ref_rejected_logps` — 参考模型的对数概率 (B,)\n- `beta` — 温度缩放因子\n\n**返回:** 标量损失\n\n**约束:**\n- `L = -log(sigmoid(beta * ((pi_c - ref_c) - (pi_r - ref_r)))).mean()`",
+      "version": 1,
       "tests": [
         {
           "name": "Easy pair: small loss",
@@ -833,6 +860,7 @@
       "hintZh": "分块处理 Q。对每个 Q 块，遍历 K/V 块：\n1. `block_max = scores.max(dim=-1)` → `new_max = max(row_max, block_max)`\n2. `correction = exp(row_max - new_max)` → 重新缩放 `acc` 和 `row_sum`\n3. `acc += exp(scores - new_max) @ V_block`\n4. `output = acc / row_sum`",
       "descriptionEn": "Implement tiled (flash) attention with online softmax.\n\nFlash attention processes Q/K/V in blocks to reduce memory usage, using the online softmax trick to maintain numerical correctness across tiles.\n\n**Signature:** `flash_attention(Q, K, V, block_size=32) -> Tensor`\n\n**Parameters:**\n- `Q`, `K`, `V` — input tensors (B, S, D)\n- `block_size` — tile size for blocking\n\n**Returns:** attention output (B, S, D), identical to standard attention\n\n**Constraints:**\n- Must match standard softmax attention numerically\n- Handle non-aligned sequence lengths (S not divisible by block_size)\n- Result must be invariant to block_size choice",
       "descriptionZh": "实现分块（Flash）注意力与在线 softmax。\n\nFlash 注意力将 Q/K/V 分块处理以减少内存使用，利用在线 softmax 技巧在分块间保持数值正确性。\n\n**签名:** `flash_attention(Q, K, V, block_size=32) -> Tensor`\n\n**参数:**\n- `Q`, `K`, `V` — 输入张量 (B, S, D)\n- `block_size` — 分块大小\n\n**返回:** 注意力输出 (B, S, D)，与标准注意力数值一致\n\n**约束:**\n- 必须与标准 softmax 注意力数值匹配\n- 处理非对齐序列长度（S 不能被 block_size 整除）\n- 结果不受 block_size 选择影响",
+      "version": 1,
       "tests": [
         {
           "name": "Matches standard attention",
@@ -862,6 +890,7 @@
       "hintZh": "Pre-norm 残差：`x = x + attn(ln1(x))`，`x = x + mlp(ln2(x))`。MLP：`Linear(d,4d) → GELU → Linear(4d,d)`。注意力必须是因果的（用 `-inf` 遮蔽未来）。",
       "descriptionEn": "Implement a GPT-2 transformer block as an nn.Module.\n\nA GPT-2 block uses pre-norm architecture: LayerNorm before causal self-attention and MLP, with residual connections around both.\n\n**Signature:** `GPT2Block(d_model, num_heads)` (nn.Module)\n\n**Forward:** `forward(x) -> Tensor`\n- `x` — input tensor (B, S, d_model)\n\n**Returns:** output tensor (B, S, d_model)\n\n**Constraints:**\n- Pre-norm: `x = x + attn(ln1(x))`, `x = x + mlp(ln2(x))`\n- MLP: Linear(d, 4d) -> GELU -> Linear(4d, d)\n- Attention must be causal (future tokens cannot affect past)",
       "descriptionZh": "实现 GPT-2 Transformer 块（nn.Module）。\n\nGPT-2 块使用 pre-norm 架构：在因果自注意力和 MLP 之前进行 LayerNorm，两者都有残差连接。\n\n**签名:** `GPT2Block(d_model, num_heads)`（nn.Module）\n\n**前向传播:** `forward(x) -> Tensor`\n- `x` — 输入张量 (B, S, d_model)\n\n**返回:** 输出张量 (B, S, d_model)\n\n**约束:**\n- Pre-norm：`x = x + attn(ln1(x))`，`x = x + mlp(ln2(x))`\n- MLP：Linear(d, 4d) -> GELU -> Linear(4d, d)\n- 注意力必须是因果的（未来 token 不能影响过去）",
+      "version": 1,
       "tests": [
         {
           "name": "Output shape",
@@ -895,6 +924,7 @@
       "hintZh": "1. `W_q` → `(B,H,S,d_k)`，`W_k`/`W_v` → `(B,KV,S,d_k)`\n2. `K = K.repeat_interleave(H//KV, dim=1)` 扩展 KV 头\n3. 缩放点积注意力 → reshape 为 `(B,S,d_model)`",
       "descriptionEn": "Implement Grouped Query Attention (GQA).\n\nGQA uses fewer KV heads than query heads, sharing each KV head across a group of query heads. This reduces KV cache size while preserving quality.\n\n**Signature:** `GroupQueryAttention(d_model, num_heads, num_kv_heads)`\n\n**Forward:** `forward(x) -> Tensor`\n- `x` — input tensor (B, S, d_model)\n\n**Returns:** attention output (B, S, d_model)\n\n**Constraints:**\n- W_k/W_v project to `num_kv_heads * d_k` dimensions\n- Expand KV heads with `repeat_interleave` to match query heads\n- Degenerates to standard MHA when `num_kv_heads == num_heads`",
       "descriptionZh": "实现分组查询注意力（GQA）。\n\nGQA 使用比查询头更少的 KV 头，每个 KV 头在一组查询头之间共享，在保持质量的同时减少 KV 缓存大小。\n\n**签名:** `GroupQueryAttention(d_model, num_heads, num_kv_heads)`\n\n**前向传播:** `forward(x) -> Tensor`\n- `x` — 输入张量 (B, S, d_model)\n\n**返回:** 注意力输出 (B, S, d_model)\n\n**约束:**\n- W_k/W_v 投影到 `num_kv_heads * d_k` 维\n- 使用 `repeat_interleave` 扩展 KV 头以匹配查询头数\n- 当 `num_kv_heads == num_heads` 时退化为标准 MHA",
+      "version": 1,
       "tests": [
         {
           "name": "Is nn.Module",
@@ -932,6 +962,7 @@
       "hintZh": "1. 对每个组 g：A_i = (r_i - mean_g) / (std_g + eps)\n2. advantages = A.detach()（梯度不流经奖励）\n3. loss = -(advantages * logps).mean()",
       "descriptionEn": "Implement the GRPO (Group Relative Policy Optimization) loss.\n\nGRPO normalizes rewards within each prompt group to compute advantages, then optimizes the policy using these group-relative advantages.\n\n**Signature:** `grpo_loss(logps, rewards, group_ids, eps=1e-5) -> Tensor`\n\n**Parameters:**\n- `logps` — policy log-probabilities (B,)\n- `rewards` — scalar rewards (B,)\n- `group_ids` — integer group identifiers (B,)\n- `eps` — epsilon for numerical stability\n\n**Returns:** scalar loss\n\n**Constraints:**\n- Per-group z-score normalization: `A_i = (r_i - mean_g) / (std_g + eps)`\n- Advantages must be detached (gradients flow only through logps)\n- Loss = `-mean(A_i * logps_i)`",
       "descriptionZh": "实现 GRPO（组相对策略优化）损失。\n\nGRPO 在每个提示组内归一化奖励以计算优势值，然后使用这些组相对优势优化策略。\n\n**签名:** `grpo_loss(logps, rewards, group_ids, eps=1e-5) -> Tensor`\n\n**参数:**\n- `logps` — 策略对数概率 (B,)\n- `rewards` — 标量奖励 (B,)\n- `group_ids` — 整数组标识符 (B,)\n- `eps` — 数值稳定性的 epsilon\n\n**返回:** 标量损失\n\n**约束:**\n- 组内 z-score 归一化：`A_i = (r_i - mean_g) / (std_g + eps)`\n- 优势值必须 detach（梯度仅通过 logps 流动）\n- 损失 = `-mean(A_i * logps_i)`",
+      "version": 1,
       "tests": [
         {
           "name": "Basic shape & type",
@@ -961,6 +992,7 @@
       "hintZh": "1. scale = abs(weight).max(dim=1) / 127（逐输出通道，keepdim）\n2. weight_int8 = round(weight / scale).clamp(-128, 127).to(int8)\n3. 两者均注册为 buffer（非 parameter）\n4. 前向：dequant = weight_int8.float() * scale → x @ dequant.T",
       "descriptionEn": "Implement INT8 per-channel weight quantization for a linear layer.\n\nQuantization converts float32 weights to int8 with per-channel scaling, reducing model size by 4x while preserving accuracy.\n\n**Signature:** `Int8Linear(weight, bias=None)` (nn.Module)\n\n**Forward:** `forward(x) -> Tensor`\n- `x` — input tensor (*, in_features)\n\n**Returns:** linear output with dequantized weights\n\n**Constraints:**\n- Per-channel scale: `abs(weight).max(dim=1) / 127`\n- Quantize: `round(weight/scale).clamp(-128, 127).to(int8)`\n- Store weight_int8 and scale as buffers, not parameters",
       "descriptionZh": "实现 INT8 逐通道权重量化线性层。\n\n量化将 float32 权重转换为 int8 并使用逐通道缩放，将模型大小减少 4 倍同时保持精度。\n\n**签名:** `Int8Linear(weight, bias=None)`（nn.Module）\n\n**前向传播:** `forward(x) -> Tensor`\n- `x` — 输入张量 (*, in_features)\n\n**返回:** 使用反量化权重的线性输出\n\n**约束:**\n- 逐通道缩放：`abs(weight).max(dim=1) / 127`\n- 量化：`round(weight/scale).clamp(-128, 127).to(int8)`\n- weight_int8 和 scale 存储为 buffer 而非 parameter",
+      "version": 1,
       "tests": [
         {
           "name": "Weight is int8",
@@ -994,6 +1026,7 @@
       "hintZh": "1. 投影 Q/K/V → reshape 为 `(B, num_heads, S, d_k)`\n2. 有缓存时：K = cat([cache_K, K], dim=2),  V = cat([cache_V, V], dim=2)\n3. S_new > 1（预填充）时应用因果掩码\n4. 缩放点积注意力 → 输出投影\n5. 返回 (output, (K_all, V_all))",
       "descriptionEn": "Implement multi-head attention with KV cache for efficient autoregressive decoding.\n\nKV caching stores previously computed keys and values, so each decode step only processes the new token instead of the full sequence.\n\n**Signature:** `KVCacheAttention(d_model, num_heads)` (nn.Module)\n\n**Forward:** `forward(x, cache=None) -> (Tensor, tuple)`\n- `x` — input tensor (B, S_new, d_model)\n- `cache` — optional (K, V) tuple from previous steps\n\n**Returns:** (output, (K_all, V_all)) where cache grows each step\n\n**Constraints:**\n- Concatenate new K/V with cached along sequence dim\n- Apply causal mask during prefill (S_new > 1)\n- Incremental decode must match full forward numerically",
       "descriptionZh": "实现带 KV 缓存的多头注意力，用于高效自回归解码。\n\nKV 缓存存储之前计算的键和值，使每个解码步骤只需处理新 token 而非完整序列。\n\n**签名:** `KVCacheAttention(d_model, num_heads)`（nn.Module）\n\n**前向传播:** `forward(x, cache=None) -> (Tensor, tuple)`\n- `x` — 输入张量 (B, S_new, d_model)\n- `cache` — 可选的前序步骤 (K, V) 元组\n\n**返回:** (输出, (K_all, V_all))，缓存逐步增长\n\n**约束:**\n- 将新 K/V 与缓存沿序列维度拼接\n- 预填充时（S_new > 1）应用因果掩码\n- 增量解码必须与完整前向传播数值一致",
+      "version": 1,
       "tests": [
         {
           "name": "Output shape (no cache)",
@@ -1027,6 +1060,7 @@
       "hintZh": "`phi(x) = elu(x) + 1`。令 `KV = phi(K).transpose(-2, -1) @ V`，`Z = phi(K).sum(dim=-2, keepdim=True)`。输出 = `(phi(Q) @ KV) / (phi(Q) @ Z.transpose(-2, -1) + 1e-6)`。",
       "descriptionEn": "Implement linear self-attention with kernel feature maps.\n\nLinear attention replaces softmax with a feature map phi, enabling O(S*D^2) complexity instead of O(S^2*D) by reordering the computation.\n\n**Signature:** `linear_attention(Q, K, V) -> Tensor`\n\n**Parameters:**\n- `Q` — query tensor (B, S, D_k)\n- `K` — key tensor (B, S, D_k)\n- `V` — value tensor (B, S, D_v)\n\n**Returns:** attention output (B, S, D_v)\n\n**Constraints:**\n- Feature map: `phi(x) = elu(x) + 1`\n- Compute `phi(Q) @ (phi(K)^T @ V)` not `softmax(Q @ K^T) @ V`\n- Normalize by `phi(Q) @ sum(phi(K))` (add `eps=1e-6` for numerical stability)",
       "descriptionZh": "实现基于核特征映射的线性自注意力。\n\n线性注意力用特征映射 phi 替代 softmax，通过重排计算顺序将复杂度从 O(S^2*D) 降至 O(S*D^2)。\n\n**签名:** `linear_attention(Q, K, V) -> Tensor`\n\n**参数:**\n- `Q` — 查询张量 (B, S, D_k)\n- `K` — 键张量 (B, S, D_k)\n- `V` — 值张量 (B, S, D_v)\n\n**返回:** 注意力输出 (B, S, D_v)\n\n**约束:**\n- 特征映射：`phi(x) = elu(x) + 1`\n- 计算 `phi(Q) @ (phi(K)^T @ V)` 而非 `softmax(Q @ K^T) @ V`\n- 通过 `phi(Q) @ sum(phi(K))` 归一化（加 `eps=1e-6` 保证数值稳定）",
+      "version": 1,
       "tests": [
         {
           "name": "Output shape",
@@ -1060,6 +1094,7 @@
       "hintZh": "1. 用 `nn.Linear(d_model, d_model)` 投影 Q/K/V\n2. `.view(...).transpose(1,2)` → `(B, heads, S, d_k)`\n3. `scores = Q @ K.T / sqrt(d_k)` → `softmax` → `@ V`\n4. transpose + reshape → `W_o` 投影",
       "descriptionEn": "Implement Multi-Head Attention from scratch.\n\nMHA projects inputs into multiple heads, computes scaled dot-product attention per head, then concatenates and projects the results.\n\n**Signature:** `MultiHeadAttention(d_model, num_heads)`\n\n**Method:** `forward(Q, K, V) -> Tensor`\n- `Q` — query tensor (B, S_q, d_model)\n- `K` — key tensor (B, S_k, d_model)\n- `V` — value tensor (B, S_k, d_model)\n\n**Returns:** attention output (B, S_q, d_model)\n\n**Constraints:**\n- Use W_q, W_k, W_v, W_o as `nn.Linear(d_model, d_model)`\n- `d_k = d_model // num_heads`\n- Support cross-attention (S_q != S_k)",
       "descriptionZh": "从零实现多头注意力。\n\nMHA 将输入投影到多个头，每个头计算缩放点积注意力，然后拼接并投影结果。\n\n**签名:** `MultiHeadAttention(d_model, num_heads)`\n\n**方法:** `forward(Q, K, V) -> Tensor`\n- `Q` — 查询张量 (B, S_q, d_model)\n- `K` — 键张量 (B, S_k, d_model)\n- `V` — 值张量 (B, S_k, d_model)\n\n**返回:** 注意力输出 (B, S_q, d_model)\n\n**约束:**\n- 使用 W_q、W_k、W_v、W_o 作为 `nn.Linear(d_model, d_model)`\n- `d_k = d_model // num_heads`\n- 支持交叉注意力（S_q != S_k）",
+      "version": 1,
       "tests": [
         {
           "name": "Is nn.Module",
@@ -1101,6 +1136,7 @@
       "hintZh": "`router`：`Linear(d, num_experts)` → `topk` → `softmax` 权重。每个专家：`Linear → ReLU → Linear`。对每个 token 的 top-k 专家输出加权求和。",
       "descriptionEn": "Implement a Mixture of Experts (MoE) layer as an nn.Module.\n\nMoE routes each token to the top-k experts via a learned router, combining their outputs with softmax-normalized weights for conditional computation.\n\n**Signature:** `MixtureOfExperts(d_model, d_ff, num_experts, top_k=2)` (nn.Module)\n\n**Forward:** `forward(x) -> Tensor`\n- `x` — input tensor (B, S, d_model)\n\n**Returns:** output tensor (B, S, d_model)\n\n**Constraints:**\n- Router: `nn.Linear(d_model, num_experts)` -> topk -> softmax\n- Each expert: Linear -> ReLU -> Linear\n- Store experts in `self.experts` (nn.ModuleList)",
       "descriptionZh": "实现混合专家（MoE）层（nn.Module）。\n\nMoE 通过学习的路由器将每个 token 路由到 top-k 个专家，用 softmax 归一化的权重组合它们的输出，实现条件计算。\n\n**签名:** `MixtureOfExperts(d_model, d_ff, num_experts, top_k=2)`（nn.Module）\n\n**前向传播:** `forward(x) -> Tensor`\n- `x` — 输入张量 (B, S, d_model)\n\n**返回:** 输出张量 (B, S, d_model)\n\n**约束:**\n- 路由器：`nn.Linear(d_model, num_experts)` -> topk -> softmax\n- 每个专家：Linear -> ReLU -> Linear\n- 专家存储在 `self.experts`（nn.ModuleList）中",
+      "version": 1,
       "tests": [
         {
           "name": "Output shape",
@@ -1134,6 +1170,7 @@
       "hintZh": "1. r = exp(new_logps - old_logps.detach())\n2. unclipped = r * advantages.detach()\n3. clipped = clamp(r, 1-ε, 1+ε) * advantages.detach()\n4. loss = -min(unclipped, clipped).mean()",
       "descriptionEn": "Implement the PPO clipped surrogate loss.\n\nPPO constrains policy updates by clipping the importance sampling ratio, preventing destructively large updates during reinforcement learning.\n\n**Signature:** `ppo_loss(new_logps, old_logps, advantages, clip_ratio=0.2) -> Tensor`\n\n**Parameters:**\n- `new_logps` — current policy log-probs (B,)\n- `old_logps` — old policy log-probs (B,), treated as constant\n- `advantages` — advantage estimates (B,), treated as constant\n- `clip_ratio` — clipping range epsilon\n\n**Returns:** scalar loss\n\n**Constraints:**\n- Ratio: `r = exp(new_logps - old_logps.detach())`\n- Loss: `-min(r * A, clamp(r, 1-eps, 1+eps) * A).mean()`\n- Gradients flow only through new_logps",
       "descriptionZh": "实现 PPO 裁剪代理损失。\n\nPPO 通过裁剪重要性采样比率来约束策略更新，防止强化学习中的破坏性大幅更新。\n\n**签名:** `ppo_loss(new_logps, old_logps, advantages, clip_ratio=0.2) -> Tensor`\n\n**参数:**\n- `new_logps` — 当前策略对数概率 (B,)\n- `old_logps` — 旧策略对数概率 (B,)，视为常量\n- `advantages` — 优势估计 (B,)，视为常量\n- `clip_ratio` — 裁剪范围 epsilon\n\n**返回:** 标量损失\n\n**约束:**\n- 比率：`r = exp(new_logps - old_logps.detach())`\n- 损失：`-min(r * A, clamp(r, 1-eps, 1+eps) * A).mean()`\n- 梯度仅通过 new_logps 流动",
+      "version": 1,
       "tests": [
         {
           "name": "Basic shape & type",
@@ -1159,6 +1196,7 @@
       "hintZh": "1. `freqs = 1 / 10000^(2i/D)`，i 取 `range(D//2)`\n2. `angles = pos[:, None] * freqs` → `cos_a`、`sin_a`\n3. 拆分：`x_e = x[..., 0::2]`，`x_o = x[..., 1::2]`\n4. 旋转：`[x_e*cos - x_o*sin, x_e*sin + x_o*cos]` → stack → flatten",
       "descriptionEn": "Implement Rotary Position Embedding (RoPE).\n\nRoPE encodes position information by rotating query and key vectors in pairs, enabling relative position awareness through dot-product properties.\n\n**Signature:** `apply_rope(q, k) -> (Tensor, Tensor)`\n\n**Parameters:**\n- `q` — query tensor (B, S, D)\n- `k` — key tensor (B, S, D)\n\n**Returns:** tuple of rotated (q, k) with same shapes\n\n**Constraints:**\n- Split into even/odd pairs, apply rotation with `angles = pos * 1/(10000^(2i/D))`\n- Must preserve vector norms\n- Dot products should depend only on relative position",
       "descriptionZh": "实现旋转位置编码（RoPE）。\n\nRoPE 通过成对旋转查询和键向量来编码位置信息，利用点积性质实现相对位置感知。\n\n**签名:** `apply_rope(q, k) -> (Tensor, Tensor)`\n\n**参数:**\n- `q` — 查询张量 (B, S, D)\n- `k` — 键张量 (B, S, D)\n\n**返回:** 旋转后的 (q, k) 元组，形状不变\n\n**约束:**\n- 按奇偶对分割，使用 `angles = pos * 1/(10000^(2i/D))` 旋转\n- 必须保持向量范数不变\n- 点积应仅依赖于相对位置",
+      "version": 1,
       "tests": [
         {
           "name": "Output shapes",
@@ -1192,6 +1230,7 @@
       "hintZh": "标准注意力 + 窗口遮蔽。构造 `|i-j|` 矩阵 → 将 `|i-j| > window_size` 的位置填 `-inf` → softmax → `@ V`。",
       "descriptionEn": "Implement sliding window attention.\n\nSliding window attention restricts each position to attend only within a fixed window, reducing complexity for long sequences while maintaining local context.\n\n**Signature:** `sliding_window_attention(Q, K, V, window_size) -> Tensor`\n\n**Parameters:**\n- `Q`, `K`, `V` — input tensors (B, S, D)\n- `window_size` — each position attends to positions within |i-j| <= window_size\n\n**Returns:** attention output (B, S, D)\n\n**Constraints:**\n- Mask positions where `|i - j| > window_size` with `-inf`\n- `window_size=0` means each position only sees itself\n- Large window equals full attention",
       "descriptionZh": "实现滑动窗口注意力。\n\n滑动窗口注意力限制每个位置只关注固定窗口内的位置，在保持局部上下文的同时降低长序列的复杂度。\n\n**签名:** `sliding_window_attention(Q, K, V, window_size) -> Tensor`\n\n**参数:**\n- `Q`, `K`, `V` — 输入张量 (B, S, D)\n- `window_size` — 每个位置关注 |i-j| <= window_size 范围内的位置\n\n**返回:** 注意力输出 (B, S, D)\n\n**约束:**\n- 用 `-inf` 掩盖 `|i - j| > window_size` 的位置\n- `window_size=0` 表示每个位置只能看到自身\n- 大窗口等同于全注意力",
+      "version": 1,
       "tests": [
         {
           "name": "Output shape",
@@ -1225,6 +1264,7 @@
       "hintZh": "for i in range(K):\n  accept_prob = min(1, p_target[i, token] / p_draft[i, token])\n  若接受：追加 token，继续\n  若拒绝：从归一化的 max(0, p_target[i] - p_draft[i]) 重采样，追加后返回",
       "descriptionEn": "Implement speculative decoding for faster LLM inference.\n\nSpeculative decoding uses a fast draft model to propose tokens, then verifies them against the target model, accepting or resampling based on probability ratios.\n\n**Signature:** `speculative_decode(target_probs, draft_probs, draft_tokens) -> list[int]`\n\n**Parameters:**\n- `target_probs` — target model probabilities (K, V)\n- `draft_probs` — draft model probabilities (K, V)\n- `draft_tokens` — proposed token IDs (K,)\n\n**Returns:** list of accepted token IDs (length 1 to K)\n\n**Constraints:**\n- Accept with prob `min(1, p_target/p_draft)`\n- On rejection, resample from `max(0, p_target - p_draft)` normalized\n- Stop at first rejection (return accepted so far + resampled token)",
       "descriptionZh": "实现推测解码以加速 LLM 推理。\n\n推测解码使用快速草稿模型提议 token，然后根据概率比率与目标模型验证，接受或重新采样。\n\n**签名:** `speculative_decode(target_probs, draft_probs, draft_tokens) -> list[int]`\n\n**参数:**\n- `target_probs` — 目标模型概率 (K, V)\n- `draft_probs` — 草稿模型概率 (K, V)\n- `draft_tokens` — 提议的 token ID (K,)\n\n**返回:** 接受的 token ID 列表（长度 1 到 K）\n\n**约束:**\n- 以概率 `min(1, p_target/p_draft)` 接受\n- 拒绝时从归一化的 `max(0, p_target - p_draft)` 重新采样\n- 在首次拒绝时停止（返回已接受的 + 重采样 token）",
+      "version": 1,
       "tests": [
         {
           "name": "Perfect draft: all accepted",
@@ -1254,6 +1294,7 @@
       "hintZh": "1. `freqs = 1 / 10000^(2i/d_model)`，i 取 `range(d_model//2)`\n2. `angles = pos[:, None] * freqs[None, :]` → 形状 `(seq_len, d_model//2)`\n3. `pe[:, 0::2] = sin(angles)`，`pe[:, 1::2] = cos(angles)`",
       "descriptionEn": "Implement the sinusoidal position encoding from 'Attention Is All You Need'.\n\nPosition encodings are added to token embeddings to give the model information about token positions. The original Transformer uses fixed sinusoidal functions.\n\n**Signature:** `sinusoidal_pe(seq_len, d_model) -> Tensor`\n\n**Parameters:**\n- `seq_len` — number of positions\n- `d_model` — embedding dimension (must be even)\n\n**Returns:** position encoding tensor of shape `(seq_len, d_model)`\n\n**Formula:**\n- `PE(pos, 2i)   = sin(pos / 10000^(2i/d_model))`\n- `PE(pos, 2i+1) = cos(pos / 10000^(2i/d_model))`",
       "descriptionZh": "实现《Attention Is All You Need》中的正弦位置编码。\n\n位置编码加到词嵌入上，让模型感知 token 的位置信息。原始 Transformer 使用固定的正弦函数。\n\n**签名:** `sinusoidal_pe(seq_len, d_model) -> Tensor`\n\n**参数:**\n- `seq_len` — 位置数量\n- `d_model` — 嵌入维度（必须为偶数）\n\n**返回:** 形状为 `(seq_len, d_model)` 的位置编码张量\n\n**公式:**\n- `PE(pos, 2i)   = sin(pos / 10000^(2i/d_model))`\n- `PE(pos, 2i+1) = cos(pos / 10000^(2i/d_model))`",
+      "version": 1,
       "tests": [
         {
           "name": "Output shape",
@@ -1283,6 +1324,7 @@
       "hintZh": "1. `soft = full((N,C), ε/(C-1))`，再 `soft.scatter_(1, targets, 1-ε)`\n2. 用稳定 log-softmax 得到 `log_probs`\n3. `return -(soft * log_probs).sum(dim=-1).mean()`",
       "descriptionEn": "Implement label smoothing cross-entropy loss.\n\nLabel smoothing prevents overconfidence by mixing the one-hot target distribution with a uniform distribution. It is widely used in Transformer training.\n\n**Signature:** `label_smoothing(logits, targets, smoothing=0.1) -> Tensor`\n\n**Parameters:**\n- `logits` — raw model outputs, shape `(N, C)`\n- `targets` — integer class indices, shape `(N,)`\n- `smoothing` — smoothing factor ε ∈ [0, 1)\n\n**Returns:** scalar loss\n\n**Formula:** soft target for correct class = `1 - ε`, for others = `ε / (C - 1)`",
       "descriptionZh": "实现标签平滑交叉熵损失。\n\n标签平滑通过将 one-hot 目标分布与均匀分布混合来防止过度自信，在 Transformer 训练中被广泛使用。\n\n**签名:** `label_smoothing(logits, targets, smoothing=0.1) -> Tensor`\n\n**参数:**\n- `logits` — 模型原始输出，形状 `(N, C)`\n- `targets` — 整数类别索引，形状 `(N,)`\n- `smoothing` — 平滑系数 ε ∈ [0, 1)\n\n**返回:** 标量损失\n\n**公式:** 正确类别的软目标 = `1 - ε`，其他类别 = `ε / (C - 1)`",
+      "version": 1,
       "tests": [
         {
           "name": "Returns scalar",
@@ -1316,6 +1358,7 @@
       "hintZh": "1. `gate = (x @ Wgate) * sigmoid(x @ Wgate)`  ← swish\n2. `hidden = (x @ W1) * gate`\n3. `return hidden @ W2`",
       "descriptionEn": "Implement the SwiGLU gated activation function.\n\nSwiGLU is used in LLaMA, PaLM, and other modern LLMs as the MLP activation. It gates one linear projection with a Swish-activated version of another.\n\n**Signature:** `swiglu(x, W1, W2, Wgate) -> Tensor`\n\n**Parameters:**\n- `x` — input tensor `(B, d_model)`\n- `W1` — weight matrix `(d_model, d_ff)`\n- `W2` — output projection `(d_ff, d_model)`\n- `Wgate` — gate weight `(d_model, d_ff)`\n\n**Returns:** output tensor `(B, d_model)`\n\n**Formula:** `hidden = (x @ W1) * swish(x @ Wgate)`, output = `hidden @ W2`\n\n**Swish:** `swish(z) = z * sigmoid(z)`",
       "descriptionZh": "实现 SwiGLU 门控激活函数。\n\nSwiGLU 被 LLaMA、PaLM 等现代大语言模型用作 MLP 激活函数，用一个线性投影的 Swish 激活版本对另一个进行门控。\n\n**签名:** `swiglu(x, W1, W2, Wgate) -> Tensor`\n\n**参数:**\n- `x` — 输入张量 `(B, d_model)`\n- `W1` — 权重矩阵 `(d_model, d_ff)`\n- `W2` — 输出投影 `(d_ff, d_model)`\n- `Wgate` — 门控权重 `(d_model, d_ff)`\n\n**返回:** 输出张量 `(B, d_model)`\n\n**公式:** 隐藏状态 = `(x @ W1) * swish(x @ Wgate)`，输出 = `隐藏状态 @ W2`\n\n**Swish:** `swish(z) = z * sigmoid(z)`",
+      "version": 1,
       "tests": [
         {
           "name": "Output shape",
@@ -1341,6 +1384,7 @@
       "hintZh": "1. 斜率：`m_h = 2**(-8*h/H)`，h=1..H\n2. 距离矩阵：`|i-j|`，形状 `(S,S)`\n3. 偏置：`-slopes[:, None, None] * distances`，形状 `(H,S,S)`\n4. 标准多头注意力，将偏置加到 scores 上",
       "descriptionEn": "Implement Attention with Linear Biases (ALiBi).\n\nALiBi replaces positional embeddings with a fixed linear bias added to attention scores. Each head gets a different slope `m_h`, penalizing attention to distant tokens.\n\n**Signature:** `alibi_attention(Q, K, V, num_heads) -> Tensor`\n\n**Parameters:**\n- `Q, K, V` — tensors of shape `(B, S, D)`\n- `num_heads` — number of attention heads\n\n**Returns:** output tensor `(B, S, D)`\n\n**Slope schedule:** `m_h = 1 / 2^(8h/H)` for h = 1..H\n\n**Bias:** `bias[h, i, j] = -m_h * |i - j|` (added to attention scores before softmax)",
       "descriptionZh": "实现带线性偏置的注意力（ALiBi）。\n\nALiBi 用固定线性偏置替代位置嵌入，直接加到注意力分数上。每个头有不同的斜率 `m_h`，对远距离 token 的注意力施加惩罚。\n\n**签名:** `alibi_attention(Q, K, V, num_heads) -> Tensor`\n\n**参数:**\n- `Q, K, V` — 形状 `(B, S, D)` 的张量\n- `num_heads` — 注意力头数\n\n**返回:** 输出张量 `(B, S, D)`\n\n**斜率:** `m_h = 1 / 2^(8h/H)`，h = 1..H\n\n**偏置:** `bias[h, i, j] = -m_h * |i - j|`（在 softmax 前加到注意力分数上）",
+      "version": 1,
       "tests": [
         {
           "name": "Output shape",
@@ -1370,6 +1414,7 @@
       "hintZh": "`new_base = 10000 * scale**(D/(D-2))` → 用 `new_base` 替换 `10000` 应用标准 RoPE。",
       "descriptionEn": "Implement NTK-aware RoPE scaling for long-context extrapolation.\n\nStandard RoPE degrades on sequences longer than the training context. NTK-aware scaling adjusts the base frequency so that high-frequency dimensions are preserved while low-frequency ones are stretched, enabling extrapolation without fine-tuning.\n\n**Signature:** `ntk_rope(q, k, scale) -> (Tensor, Tensor)`\n\n**Parameters:**\n- `q, k` — tensors of shape `(B, S, D)`\n- `scale` — context length ratio (new_len / train_len), e.g. 4.0 for 4× context\n\n**Returns:** rotated `(q, k)` with same shapes\n\n**NTK base:** `base_new = 10000 * scale^(D/(D-2))`\n\nThen apply standard RoPE with the new base.",
       "descriptionZh": "实现 NTK-aware RoPE 缩放，用于长上下文外推。\n\n标准 RoPE 在超过训练上下文长度的序列上性能下降。NTK-aware 缩放调整基础频率，保留高频维度同时拉伸低频维度，无需微调即可外推。\n\n**签名:** `ntk_rope(q, k, scale) -> (Tensor, Tensor)`\n\n**参数:**\n- `q, k` — 形状 `(B, S, D)` 的张量\n- `scale` — 上下文长度比例（新长度/训练长度），如 4× 上下文传 4.0\n\n**返回:** 旋转后的 `(q, k)`，形状不变\n\n**NTK 基底:** `base_new = 10000 * scale^(D/(D-2))`\n\n然后用新基底应用标准 RoPE。",
+      "version": 1,
       "tests": [
         {
           "name": "Output shapes",
@@ -1403,6 +1448,7 @@
       "hintZh": "1. model.half() → fp16 输入前向传播\n2. 计算 loss → 乘以 loss_scale → 反向传播\n3. 所有 param.grad 除以 loss_scale（反缩放）\n4. model.float() → optimizer.step()\n5. 返回未缩放的 loss（float）",
       "descriptionEn": "Implement one mixed precision training step.\n\nMixed precision training uses fp16 for the forward/backward pass (faster, less memory) while keeping fp32 master weights for numerical stability. Loss scaling prevents fp16 gradient underflow.\n\n**Signature:** `mixed_precision_step(model, optimizer, loss_fn, x, y, loss_scale=1024.0) -> float`\n\n**Parameters:**\n- `model` — nn.Module with fp32 parameters\n- `optimizer` — optimizer holding fp32 params\n- `loss_fn` — callable `(output, target) -> scalar loss`\n- `x, y` — input and target tensors\n- `loss_scale` — scalar to multiply loss before backward\n\n**Returns:** unscaled loss value as float\n\n**Steps:**\n1. Cast model to fp16, run forward pass\n2. Compute loss, scale it by `loss_scale`\n3. Run backward on scaled loss\n4. Unscale gradients (divide by `loss_scale`)\n5. Update optimizer (fp32 master weights)\n6. Restore model to fp32\n7. Return original (unscaled) loss",
       "descriptionZh": "实现一步混合精度训练。\n\n混合精度训练用 fp16 做前向/反向传播（更快、更省内存），同时保留 fp32 主权重以保证数值稳定性。Loss scaling 防止 fp16 梯度下溢。\n\n**签名:** `mixed_precision_step(model, optimizer, loss_fn, x, y, loss_scale=1024.0) -> float`\n\n**参数:**\n- `model` — 持有 fp32 参数的 nn.Module\n- `optimizer` — 持有 fp32 参数的优化器\n- `loss_fn` — 可调用对象 `(output, target) -> 标量损失`\n- `x, y` — 输入和目标张量\n- `loss_scale` — 反向传播前乘以 loss 的缩放系数\n\n**返回:** 未缩放的 loss 值（float）\n\n**步骤:**\n1. 将模型转为 fp16，运行前向传播\n2. 计算 loss，乘以 `loss_scale`\n3. 对缩放后的 loss 做反向传播\n4. 反缩放梯度（除以 `loss_scale`）\n5. 更新优化器（fp32 主权重）\n6. 将模型恢复为 fp32\n7. 返回原始（未缩放）loss",
+      "version": 1,
       "tests": [
         {
           "name": "Returns float loss",
@@ -1436,6 +1482,7 @@
       "hintZh": "for b in range(B):\n  K = k_pages[block_table[b]].reshape(-1, D)[:context_len]  # gather + 截取\n  V = v_pages[block_table[b]].reshape(-1, D)[:context_len]\n  scores = Q[b] @ K.T / √D → softmax → @ V",
       "descriptionEn": "Implement paged attention (vLLM-style).\n\nInstead of a contiguous KV cache, keys and values are stored in fixed-size pages (blocks). A block table maps logical block indices to physical page indices, enabling non-contiguous memory allocation.\n\n**Signature:** `paged_attention(Q, k_pages, v_pages, block_table, context_len, block_size) -> Tensor`\n\n**Parameters:**\n- `Q` — query tensor `(B, 1, D)` (single decode step)\n- `k_pages` — key pages `(num_pages, block_size, D)`\n- `v_pages` — value pages `(num_pages, block_size, D)`\n- `block_table` — integer tensor `(B, max_blocks)` mapping logical → physical page\n- `context_len` — number of valid KV tokens per sequence (scalar)\n- `block_size` — tokens per page\n\n**Returns:** output tensor `(B, 1, D)`\n\n**Steps:** Use block_table to gather K/V pages, slice to context_len, then compute standard scaled dot-product attention.",
       "descriptionZh": "实现分页注意力（vLLM 风格）。\n\nKV 缓存不再连续存储，而是存在固定大小的页（block）中。block table 将逻辑块索引映射到物理页索引，实现非连续内存分配。\n\n**签名:** `paged_attention(Q, k_pages, v_pages, block_table, context_len, block_size) -> Tensor`\n\n**参数:**\n- `Q` — 查询张量 `(B, 1, D)`（单步解码）\n- `k_pages` — 键页 `(num_pages, block_size, D)`\n- `v_pages` — 值页 `(num_pages, block_size, D)`\n- `block_table` — 整数张量 `(B, max_blocks)`，逻辑块 → 物理页\n- `context_len` — 每条序列有效 KV token 数（标量）\n- `block_size` — 每页 token 数\n\n**返回:** 输出张量 `(B, 1, D)`\n\n**步骤:** 用 block_table gather K/V 页，截取到 context_len，再做标准缩放点积注意力。",
+      "version": 1,
       "tests": [
         {
           "name": "Output shape",
@@ -1465,6 +1512,7 @@
       "hintZh": "将 Q/K/V 分成 num_devices 块。对每个 Q 块 i，遍历所有 K/V 块（环形顺序）。\n每步 online softmax：\n  m_new = max(m, scores.max)\n  l_new = l·exp(m-m_new) + Σexp(scores-m_new)\n  o = (o·l·exp(m-m_new) + exp(scores-m_new)@V) / l_new",
       "descriptionEn": "Implement ring attention (single-device simulation).\n\nRing attention enables sequence parallelism by partitioning Q/K/V across devices in a ring. Each device holds a Q chunk and rotates K/V chunks around the ring, accumulating attention outputs using online softmax.\n\n**Signature:** `ring_attention(Q, K, V, num_devices) -> Tensor`\n\n**Parameters:**\n- `Q, K, V` — tensors of shape `(B, S, D)`, S divisible by num_devices\n- `num_devices` — number of virtual ring participants\n\n**Returns:** output tensor `(B, S, D)`, numerically equivalent to standard attention\n\n**Algorithm:**\n1. Split Q, K, V into `num_devices` chunks along S\n2. For each Q chunk (device i), iterate over all K/V chunks in ring order\n3. Accumulate using online softmax (track running max and sum)\n4. Reassemble output chunks",
       "descriptionZh": "实现环形注意力（单机模拟）。\n\n环形注意力通过将 Q/K/V 分布在环形拓扑的设备上实现序列并行。每个设备持有一个 Q 分块，K/V 分块在环上轮转，用 online softmax 累加注意力输出。\n\n**签名:** `ring_attention(Q, K, V, num_devices) -> Tensor`\n\n**参数:**\n- `Q, K, V` — 形状 `(B, S, D)` 的张量，S 可被 num_devices 整除\n- `num_devices` — 虚拟环参与者数量\n\n**返回:** 输出张量 `(B, S, D)`，数值上等价于标准注意力\n\n**算法:**\n1. 沿 S 维将 Q, K, V 分成 `num_devices` 个分块\n2. 对每个 Q 分块（设备 i），遍历所有 K/V 分块（环形顺序）\n3. 用 online softmax 累加（跟踪运行最大值和归一化因子）\n4. 重新拼接输出分块",
+      "version": 1,
       "tests": [
         {
           "name": "Output shape",
@@ -1494,6 +1542,7 @@
       "hintZh": "1. W1 按列分片 → w1_shards[i] 形状 `(d_model, d_ff/world_size)`\n2. W2 按行分片 → w2_shards[i] 形状 `(d_ff/world_size, d_model)`\n3. 对每个分片 i：h_i = gelu(x @ w1_i) → partial_i = h_i @ w2_i\n4. all-reduce = sum(所有 partial_i)",
       "descriptionEn": "Implement a Megatron-style tensor parallel MLP.\n\nTensor parallelism splits the MLP weight matrices across devices. The first (up-projection) layer is column-parallel: each shard computes a slice of the hidden dimension. The second (down-projection) is row-parallel: each shard takes a slice of the input and produces the full output, then results are summed (all-reduce).\n\n**Signature:** `TensorParallelMLP(d_model, d_ff, world_size)` (nn.Module)\n\n**Parameters:**\n- `d_model` — input/output dimension\n- `d_ff` — hidden dimension (divisible by world_size)\n- `world_size` — number of virtual shards\n\n**Forward:** `forward(x) -> Tensor` where x is `(B, d_model)`\n\n**Constraint:** Store sharded weights as `nn.ParameterList`. The forward pass must simulate column-parallel + row-parallel + all-reduce. Result must match a standard `d_model -> d_ff -> d_model` MLP with GELU activation.",
       "descriptionZh": "实现 Megatron 风格的张量并行 MLP。\n\n张量并行将 MLP 权重矩阵分片到各设备。第一层（上投影）是列并行：每个分片计算隐藏维度的一个切片。第二层（下投影）是行并行：每个分片接收输入的一个切片并产生完整输出，然后求和（all-reduce）。\n\n**签名:** `TensorParallelMLP(d_model, d_ff, world_size)`（nn.Module）\n\n**参数:**\n- `d_model` — 输入/输出维度\n- `d_ff` — 隐藏维度（可被 world_size 整除）\n- `world_size` — 虚拟分片数\n\n**前向:** `forward(x) -> Tensor`，x 形状 `(B, d_model)`\n\n**约束:** 将分片权重存为 `nn.ParameterList`。前向传播必须模拟列并行 + 行并行 + all-reduce。结果必须与带 GELU 激活的标准 `d_model -> d_ff -> d_model` MLP 一致。",
+      "version": 1,
       "tests": [
         {
           "name": "Output shape",
@@ -1523,6 +1572,7 @@
       "hintZh": "1. all-gather：full_param = torch.cat(param_shards)\n2. grad = grad_fn(full_param)\n3. reduce-scatter：grad_shards = list(grad.chunk(world_size))\n4. new_shards[i] = param_shards[i] - 0.01 * grad_shards[i]",
       "descriptionEn": "Implement a simplified FSDP (Fully Sharded Data Parallel) training step.\n\nFSDP shards model parameters across workers to reduce per-device memory. Before the forward pass, each worker all-gathers the full parameters. After the backward pass, gradients are reduce-scattered so each worker only holds its shard's gradient.\n\n**Signature:** `fsdp_step(param_shards, grad_fn, world_size) -> list[Tensor]`\n\n**Parameters:**\n- `param_shards` — list of `world_size` parameter shards (each a flat 1D tensor)\n- `grad_fn` — callable that takes the full (unsharded) parameter tensor and returns the gradient w.r.t. it\n- `world_size` — number of virtual workers\n\n**Returns:** updated list of parameter shards (after one gradient step with lr=0.01)\n\n**Steps:**\n1. All-gather: concatenate shards to get full parameter\n2. Compute gradient via grad_fn(full_param)\n3. Reduce-scatter: split gradient into world_size chunks, each worker keeps its chunk\n4. Update each shard: shard -= 0.01 * grad_shard",
       "descriptionZh": "实现简化版 FSDP（全分片数据并行）训练步骤。\n\nFSDP 将模型参数分片到各 worker 以减少单设备内存。前向传播前，每个 worker all-gather 完整参数。反向传播后，梯度 reduce-scatter，每个 worker 只保留自己分片的梯度。\n\n**签名:** `fsdp_step(param_shards, grad_fn, world_size) -> list[Tensor]`\n\n**参数:**\n- `param_shards` — `world_size` 个参数分片的列表（每个是扁平 1D 张量）\n- `grad_fn` — 接收完整（未分片）参数张量，返回对应梯度的可调用对象\n- `world_size` — 虚拟 worker 数量\n\n**返回:** 更新后的参数分片列表（一步梯度更新，lr=0.01）\n\n**步骤:**\n1. All-gather：拼接分片得到完整参数\n2. 通过 grad_fn(full_param) 计算梯度\n3. Reduce-scatter：将梯度分成 world_size 块，每个 worker 保留自己的块\n4. 更新每个分片：shard -= 0.01 * grad_shard",
+      "version": 1,
       "tests": [
         {
           "name": "Returns correct number of shards",
@@ -1552,6 +1602,7 @@
       "hintZh": "`x.unfold(2, k, stride).unfold(3, k, stride)` → `(B, C, H_out, W_out, k, k)` → `.flatten(-2).max(dim=-1).values`。",
       "descriptionEn": "Implement 2D max pooling from scratch.\n\nMax pooling slides a window over the spatial dimensions of a feature map and takes the maximum value in each window.\n\n**Signature:** `max_pool2d(x, kernel_size, stride=None) -> Tensor`\n\n**Parameters:**\n- `x` — input tensor of shape (B, C, H, W)\n- `kernel_size` — size of the pooling window (square)\n- `stride` — step size between windows; defaults to `kernel_size` if `None`\n\n**Returns:** tensor of shape (B, C, H_out, W_out) where\n- `H_out = (H - kernel_size) // stride + 1`\n- `W_out = (W - kernel_size) // stride + 1`\n\n**Constraints:**\n- Must match `torch.nn.functional.max_pool2d` numerically\n- Do not call any `F.*` or `nn.functional.*` functions",
       "descriptionZh": "从零实现二维最大池化。\n\n最大池化在特征图的空间维度上滑动窗口，取每个窗口内的最大值。\n\n**签名:** `max_pool2d(x, kernel_size, stride=None) -> Tensor`\n\n**参数:**\n- `x` — 输入张量，形状为 (B, C, H, W)\n- `kernel_size` — 池化窗口大小（正方形）\n- `stride` — 窗口步长；若为 `None` 则默认等于 `kernel_size`\n\n**返回:** 形状为 (B, C, H_out, W_out) 的张量，其中\n- `H_out = (H - kernel_size) // stride + 1`\n- `W_out = (W - kernel_size) // stride + 1`\n\n**约束:**\n- 结果必须与 `torch.nn.functional.max_pool2d` 在数值上一致\n- 不得调用任何 `F.*` 或 `nn.functional.*` 函数",
+      "version": 1,
       "tests": [
         {
           "name": "Output shape (kernel=2, stride=2)",
@@ -1581,6 +1632,7 @@
       "hintZh": "1. 稳定 softmax：`exp(logits - max)` → 归一化 → `probs`\n2. `p_t = probs[arange(N), targets]`\n3. `return (-alpha * (1-p_t)**gamma * log(p_t+1e-8)).mean()`",
       "descriptionEn": "Implement Focal Loss for handling class imbalance in classification.\n\nFocal Loss down-weights easy examples so the model focuses on hard ones. It was introduced in RetinaNet for dense object detection.\n\n**Signature:** `focal_loss(logits, targets, alpha=0.25, gamma=2.0) -> Tensor`\n\n**Parameters:**\n- `logits` — raw class scores, shape (N, C)\n- `targets` — integer class indices, shape (N,)\n- `alpha` — weighting factor (scalar)\n- `gamma` — focusing parameter; higher values down-weight easy examples more\n\n**Returns:** scalar mean loss\n\n**Formula:**\n```\nFL(p_t) = -alpha * (1 - p_t)^gamma * log(p_t)\n```\nwhere `p_t = softmax(logits)[i, targets[i]]`\n\n**Constraints:**\n- Compute softmax manually (no `F.*`)\n- Use numerically stable softmax (subtract max before exp)\n- Return the mean over the batch",
       "descriptionZh": "实现用于处理分类任务中类别不平衡问题的 Focal Loss。\n\nFocal Loss 降低简单样本的权重，使模型专注于困难样本。它由 RetinaNet 在密集目标检测中提出。\n\n**签名:** `focal_loss(logits, targets, alpha=0.25, gamma=2.0) -> Tensor`\n\n**参数:**\n- `logits` — 原始类别分数，形状 (N, C)\n- `targets` — 整数类别索引，形状 (N,)\n- `alpha` — 加权因子（标量）\n- `gamma` — 聚焦参数；值越大，对简单样本的降权越强\n\n**返回:** 标量均值损失\n\n**公式:**\n```\nFL(p_t) = -alpha * (1 - p_t)^gamma * log(p_t)\n```\n其中 `p_t = softmax(logits)[i, targets[i]]`\n\n**约束:**\n- 手动计算 softmax（不得使用 `F.*`）\n- 使用数值稳定的 softmax（exp 前减去最大值）\n- 返回批次上的均值",
+      "version": 1,
       "tests": [
         {
           "name": "Returns scalar",
@@ -1610,6 +1662,7 @@
       "hintZh": "1. `logits = (q @ k.T) / temperature`  形状 `(N, N)`\n2. `log_sum_exp = logits.logsumexp(dim=-1)`\n3. `pos = logits[arange(N), arange(N)]`\n4. `return -(pos - log_sum_exp).mean()`",
       "descriptionEn": "Implement InfoNCE / NT-Xent contrastive loss, the objective used in CLIP and SimCLR.\n\nGiven a batch of query-key pairs, each query `q[i]` should be pulled toward its matching key `k[i]` and pushed away from all other keys.\n\n**Signature:** `contrastive_loss(q, k, temperature=0.07) -> Tensor`\n\n**Parameters:**\n- `q` — query embeddings, shape (N, D), assumed L2-normalized\n- `k` — key embeddings, shape (N, D), assumed L2-normalized; `k[i]` is the positive for `q[i]`\n- `temperature` — softmax temperature τ\n\n**Returns:** scalar mean loss\n\n**Formula:**\n```\nL = mean over i of: -log( exp(q_i·k_i / τ) / Σ_j exp(q_i·k_j / τ) )\n```\nThis is equivalent to cross-entropy with targets `[0, 1, 2, ..., N-1]`.\n\n**Constraints:**\n- Do not use `F.*` or `nn.*` for cross-entropy or softmax\n- Implement the log-sum-exp manually",
       "descriptionZh": "实现 InfoNCE / NT-Xent 对比损失，即 CLIP 和 SimCLR 中使用的训练目标。\n\n给定一批查询-键对，每个查询 `q[i]` 应被拉近其匹配键 `k[i]`，并远离所有其他键。\n\n**签名:** `contrastive_loss(q, k, temperature=0.07) -> Tensor`\n\n**参数:**\n- `q` — 查询嵌入，形状 (N, D)，假设已 L2 归一化\n- `k` — 键嵌入，形状 (N, D)，假设已 L2 归一化；`k[i]` 是 `q[i]` 的正样本\n- `temperature` — softmax 温度 τ\n\n**返回:** 标量均值损失\n\n**公式:**\n```\nL = 对 i 求均值：-log( exp(q_i·k_i / τ) / Σ_j exp(q_i·k_j / τ) )\n```\n等价于目标为 `[0, 1, 2, ..., N-1]` 的交叉熵。\n\n**约束:**\n- 不得使用 `F.*` 或 `nn.*` 计算交叉熵或 softmax\n- 手动实现 log-sum-exp",
+      "version": 1,
       "tests": [
         {
           "name": "Returns scalar",
@@ -1647,6 +1700,7 @@
       "hintZh": "set_weight：`scale = W.abs().max(dim=1,keepdim=True).values.clamp(1e-8)/127`\n            `q = (W/scale).round().clamp(-127,127).to(int8)`\n前向：`W_fp = q.float()*scale` → `x@W_fp.T + x@lora_A@lora_B*(alpha/rank)`",
       "descriptionEn": "Implement QLoRA: a quantized linear layer with LoRA adapters.\n\nQLoRA stores the base weight in int8 (simulating 4-bit quantization) with a per-row fp32 scale, while LoRA adapters remain in full precision for efficient fine-tuning.\n\n**Signature:** `QLoRALinear(in_features, out_features, rank, alpha=1.0)` (nn.Module)\n\n**Parameters stored:**\n- `quantized_weight`: (out_features, in_features), dtype=int8, requires_grad=False\n- `scale`: (out_features, 1), fp32 per-row scale\n- `lora_A`: (in_features, rank), initialized ~ N(0, 0.01²)\n- `lora_B`: (rank, out_features), initialized to zeros\n\n**Forward:**\n1. Dequantize: `W_fp = quantized_weight.float() * scale`\n2. Base output: `x @ W_fp.T`\n3. LoRA delta: `x @ lora_A @ lora_B * (alpha / rank)`\n4. Return base + delta\n\n**Helper:** `set_weight(W_fp32)` quantizes a float weight per-row:\n- `scale = W.abs().max(dim=1, keepdim=True).values / 127`\n- `quantized = (W / scale).round().clamp(-127, 127).to(int8)`",
       "descriptionZh": "实现 QLoRA：带 LoRA 适配器的量化线性层。\n\nQLoRA 将基础权重以 int8 格式存储（模拟 4-bit 量化），配合每行 fp32 缩放因子，同时 LoRA 适配器保持全精度，实现高效微调。\n\n**签名:** `QLoRALinear(in_features, out_features, rank, alpha=1.0)`（nn.Module）\n\n**存储的参数:**\n- `quantized_weight`：(out_features, in_features)，dtype=int8，requires_grad=False\n- `scale`：(out_features, 1)，fp32 每行缩放因子\n- `lora_A`：(in_features, rank)，初始化 ~ N(0, 0.01²)\n- `lora_B`：(rank, out_features)，初始化为零\n\n**前向传播:**\n1. 反量化：`W_fp = quantized_weight.float() * scale`\n2. 基础输出：`x @ W_fp.T`\n3. LoRA 增量：`x @ lora_A @ lora_B * (alpha / rank)`\n4. 返回 base + delta\n\n**辅助方法:** `set_weight(W_fp32)` 按行量化浮点权重：\n- `scale = W.abs().max(dim=1, keepdim=True).values / 127`\n- `quantized = (W / scale).round().clamp(-127, 127).to(int8)`",
+      "version": 1,
       "tests": [
         {
           "name": "Output shape correct",
@@ -1680,6 +1734,7 @@
       "hintZh": "1. `dA = exp(delta.unsqueeze(-1) * A)`  形状 `(B,D,N)`\n2. `dB = delta.unsqueeze(-1) * B`\n3. `h_new = dA * h + dB * x.unsqueeze(-1)`\n4. `y = (h_new * C).sum(dim=-1)`  形状 `(B,D)`",
       "descriptionEn": "Implement a single recurrent step of the Mamba selective state space model (SSM).\n\nMamba's key innovation is that B, C, and delta are **input-dependent** (selective), unlike classical SSMs where they are fixed. This allows the model to selectively remember or forget information.\n\n**Signature:** `mamba_ssm_step(x, h, A, B, C, delta) -> (y, h_new)`\n\n**Parameters:**\n- `x` — input at current step, shape (B, D)\n- `h` — hidden state, shape (B, D, N)\n- `A` — state transition, shape (D, N) — used as `A = -exp(A_log)` upstream\n- `B` — input projection (selective), shape (B, D, N)\n- `C` — output projection (selective), shape (B, D, N)\n- `delta` — discretization step (selective, after softplus), shape (B, D)\n\n**Discretization (Zero-Order Hold):**\n- `dA = exp(delta.unsqueeze(-1) * A)` — shape (B, D, N)\n- `dB = delta.unsqueeze(-1) * B` — shape (B, D, N)\n\n**Recurrence:**\n- `h_new = dA * h + dB * x.unsqueeze(-1)`\n- `y = (h_new * C).sum(dim=-1)` — shape (B, D)\n\n**Returns:** tuple `(y, h_new)`",
       "descriptionZh": "实现 Mamba 选择性状态空间模型（SSM）的单步递推。\n\nMamba 的核心创新在于 B、C 和 delta 是**输入相关的**（选择性的），不同于经典 SSM 中的固定参数。这使模型能够选择性地记忆或遗忘信息。\n\n**签名:** `mamba_ssm_step(x, h, A, B, C, delta) -> (y, h_new)`\n\n**参数:**\n- `x` — 当前步输入，形状 (B, D)\n- `h` — 隐藏状态，形状 (B, D, N)\n- `A` — 状态转移矩阵，形状 (D, N)（上游使用 `A = -exp(A_log)`）\n- `B` — 输入投影（选择性），形状 (B, D, N)\n- `C` — 输出投影（选择性），形状 (B, D, N)\n- `delta` — 离散化步长（选择性，经过 softplus），形状 (B, D)\n\n**离散化（零阶保持）:**\n- `dA = exp(delta.unsqueeze(-1) * A)` — 形状 (B, D, N)\n- `dB = delta.unsqueeze(-1) * B` — 形状 (B, D, N)\n\n**递推:**\n- `h_new = dA * h + dB * x.unsqueeze(-1)`\n- `y = (h_new * C).sum(dim=-1)` — 形状 (B, D)\n\n**返回:** 元组 `(y, h_new)`",
+      "version": 1,
       "tests": [
         {
           "name": "Output shapes",
@@ -1713,6 +1768,7 @@
       "hintZh": "import torch.utils.checkpoint as cp\n遍历 fns：x = cp.checkpoint(fn, x, use_reentrant=False)\n激活在反向传播时重新计算，而非存储。",
       "descriptionEn": "Implement gradient checkpointing for a sequence of functions.\n\nActivation checkpointing trades compute for memory: instead of storing all intermediate activations during the forward pass, they are recomputed on-the-fly during backpropagation.\n\n**Signature:** `checkpoint_sequential(fns, x) -> Tensor`\n\n**Parameters:**\n- `fns` — list of callables, each mapping Tensor -> Tensor\n- `x` — input tensor\n\n**Returns:** output tensor after applying all functions sequentially\n\n**Constraints:**\n- Intermediate activations must NOT be stored during the forward pass\n- Gradients must flow back to `x`\n- Output must be numerically identical to naive sequential application\n- Use `torch.utils.checkpoint.checkpoint` (allowed — it is not `F.*` or `nn.functional.*`)",
       "descriptionZh": "为一系列函数实现梯度检查点。\n\n激活检查点以计算换内存：在前向传播期间不存储所有中间激活，而是在反向传播时按需重新计算。\n\n**签名:** `checkpoint_sequential(fns, x) -> Tensor`\n\n**参数:**\n- `fns` — 可调用对象列表，每个接受 Tensor 并返回 Tensor\n- `x` — 输入张量\n\n**返回:** 依次应用所有函数后的输出张量\n\n**约束:**\n- 前向传播期间不得存储中间激活\n- 梯度必须能流回 `x`\n- 输出必须与朴素顺序应用在数值上完全一致\n- 使用 `torch.utils.checkpoint.checkpoint`（允许——它不是 `F.*` 或 `nn.functional.*`）",
+      "version": 1,
       "tests": [
         {
           "name": "Output matches naive sequential",
@@ -1742,6 +1798,7 @@
       "hintZh": "深度卷积：`x.unfold(2,kH,1).unfold(3,kW,1)` → `(B,C,H_out,W_out,kH,kW)` → 乘 `dw_weight` → 对最后 2 维求和\n逐点卷积：`torch.einsum('bchw,oc->bohw', dw_out, pw_weight[:,: ,0,0])`",
       "descriptionEn": "Implement MobileNet-style depthwise separable convolution from primitives.\n\nDepthwise separable convolution factorizes a standard convolution into two steps: a depthwise conv (one filter per input channel) followed by a pointwise 1x1 conv (to mix channels). This dramatically reduces parameter count and FLOPs.\n\n**Signature:** `depthwise_separable_conv(x, dw_weight, pw_weight) -> Tensor`\n\n**Parameters:**\n- `x` — input tensor (B, C_in, H, W)\n- `dw_weight` — depthwise filter (C_in, 1, kH, kW)\n- `pw_weight` — pointwise filter (C_out, C_in, 1, 1)\n\n**Returns:** output tensor (B, C_out, H-kH+1, W-kW+1)\n\n**Constraints:**\n- No padding, stride=1\n- Must NOT use `F.conv2d` — implement both steps using `unfold` and `einsum`/matmul\n- Depthwise step: each channel c is convolved only with `dw_weight[c, 0]`\n- Pointwise step: 1x1 conv mixes channels via matrix multiply",
       "descriptionZh": "从基本原语实现 MobileNet 风格的深度可分离卷积。\n\n深度可分离卷积将标准卷积分解为两步：深度卷积（每个输入通道一个滤波器）和逐点 1x1 卷积（混合通道）。这大幅减少了参数量和计算量。\n\n**签名:** `depthwise_separable_conv(x, dw_weight, pw_weight) -> Tensor`\n\n**参数:**\n- `x` — 输入张量 (B, C_in, H, W)\n- `dw_weight` — 深度滤波器 (C_in, 1, kH, kW)\n- `pw_weight` — 逐点滤波器 (C_out, C_in, 1, 1)\n\n**返回:** 输出张量 (B, C_out, H-kH+1, W-kW+1)\n\n**约束:**\n- 无填充，步长=1\n- 不得使用 `F.conv2d`——使用 `unfold` 和 `einsum`/matmul 实现两步\n- 深度步骤：通道 c 仅与 `dw_weight[c, 0]` 卷积\n- 逐点步骤：1x1 卷积通过矩阵乘法混合通道",
+      "version": 1,
       "tests": [
         {
           "name": "Output shape is correct",
@@ -1771,6 +1828,7 @@
       "hintZh": "MHA：`nn.Linear(d, 3d)` → 拆分 Q/K/V → reshape `(B, H, N, d_h)` → 缩放点积 → `proj`\nGELU：`x * 0.5 * (1 + erf(x / sqrt(2)))`\n块结构：`x = x + MHA(norm1(x))` → `x = x + MLP(norm2(x))`",
       "descriptionEn": "Implement a Vision Transformer (ViT) block as an nn.Module.\n\nA ViT block uses pre-norm architecture with multi-head self-attention and an MLP, both wrapped in residual connections.\n\n**Signature:** `ViTBlock(d_model, num_heads)` (nn.Module)\n\n**Forward:** `forward(x) -> Tensor`\n- `x` — input tensor (B, N, d_model), where N = num_patches + 1 (includes CLS token)\n\n**Returns:** output tensor (B, N, d_model)\n\n**Architecture:**\n```\nx = x + MHA(LayerNorm(x))\nx = x + MLP(LayerNorm(x))\n```\n\n**Constraints:**\n- `nn.Linear` and `nn.LayerNorm` are allowed as building blocks\n- MHA must be hand-implemented (no `nn.MultiheadAttention`)\n- MLP: `Linear(d, 4d) -> GELU -> Linear(4d, d)`\n- GELU must be hand-implemented: `x * 0.5 * (1 + erf(x / sqrt(2)))`\n- No `F.*` or `nn.functional.*` calls anywhere",
       "descriptionZh": "将 Vision Transformer（ViT）块实现为 nn.Module。\n\nViT 块使用 pre-norm 架构，包含多头自注意力和 MLP，两者都有残差连接。\n\n**签名:** `ViTBlock(d_model, num_heads)`（nn.Module）\n\n**前向传播:** `forward(x) -> Tensor`\n- `x` — 输入张量 (B, N, d_model)，其中 N = 图像块数 + 1（含 CLS token）\n\n**返回:** 输出张量 (B, N, d_model)\n\n**架构:**\n```\nx = x + MHA(LayerNorm(x))\nx = x + MLP(LayerNorm(x))\n```\n\n**约束:**\n- `nn.Linear` 和 `nn.LayerNorm` 可作为构建块使用\n- MHA 必须手动实现（不得使用 `nn.MultiheadAttention`）\n- MLP：`Linear(d, 4d) -> GELU -> Linear(4d, d)`\n- GELU 必须手动实现：`x * 0.5 * (1 + erf(x / sqrt(2)))`\n- 任何地方都不得调用 `F.*` 或 `nn.functional.*`",
+      "version": 1,
       "tests": [
         {
           "name": "Output shape",
@@ -1808,6 +1866,7 @@
       "hintZh": "1. `Q1,Q2 = Q[...,:D_h], Q[...,D_h:]`；K 同理\n2. `scale = D_h**-0.5`\n3. `A1 = softmax(Q1@K1.T * scale)`，`A2 = softmax(Q2@K2.T * scale)`\n4. `return (A1 - lambda_val*A2) @ V`",
       "descriptionEn": "Implement Differential Attention from the ICLR 2025 paper \"Differential Transformer\".\n\nThe key idea: split Q and K each into two halves, compute two separate softmax attention maps, then subtract them (scaled by a learnable lambda) to cancel noise and improve focus on relevant context.\n\n**Signature:** `diff_attention(Q, K, V, lambda_val) -> Tensor`\n\n**Parameters:**\n- `Q` — query tensor (B, S, 2*D_h)\n- `K` — key tensor (B, S, 2*D_h)\n- `V` — value tensor (B, S, D_v)\n- `lambda_val` — scalar float or 0-dim tensor controlling noise cancellation\n\n**Returns:** output tensor (B, S, D_v)\n\n**Formula:**\n```\nout = (softmax(Q1 @ K1.T / √D_h) - lambda_val * softmax(Q2 @ K2.T / √D_h)) @ V\n```\n\n**Constraints:**\n- Split Q into Q1, Q2 along last dim; same for K\n- Use `torch.softmax(..., dim=-1)` (not F.softmax)\n- Scale by 1/√D_h before softmax",
       "descriptionZh": "实现 ICLR 2025 论文《Differential Transformer》中的差分注意力机制。\n\n核心思想：将 Q 和 K 各自分成两半，分别计算两个 softmax 注意力图，然后相减（乘以可学习的 lambda）以消除噪声，提升对相关上下文的聚焦能力。\n\n**签名:** `diff_attention(Q, K, V, lambda_val) -> Tensor`\n\n**参数:**\n- `Q` — 查询张量 (B, S, 2*D_h)\n- `K` — 键张量 (B, S, 2*D_h)\n- `V` — 值张量 (B, S, D_v)\n- `lambda_val` — 标量浮点数或 0 维张量，控制噪声消除强度\n\n**返回:** 输出张量 (B, S, D_v)\n\n**公式:**\n```\nout = (softmax(Q1 @ K1.T / √D_h) - lambda_val * softmax(Q2 @ K2.T / √D_h)) @ V\n```\n\n**约束:**\n- 沿最后一维将 Q 拆分为 Q1、Q2；K 同理\n- 使用 `torch.softmax(..., dim=-1)`（不能用 F.softmax）\n- softmax 前除以 √D_h",
+      "version": 1,
       "tests": [
         {
           "name": "Output shape",
@@ -1837,6 +1896,7 @@
       "hintZh": "1. `c_kv = X @ W_dkv`  → `(B,S,kv_rank)`\n2. `K = c_kv @ W_uk`，`V = c_kv @ W_uv`，`Q = X @ W_q`\n3. 各自 `.view(B,S,num_heads,D_h).transpose(1,2)`\n4. 缩放点积注意力 → `.transpose(1,2).reshape(B,S,-1)`",
       "descriptionEn": "Implement Multi-Head Latent Attention (MLA) from DeepSeek V2/V3.\n\nMLA's key innovation: instead of caching full K and V tensors, compress them into a low-rank latent vector `c_kv`, then decompress on the fly. This dramatically reduces KV cache memory during inference.\n\n**Signature:** `mla_attention(X, W_dkv, W_uk, W_uv, W_q, num_heads) -> Tensor`\n\n**Parameters:**\n- `X` — input tensor (B, S, D)\n- `W_dkv` — KV compression matrix (D, kv_rank)\n- `W_uk` — K decompression matrix (kv_rank, num_heads * D_h)\n- `W_uv` — V decompression matrix (kv_rank, num_heads * D_h)\n- `W_q` — Q projection matrix (D, num_heads * D_h)\n- `num_heads` — number of attention heads\n\n**Returns:** output tensor (B, S, num_heads * D_h)\n\n**Steps:**\n1. Compress: `c_kv = X @ W_dkv` → (B, S, kv_rank)\n2. Decompress: `K = c_kv @ W_uk`, `V = c_kv @ W_uv`\n3. Project queries: `Q = X @ W_q`\n4. Reshape all to (B, num_heads, S, D_h)\n5. Scaled dot-product attention\n6. Reshape output to (B, S, num_heads * D_h)",
       "descriptionZh": "实现 DeepSeek V2/V3 中的多头潜在注意力（MLA）。\n\nMLA 的核心创新：不缓存完整的 K 和 V 张量，而是将其压缩为低秩潜在向量 `c_kv`，推理时再即时解压。这大幅降低了推理时的 KV 缓存内存占用。\n\n**签名:** `mla_attention(X, W_dkv, W_uk, W_uv, W_q, num_heads) -> Tensor`\n\n**参数:**\n- `X` — 输入张量 (B, S, D)\n- `W_dkv` — KV 压缩矩阵 (D, kv_rank)\n- `W_uk` — K 解压矩阵 (kv_rank, num_heads * D_h)\n- `W_uv` — V 解压矩阵 (kv_rank, num_heads * D_h)\n- `W_q` — Q 投影矩阵 (D, num_heads * D_h)\n- `num_heads` — 注意力头数\n\n**返回:** 输出张量 (B, S, num_heads * D_h)\n\n**步骤:**\n1. 压缩：`c_kv = X @ W_dkv` → (B, S, kv_rank)\n2. 解压：`K = c_kv @ W_uk`，`V = c_kv @ W_uv`\n3. 投影查询：`Q = X @ W_q`\n4. 重塑为 (B, num_heads, S, D_h)\n5. 缩放点积注意力\n6. 重塑输出为 (B, S, num_heads * D_h)",
+      "version": 1,
       "tests": [
         {
           "name": "Output shape",
@@ -1870,6 +1930,7 @@
       "hintZh": "对每个头 `i`：\n1. `logits = hidden_states @ heads[i]`\n2. 稳定 log-softmax：`shifted = logits - logits.max(-1,keepdim=True).values`\n   `log_probs = shifted - log(exp(shifted).sum(-1,keepdim=True))`\n3. `log_p = log_probs.gather(-1, targets[:,:,i].unsqueeze(-1)).squeeze(-1)`\n4. `loss += -log_p.mean()`\n返回 `total_loss / N`",
       "descriptionEn": "Implement the Multi-Token Prediction (MTP) training loss from Meta's 2024 paper.\n\nInstead of predicting only the next token, train N independent prediction heads to simultaneously predict the next N tokens from the same hidden states. Average the cross-entropy loss across all heads.\n\n**Signature:** `multi_token_prediction_loss(hidden_states, heads, targets) -> Tensor`\n\n**Parameters:**\n- `hidden_states` — transformer hidden states (B, S, D)\n- `heads` — list of N weight matrices, each (D, vocab_size)\n- `targets` — target token IDs (B, S, N), where `targets[:, :, i]` are the labels for head i\n\n**Returns:** scalar mean loss (average CE across all N heads)\n\n**Constraints:**\n- Implement cross-entropy manually: log-softmax then gather\n- Do NOT use F.cross_entropy or F.log_softmax\n- Use numerically stable log-softmax: subtract max before exp",
       "descriptionZh": "实现 Meta 2024 年论文中的多 Token 预测（MTP）训练损失。\n\n不只预测下一个 token，而是训练 N 个独立的预测头，从相同的隐藏状态同时预测接下来的 N 个 token。对所有头的交叉熵损失取平均。\n\n**签名:** `multi_token_prediction_loss(hidden_states, heads, targets) -> Tensor`\n\n**参数:**\n- `hidden_states` — Transformer 隐藏状态 (B, S, D)\n- `heads` — N 个权重矩阵的列表，每个形状为 (D, vocab_size)\n- `targets` — 目标 token ID (B, S, N)，其中 `targets[:, :, i]` 是第 i 个头的标签\n\n**返回:** 标量均值损失（所有 N 个头的 CE 均值）\n\n**约束:**\n- 手动实现交叉熵：log-softmax 后 gather\n- 不能使用 F.cross_entropy 或 F.log_softmax\n- 使用数值稳定的 log-softmax：exp 前先减去最大值",
+      "version": 1,
       "tests": [
         {
           "name": "Returns scalar",
@@ -1899,6 +1960,7 @@
       "hintZh": "1. `assignments = logits.argmax(dim=-1)` → `f[e] = (assignments == e).float().mean()`\n2. `P = softmax(logits, dim=-1).mean(dim=0)`\n3. 返回 `num_experts * (f * P).sum()`",
       "descriptionEn": "Implement the auxiliary load balancing loss from Switch Transformer / DeepSeek-style Mixture-of-Experts.\n\nWithout this loss, MoE models collapse: all tokens route to the same expert, wasting capacity. The loss penalizes uneven token distribution by combining a non-differentiable routing fraction with a differentiable probability term.\n\n**Signature:** `moe_load_balance_loss(router_logits, num_experts) -> Tensor`\n\n**Parameters:**\n- `router_logits` — raw router scores before softmax (N_tokens, num_experts)\n- `num_experts` — number of experts\n\n**Returns:** scalar auxiliary loss\n\n**Formula:**\n- `f_i` = fraction of tokens assigned to expert i (via argmax — non-differentiable)\n- `P_i` = mean router probability for expert i (via softmax — differentiable)\n- `L_aux = num_experts * Σ(f_i * P_i)`\n\n**Note:** Gradient flows only through `P_i` (the softmax term). `f_i` is a stop-gradient counting term.",
       "descriptionZh": "实现 Switch Transformer / DeepSeek 风格混合专家（MoE）中的辅助负载均衡损失。\n\n没有这个损失，MoE 模型会退化：所有 token 都路由到同一个专家，浪费容量。该损失通过将不可微的路由分数与可微的概率项结合，惩罚不均匀的 token 分布。\n\n**签名:** `moe_load_balance_loss(router_logits, num_experts) -> Tensor`\n\n**参数:**\n- `router_logits` — softmax 前的原始路由分数 (N_tokens, num_experts)\n- `num_experts` — 专家数量\n\n**返回:** 标量辅助损失\n\n**公式:**\n- `f_i` = 路由到专家 i 的 token 比例（通过 argmax，不可微）\n- `P_i` = 专家 i 的平均路由概率（通过 softmax，可微）\n- `L_aux = num_experts * Σ(f_i * P_i)`\n\n**注意:** 梯度只通过 `P_i`（softmax 项）传播，`f_i` 是停止梯度的计数项。",
+      "version": 1,
       "tests": [
         {
           "name": "Returns scalar",
@@ -1928,6 +1990,7 @@
       "hintZh": "1. UCB(i) = values[i] + c_puct·√(log(parent_visits+1) / (visit_counts[i]+1))\n2. selected = argmax(UCB)\n3. rollout = torch.rand(1).item()（[0,1] 内随机值）\n4. Q_new = (Q_old·n + rollout) / (n+1);  visit_counts[selected] += 1",
       "descriptionEn": "Implement one step of Monte Carlo Tree Search (MCTS) — the core algorithm behind o1/AlphaProof-style LLM reasoning.\n\n**Signature:** `mcts_step(values, visit_counts, parent_visits, c_puct=1.414) -> (int, Tensor, Tensor)`\n\n**Parameters:**\n- `values` — current value estimates for N child nodes (N,)\n- `visit_counts` — visit counts for each child (N,)\n- `parent_visits` — total visits to the parent node (int or scalar)\n- `c_puct` — exploration constant (default 1.414)\n\n**Returns:** `(selected_idx, updated_values, updated_visits)`\n\n**Algorithm:**\n1. **Selection** — compute UCB1 scores and pick `argmax`:\n   `UCB(i) = Q(i) + c_puct * sqrt(log(parent_visits + 1) / (visit_counts[i] + 1))`\n2. **Rollout** — simulate a random value in [0, 1] for the selected node\n3. **Backpropagation** — update with running mean:\n   `Q_new = (Q_old * n + rollout_value) / (n + 1)` where `n` is the old visit count\n4. Increment `visit_counts[selected_idx]` by 1",
       "descriptionZh": "实现蒙特卡洛树搜索（MCTS）的单步操作——o1/AlphaProof 风格 LLM 推理的核心算法。\n\n**签名:** `mcts_step(values, visit_counts, parent_visits, c_puct=1.414) -> (int, Tensor, Tensor)`\n\n**参数:**\n- `values` — N 个子节点的当前价值估计 (N,)\n- `visit_counts` — 每个子节点的访问次数 (N,)\n- `parent_visits` — 父节点的总访问次数（int 或标量）\n- `c_puct` — 探索常数（默认 1.414）\n\n**返回:** `(selected_idx, updated_values, updated_visits)`\n\n**算法:**\n1. **选择** — 计算 UCB1 分数并取 `argmax`：\n   `UCB(i) = Q(i) + c_puct * sqrt(log(parent_visits + 1) / (visit_counts[i] + 1))`\n2. **模拟** — 为选中节点模拟 [0, 1] 内的随机价值\n3. **反向传播** — 用滑动均值更新：\n   `Q_new = (Q_old * n + rollout_value) / (n + 1)`，其中 `n` 为旧访问次数\n4. 将 `visit_counts[selected_idx]` 加 1",
+      "version": 1,
       "tests": [
         {
           "name": "Return types and shapes",
@@ -1961,6 +2024,7 @@
       "hintZh": "1. r_chosen = (chosen_hidden @ reward_head).squeeze(-1)  → (B,)\n2. r_rejected = (rejected_hidden @ reward_head).squeeze(-1)\n3. margin = r_chosen - r_rejected\n4. loss = -log(1 / (1 + exp(-margin))).mean()  (手动 sigmoid)",
       "descriptionEn": "Implement the canonical RLHF reward model training loss based on the Bradley-Terry preference model.\n\nGiven hidden states for chosen and rejected responses, project them to scalar rewards and compute the preference loss.\n\n**Signature:** `reward_model_loss(chosen_hidden, rejected_hidden, reward_head) -> Tensor`\n\n**Parameters:**\n- `chosen_hidden` — last-token hidden states for chosen responses (B, D)\n- `rejected_hidden` — last-token hidden states for rejected responses (B, D)\n- `reward_head` — linear projection to scalar reward (D, 1)\n\n**Returns:** scalar loss tensor\n\n**Formula:**\n1. `r_chosen = chosen_hidden @ reward_head` — shape (B, 1)\n2. `r_rejected = rejected_hidden @ reward_head` — shape (B, 1)\n3. `loss = -mean(log(sigmoid(r_chosen - r_rejected)))`\n\n**Constraint:** implement sigmoid manually — `σ(x) = 1 / (1 + exp(-x))` — do not use library sigmoid functions.",
       "descriptionZh": "实现基于 Bradley-Terry 偏好模型的标准 RLHF 奖励模型训练损失。\n\n给定选中和拒绝响应的隐藏状态，将其投影为标量奖励并计算偏好损失。\n\n**签名:** `reward_model_loss(chosen_hidden, rejected_hidden, reward_head) -> Tensor`\n\n**参数:**\n- `chosen_hidden` — 选中响应的最后一个 token 隐藏状态 (B, D)\n- `rejected_hidden` — 拒绝响应的最后一个 token 隐藏状态 (B, D)\n- `reward_head` — 投影到标量奖励的线性层权重 (D, 1)\n\n**返回:** 标量损失张量\n\n**公式:**\n1. `r_chosen = chosen_hidden @ reward_head` — 形状 (B, 1)\n2. `r_rejected = rejected_hidden @ reward_head` — 形状 (B, 1)\n3. `loss = -mean(log(sigmoid(r_chosen - r_rejected)))`\n\n**约束:** 手动实现 sigmoid — `σ(x) = 1 / (1 + exp(-x))` — 不得使用库函数。",
+      "version": 1,
       "tests": [
         {
           "name": "Returns scalar",
@@ -1994,6 +2058,7 @@
       "hintZh": "1. `params = cond @ W_ada + b_ada`  形状 `(B, 6*D)`\n2. `γ1,β1,α1,... = params.chunk(6, dim=-1)`\n3. 手动 LayerNorm：`dim=-1` 求 `mean/var`，`unbiased=False`，`eps=1e-6`\n4. `out = α1.unsqueeze(1) * (γ1.unsqueeze(1) * x_norm + β1.unsqueeze(1))`",
       "descriptionEn": "Implement the adaLN-Zero conditioning mechanism from DiT (Diffusion Transformer, ICCV 2023).\n\nA linear projection of the conditioning embedding (timestep + class label) regresses scale (γ), shift (β), and gate (α) parameters. These modulate the layer-normed input. The gate is zero-initialized so the block starts as an identity function.\n\n**Signature:** `adaln_zero(x, cond, W_ada, b_ada) -> Tensor`\n\n**Parameters:**\n- `x` — input tokens (B, N, D)\n- `cond` — conditioning embedding (B, D)\n- `W_ada` — linear weight (D, 6*D), regresses [γ1, β1, α1, γ2, β2, α2]\n- `b_ada` — bias (6*D,), zero-initialized in practice\n\n**Returns:** modulated tensor (B, N, D) using the first set of params (γ1, β1, α1)\n\n**Steps:**\n1. `params = cond @ W_ada + b_ada` — shape (B, 6*D)\n2. Split into 6 chunks of size D: γ1, β1, α1, γ2, β2, α2\n3. LayerNorm x manually (no learnable affine): subtract mean, divide by std\n4. Modulate: `out = α1.unsqueeze(1) * (γ1.unsqueeze(1) * x_norm + β1.unsqueeze(1))`\n5. Return out",
       "descriptionZh": "实现 DiT（扩散变换器，ICCV 2023）中的 adaLN-Zero 条件机制。\n\n通过对条件嵌入（时间步 + 类别标签）进行线性投影，回归出缩放（γ）、偏移（β）和门控（α）参数，用于调制经过层归一化的输入。门控参数零初始化，使得模块初始时等价于恒等映射。\n\n**签名:** `adaln_zero(x, cond, W_ada, b_ada) -> Tensor`\n\n**参数:**\n- `x` — 输入 token (B, N, D)\n- `cond` — 条件嵌入 (B, D)\n- `W_ada` — 线性权重 (D, 6*D)，回归 [γ1, β1, α1, γ2, β2, α2]\n- `b_ada` — 偏置 (6*D,)，实践中零初始化\n\n**返回:** 使用第一组参数 (γ1, β1, α1) 调制后的张量 (B, N, D)\n\n**步骤:**\n1. `params = cond @ W_ada + b_ada` — 形状 (B, 6*D)\n2. 沿最后一维切分为 6 块，每块大小 D：γ1, β1, α1, γ2, β2, α2\n3. 手动计算 LayerNorm（无可学习仿射参数）：减均值，除以标准差\n4. 调制：`out = α1.unsqueeze(1) * (γ1.unsqueeze(1) * x_norm + β1.unsqueeze(1))`\n5. 返回 out",
+      "version": 1,
       "tests": [
         {
           "name": "Output shape",
@@ -2023,6 +2088,7 @@
       "hintZh": "1. x0_pred = (x_t - √(1-ᾱ_t)·ε) / √ᾱ_t\n2. noise_dir = √(1-ᾱ_{t-1})·ε\n3. x_{t-1} = √ᾱ_{t-1}·x0_pred + noise_dir\n   用 ** 0.5 计算平方根。",
       "descriptionEn": "Implement one step of DDIM (Denoising Diffusion Implicit Models) deterministic sampling.\n\nGiven the current noisy sample and the model's noise prediction, compute the previous (less noisy) sample without any stochastic noise injection.\n\n**Signature:** `ddim_step(x_t, noise_pred, alpha_bar_t, alpha_bar_prev) -> Tensor`\n\n**Parameters:**\n- `x_t` — current noisy sample at timestep t, shape (B, ...)\n- `noise_pred` — model's predicted noise ε_θ(x_t, t), same shape as x_t\n- `alpha_bar_t` — scalar, cumulative noise schedule ᾱ_t at current step\n- `alpha_bar_prev` — scalar, cumulative noise schedule ᾱ_{t-1} at previous step\n\n**Returns:** x_{t-1} with same shape as x_t\n\n**Formula:**\n1. Predict x0: `x0_pred = (x_t - sqrt(1 - ᾱ_t) * noise_pred) / sqrt(ᾱ_t)`\n2. Direction toward x_t: `noise_direction = sqrt(1 - ᾱ_{t-1}) * noise_pred`\n3. `x_{t-1} = sqrt(ᾱ_{t-1}) * x0_pred + noise_direction`",
       "descriptionZh": "实现 DDIM（去噪扩散隐式模型）的单步确定性采样。\n\n给定当前含噪样本和模型的噪声预测，在不注入随机噪声的情况下计算上一步（噪声更少的）样本。\n\n**签名:** `ddim_step(x_t, noise_pred, alpha_bar_t, alpha_bar_prev) -> Tensor`\n\n**参数:**\n- `x_t` — 时间步 t 的含噪样本，形状 (B, ...)\n- `noise_pred` — 模型预测的噪声 ε_θ(x_t, t)，形状与 x_t 相同\n- `alpha_bar_t` — 标量，当前步的累积噪声调度 ᾱ_t\n- `alpha_bar_prev` — 标量，上一步的累积噪声调度 ᾱ_{t-1}\n\n**返回:** x_{t-1}，形状与 x_t 相同\n\n**公式:**\n1. 预测 x0：`x0_pred = (x_t - sqrt(1 - ᾱ_t) * noise_pred) / sqrt(ᾱ_t)`\n2. 指向 x_t 的方向：`noise_direction = sqrt(1 - ᾱ_{t-1}) * noise_pred`\n3. `x_{t-1} = sqrt(ᾱ_{t-1}) * x0_pred + noise_direction`",
+      "version": 1,
       "tests": [
         {
           "name": "Output shape matches x_t",
@@ -2056,6 +2122,7 @@
       "hintZh": "target = x1 - x0（从噪声到数据的直线速度）\nloss = ((model_output - target) ** 2).mean()\n损失计算本身不需要 `t`。",
       "descriptionEn": "Implement the flow matching training loss, the generative modeling paradigm behind Stable Diffusion 3, Flux, and Sora.\n\nFlow matching trains a neural network to predict the velocity field that transports noise to data along straight paths. The target velocity at any interpolated point is simply the direction from noise to data.\n\n**Signature:** `flow_matching_loss(model_output, x0, x1, t) -> Tensor`\n\n**Parameters:**\n- `model_output` — predicted velocity v_θ(x_t, t), shape (B, D)\n- `x0` — noise samples, shape (B, D)\n- `x1` — data samples, shape (B, D)\n- `t` — timesteps in [0, 1], shape (B,)\n\n**Returns:** scalar MSE loss\n\n**Formula:**\n- Target velocity: `u_t = x1 - x0` (straight-line direction from noise to data)\n- Loss: `mean(||model_output - u_t||²)`\n\nNote: the interpolated point `x_t = t * x1 + (1 - t) * x0` is computed externally before calling the model; `t` is passed here only for interface completeness.",
       "descriptionZh": "实现流匹配训练损失——Stable Diffusion 3、Flux 和 Sora 背后的生成建模范式。\n\n流匹配训练神经网络预测速度场，将噪声沿直线路径传输到数据。在任意插值点处，目标速度就是从噪声指向数据的方向。\n\n**签名:** `flow_matching_loss(model_output, x0, x1, t) -> Tensor`\n\n**参数:**\n- `model_output` — 预测速度 v_θ(x_t, t)，形状 (B, D)\n- `x0` — 噪声样本，形状 (B, D)\n- `x1` — 数据样本，形状 (B, D)\n- `t` — [0, 1] 内的时间步，形状 (B,)\n\n**返回:** 标量 MSE 损失\n\n**公式:**\n- 目标速度：`u_t = x1 - x0`（从噪声到数据的直线方向）\n- 损失：`mean(||model_output - u_t||²)`\n\n注意：插值点 `x_t = t * x1 + (1 - t) * x0` 在调用模型前已在外部计算；`t` 在此仅为接口完整性而传入。",
+      "version": 1,
       "tests": [
         {
           "name": "Returns scalar",
@@ -2093,6 +2160,7 @@
       "hintZh": "linear/sigmoid：计算 betas → alpha_bar = torch.cumprod(1-betas, dim=0)\ncosine：f(t) = cos(...)² → alpha_bar = f(t)/f(0)，clamp 到 [0.0001, 0.9999]\nsigmoid 缩放：平移+缩放使 min(sig)→β_start，max(sig)→β_end",
       "descriptionEn": "Implement three noise schedules used in diffusion models.\n\nEach schedule returns `alpha_bar` (ᾱ), the cumulative product of (1 - β) across timesteps. ᾱ_t controls the signal-to-noise ratio: close to 1 means mostly signal, close to 0 means mostly noise.\n\n**Signature:** `noise_schedule(num_timesteps, schedule_type='cosine') -> Tensor`\n\n**Parameters:**\n- `num_timesteps` — number of diffusion timesteps T\n- `schedule_type` — one of `'linear'`, `'cosine'`, or `'sigmoid'`\n\n**Returns:** `alpha_bar` tensor of shape `(num_timesteps,)`, values in (0, 1], monotonically decreasing\n\n**Formulas:**\n\n`linear`: β_t = β_start + (β_end − β_start) × t/(T−1), then ᾱ = cumprod(1 − β)\n- Use β_start=1e-4, β_end=0.02\n\n`cosine`: ᾱ_t = cos²((t/T + s)/(1+s) × π/2) / cos²(s/(1+s) × π/2)\n- Use s=0.008, clip to [0.0001, 0.9999]\n\n`sigmoid`: β_t = sigmoid(t/T × 12 − 6), scaled to [β_start, β_end], then ᾱ = cumprod(1 − β)\n- Use β_start=1e-4, β_end=0.02",
       "descriptionZh": "实现扩散模型中使用的三种噪声调度。\n\n每种调度返回 `alpha_bar`（ᾱ），即各时间步 (1 - β) 的累积乘积。ᾱ_t 控制信噪比：接近 1 表示主要是信号，接近 0 表示主要是噪声。\n\n**签名:** `noise_schedule(num_timesteps, schedule_type='cosine') -> Tensor`\n\n**参数:**\n- `num_timesteps` — 扩散时间步数 T\n- `schedule_type` — `'linear'`、`'cosine'` 或 `'sigmoid'` 之一\n\n**返回:** 形状为 `(num_timesteps,)` 的 `alpha_bar` 张量，值域 (0, 1]，单调递减\n\n**公式:**\n\n`linear`：β_t = β_start + (β_end − β_start) × t/(T−1)，然后 ᾱ = cumprod(1 − β)\n- 使用 β_start=1e-4，β_end=0.02\n\n`cosine`：ᾱ_t = cos²((t/T + s)/(1+s) × π/2) / cos²(s/(1+s) × π/2)\n- 使用 s=0.008，截断到 [0.0001, 0.9999]\n\n`sigmoid`：β_t = sigmoid(t/T × 12 − 6)，缩放到 [β_start, β_end]，然后 ᾱ = cumprod(1 − β)\n- 使用 β_start=1e-4，β_end=0.02",
+      "version": 1,
       "tests": [
         {
           "name": "Output shape",
@@ -2134,6 +2202,7 @@
       "hintZh": "1. `A_hat = A + I`（加自环）\n2. `D_inv_sqrt = diag(A_hat.sum(1))^{-0.5}`\n3. `A_norm = D_inv_sqrt @ A_hat @ D_inv_sqrt`\n4. `W1 = randn(F, 32) * 0.1`，`W2 = randn(32, 16) * 0.1`\n5. `H = relu(A_norm @ X @ W1)`\n6. `Z = A_norm @ H @ W2`\n7. `return sigmoid(Z @ Z.T)`",
       "descriptionEn": "Implement a Graph Autoencoder that learns node embeddings via a two-layer GCN encoder and reconstructs the adjacency matrix with an inner-product decoder.\n\n**Signature:** `gae(A, X) -> Tensor`\n\n**Parameters:**\n- `A` — adjacency matrix (N, N), binary, symmetric, no self-loops\n- `X` — node feature matrix (N, F)\n\n**Returns:** reconstructed adjacency matrix `A_hat` of shape (N, N), with values in [0, 1] (apply sigmoid)\n\n**Architecture:**\n1. Compute degree-normalized adjacency: `A_norm = D^{-1/2} (A + I) D^{-1/2}` where D is the degree matrix of `A + I`\n2. GCN Layer 1: `H = ReLU(A_norm @ X @ W1)` with `W1` shape (F, 32)\n3. GCN Layer 2: `Z = A_norm @ H @ W2` with `Z` shape (N, 16), `W2` shape (32, 16)\n4. Inner-product decoder: `A_hat = sigmoid(Z @ Z^T)`\n\n**Constraints:**\n- Initialize `W1` and `W2` with `torch.manual_seed(0)` then `torch.randn(...) * 0.1` (W1 first, then W2)\n- `W1` shape: (F, 32), `W2` shape: (32, 16)\n- Do not use `nn.Module` or `nn.Linear`\n- Use `torch.relu` and `torch.sigmoid`",
       "descriptionZh": "实现图自编码器 (GAE)，通过两层 GCN 编码器学习节点嵌入，并用内积解码器重建邻接矩阵。\n\n**签名:** `gae(A, X) -> Tensor`\n\n**参数:**\n- `A` — 邻接矩阵 (N, N)，二值、对称、无自环\n- `X` — 节点特征矩阵 (N, F)\n\n**返回:** 重建的邻接矩阵 `A_hat`，形状 (N, N)，值在 [0, 1] 之间（应用 sigmoid）\n\n**架构:**\n1. 计算度归一化邻接矩阵：`A_norm = D^{-1/2} (A + I) D^{-1/2}`，其中 D 是 `A + I` 的度矩阵\n2. GCN 第一层：`H = ReLU(A_norm @ X @ W1)`，`W1` 形状 (F, 32)\n3. GCN 第二层：`Z = A_norm @ H @ W2`，`Z` 形状 (N, 16)，`W2` 形状 (32, 16)\n4. 内积解码器：`A_hat = sigmoid(Z @ Z^T)`\n\n**约束:**\n- 用 `torch.manual_seed(0)` 初始化 `W1` 和 `W2`，然后依次 `torch.randn(...) * 0.1`（先 W1 后 W2）\n- 不得使用 `nn.Module` 或 `nn.Linear`\n- 使用 `torch.relu` 和 `torch.sigmoid`",
+      "version": 1,
       "tests": [
         {
           "name": "Output shape matches input",
@@ -2171,6 +2240,7 @@
       "hintZh": "1. `A_tilde = A + torch.eye(N)`\n2. `D_vec = A_tilde.sum(1)`\n3. `D_inv_sqrt = torch.diag(D_vec.pow(-0.5))`\n4. `A_norm = D_inv_sqrt @ A_tilde @ D_inv_sqrt`\n5. `return torch.relu(A_norm @ X @ W)`",
       "descriptionEn": "Implement a single Graph Convolutional Network (GCN) layer with symmetric normalization.\n\n**Signature:** `gcn_layer(A, X, W) -> Tensor`\n\n**Parameters:**\n- `A` — adjacency matrix (N, N), binary, symmetric, no self-loops\n- `X` — node feature matrix (N, F_in)\n- `W` — weight matrix (F_in, F_out)\n\n**Returns:** output node features of shape (N, F_out)\n\n**Algorithm:**\n1. Add self-loops: `A_tilde = A + I`\n2. Compute degree vector: `D_vec = A_tilde.sum(1)`\n3. Symmetric normalization: `D_inv_sqrt = diag(D_vec^{-0.5})`\n4. Normalized adjacency: `A_norm = D_inv_sqrt @ A_tilde @ D_inv_sqrt`\n5. Return `ReLU(A_norm @ X @ W)`\n\n**Constraints:**\n- Weights `W` are passed in — do not create them inside the function\n- Use `torch.relu` for activation",
       "descriptionZh": "实现单层图卷积网络 (GCN)，采用对称归一化。\n\n**签名:** `gcn_layer(A, X, W) -> Tensor`\n\n**参数:**\n- `A` — 邻接矩阵 (N, N)，二值、对称、无自环\n- `X` — 节点特征矩阵 (N, F_in)\n- `W` — 权重矩阵 (F_in, F_out)\n\n**返回:** 形状为 (N, F_out) 的输出节点特征\n\n**算法:**\n1. 添加自环：`A_tilde = A + I`\n2. 计算度向量：`D_vec = A_tilde.sum(1)`\n3. 对称归一化：`D_inv_sqrt = diag(D_vec^{-0.5})`\n4. 归一化邻接矩阵：`A_norm = D_inv_sqrt @ A_tilde @ D_inv_sqrt`\n5. 返回 `ReLU(A_norm @ X @ W)`\n\n**约束:**\n- 权重 `W` 由参数传入，不要在函数内部创建\n- 使用 `torch.relu` 作为激活函数",
+      "version": 1,
       "tests": [
         {
           "name": "Output shape matches (N, F_out)",
@@ -2208,6 +2278,7 @@
       "hintZh": "1. `num_graphs = batch.max().item() + 1`\n2. sum 模式：`out.index_add_(0, batch, X)`\n3. mean 模式：sum / 每个图的节点数\n4. max 模式：按图索引循环或使用 `scatter` 配合 `reduce='amax'`",
       "descriptionEn": "Implement graph-level readout (pooling) that aggregates node embeddings into a single vector per graph.\n\n**Signature:** `graph_readout(X, batch, mode='mean') -> Tensor`\n\n**Parameters:**\n- `X` — node embedding matrix (total_nodes, D)\n- `batch` — integer tensor (total_nodes,) mapping each node to its graph index (0-indexed)\n- `mode` — aggregation mode: `'mean'`, `'sum'`, or `'max'`\n\n**Returns:** graph-level embeddings of shape (num_graphs, D) where `num_graphs = batch.max() + 1`\n\n**Algorithm:**\n- `'sum'`: accumulate node features per graph (e.g., `index_add_` or `scatter_add_`)\n- `'mean'`: sum per graph divided by node count per graph\n- `'max'`: per-graph element-wise maximum over node features\n\n**Constraints:**\n- Do not use PyG or DGL — use only raw PyTorch operations\n- Handle all three modes",
       "descriptionZh": "实现图级别的读出（池化）操作，将节点嵌入聚合为每个图的单一向量表示。\n\n**签名:** `graph_readout(X, batch, mode='mean') -> Tensor`\n\n**参数:**\n- `X` — 节点嵌入矩阵 (total_nodes, D)\n- `batch` — 整数张量 (total_nodes,)，将每个节点映射到所属图的索引（从 0 开始）\n- `mode` — 聚合方式：`'mean'`、`'sum'` 或 `'max'`\n\n**返回:** 形状为 (num_graphs, D) 的图级嵌入，其中 `num_graphs = batch.max() + 1`\n\n**算法:**\n- `'sum'`：按图累加节点特征（可用 `index_add_` 或 `scatter_add_`）\n- `'mean'`：按图求和后除以各图节点数\n- `'max'`：按图对节点特征逐元素取最大值\n\n**约束:**\n- 仅使用原生 PyTorch 操作，不得使用 PyG 或 DGL\n- 需支持全部三种聚合模式",
+      "version": 1,
       "tests": [
         {
           "name": "Single graph (all batch=0), mean mode",
@@ -2245,6 +2316,7 @@
       "hintZh": "利用广播计算 e 矩阵：`e = (H @ a[:F_out]).unsqueeze(1) + (H @ a[F_out:]).unsqueeze(0)`，然后用 A 掩码并 softmax。",
       "descriptionEn": "Implement a single-head Graph Attention Network (GAT) layer.\n\nGAT computes attention coefficients between connected nodes, then aggregates neighbor features weighted by those coefficients.\n\n**Signature:** `gat_layer(A, X, W, a, negative_slope=0.2) -> Tensor`\n\n**Parameters:**\n- `A` — adjacency matrix (N, N), binary, already includes self-loops\n- `X` — node feature matrix (N, F_in)\n- `W` — weight matrix (F_in, F_out)\n- `a` — attention vector (2*F_out,)\n- `negative_slope` — LeakyReLU negative slope (default 0.2)\n\n**Returns:** updated node features (N, F_out)\n\n**Algorithm:**\n1. Project features: `H = X @ W` → (N, F_out)\n2. Compute attention scores: `e_ij = LeakyReLU(a[:F_out]·H[i] + a[F_out:]·H[j])`\n3. Mask non-edges: set `e[i,j] = -inf` where `A[i,j] = 0`\n4. Normalize: `alpha = softmax(e, dim=-1)` over neighbors\n5. Aggregate: `output = alpha @ H`\n\n**Hint:** Compute e efficiently as an (N, N) matrix using broadcasting:\n`e = (H @ a[:F_out]).unsqueeze(1) + (H @ a[F_out:]).unsqueeze(0)`",
       "descriptionZh": "实现单头图注意力网络（GAT）层。\n\nGAT 计算相连节点之间的注意力系数，然后用这些系数对邻居特征进行加权聚合。\n\n**签名:** `gat_layer(A, X, W, a, negative_slope=0.2) -> Tensor`\n\n**参数:**\n- `A` — 邻接矩阵 (N, N)，二值，已包含自环\n- `X` — 节点特征矩阵 (N, F_in)\n- `W` — 权重矩阵 (F_in, F_out)\n- `a` — 注意力向量 (2*F_out,)\n- `negative_slope` — LeakyReLU 负斜率（默认 0.2）\n\n**返回:** 更新后的节点特征 (N, F_out)\n\n**算法:**\n1. 特征投影：`H = X @ W` → (N, F_out)\n2. 计算注意力分数：`e_ij = LeakyReLU(a[:F_out]·H[i] + a[F_out:]·H[j])`\n3. 掩码非边：将 `A[i,j] = 0` 处的 `e[i,j]` 设为 `-inf`\n4. 归一化：`alpha = softmax(e, dim=-1)` 对邻居求 softmax\n5. 聚合：`output = alpha @ H`\n\n**提示:** 利用广播高效计算 e 矩阵：\n`e = (H @ a[:F_out]).unsqueeze(1) + (H @ a[F_out:]).unsqueeze(0)`",
+      "version": 1,
       "tests": [
         {
           "name": "Output shape",
@@ -2282,6 +2354,7 @@
       "hintZh": "用 `A @ X` 聚合邻居，组合为 `(1 + eps) * X + agg`，然后通过带 ReLU 的两层 MLP。",
       "descriptionEn": "Implement a Graph Isomorphism Network (GIN) layer.\n\nGIN updates node features by aggregating neighbor features, scaling the node's own features by (1 + eps), and passing through a 2-layer MLP.\n\n**Signature:** `gin_layer(A, X, eps, W1, b1, W2, b2) -> Tensor`\n\n**Parameters:**\n- `A` — adjacency matrix (N, N), binary\n- `X` — node feature matrix (N, F_in)\n- `eps` — learnable scalar tensor\n- `W1` — first linear weight (F_in, F_hidden)\n- `b1` — first linear bias (F_hidden,)\n- `W2` — second linear weight (F_hidden, F_out)\n- `b2` — second linear bias (F_out,)\n\n**Returns:** updated node features (N, F_out)\n\n**Algorithm:**\n1. Aggregate neighbor features: `agg = A @ X`\n2. Combine: `h = (1 + eps) * X + agg`\n3. MLP layer 1: `h = ReLU(h @ W1 + b1)`\n4. MLP layer 2: `h = h @ W2 + b2`\n5. Return h",
       "descriptionZh": "实现图同构网络（GIN）层。\n\nGIN 通过聚合邻居特征、用 (1 + eps) 缩放自身特征，再经过两层 MLP 来更新节点表示。\n\n**签名:** `gin_layer(A, X, eps, W1, b1, W2, b2) -> Tensor`\n\n**参数:**\n- `A` — 邻接矩阵 (N, N)，二值\n- `X` — 节点特征矩阵 (N, F_in)\n- `eps` — 可学习标量张量\n- `W1` — 第一层线性权重 (F_in, F_hidden)\n- `b1` — 第一层线性偏置 (F_hidden,)\n- `W2` — 第二层线性权重 (F_hidden, F_out)\n- `b2` — 第二层线性偏置 (F_out,)\n\n**返回:** 更新后的节点特征 (N, F_out)\n\n**算法:**\n1. 聚合邻居特征：`agg = A @ X`\n2. 组合：`h = (1 + eps) * X + agg`\n3. MLP 第一层：`h = ReLU(h @ W1 + b1)`\n4. MLP 第二层：`h = h @ W2 + b2`\n5. 返回 h",
+      "version": 1,
       "tests": [
         {
           "name": "Output shape",
@@ -2319,6 +2392,7 @@
       "hintZh": "利用广播构建 (N, N, 2F+D_e) 张量，拼接 `X[i]`、`X[j]` 和 `E[i,j]`，与 W_msg 矩阵乘，用 A 掩码后沿 dim=1 求和。",
       "descriptionEn": "Implement a Message Passing Neural Network (MPNN) layer.\n\nMPNN computes messages along edges using node and edge features, aggregates them per node, then updates node representations.\n\n**Signature:** `mpnn_layer(A, X, E, W_msg, W_upd) -> Tensor`\n\n**Parameters:**\n- `A` — adjacency matrix (N, N), binary\n- `X` — node feature matrix (N, F)\n- `E` — edge feature tensor (N, N, D_e)\n- `W_msg` — message weight matrix (2*F + D_e, F_msg)\n- `W_upd` — update weight matrix (F + F_msg, F_out)\n\n**Returns:** updated node features (N, F_out)\n\n**Algorithm:**\n1. For each edge (i,j) where A[i,j]=1, compute message: `m_ij = ReLU(concat(X[i], X[j], E[i,j]) @ W_msg)`\n2. For each node i, aggregate: `agg_i = sum of m_ij over neighbors j`\n3. For each node i, update: `out_i = ReLU(concat(X[i], agg_i) @ W_upd)`\n\n**Hint:** Build an (N, N, 2F+D_e) tensor by broadcasting X, then matmul with W_msg, mask by A, and sum over dim=1.",
       "descriptionZh": "实现消息传递神经网络（MPNN）层。\n\nMPNN 利用节点和边特征沿边计算消息，按节点聚合后更新节点表示。\n\n**签名:** `mpnn_layer(A, X, E, W_msg, W_upd) -> Tensor`\n\n**参数:**\n- `A` — 邻接矩阵 (N, N)，二值\n- `X` — 节点特征矩阵 (N, F)\n- `E` — 边特征张量 (N, N, D_e)\n- `W_msg` — 消息权重矩阵 (2*F + D_e, F_msg)\n- `W_upd` — 更新权重矩阵 (F + F_msg, F_out)\n\n**返回:** 更新后的节点特征 (N, F_out)\n\n**算法:**\n1. 对每条边 (i,j)（A[i,j]=1），计算消息：`m_ij = ReLU(concat(X[i], X[j], E[i,j]) @ W_msg)`\n2. 对每个节点 i，聚合：`agg_i = 对邻居 j 的 m_ij 求和`\n3. 对每个节点 i，更新：`out_i = ReLU(concat(X[i], agg_i) @ W_upd)`\n\n**提示:** 利用广播构建 (N, N, 2F+D_e) 张量，与 W_msg 矩阵乘，用 A 掩码后沿 dim=1 求和。",
+      "version": 1,
       "tests": [
         {
           "name": "Output shape",
@@ -2356,6 +2430,7 @@
       "hintZh": "1. 遍历节点，从 A[i].nonzero() 获取邻居\n2. 若需采样：`torch.manual_seed(42)`，`perm = torch.randperm(n_neighbors)[:k]`\n3. 均值池化邻居特征（孤立节点用零向量）\n4. `concat = torch.cat([X, agg], dim=1)` → (N, 2*F_in)\n5. `out = relu(concat @ W)`\n6. `out = out / out.norm(dim=-1, keepdim=True).clamp(min=1e-8)`",
       "descriptionEn": "Implement a GraphSAGE layer that aggregates neighbor features via mean pooling, concatenates with self features, and applies a linear transformation with L2 normalization.\n\n**Signature:** `graphsage_layer(A, X, W, k=None) -> Tensor`\n\n**Parameters:**\n- `A` — adjacency matrix (N, N), binary\n- `X` — node feature matrix (N, F_in)\n- `W` — weight matrix (2*F_in, F_out)\n- `k` — if not None, sample at most k neighbors per node (use `torch.manual_seed(42)` before sampling for determinism)\n\n**Returns:** (N, F_out) tensor, L2-normalized along the feature dimension\n\n**Algorithm:**\n1. For each node i:\n   - Get neighbor indices where A[i] > 0\n   - If k is not None and num_neighbors > k: set `torch.manual_seed(42)`, use `torch.randperm(num_neighbors)[:k]` to sample\n   - Compute mean of neighbor features (zero vector if no neighbors)\n2. Concatenate [X, neighbor_agg] along feature dim to get (N, 2*F_in)\n3. Apply linear transform: `out = ReLU(concat @ W)`\n4. L2 normalize: `out = out / ||out||_2` per row (clamp norm min to 1e-8)\n\n**Constraints:**\n- Do not use `nn.Module` or `nn.Linear`\n- Use `torch.relu` for activation\n- Sampling must be deterministic with `torch.manual_seed(42)` called immediately before each `randperm`",
       "descriptionZh": "实现 GraphSAGE 层：通过均值池化聚合邻居特征，与自身特征拼接后进行线性变换，最后做 L2 归一化。\n\n**签名:** `graphsage_layer(A, X, W, k=None) -> Tensor`\n\n**参数:**\n- `A` — 邻接矩阵 (N, N)，二值\n- `X` — 节点特征矩阵 (N, F_in)\n- `W` — 权重矩阵 (2*F_in, F_out)\n- `k` — 若不为 None，每个节点最多采样 k 个邻居（采样前调用 `torch.manual_seed(42)` 保证确定性）\n\n**返回:** (N, F_out) 张量，沿特征维度做 L2 归一化\n\n**算法:**\n1. 对每个节点 i：\n   - 获取 A[i] > 0 的邻居索引\n   - 若 k 不为 None 且邻居数 > k：设置 `torch.manual_seed(42)`，用 `torch.randperm(num_neighbors)[:k]` 采样\n   - 计算邻居特征均值（无邻居则为零向量）\n2. 沿特征维拼接 [X, neighbor_agg] 得到 (N, 2*F_in)\n3. 线性变换：`out = ReLU(concat @ W)`\n4. L2 归一化：`out = out / ||out||_2`（每行归一化，范数下限 clamp 为 1e-8）\n\n**约束:**\n- 不得使用 `nn.Module` 或 `nn.Linear`\n- 使用 `torch.relu` 作为激活函数\n- 采样必须确定性：每次 `randperm` 前立即调用 `torch.manual_seed(42)`",
+      "version": 1,
       "tests": [
         {
           "name": "Output shape check",
@@ -2401,6 +2476,7 @@
       "hintZh": "1. `A_tilde = A + I`（加自环）\n2. `D_inv_sqrt = diag(A_tilde.sum(1))^{-0.5}`\n3. `A_norm = D_inv_sqrt @ A_tilde @ D_inv_sqrt`\n4. 两层 GCN：H = relu(A_norm @ X @ W1)，Z = A_norm @ H @ W2\n5. 对每条边打分：`sigmoid((Z[edges[:,0]] * Z[edges[:,1]]).sum(dim=1))`",
       "descriptionEn": "Implement a link prediction model using a two-layer GCN encoder that predicts edge existence probabilities.\n\n**Signature:** `link_prediction(A, X, edges) -> Tensor`\n\n**Parameters:**\n- `A` — adjacency matrix (N, N), binary, symmetric, no self-loops\n- `X` — node feature matrix (N, F)\n- `edges` — (M, 2) long tensor of node pairs to predict\n\n**Returns:** (M,) tensor of probabilities in [0, 1], where each value is the predicted likelihood of an edge existing between the corresponding node pair\n\n**Algorithm:**\n1. Initialize weights with `torch.manual_seed(0)`: `W1 = randn(F, 16) * 0.1`, then `W2 = randn(16, 8) * 0.1`\n2. Compute degree-normalized adjacency: `A_norm = D^{-1/2} (A + I) D^{-1/2}`\n3. GCN Layer 1: `H = ReLU(A_norm @ X @ W1)`\n4. GCN Layer 2: `Z = A_norm @ H @ W2` (no activation)\n5. For each edge (i, j): `score = sigmoid(Z[i] · Z[j])`\n6. Return all scores as (M,) tensor\n\n**Constraints:**\n- Do not use `nn.Module` or `nn.Linear`\n- Use `torch.relu` and `torch.sigmoid`",
       "descriptionZh": "实现基于两层 GCN 编码器的链接预测模型，预测节点对之间存在边的概率。\n\n**签名:** `link_prediction(A, X, edges) -> Tensor`\n\n**参数:**\n- `A` — 邻接矩阵 (N, N)，二值、对称、无自环\n- `X` — 节点特征矩阵 (N, F)\n- `edges` — (M, 2) 长整型张量，表示待预测的节点对\n\n**返回:** (M,) 概率张量，值在 [0, 1] 之间，每个值表示对应节点对之间存在边的预测概率\n\n**算法:**\n1. 用 `torch.manual_seed(0)` 初始化权重：`W1 = randn(F, 16) * 0.1`，然后 `W2 = randn(16, 8) * 0.1`\n2. 计算度归一化邻接矩阵：`A_norm = D^{-1/2} (A + I) D^{-1/2}`\n3. GCN 第一层：`H = ReLU(A_norm @ X @ W1)`\n4. GCN 第二层：`Z = A_norm @ H @ W2`（无激活函数）\n5. 对每条边 (i, j)：`score = sigmoid(Z[i] · Z[j])`\n6. 返回所有分数组成的 (M,) 张量\n\n**约束:**\n- 不得使用 `nn.Module` 或 `nn.Linear`\n- 使用 `torch.relu` 和 `torch.sigmoid`",
+      "version": 1,
       "tests": [
         {
           "name": "Output shape is (M,)",

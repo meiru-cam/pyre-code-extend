@@ -1,5 +1,5 @@
 import solutionsData from '@/lib/solutions.json';
-import type { Problem } from '@/lib/types';
+import type { Problem, Test } from '@/lib/types';
 
 interface SolutionCell {
   type: string;
@@ -28,8 +28,13 @@ export function formatTestCode(code: string, functionName: string): string {
 }
 
 export function getSampleTests(problem: Problem, limit = 2): Array<{ name: string; code: string }> {
-  return problem.tests.slice(0, limit).map((test) => ({
-    name: test.name,
-    code: formatTestCode(test.code, problem.functionName),
-  }));
+  return problem.tests
+    .filter((test): test is Test & { code: string } => (
+      test.visibility !== 'unshown' && typeof test.code === 'string'
+    ))
+    .slice(0, limit)
+    .map((test) => ({
+      name: test.name,
+      code: formatTestCode(test.code, problem.functionName),
+    }));
 }
