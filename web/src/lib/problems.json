@@ -2503,6 +2503,386 @@
           "code": "\nimport torch\nN, F = 6, 4\nA = torch.zeros(N, N)\nedges_list = [(0,1),(1,2),(2,3),(3,4),(4,5),(0,5)]\nfor i,j in edges_list:\n    A[i,j] = A[j,i] = 1.0\ntorch.manual_seed(42)\nX = torch.randn(N, F)\n# (i,j) and (j,i) should produce the same score since decoder is dot product\nedges_fwd = torch.tensor([[0,1],[2,3],[1,4]], dtype=torch.long)\nedges_rev = torch.tensor([[1,0],[3,2],[4,1]], dtype=torch.long)\nscores_fwd = {fn}(A, X, edges_fwd)\nscores_rev = {fn}(A, X, edges_rev)\nassert torch.allclose(scores_fwd, scores_rev, atol=1e-5), f'score(i,j) should equal score(j,i): max diff = {(scores_fwd - scores_rev).abs().max().item():.6f}'\n"
         }
       ]
+    },
+    {
+      "id": "hybrid_attention_schedule",
+      "title": "Hybrid Local/Global Attention Schedule",
+      "titleZh": "Hybrid Local/Global Attention Schedule",
+      "difficulty": "Medium",
+      "functionName": "hybrid_attention_schedule",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Implement causal scaled-dot-product attention whose receptive field changes by layer.\n\n**Signature:** `hybrid_attention_schedule(Q, K, V, layer_index, window_size, global_every) -> Tensor`\n\n`Q` and `K` have shape `(batch, sequence, head_dim)` and `V` has shape `(batch, sequence, value_dim)`; `value_dim` may differ from `head_dim`. Layer numbering in the API is zero-based, but the schedule is expressed in human one-based terms: a layer is global when `(layer_index + 1) % global_every == 0`. Global layers may attend to every current or earlier token. Other layers are local and may attend to the current token plus at most `window_size` earlier tokens. Future tokens are never visible.\n\nValidate matching non-empty Q/K/V shapes, `layer_index >= 0`, `window_size >= 0`, and `global_every >= 1`. Preserve dtype/device and gradients.\n\nThis small function isolates a real architectural decision. Gemma 3 repeats local layers followed by a global layer; Qwen3 represents full/sliding choices as layer types; Mistral uses sliding windows to bound cache and attention work. Production schedules and kernels vary—the exercise teaches the mask and indexing semantics, not a claim that these models share one block.",
+      "descriptionZh": "Implement causal scaled-dot-product attention whose receptive field changes by layer.\n\n**Signature:** `hybrid_attention_schedule(Q, K, V, layer_index, window_size, global_every) -> Tensor`\n\n`Q` and `K` have shape `(batch, sequence, head_dim)` and `V` has shape `(batch, sequence, value_dim)`; `value_dim` may differ from `head_dim`. Layer numbering in the API is zero-based, but the schedule is expressed in human one-based terms: a layer is global when `(layer_index + 1) % global_every == 0`. Global layers may attend to every current or earlier token. Other layers are local and may attend to the current token plus at most `window_size` earlier tokens. Future tokens are never visible.\n\nValidate matching non-empty Q/K/V shapes, `layer_index >= 0`, `window_size >= 0`, and `global_every >= 1`. Preserve dtype/device and gradients.\n\nThis small function isolates a real architectural decision. Gemma 3 repeats local layers followed by a global layer; Qwen3 represents full/sliding choices as layer types; Mistral uses sliding windows to bound cache and attention work. Production schedules and kernels vary—the exercise teaches the mask and indexing semantics, not a claim that these models share one block.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Hand-calculated local causal averages",
+          "code": "\nimport torch\nQ = torch.zeros(1, 3, 1)\nK = torch.zeros(1, 3, 1)\nV = torch.tensor([[[1.0], [2.0], [4.0]]])\nout = {fn}(Q, K, V, layer_index=0, window_size=1, global_every=2)\nexpected = torch.tensor([[[1.0], [1.5], [3.0]]])\nassert torch.allclose(out, expected, atol=1e-6), (out, expected)\n",
+          "behavior": "attention.masking"
+        },
+        {
+          "name": "Every Nth layer is global using one-based numbering",
+          "code": "\nimport torch\nQ = torch.zeros(1, 4, 1)\nK = torch.zeros(1, 4, 1)\nV = torch.tensor([[[1.0], [2.0], [4.0], [8.0]]])\nout = {fn}(Q, K, V, layer_index=1, window_size=0, global_every=2)\nexpected = torch.tensor([[[1.0], [1.5], [7.0 / 3.0], [3.75]]])\nassert torch.allclose(out, expected, atol=1e-6), (out, expected)\n",
+          "behavior": "attention.masking"
+        },
+        {
+          "name": "global_every=1 makes every layer global",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary"
+        },
+        {
+          "name": "Preserves output structure",
+          "code": "\nimport torch\nQ = torch.randn(2, 5, 4, dtype=torch.float64)\nK = torch.randn(2, 5, 4, dtype=torch.float64)\nV = torch.randn(2, 5, 6, dtype=torch.float64)\nout = {fn}(Q, K, V, 0, 2, 3)\nassert out.shape == V.shape and out.dtype == V.dtype and out.device == V.device\n",
+          "behavior": "tensor.dtype_device"
+        },
+        {
+          "name": "Seeded differential mask oracle",
+          "visibility": "unshown",
+          "behavior": "attention.masking"
+        },
+        {
+          "name": "Future and distant tokens cannot leak into a local output",
+          "visibility": "unshown",
+          "behavior": "attention.masking"
+        },
+        {
+          "name": "Boundary arguments are validated",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary"
+        },
+        {
+          "name": "Gradients reach Q K and V",
+          "visibility": "unshown",
+          "behavior": "gradient.flow"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "For query position i, which key positions are causal? On a local layer, what additional lower bound does window_size impose? How does zero-based layer_index map to every Nth layer?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Build query and key position grids. Start with key <= query. Unless (layer_index + 1) is divisible by global_every, also require key >= query - window_size. Mask disallowed logits before softmax."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "causal_attention",
+        "sliding_window"
+      ],
+      "modelConnections": [
+        "Gemma 3 config uses five LOCAL_SLIDING layers followed by one GLOBAL layer for larger variants.",
+        "Qwen3 attention selects a causal mask from configured full_attention or sliding_attention layer types.",
+        "Mistral inference derives per-layer cache sizes from an integer or repeating sliding-window list."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Local layers bound receptive-field work and KV-cache demand while global layers restore long-range paths.",
+          "A declarative schedule lets model code reuse one attention interface with different masks."
+        ],
+        "cons": [
+          "Information may need several layers to travel between distant tokens.",
+          "Mixed masks complicate cache management, kernel selection, and layer-index bookkeeping.",
+          "The best local/global ratio and window depend on training distribution and context length."
+        ]
+      },
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/google/gemma_pytorch",
+          "commit": "014acb7ac4563a5f77c76d7ff98f31b568c16508",
+          "path": "gemma/config.py",
+          "symbol": "AttentionType and get_config_for_27b_v3",
+          "license": "Apache-2.0",
+          "adapted": "The repeating local-sliding/global layer schedule as an explicit configuration.",
+          "simplifications": "A single-head tensor function with no RoPE, cache, soft-capping, or fused kernel."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/huggingface/transformers",
+          "commit": "7ea2320c76117e6742364808a666ef6f2fb40a67",
+          "path": "src/transformers/models/qwen3/modeling_qwen3.py",
+          "symbol": "Qwen3Model.forward and Qwen3Attention.forward",
+          "license": "Apache-2.0",
+          "adapted": "Selecting a full or sliding causal mask from the current layer type.",
+          "simplifications": "Uses arithmetic periodicity instead of a full layer_types configuration list."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/mistralai/mistral-inference",
+          "commit": "9eaeb91c17450e09021b6065a1d5cc69876507c8",
+          "path": "src/mistral_inference/cache.py",
+          "symbol": "get_cache_sizes",
+          "license": "Apache-2.0",
+          "adapted": "The idea that a repeating per-layer sliding-window profile drives bounded state.",
+          "simplifications": "No inference cache; masking is materialized for tiny CPU tensors."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2503.19786",
+          "section": "2 Model Architecture"
+        }
+      ]
+    },
+    {
+      "id": "qk_norm",
+      "title": "QK Normalization for Stable Attention",
+      "titleZh": "QK Normalization for Stable Attention",
+      "difficulty": "Medium",
+      "functionName": "qk_norm",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Implement per-head RMS normalization for queries and keys.\n\n**Signature:** `qk_norm(q, k, eps=1e-6) -> (q_normalized, k_normalized)`\n\n`q` and `k` may have any floating-point shape whose final dimension is the head dimension. Normalize each Q vector and each K vector **independently** over that final dimension:\n\n\\[\n\\operatorname{rmsnorm}(x) = x\\,(\\operatorname{mean}(x^2, \\mathrm{dim}=-1) + \\epsilon)^{-1/2}.\n\\]\n\nPreserve shape, dtype, device, and autograd connectivity. `eps` must keep an all-zero vector finite. This exercise uses no learned scale; production blocks often attach a learned RMSNorm weight.\n\nWhy it matters: query/key magnitudes directly scale attention logits. QK normalization bounds that source of logit growth and can improve training stability, but it adds normalization work and changes the model's parameterization.\n\n**Optional source connections:** Qwen3 applies learned head-dimensional Q/K RMSNorm immediately after projection. Gemma 3 enables QK norm in its attention configuration. These references are additional context—you can implement the contract without reading them.",
+      "descriptionZh": "Implement per-head RMS normalization for queries and keys.\n\n**Signature:** `qk_norm(q, k, eps=1e-6) -> (q_normalized, k_normalized)`\n\n`q` and `k` may have any floating-point shape whose final dimension is the head dimension. Normalize each Q vector and each K vector **independently** over that final dimension:\n\n\\[\n\\operatorname{rmsnorm}(x) = x\\,(\\operatorname{mean}(x^2, \\mathrm{dim}=-1) + \\epsilon)^{-1/2}.\n\\]\n\nPreserve shape, dtype, device, and autograd connectivity. `eps` must keep an all-zero vector finite. This exercise uses no learned scale; production blocks often attach a learned RMSNorm weight.\n\nWhy it matters: query/key magnitudes directly scale attention logits. QK normalization bounds that source of logit growth and can improve training stability, but it adds normalization work and changes the model's parameterization.\n\n**Optional source connections:** Qwen3 applies learned head-dimensional Q/K RMSNorm immediately after projection. Gemma 3 enables QK norm in its attention configuration. These references are additional context—you can implement the contract without reading them.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Hand-calculated RMS normalization",
+          "code": "\nimport torch\nq = torch.tensor([[[3.0, 4.0]]])\nk = torch.tensor([[[1.0, -1.0]]])\nq_out, k_out = {fn}(q, k, eps=0.0)\nq_expected = q / torch.sqrt(q.square().mean(dim=-1, keepdim=True))\nk_expected = k / torch.sqrt(k.square().mean(dim=-1, keepdim=True))\nassert torch.allclose(q_out, q_expected, atol=1e-6)\nassert torch.allclose(k_out, k_expected, atol=1e-6)\n",
+          "behavior": "state.invariant"
+        },
+        {
+          "name": "Preserves shape dtype and device",
+          "code": "\nimport torch\nq = torch.randn(2, 3, 4, 5, dtype=torch.float64)\nk = torch.randn(2, 1, 4, 5, dtype=torch.float64)\nq_out, k_out = {fn}(q, k)\nassert q_out.shape == q.shape and k_out.shape == k.shape\nassert q_out.dtype == q.dtype and k_out.dtype == k.dtype\nassert q_out.device == q.device and k_out.device == k.device\n",
+          "behavior": "tensor.dtype_device"
+        },
+        {
+          "name": "Independent PyTorch vector-norm differential",
+          "visibility": "unshown",
+          "behavior": "state.invariant"
+        },
+        {
+          "name": "Zero vectors stay finite",
+          "visibility": "unshown",
+          "behavior": "numerics.stability"
+        },
+        {
+          "name": "Large fp16 vectors avoid reduction overflow",
+          "visibility": "unshown",
+          "behavior": "numerics.stability"
+        },
+        {
+          "name": "Q and K use independent statistics",
+          "visibility": "unshown",
+          "behavior": "state.invariant"
+        },
+        {
+          "name": "Positive scale metamorphism",
+          "visibility": "unshown",
+          "behavior": "state.invariant"
+        },
+        {
+          "name": "Gradients reach Q and K",
+          "visibility": "unshown",
+          "behavior": "gradient.flow"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which axis is the head-feature axis? Should Q and K share statistics? What happens to a zero vector if epsilon is omitted?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "For each tensor separately, keep the last dimension while computing the mean of squared values, add eps, multiply by the reciprocal square root, and avoid detach or constructing a new tensor from the result."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "rmsnorm",
+        "attention"
+      ],
+      "modelConnections": [
+        "Qwen3: Qwen3Attention owns q_norm and k_norm over head_dim and applies them to the projected Q/K states before RoPE.",
+        "Gemma 3: the official PyTorch configuration enables use_qk_norm together with a hybrid local/global attention schedule."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Controls query/key magnitude before the dot product and improves logit stability.",
+          "Acts per head and per token, so it does not mix sequence positions or attention heads."
+        ],
+        "cons": [
+          "Adds two reductions and rescalings per attention layer.",
+          "Changes optimization dynamics and may be redundant with other logit controls.",
+          "Production implementations need careful mixed-precision and fused-kernel handling."
+        ]
+      },
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/huggingface/transformers",
+          "commit": "7ea2320c76117e6742364808a666ef6f2fb40a67",
+          "path": "src/transformers/models/qwen3/modeling_qwen3.py",
+          "symbol": "Qwen3Attention.__init__ and Qwen3Attention.forward",
+          "license": "Apache-2.0",
+          "adapted": "The placement of independent head-dimensional Q and K RMS normalization.",
+          "simplifications": "No learned scale, RoPE, cache, dropout, or optimized attention kernel."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/google/gemma_pytorch",
+          "commit": "014acb7ac4563a5f77c76d7ff98f31b568c16508",
+          "path": "gemma/config.py",
+          "symbol": "GemmaConfig.use_qk_norm and get_config_for_27b_v3",
+          "license": "Apache-2.0",
+          "adapted": "The explicit QK-normalization architecture option and its Gemma 3 use.",
+          "simplifications": "A standalone tensor operation rather than a full Gemma attention layer."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2505.09388",
+          "section": "2.1 Model Architecture"
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2503.19786",
+          "section": "2 Model Architecture"
+        }
+      ]
+    },
+    {
+      "id": "frontier_attention_block",
+      "title": "Build a Configurable Frontier Attention Block",
+      "titleZh": "Build a Configurable Frontier Attention Block",
+      "difficulty": "Hard",
+      "functionName": "FrontierAttentionBlock",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Compose grouped-query attention, optional QK normalization, and a causal local/global schedule in one PyTorch module.\n\n**Constructor:** `FrontierAttentionBlock(d_model, num_heads, num_kv_heads, layer_index, window_size, global_every, use_qk_norm=True, eps=1e-6)`\n\n**Forward:** `block(x) -> Tensor`, where `x` and the output have shape `(batch, sequence, d_model)`.\n\nCreate bias-free projections named `q_proj`, `k_proj`, `v_proj`, and `o_proj`. Q has `num_heads`; K/V have `num_kv_heads` and are repeated in contiguous groups. When enabled, RMS-normalize Q and K independently over `head_dim` before the dot product. Apply causal attention; every `global_every`-th one-based layer is global, while other layers see the current token and at most `window_size` predecessors.\n\nValidate the divisibility and schedule arguments. Preserve autograd connectivity to the input and every projection.\n\nThis is a learning profile, not a universal reproduction. Llama demonstrates GQA; Mistral demonstrates bounded local attention; Gemma combines local/global schedules and QK norm; Qwen3 combines GQA, QK norm, and layer-selected masks. Kimi K2 and GLM-4.5 use MLA-style attention, a materially different KV-compression design connected to the advisory `mla` exercise rather than falsely squeezed into this class.\n\nOmitted production concerns include RoPE, cache updates, flash/flex kernels, attention dropout, tensor parallelism, mixed-precision upcasts, and model-specific residual/normalization placement.",
+      "descriptionZh": "Compose grouped-query attention, optional QK normalization, and a causal local/global schedule in one PyTorch module.\n\n**Constructor:** `FrontierAttentionBlock(d_model, num_heads, num_kv_heads, layer_index, window_size, global_every, use_qk_norm=True, eps=1e-6)`\n\n**Forward:** `block(x) -> Tensor`, where `x` and the output have shape `(batch, sequence, d_model)`.\n\nCreate bias-free projections named `q_proj`, `k_proj`, `v_proj`, and `o_proj`. Q has `num_heads`; K/V have `num_kv_heads` and are repeated in contiguous groups. When enabled, RMS-normalize Q and K independently over `head_dim` before the dot product. Apply causal attention; every `global_every`-th one-based layer is global, while other layers see the current token and at most `window_size` predecessors.\n\nValidate the divisibility and schedule arguments. Preserve autograd connectivity to the input and every projection.\n\nThis is a learning profile, not a universal reproduction. Llama demonstrates GQA; Mistral demonstrates bounded local attention; Gemma combines local/global schedules and QK norm; Qwen3 combines GQA, QK norm, and layer-selected masks. Kimi K2 and GLM-4.5 use MLA-style attention, a materially different KV-compression design connected to the advisory `mla` exercise rather than falsely squeezed into this class.\n\nOmitted production concerns include RoPE, cache updates, flash/flex kernels, attention dropout, tensor parallelism, mixed-precision upcasts, and model-specific residual/normalization placement.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Module and projection contracts",
+          "code": "\nimport torch\nimport torch.nn as nn\nblock = {fn}(d_model=16, num_heads=4, num_kv_heads=2, layer_index=0, window_size=2, global_every=3)\nassert isinstance(block, nn.Module)\nassert isinstance(block.q_proj, nn.Linear) and block.q_proj.weight.shape == (16, 16) and block.q_proj.bias is None\nassert isinstance(block.k_proj, nn.Linear) and block.k_proj.weight.shape == (8, 16) and block.k_proj.bias is None\nassert isinstance(block.v_proj, nn.Linear) and block.v_proj.weight.shape == (8, 16) and block.v_proj.bias is None\nassert isinstance(block.o_proj, nn.Linear) and block.o_proj.weight.shape == (16, 16) and block.o_proj.bias is None\nassert block(torch.randn(2, 5, 16)).shape == (2, 5, 16)\n",
+          "behavior": "contract.signature"
+        },
+        {
+          "name": "Constructor rejects invalid profiles",
+          "code": "\nbad_configs = [\n    dict(d_model=10, num_heads=4, num_kv_heads=2, layer_index=0, window_size=1, global_every=2),\n    dict(d_model=12, num_heads=3, num_kv_heads=2, layer_index=0, window_size=1, global_every=2),\n    dict(d_model=12, num_heads=3, num_kv_heads=1, layer_index=-1, window_size=1, global_every=2),\n    dict(d_model=12, num_heads=3, num_kv_heads=1, layer_index=0, window_size=-1, global_every=2),\n    dict(d_model=12, num_heads=3, num_kv_heads=1, layer_index=0, window_size=1, global_every=0),\n]\nfor config in bad_configs:\n    raised = False\n    try:\n        {fn}(**config)\n    except ValueError:\n        raised = True\n    assert raised\n",
+          "behavior": "edge.empty_or_boundary"
+        },
+        {
+          "name": "Independent numerical oracle",
+          "visibility": "unshown",
+          "behavior": "state.invariant"
+        },
+        {
+          "name": "QK normalization toggle changes only the configured operation",
+          "visibility": "unshown",
+          "behavior": "state.invariant"
+        },
+        {
+          "name": "Local and global layers enforce their receptive fields",
+          "visibility": "unshown",
+          "behavior": "attention.masking"
+        },
+        {
+          "name": "Gradients reach input and every projection",
+          "visibility": "unshown",
+          "behavior": "gradient.flow"
+        },
+        {
+          "name": "Seeded construction is deterministic",
+          "visibility": "unshown",
+          "behavior": "state.invariant"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "What are the Q and KV projection widths? How many times must each KV head be repeated? At which point should QK normalization happen? Which two inequalities define a local causal mask?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Project and reshape to (B, heads, S, head_dim); normalize Q/K per final dimension; repeat each KV head num_heads // num_kv_heads times; scale logits by head_dim**-0.5; apply the scheduled causal mask; combine V, restore (B,S,D), then use o_proj."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "qk_norm",
+        "gqa",
+        "hybrid_attention_schedule",
+        "mla"
+      ],
+      "modelConnections": [
+        "Llama attention uses fewer key/value heads than query heads and repeats KV groups for GQA.",
+        "Mistral inference represents sliding-window state per layer to bound long-context work.",
+        "Gemma 3 combines QK normalization with a repeating local-sliding/global schedule.",
+        "Qwen3 attention combines GQA, head-dimensional QK normalization, and layer-selected masks.",
+        "Kimi K2 reports MLA, so its compressed KV path is better studied through the separate MLA exercise.",
+        "GLM-4.5 also belongs to the MLA/MoE branch; this capstone explicitly does not claim implementation equivalence."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "GQA reduces KV projection/cache size relative to full multi-head KV while retaining multiple KV groups.",
+          "QK norm controls logit magnitude; local/global scheduling trades bounded work for periodic long-range communication.",
+          "One explicit configuration makes architectural choices and their interactions testable."
+        ],
+        "cons": [
+          "KV repetition is pedagogical but can materialize memory that optimized grouped kernels avoid.",
+          "Local layers delay distant information flow and introduce cache/kernel scheduling complexity.",
+          "Normalization adds reductions and the block omits model-specific features needed for checkpoint compatibility.",
+          "MLA models such as Kimi and GLM require compressed latent KV projections, not this GQA representation."
+        ]
+      },
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/huggingface/transformers",
+          "commit": "7ea2320c76117e6742364808a666ef6f2fb40a67",
+          "path": "src/transformers/models/qwen3/modeling_qwen3.py",
+          "symbol": "repeat_kv, eager_attention_forward, and Qwen3Attention",
+          "license": "Apache-2.0",
+          "adapted": "GQA projection/repetition, head-dimensional QK norm, scaling, and mask selection boundaries.",
+          "simplifications": "No RoPE/cache/backend dispatch/dropout and no learned norm weights."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/huggingface/transformers",
+          "commit": "7ea2320c76117e6742364808a666ef6f2fb40a67",
+          "path": "src/transformers/models/llama/modeling_llama.py",
+          "symbol": "repeat_kv, eager_attention_forward, and LlamaAttention",
+          "license": "Apache-2.0",
+          "adapted": "The separate query-head/KV-head contract and contiguous KV-group repetition.",
+          "simplifications": "Single-process CPU-sized tensors without cache or rotary embeddings."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/google/gemma_pytorch",
+          "commit": "014acb7ac4563a5f77c76d7ff98f31b568c16508",
+          "path": "gemma/config.py",
+          "symbol": "GemmaConfig, AttentionType, and get_config_for_27b_v3",
+          "license": "Apache-2.0",
+          "adapted": "QK-norm and repeating local/global attention profile configuration.",
+          "simplifications": "Arithmetic schedule rather than complete per-layer config and model block."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/mistralai/mistral-inference",
+          "commit": "9eaeb91c17450e09021b6065a1d5cc69876507c8",
+          "path": "src/mistral_inference/transformer_layers.py",
+          "symbol": "repeat_kv and Attention",
+          "license": "Apache-2.0",
+          "adapted": "Bias-free GQA projections and repeated KV heads used with bounded inference state.",
+          "simplifications": "Materialized attention mask with no xFormers kernel or rolling cache."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2507.20534",
+          "section": "2 Model Architecture (Kimi K2 technical report)"
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2508.06471",
+          "section": "2 Architecture (GLM-4.5 technical report)"
+        }
+      ]
     }
   ]
 }

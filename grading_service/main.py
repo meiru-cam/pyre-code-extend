@@ -16,6 +16,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
+from torch_judge.harness import HarnessFailure
 from torch_judge.tasks import get_task
 
 app = FastAPI(title="Grading Service")
@@ -258,6 +259,8 @@ def _execute_tests(code: str, task: dict, test_indices: list[int] | None = None,
                         test_index,
                     ))
                     passed += 1
+                except HarnessFailure:
+                    raise
                 except AssertionError as e:
                     exec_time_ms = (time.perf_counter() - start) * 1000
                     output = captured.getvalue() or None
@@ -297,6 +300,8 @@ def _execute_tests(code: str, task: dict, test_indices: list[int] | None = None,
                     test_index,
                 ))
                 passed += 1
+            except HarnessFailure:
+                raise
             except AssertionError as e:
                 exec_time_ms = (time.perf_counter() - start) * 1000
                 results.append(_finalize_result(
@@ -327,7 +332,13 @@ def grade(request: SubmitRequest) -> GradeResponse:
     task = get_task(request.taskId)
     if task is None:
         raise HTTPException(status_code=404, detail=f"Task '{request.taskId}' not found")
-    return _execute_tests(request.code, task)
+    try:
+        return _execute_tests(request.code, task)
+    except HarnessFailure as error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Evaluator harness failure: {error}",
+        ) from error
 
 
 @app.post("/run", response_model=GradeResponse)
@@ -335,7 +346,13 @@ def run(request: RunRequest) -> GradeResponse:
     task = get_task(request.taskId)
     if task is None:
         raise HTTPException(status_code=404, detail=f"Task '{request.taskId}' not found")
-    return _execute_tests(request.code, task, request.testIndices)
+    try:
+        return _execute_tests(request.code, task, request.testIndices)
+    except HarnessFailure as error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Evaluator harness failure: {error}",
+        ) from error
 
 
 

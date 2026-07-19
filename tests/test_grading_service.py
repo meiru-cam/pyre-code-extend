@@ -5,9 +5,12 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from grading_service.main import _execute_tests
+from torch_judge.harness import HarnessFailure
 
 TASK = {
     "title": "Add",
@@ -74,3 +77,20 @@ def test_unshown_failure_without_message_falls_back_to_behavior():
     del task["tests"][0]["failure_message"]
     response = _execute_tests(BAD, task)
     assert response.results[0].error == "Behavior check failed: routing.normalization"
+
+
+@pytest.mark.parametrize("capture_output", [True, False])
+def test_harness_failures_are_not_converted_to_learner_failures(capture_output):
+    task = {
+        **TASK,
+        "tests": [
+            {
+                "name": "broken evaluator",
+                "code": "from torch_judge.harness import HarnessFailure\nraise HarnessFailure('oracle is invalid')",
+                "behavior": "state.invariant",
+            }
+        ],
+    }
+
+    with pytest.raises(HarnessFailure, match="oracle is invalid"):
+        _execute_tests(GOOD, task, capture_output=capture_output)
