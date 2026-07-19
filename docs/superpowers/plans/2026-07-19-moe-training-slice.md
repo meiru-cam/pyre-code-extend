@@ -16,7 +16,7 @@
 **Contract:** `moe_topk_router(router_logits, k) -> (expert_indices, expert_weights)`. Inputs are `[tokens, experts]`; softmax is over experts before top-k; returned tensors are `[tokens, k]`; selected weights are renormalized to sum to one. Validate `1 <= k <= experts`.
 
 - Cases: hand calculation, ties with deterministic PyTorch `topk` semantics, shape/dtype/device, randomized oracle, normalization, gradients through selected weights, expert permutation.
-- Reject: wrong softmax dimension, top-k before softmax without renormalization, smallest-k, detached weights, shared route for all tokens.
+- Reject observable errors: wrong softmax dimension, unnormalized selected probabilities or raw top-k logits, smallest-k, detached weights, shared route for all tokens. Document that top-k logits followed by selected softmax is mathematically output-equivalent to full softmax, top-k, then renormalization.
 - Connect DeepSeek-V3/Kimi K2/GLM-4.5/Qwen3-MoE router code and precise report sections; distinguish selection probabilities from auxiliary load-balancing objectives.
 
 ## Task 3: `moe_capacity_dispatch`
@@ -24,8 +24,8 @@
 **Contract:** `moe_capacity_dispatch(x, expert_indices, expert_weights, experts, capacity) -> (output, stats)`. Route in token-major then slot order; each expert accepts at most `capacity`; overflow assignments are dropped; accepted weighted outputs are accumulated back to exactly one token row; `stats` contains integer `accepted`, `dropped`, and per-expert `loads`.
 
 - Cases: dense-oracle equivalence, token conservation, no duplication, capacity boundaries including zero, sparse invocation counts, dtype/device, gradients only through selected accepted paths, expert permutation.
-- Reject: no capacity, global instead of per-expert capacity, duplicated gather, unweighted gather, execute-all-experts, count shared expert as routed.
-- Explain dropless versus dropping/padding, capacity-factor utilization, communication regularity, and quality loss.
+- Reject: no capacity, global instead of per-expert capacity, duplicated gather, unweighted gather, and execute-all-experts.
+- Explain dropless versus dropping/padding, capacity-factor utilization, communication regularity, and quality loss. Teach shared experts as a separate always-on branch intentionally outside this routed-dispatch signature and its load statistics.
 
 ## Task 4: `tiny_moe_train_step`
 

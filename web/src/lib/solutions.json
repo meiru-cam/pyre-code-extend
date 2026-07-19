@@ -581,6 +581,20 @@
       }
     ]
   },
+  "moe_topk_router": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def moe_topk_router(router_logits, k):\n    if router_logits.ndim != 2:\n        raise ValueError(\"router_logits must have shape (tokens, experts)\")\n    num_experts = router_logits.shape[-1]\n    if not isinstance(k, int) or isinstance(k, bool) or not 1 <= k <= num_experts:\n        raise ValueError(\"k must select between one and all experts\")\n    probabilities = torch.softmax(router_logits, dim=-1)\n    weights, indices = torch.topk(probabilities, k, dim=-1)\n    weights = weights / weights.sum(dim=-1, keepdim=True)\n    return indices, weights",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "router_logits=torch.tensor([[3.,1.,0.],[0.,2.,4.]])\nexpert_indices,expert_weights=moe_topk_router(router_logits,2)\nprint(expert_indices)\nprint(expert_weights, expert_weights.sum(-1))",
+        "role": "demo"
+      }
+    ]
+  },
   "mpnn_layer": {
     "cells": [
       {
@@ -981,6 +995,20 @@
       }
     ]
   },
+  "moe_capacity_dispatch": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def moe_capacity_dispatch(x, expert_indices, expert_weights, experts, capacity):\n    if x.ndim != 2 or expert_indices.ndim != 2 or expert_weights.shape != expert_indices.shape:\n        raise ValueError(\"x and route tensors have invalid shapes\")\n    if expert_indices.shape[0] != x.shape[0] or expert_indices.dtype != torch.long:\n        raise ValueError(\"route tensors must align with tokens and indices must be long\")\n    if not isinstance(capacity, int) or isinstance(capacity, bool) or capacity < 0 or not experts:\n        raise ValueError(\"capacity and experts are invalid\")\n    if expert_indices.numel() and (int(expert_indices.min()) < 0 or int(expert_indices.max()) >= len(experts)):\n        raise ValueError(\"expert index out of range\")\n    loads = [0 for _ in experts]\n    routes = [[] for _ in experts]\n    for token in range(expert_indices.shape[0]):\n        for slot in range(expert_indices.shape[1]):\n            expert_id = int(expert_indices[token, slot])\n            if loads[expert_id] < capacity:\n                routes[expert_id].append((token, slot))\n                loads[expert_id] += 1\n    output = torch.zeros_like(x)\n    for expert_id, accepted in enumerate(routes):\n        if not accepted:\n            continue\n        token_ids = torch.tensor([token for token, _ in accepted], device=x.device)\n        slot_ids = torch.tensor([slot for _, slot in accepted], device=x.device)\n        expert_output = experts[expert_id](x.index_select(0, token_ids))\n        route_weights = expert_weights[token_ids, slot_ids].to(expert_output.dtype).unsqueeze(-1)\n        output.index_add_(0, token_ids, expert_output * route_weights)\n    accepted_count = sum(loads)\n    return output, {\"accepted\": accepted_count, \"dropped\": expert_indices.numel() - accepted_count, \"loads\": loads}",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "experts=[nn.Linear(4,4,bias=False) for _ in range(3)]\nx=torch.randn(5,4)\nindices=torch.tensor([[0,1],[0,2],[1,2],[0,1],[2,0]])\nweights=torch.full((5,2),.5)\noutput,stats=moe_capacity_dispatch(x,indices,weights,experts,capacity=2)\nprint(output.shape,stats)",
+        "role": "demo"
+      }
+    ]
+  },
   "paged_attention": {
     "cells": [
       {
@@ -1047,6 +1075,20 @@
       {
         "type": "code",
         "source": "torch.manual_seed(42)\nd_model, d_ff, world_size = 64, 256, 4\nx = torch.randn(2, d_model)\n\ntp_mlp = TensorParallelMLP(d_model, d_ff, world_size)\nout = tp_mlp(x)\nprint(\"Output shape:\", out.shape)  # expect (2, 64)\n\nw1_full = torch.cat([p.data for p in tp_mlp.w1_shards], dim=1)  # (d_model, d_ff)\nw2_full = torch.cat([p.data for p in tp_mlp.w2_shards], dim=0)  # (d_ff, d_model)\nref = torch.nn.functional.gelu(x @ w1_full) @ w2_full\n\nprint(\"Max diff vs reference:\", (out - ref).abs().max().item())  # expect ~0",
+        "role": "demo"
+      }
+    ]
+  },
+  "tiny_moe_train_step": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def tiny_moe_train_step(model, optimizer, x, targets, balance_weight=0.01, z_weight=0.001):\n    optimizer.zero_grad()\n    logits, router_logits = model(x)\n    task_loss = F.cross_entropy(logits, targets)\n    importance = torch.softmax(router_logits, dim=-1).mean(dim=0)\n    balance_loss = router_logits.shape[-1] * importance.square().sum()\n    z_loss = torch.logsumexp(router_logits, dim=-1).square().mean()\n    loss = task_loss + balance_weight * balance_loss + z_weight * z_loss\n    loss.backward()\n    optimizer.step()\n    return {\n        \"loss\": loss.detach(),\n        \"task_loss\": task_loss.detach(),\n        \"balance_loss\": balance_loss.detach(),\n        \"z_loss\": z_loss.detach(),\n    }",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "model=nn.Sequential()\n# Supply a model whose forward returns (task_logits, router_logits), then:\n# metrics=tiny_moe_train_step(model,optimizer,x,targets)\n# print({name: float(value) for name,value in metrics.items()})",
         "role": "demo"
       }
     ]
