@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 import sqlite3
 import sys
+import threading
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -66,6 +68,25 @@ def test_migration_is_idempotent(tmp_path, monkeypatch):
     gs._get_db().close()
 
 
+def test_concurrent_first_open_is_safe(tmp_path, monkeypatch):
+    """Cold-start requests must not race while adding migration columns."""
+    for attempt in range(10):
+        database = tmp_path / f"concurrent-{attempt}.db"
+        monkeypatch.setattr(gs, "_DB_PATH", str(database))
+        barrier = threading.Barrier(8)
+
+        def open_database() -> None:
+            barrier.wait()
+            with gs._get_db():
+                pass
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+            futures = [executor.submit(open_database) for _ in range(8)]
+
+        errors = [future.exception() for future in futures if future.exception() is not None]
+        assert errors == []
+
+
 def _install_task(monkeypatch, version: int) -> dict:
     task = {
         "title": "V",
@@ -102,6 +123,12 @@ def test_new_revision_does_not_overwrite_solved_history(tmp_path, monkeypatch):
             "WHERE task_id='_versioned' ORDER BY contract_version"
         ).fetchall()
         assert rows == [(1, "solved"), (2, "attempted")]
+        aggregate = connection.execute(
+            "SELECT status, contract_version FROM progress WHERE task_id='_versioned'"
+        ).fetchone()
+        # The compatibility row is lifetime-monotonic and tracks the latest
+        # revision touched; revision rows remain the current-version authority.
+        assert aggregate == ("solved", 2)
 
     progress = gs.get_progress(1)
     assert progress["_versioned"].contractVersion == 2

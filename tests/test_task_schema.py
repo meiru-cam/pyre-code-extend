@@ -157,6 +157,16 @@ def test_unshown_requires_behavior_and_failure_message():
         validate_task("t", task)
 
 
+def test_task_requires_at_least_one_visible_case():
+    task = make_new_task()
+    for test in task["tests"]:
+        test["visibility"] = "unshown"
+        test["failure_message"] = "The evaluator behavior failed."
+
+    with pytest.raises(TaskValidationError, match="at least one visible case"):
+        validate_task("t", task)
+
+
 def test_unknown_advisory_prerequisite_rejected():
     task = make_new_task()
     with pytest.raises(TaskValidationError, match="advisory_prerequisites"):

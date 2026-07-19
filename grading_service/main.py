@@ -23,6 +23,10 @@ app = FastAPI(title="Grading Service")
 # Lock to serialize sys.stdout redirects across concurrent request threads
 _stdout_lock = threading.Lock()
 
+# Schema initialization runs lazily from request handlers. Serialize it within
+# the process; BEGIN IMMEDIATE provides the equivalent lock across processes.
+_db_init_lock = threading.Lock()
+
 # ---------------------------------------------------------------------------
 # SQLite DB (user sessions + progress)
 # ---------------------------------------------------------------------------
@@ -38,64 +42,72 @@ def _ensure_column(conn: sqlite3.Connection, table: str, column: str, decl: str)
 
 def _get_db() -> sqlite3.Connection:
     Path(_DB_PATH).parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(_DB_PATH)
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA foreign_keys=ON")
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            session_token TEXT UNIQUE NOT NULL,
-            created_at TEXT DEFAULT (datetime('now'))
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS progress (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            task_id TEXT NOT NULL,
-            status TEXT NOT NULL CHECK (status IN ('todo', 'attempted', 'solved')),
-            best_time_ms REAL,
-            attempts INTEGER DEFAULT 0,
-            solved_at TEXT,
-            FOREIGN KEY (user_id) REFERENCES users(id),
-            UNIQUE(user_id, task_id)
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS submissions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            task_id TEXT NOT NULL,
-            code TEXT NOT NULL,
-            passed INTEGER NOT NULL,
-            exec_time_ms REAL,
-            submitted_at TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (user_id) REFERENCES users(id)
-        )
-    """)
-    _ensure_column(conn, "progress", "contract_version", "INTEGER NOT NULL DEFAULT 1")
-    _ensure_column(conn, "submissions", "contract_version", "INTEGER NOT NULL DEFAULT 1")
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS progress_revisions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            task_id TEXT NOT NULL,
-            contract_version INTEGER NOT NULL,
-            status TEXT NOT NULL CHECK (status IN ('todo', 'attempted', 'solved')),
-            best_time_ms REAL,
-            attempts INTEGER DEFAULT 0,
-            solved_at TEXT,
-            FOREIGN KEY (user_id) REFERENCES users(id),
-            UNIQUE(user_id, task_id, contract_version)
-        )
-    """)
-    conn.execute("""
-        INSERT OR IGNORE INTO progress_revisions
-            (user_id, task_id, contract_version, status, best_time_ms, attempts, solved_at)
-        SELECT user_id, task_id, contract_version, status, best_time_ms, attempts, solved_at
-        FROM progress
-    """)
-    conn.commit()
+    conn = sqlite3.connect(_DB_PATH, timeout=30)
+    conn.execute("PRAGMA busy_timeout=30000")
+    with _db_init_lock:
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA foreign_keys=ON")
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_token TEXT UNIQUE NOT NULL,
+                    created_at TEXT DEFAULT (datetime('now'))
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS progress (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    task_id TEXT NOT NULL,
+                    status TEXT NOT NULL CHECK (status IN ('todo', 'attempted', 'solved')),
+                    best_time_ms REAL,
+                    attempts INTEGER DEFAULT 0,
+                    solved_at TEXT,
+                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    UNIQUE(user_id, task_id)
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS submissions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    task_id TEXT NOT NULL,
+                    code TEXT NOT NULL,
+                    passed INTEGER NOT NULL,
+                    exec_time_ms REAL,
+                    submitted_at TEXT DEFAULT (datetime('now')),
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                )
+            """)
+            _ensure_column(conn, "progress", "contract_version", "INTEGER NOT NULL DEFAULT 1")
+            _ensure_column(conn, "submissions", "contract_version", "INTEGER NOT NULL DEFAULT 1")
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS progress_revisions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    task_id TEXT NOT NULL,
+                    contract_version INTEGER NOT NULL,
+                    status TEXT NOT NULL CHECK (status IN ('todo', 'attempted', 'solved')),
+                    best_time_ms REAL,
+                    attempts INTEGER DEFAULT 0,
+                    solved_at TEXT,
+                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    UNIQUE(user_id, task_id, contract_version)
+                )
+            """)
+            conn.execute("""
+                INSERT OR IGNORE INTO progress_revisions
+                    (user_id, task_id, contract_version, status, best_time_ms, attempts, solved_at)
+                SELECT user_id, task_id, contract_version, status, best_time_ms, attempts, solved_at
+                FROM progress
+            """)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            conn.close()
+            raise
     return conn
 
 
@@ -192,6 +204,11 @@ def _execute_tests(code: str, task: dict, test_indices: list[int] | None = None,
         return GradeResponse(passed=0, total=0, allPassed=False, results=[], totalTimeMs=0.0, error=f"Function '{fn_name}' not found in submitted code")
 
     all_tests = task.get("tests", [])
+    if test_indices is not None and len(test_indices) == 0:
+        return GradeResponse(
+            passed=0, total=0, allPassed=False, results=[], totalTimeMs=0.0,
+            error="No visible test cases are available to run.",
+        )
     indexed_tests = (
         [(index, all_tests[index]) for index in test_indices if 0 <= index < len(all_tests)]
         if test_indices is not None
@@ -484,6 +501,9 @@ def save_progress(request: SaveProgressRequest) -> dict[str, str]:
             status=request.status,
             exec_time_ms=request.execTimeMs,
         )
+        # Compatibility table: status remains lifetime-monotonic (once solved,
+        # always solved), while contract_version records the latest revision
+        # touched. Current-version truth lives in progress_revisions.
         existing = conn.execute(
             "SELECT status, best_time_ms FROM progress WHERE user_id = ? AND task_id = ?",
             (user_id, request.taskId)

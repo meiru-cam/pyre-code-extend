@@ -157,6 +157,8 @@ def validate_task(task_id: str, task: dict, known_ids: set[str] | None = None) -
         raise TaskValidationError(task_id, "tests", "required non-empty list")
     for index, test in enumerate(tests):
         _validate_test(task_id, index, test)
+    if not any(test.get("visibility", "visible") == "visible" for test in tests):
+        raise TaskValidationError(task_id, "tests", "requires at least one visible case")
 
     if "advisory_prerequisites" in task:
         prerequisites = task["advisory_prerequisites"]

@@ -47,6 +47,14 @@ def test_selected_run_preserves_original_test_index():
     assert response.results[0].testIndex == 1
 
 
+def test_empty_selected_run_is_not_reported_as_passing():
+    response = _execute_tests(GOOD, TASK, test_indices=[])
+
+    assert not response.allPassed
+    assert response.total == 0
+    assert response.error == "No visible test cases are available to run."
+
+
 def test_unshown_failure_masks_detail():
     response = _execute_tests(BAD, TASK)
     failing = response.results[1]
