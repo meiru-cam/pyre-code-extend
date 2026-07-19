@@ -28,18 +28,12 @@ def test_build_problem_catalog_includes_all_registered_tasks():
 
 def test_exported_problem_shape():
     problem = build_problem_catalog()["problems"][0]
-    assert set(problem) == {
-        "id",
-        "title",
-        "titleZh",
-        "difficulty",
-        "functionName",
-        "hint",
-        "hintZh",
-        "descriptionEn",
-        "descriptionZh",
-        "tests",
+    required = {
+        "id", "title", "titleZh", "difficulty", "functionName",
+        "hint", "hintZh", "descriptionEn", "descriptionZh", "tests", "version",
     }
+    assert required <= set(problem)
+    assert isinstance(problem["version"], int) and problem["version"] >= 1
 
 
 def test_build_problem_catalog_recovers_from_malformed_existing_json(tmp_path):
@@ -51,3 +45,19 @@ def test_build_problem_catalog_recovers_from_malformed_existing_json(tmp_path):
     exported_ids = [problem["id"] for problem in data["problems"]]
     assert set(exported_ids) == set(TASKS)
     assert len(exported_ids) == len(TASKS)
+
+
+def test_visible_test_entries_keep_code():
+    for problem in build_problem_catalog()["problems"]:
+        for test in problem["tests"]:
+            if test.get("visibility") != "unshown":
+                assert isinstance(test["code"], str) and test["code"].strip()
+
+
+def test_unshown_test_entries_have_no_code():
+    for problem in build_problem_catalog()["problems"]:
+        for test in problem["tests"]:
+            if test.get("visibility") == "unshown":
+                assert "code" not in test
+                assert "failure_message" not in test
+                assert test["behavior"]
