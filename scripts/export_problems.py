@@ -24,6 +24,7 @@ _OPTIONAL_FIELDS = (
     ("model_connections", "modelConnections"),
     ("pro_con_analysis", "proConAnalysis"),
     ("sources", "sources"),
+    ("design_note_rubric", "designNoteRubric"),
 )
 
 

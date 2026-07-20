@@ -101,6 +101,16 @@
       "prerequisites": ["transformer-internals"]
     },
     {
+      "id": "agent-runtime-system-design",
+      "titleEn": "Agent Runtime & Multi-Agent System Design",
+      "titleZh": "Agent Runtime & Multi-Agent System Design",
+      "descriptionEn": "Implement a validated tool API, a budgeted retrying agent loop, and resumable supervisor-worker orchestration with deterministic failure injection, backpressure, idempotency, checkpoints, and pinned OpenClaw, Hermes, and Microsoft Agent Framework code connections.",
+      "descriptionZh": "Implement a validated tool API, a budgeted retrying agent loop, and resumable supervisor-worker orchestration with deterministic failure injection, backpressure, idempotency, checkpoints, and pinned OpenClaw, Hermes, and Microsoft Agent Framework code connections.",
+      "icon": "Workflow",
+      "problems": ["tool_registry", "budgeted_agent_loop", "supervisor_orchestration"],
+      "prerequisites": []
+    },
+    {
       "id": "graph-neural-networks",
       "titleEn": "Graph Neural Networks",
       "titleZh": "图神经网络",
