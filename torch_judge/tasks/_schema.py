@@ -9,6 +9,17 @@ DIFFICULTIES = frozenset({"Easy", "Medium", "Hard"})
 HINT_KINDS = frozenset({"questions", "analysis"})
 VISIBILITIES = frozenset({"visible", "unshown"})
 
+DESIGN_NOTE_DIMENSIONS = (
+    ("api_boundaries", "API boundaries and class responsibilities"),
+    ("state_ownership", "State and ownership"),
+    ("failure_recovery", "Failure behavior and recovery"),
+    ("backpressure_concurrency", "Backpressure and concurrency"),
+    ("durability_idempotency", "Durability and idempotency"),
+    ("observability", "Observability"),
+    ("security", "Security"),
+    ("tradeoffs", "Explicit tradeoffs"),
+)
+
 BEHAVIOR_CATEGORIES = frozenset({
     "contract.signature",
     "tensor.shape",
@@ -45,6 +56,11 @@ class TaskValidationError(ValueError):
         self.task_id = task_id
         self.field = field
         super().__init__(f"Task '{task_id}', field '{field}': {message}")
+
+
+def build_design_note_rubric() -> list[dict[str, str]]:
+    """Return isolated, frontend-ready metadata for the shared design rubric."""
+    return [{"field": field, "label": label} for field, label in DESIGN_NOTE_DIMENSIONS]
 
 
 def _require_str(task_id: str, task: dict, key: str) -> None:
@@ -170,6 +186,27 @@ def validate_task(task_id: str, task: dict, known_ids: set[str] | None = None) -
                 raise TaskValidationError(
                     task_id, "advisory_prerequisites", f"unknown task ids: {unknown}"
                 )
+
+    if "design_note_rubric" in task:
+        rubric = task["design_note_rubric"]
+        expected = [field for field, _label in DESIGN_NOTE_DIMENSIONS]
+        valid = (
+            isinstance(rubric, list)
+            and [item.get("field") for item in rubric if isinstance(item, dict)] == expected
+            and len(rubric) == len(expected)
+            and all(
+                isinstance(item, dict)
+                and isinstance(item.get("label"), str)
+                and bool(item["label"].strip())
+                for item in rubric
+            )
+        )
+        if not valid:
+            raise TaskValidationError(
+                task_id,
+                "design_note_rubric",
+                "must declare every structured design dimension once in canonical order",
+            )
 
     if "pro_con_analysis" in task:
         analysis = task["pro_con_analysis"]

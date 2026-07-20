@@ -194,5 +194,12 @@ def test_paper_source_requires_precise_locator():
         validate_task("t", task)
 
 
+def test_design_note_rubric_requires_all_structured_dimensions():
+    task = make_new_task()
+    task["design_note_rubric"] = [{"field": "tradeoffs", "label": "Tradeoffs"}]
+    with pytest.raises(TaskValidationError, match="design_note_rubric"):
+        validate_task("t", task)
+
+
 def test_behavior_categories_match_spec_count():
     assert len(BEHAVIOR_CATEGORIES) == 27

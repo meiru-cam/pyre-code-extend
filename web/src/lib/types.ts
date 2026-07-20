@@ -45,6 +45,7 @@ export interface Problem {
   advisoryPrerequisites?: string[];
   modelConnections?: string[];
   proConAnalysis?: { pros: string[]; cons: string[] };
+  designNoteRubric?: { field: string; label: string }[];
   sources?: SourceRef[];
 }
 

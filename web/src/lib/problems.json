@@ -3331,6 +3331,436 @@
           "section": "2 Pre-Training"
         }
       ]
+    },
+    {
+      "id": "tool_registry",
+      "title": "Validated Agent Tool Registry",
+      "titleZh": "Validated Agent Tool Registry",
+      "difficulty": "Medium",
+      "functionName": "ToolRegistry",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Implement a small provider-neutral registry that owns tool discovery and invocation.\n\nDefine a 'ToolRegistry' class with:\n\n- 'register(tool)' — a tool exposes non-empty 'name' and 'description', an 'argument_schema' mapping argument names to Python types, and 'invoke(arguments, idempotency_key=None)'. Reject duplicate names and unsupported schema types.\n- 'describe()' — return tools in registration order as fresh dictionaries containing only 'name', 'description', and 'parameters'. Convert 'str', 'int', 'float', 'bool', 'list', and 'dict' to 'string', 'integer', 'number', 'boolean', 'array', and 'object'.\n- 'invoke(name, arguments, idempotency_key=None)' — reject unknown tools and require an exact argument set with exact declared Python types before calling the tool. In particular, 'bool' is not an 'int'. Forward the idempotency key unchanged.\n\nThis exercise separates the model-facing schema from executable handlers. That boundary lets runtimes filter what the model can discover and validate requests before side effects. It deliberately omits optional arguments and full JSON Schema so the registry semantics remain the focus.\n\nOptional code reading: OpenClaw's 'createOpenClawTools' constructs a per-run inventory, merges plugin tools, filters client capabilities, and wraps hooks. Hermes 'ToolRegistry' owns schema retrieval and dispatch for self-registering built-in tools. Read those exact sections after attempting the exercise if you want to compare a compact registry with production policy and availability layers.",
+      "descriptionZh": "Implement a small provider-neutral registry that owns tool discovery and invocation.\n\nDefine a 'ToolRegistry' class with:\n\n- 'register(tool)' — a tool exposes non-empty 'name' and 'description', an 'argument_schema' mapping argument names to Python types, and 'invoke(arguments, idempotency_key=None)'. Reject duplicate names and unsupported schema types.\n- 'describe()' — return tools in registration order as fresh dictionaries containing only 'name', 'description', and 'parameters'. Convert 'str', 'int', 'float', 'bool', 'list', and 'dict' to 'string', 'integer', 'number', 'boolean', 'array', and 'object'.\n- 'invoke(name, arguments, idempotency_key=None)' — reject unknown tools and require an exact argument set with exact declared Python types before calling the tool. In particular, 'bool' is not an 'int'. Forward the idempotency key unchanged.\n\nThis exercise separates the model-facing schema from executable handlers. That boundary lets runtimes filter what the model can discover and validate requests before side effects. It deliberately omits optional arguments and full JSON Schema so the registry semantics remain the focus.\n\nOptional code reading: OpenClaw's 'createOpenClawTools' constructs a per-run inventory, merges plugin tools, filters client capabilities, and wraps hooks. Hermes 'ToolRegistry' owns schema retrieval and dispatch for self-registering built-in tools. Read those exact sections after attempting the exercise if you want to compare a compact registry with production policy and availability layers.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Discovery is ordered and least-data",
+          "code": "\nfrom torch_judge.harness.agents import FakeTool\nregistry={fn}()\nregistry.register(FakeTool('search','find documents',{'q':str,'limit':int},outcomes=[{'items':[]}]))\nregistry.register(FakeTool('notify','send notice',{'urgent':bool},outcomes=[{'sent':True}]))\nexpected=[\n {'name':'search','description':'find documents','parameters':{'q':'string','limit':'integer'}},\n {'name':'notify','description':'send notice','parameters':{'urgent':'boolean'}},\n]\nactual=registry.describe()\nassert actual==expected\nactual[0]['parameters']['q']='changed'\nassert registry.describe()==expected\n",
+          "behavior": "protocol.validation"
+        },
+        {
+          "name": "Valid calls dispatch and preserve idempotency",
+          "code": "\nfrom torch_judge.harness.agents import FakeTool\ntool=FakeTool('charge','charge once',{'amount':int},outcomes=[{'receipt':'r1'},{'receipt':'r2'}])\nregistry={fn}(); registry.register(tool)\nassert registry.invoke('charge',{'amount':3},'pay-1')=={'receipt':'r1'}\nassert registry.invoke('charge',{'amount':3},'pay-1')=={'receipt':'r1'}\nassert tool.calls==2 and tool.effects==1\n",
+          "behavior": "effects.idempotency"
+        },
+        {
+          "name": "Invalid calls never reach a handler",
+          "visibility": "unshown",
+          "behavior": "protocol.validation"
+        },
+        {
+          "name": "Registration rejects collisions and unsupported schemas",
+          "visibility": "unshown",
+          "behavior": "state.invariant"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which state must preserve registration order? What should describe expose—and what should it hide? Can you validate all argument names and types before invoking anything? Why does isinstance(True, int) need special handling?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Keep a name-to-tool dictionary; normal dictionaries preserve insertion order. Build each description from a fixed type-name mapping and return newly allocated dictionaries. At invoke time compare key sets first, then require type(value) is declared_type for every argument, and only then delegate with the unchanged idempotency key."
+        }
+      ],
+      "advisoryPrerequisites": [],
+      "modelConnections": [
+        "OpenClaw createOpenClawTools builds a run-specific tool inventory, adds plugin tools, filters by client capabilities, and applies before-tool-call wrappers; this exercise isolates its discovery/dispatch core.",
+        "Hermes tools.registry.ToolRegistry centralizes registered schemas, availability checks, and dispatch; its production implementation also handles async tools, plugins, result normalization, and error sanitization.",
+        "Provider-neutral descriptions create an adapter seam: an OpenAI-, Anthropic-, or local-model adapter can translate one internal contract without changing tool handlers."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Central validation prevents malformed calls from reaching side-effecting handlers.",
+          "A least-data discovery surface reduces accidental leakage of handler and runtime internals.",
+          "A provider-neutral registry keeps model API formats outside domain tools."
+        ],
+        "cons": [
+          "A central registry can become a policy bottleneck and single coordination point.",
+          "The restricted type map cannot express optional fields, unions, bounds, or nested JSON Schema.",
+          "Registration order is deterministic but may couple prompt order to startup order."
+        ]
+      },
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/openclaw/openclaw",
+          "commit": "40d31f34813c2a01284b097c0d0d785fbb173400",
+          "path": "src/agents/openclaw-tools.ts",
+          "symbol": "createOpenClawTools and filterToolsByClientCaps",
+          "license": "MIT",
+          "adapted": "Per-run tool inventory construction, plugin composition, capability filtering, and wrapper boundary.",
+          "simplifications": "No channel context, plugins, allow/deny policy, sandbox capabilities, hooks, or dynamic media tools."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/NousResearch/hermes-agent",
+          "commit": "299e409f15aa5615a8a64be488580be92cda351e",
+          "path": "tools/registry.py",
+          "symbol": "ToolRegistry.register, get_definitions, and dispatch",
+          "license": "MIT",
+          "adapted": "Central schema registration, sorted discovery concepts, handler lookup, and dispatch boundary.",
+          "simplifications": "No discovery imports, toolsets, availability cache, plugin override policy, async bridge, locks, result normalization, or error sanitizer."
+        }
+      ],
+      "designNoteRubric": [
+        {
+          "field": "api_boundaries",
+          "label": "API boundaries and class responsibilities"
+        },
+        {
+          "field": "state_ownership",
+          "label": "State and ownership"
+        },
+        {
+          "field": "failure_recovery",
+          "label": "Failure behavior and recovery"
+        },
+        {
+          "field": "backpressure_concurrency",
+          "label": "Backpressure and concurrency"
+        },
+        {
+          "field": "durability_idempotency",
+          "label": "Durability and idempotency"
+        },
+        {
+          "field": "observability",
+          "label": "Observability"
+        },
+        {
+          "field": "security",
+          "label": "Security"
+        },
+        {
+          "field": "tradeoffs",
+          "label": "Explicit tradeoffs"
+        }
+      ]
+    },
+    {
+      "id": "budgeted_agent_loop",
+      "title": "Budgeted Retrying Agent Loop",
+      "titleZh": "Budgeted Retrying Agent Loop",
+      "difficulty": "Hard",
+      "functionName": "budgeted_agent_loop",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Implement a deterministic tool-using agent state machine.\n\nSignature: 'budgeted_agent_loop(model, registry, messages, limits, retry_policy, clock, trace) -> AgentResult'. Import 'AgentResult', 'RetryableModelError', 'PermanentModelError', 'RetryableToolError', and 'PermanentToolError' from 'torch_judge.harness.agents'. Do not sleep or call a live API.\n\n'model.call(messages)' returns one JSON-like response per iteration:\n\n- final: '{\"type\":\"final\", \"content\":str, \"usage\":{\"tokens\":int,\"cost\":number}}'\n- tool call: '{\"type\":\"tool_call\", \"call_id\":str, \"name\":str, \"arguments\":dict, \"idempotency_key\":str|None, \"usage\":...}'\n\n'limits' contains non-negative 'max_iterations', 'max_tool_calls', 'max_tokens', 'max_time', and 'max_cost'. It may contain 'cancelled', either a boolean or zero-argument callable. Every model attempt—including a provider failure—consumes one iteration; a successful response consumes its usage immediately. A tool attempt—including a failed attempt—consumes one tool call. Values equal to a maximum are allowed; the next unit is not. 'retry_policy' contains positive 'max_attempts' (the first call counts) and non-negative 'base_delay'. Retry 'RetryableModelError', 'TimeoutError', and 'RetryableToolError'; prefer an available 'error.retry_after', otherwise use exponential delays 'base_delay * 2 ** (attempt - 1)'. Permanent model/tool failures and unexpected adapter errors terminate with distinct typed failures. Reuse one tool idempotency key across attempts, deriving it from 'call_id' when absent. A 'HarnessFailure' denotes a broken evaluator fixture and must escape unchanged.\n\nReturn status 'completed', 'failed', 'budget_exceeded', or 'cancelled'. Failed/budget results carry a JSON-like 'failure' with a stable 'type'; never turn a permanent failure, retry exhaustion, malformed response/result, or budget violation into success. Append successful tool results to an isolated message list. Emit correlated trace events using run/correlation id 'agent-run': 'run.started'; 'model.called' or 'model.failed' plus 'model.retry'; 'tool.started', 'tool.retry', 'tool.completed' or 'tool.failed'; then a terminal 'run.completed', 'run.failed', 'run.budget_exceeded', or 'run.cancelled'.\n\nThis is a compact synchronous harness. Production systems additionally stream tokens, abort in-flight I/O, classify provider-specific errors, persist state, and coordinate concurrent calls.\n\nOptional code reading: OpenClaw's 'runEmbeddedAttempt' wires aborts, tool-result context guards, and run lifecycle around a provider attempt. Hermes 'AIAgent.run_conversation' owns its main tool loop, while gateway API runs expose bounded concurrency and structured tool events.",
+      "descriptionZh": "Implement a deterministic tool-using agent state machine.\n\nSignature: 'budgeted_agent_loop(model, registry, messages, limits, retry_policy, clock, trace) -> AgentResult'. Import 'AgentResult', 'RetryableModelError', 'PermanentModelError', 'RetryableToolError', and 'PermanentToolError' from 'torch_judge.harness.agents'. Do not sleep or call a live API.\n\n'model.call(messages)' returns one JSON-like response per iteration:\n\n- final: '{\"type\":\"final\", \"content\":str, \"usage\":{\"tokens\":int,\"cost\":number}}'\n- tool call: '{\"type\":\"tool_call\", \"call_id\":str, \"name\":str, \"arguments\":dict, \"idempotency_key\":str|None, \"usage\":...}'\n\n'limits' contains non-negative 'max_iterations', 'max_tool_calls', 'max_tokens', 'max_time', and 'max_cost'. It may contain 'cancelled', either a boolean or zero-argument callable. Every model attempt—including a provider failure—consumes one iteration; a successful response consumes its usage immediately. A tool attempt—including a failed attempt—consumes one tool call. Values equal to a maximum are allowed; the next unit is not. 'retry_policy' contains positive 'max_attempts' (the first call counts) and non-negative 'base_delay'. Retry 'RetryableModelError', 'TimeoutError', and 'RetryableToolError'; prefer an available 'error.retry_after', otherwise use exponential delays 'base_delay * 2 ** (attempt - 1)'. Permanent model/tool failures and unexpected adapter errors terminate with distinct typed failures. Reuse one tool idempotency key across attempts, deriving it from 'call_id' when absent. A 'HarnessFailure' denotes a broken evaluator fixture and must escape unchanged.\n\nReturn status 'completed', 'failed', 'budget_exceeded', or 'cancelled'. Failed/budget results carry a JSON-like 'failure' with a stable 'type'; never turn a permanent failure, retry exhaustion, malformed response/result, or budget violation into success. Append successful tool results to an isolated message list. Emit correlated trace events using run/correlation id 'agent-run': 'run.started'; 'model.called' or 'model.failed' plus 'model.retry'; 'tool.started', 'tool.retry', 'tool.completed' or 'tool.failed'; then a terminal 'run.completed', 'run.failed', 'run.budget_exceeded', or 'run.cancelled'.\n\nThis is a compact synchronous harness. Production systems additionally stream tokens, abort in-flight I/O, classify provider-specific errors, persist state, and coordinate concurrent calls.\n\nOptional code reading: OpenClaw's 'runEmbeddedAttempt' wires aborts, tool-result context guards, and run lifecycle around a provider attempt. Hermes 'AIAgent.run_conversation' owns its main tool loop, while gateway API runs expose bounded concurrency and structured tool events.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Retry-after, idempotency, messages, and trace",
+          "code": "\nfrom torch_judge.harness.agents import FakeTool,RetryableToolError,ScriptedModel,TraceRecorder,VirtualClock\nclass Registry:\n    def __init__(self,tool): self.tool=tool\n    def invoke(self,name,arguments,idempotency_key=None):\n        if name!=self.tool.name: raise KeyError(name)\n        return self.tool.invoke(arguments,idempotency_key)\ntool=FakeTool('search','search',{'q':str},outcomes=[RetryableToolError('rate',retry_after=1.5),{'answer':'ok'}])\nmodel=ScriptedModel([\n {'type':'tool_call','call_id':'call-1','name':'search','arguments':{'q':'x'},'idempotency_key':None,'usage':{'tokens':4,'cost':.1}},\n {'type':'final','content':'done','usage':{'tokens':2,'cost':.05}},\n])\nclock=VirtualClock(); trace=TraceRecorder(); registry=Registry(tool)\nlimits={'max_iterations':3,'max_tool_calls':3,'max_tokens':10,'max_time':5,'max_cost':1}\nresult={fn}(model,registry,[{'role':'user','content':'go'}],limits,{'max_attempts':2,'base_delay':.25},clock,trace)\nassert result.status=='completed' and result.content=='done'\nassert (result.iterations,result.tool_calls,result.tokens,result.elapsed)==(2,2,6,1.5)\nassert abs(result.cost-.15)<1e-12\nassert tool.calls==2 and tool.effects==1 and tool.effect_keys==['call-1']\nassert tool.invocation_keys==['call-1','call-1']\nassert clock.sleeps==[1.5]\nassert model.calls[1][-1]=={'role':'tool','tool_call_id':'call-1','name':'search','content':{'answer':'ok'}}\nassert [event.kind for event in trace.events]==['run.started','model.called','tool.started','tool.retry','tool.started','tool.completed','model.called','run.completed']\n",
+          "behavior": "retry.backoff"
+        },
+        {
+          "name": "Permanent failures are terminal and typed",
+          "code": "\nfrom torch_judge.harness.agents import FakeTool,PermanentToolError,ScriptedModel,TraceRecorder,VirtualClock\nclass Registry:\n    def __init__(self,tool): self.tool=tool\n    def invoke(self,name,arguments,idempotency_key=None): return self.tool.invoke(arguments,idempotency_key)\ntool=FakeTool('delete','delete',{},outcomes=[PermanentToolError('denied')])\nmodel=ScriptedModel([{'type':'tool_call','call_id':'c','name':'delete','arguments':{},'idempotency_key':'k','usage':{'tokens':1,'cost':0}}])\ntrace=TraceRecorder()\nresult={fn}(model,Registry(tool),[],{'max_iterations':2,'max_tool_calls':3,'max_tokens':3,'max_time':2,'max_cost':1},{'max_attempts':3,'base_delay':1},VirtualClock(),trace)\nassert result.status=='failed' and result.failure=={'type':'permanent_tool_failure','tool':'delete','message':'denied'}\nassert result.tool_calls==1 and tool.calls==1\nassert [e.kind for e in trace.events][-2:]==['tool.failed','run.failed']\n",
+          "behavior": "retry.classification"
+        },
+        {
+          "name": "Every cumulative budget has an exact boundary",
+          "visibility": "unshown",
+          "behavior": "budget.enforcement"
+        },
+        {
+          "name": "Cancellation and malformed responses fail closed",
+          "visibility": "unshown",
+          "behavior": "state.invariant"
+        },
+        {
+          "name": "Retry exhaustion is not successful",
+          "visibility": "unshown",
+          "behavior": "retry.classification"
+        },
+        {
+          "name": "Registry and handler errors become typed failures",
+          "visibility": "unshown",
+          "behavior": "retry.classification"
+        },
+        {
+          "name": "Model API failures retry or terminate with typed results",
+          "visibility": "unshown",
+          "behavior": "retry.classification"
+        },
+        {
+          "name": "Harness author failures remain evaluator errors",
+          "visibility": "unshown",
+          "behavior": "state.invariant"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "At which exact boundary is each counter consumed? Does a failed attempt count? Which key stays stable across retries? Can a retry delay itself exceed the time budget? What terminal trace should every return path emit?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Copy messages and record a start time. Before each model and tool attempt check cancellation and the relevant next-unit budget; count failed model calls as iterations, then add usage only after a valid response. Retry RetryableModelError, TimeoutError, and RetryableToolError; choose retry_after before exponential backoff and reject a delay that would cross max_time. Let HarnessFailure escape, classify permanent and unexpected runtime errors distinctly, and route every learner-facing exit through one terminal-event helper."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "tool_registry"
+      ],
+      "modelConnections": [
+        "OpenClaw runEmbeddedAttempt combines an AbortController, model/provider context, tool-result guards, hooks, and run telemetry; this exercise makes a smaller state transition table explicit.",
+        "Hermes AIAgent.run_conversation contains the main conversational tool loop, and its API server emits tool.started/tool.completed events while bounding concurrent runs.",
+        "The stable internal result and error taxonomy is an adapter boundary: provider-specific rate limits and timeouts can be classified without leaking provider formats into loop policy."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Explicit independent budgets bound runaway loops, spend, latency, and side effects.",
+          "Virtual time makes retry and timeout behavior fast and exactly reproducible.",
+          "Stable idempotency keys make retry safety testable instead of aspirational."
+        ],
+        "cons": [
+          "A synchronous loop cannot overlap independent tools or cancel real in-flight I/O.",
+          "Fail-fast permanent errors are simple but give the model no opportunity to recover with another plan.",
+          "Locally counted tokens and cost rely on trustworthy provider usage adapters."
+        ]
+      },
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/openclaw/openclaw",
+          "commit": "40d31f34813c2a01284b097c0d0d785fbb173400",
+          "path": "src/agents/pi-embedded-runner/run/attempt.ts",
+          "symbol": "runEmbeddedAttempt",
+          "license": "MIT",
+          "adapted": "Run lifecycle, abort ownership, provider attempt boundary, tool-result guarding, and operational telemetry.",
+          "simplifications": "Synchronous scripted model, no streaming, provider fallback, hooks, context compaction, sandbox, or real abort signal."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/NousResearch/hermes-agent",
+          "commit": "299e409f15aa5615a8a64be488580be92cda351e",
+          "path": "run_agent.py",
+          "symbol": "AIAgent.run_conversation",
+          "license": "MIT",
+          "adapted": "Conversation-owned model/tool iteration and terminal response flow.",
+          "simplifications": "No memory, skills, compression, provider routing, streaming, persistent session, or interactive interruption."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/NousResearch/hermes-agent",
+          "commit": "299e409f15aa5615a8a64be488580be92cda351e",
+          "path": "gateway/platforms/api_server.py",
+          "symbol": "ApiServerPlatform._handle_runs and _make_run_event_callback",
+          "license": "MIT",
+          "adapted": "Bounded run allocation and structured tool lifecycle events.",
+          "simplifications": "One local run with an in-memory trace instead of HTTP, SSE queues, threads, authentication, and TTL cleanup."
+        }
+      ],
+      "designNoteRubric": [
+        {
+          "field": "api_boundaries",
+          "label": "API boundaries and class responsibilities"
+        },
+        {
+          "field": "state_ownership",
+          "label": "State and ownership"
+        },
+        {
+          "field": "failure_recovery",
+          "label": "Failure behavior and recovery"
+        },
+        {
+          "field": "backpressure_concurrency",
+          "label": "Backpressure and concurrency"
+        },
+        {
+          "field": "durability_idempotency",
+          "label": "Durability and idempotency"
+        },
+        {
+          "field": "observability",
+          "label": "Observability"
+        },
+        {
+          "field": "security",
+          "label": "Security"
+        },
+        {
+          "field": "tradeoffs",
+          "label": "Explicit tradeoffs"
+        }
+      ]
+    },
+    {
+      "id": "supervisor_orchestration",
+      "title": "Resumable Supervisor-Worker Orchestration",
+      "titleZh": "Resumable Supervisor-Worker Orchestration",
+      "difficulty": "Hard",
+      "functionName": "supervisor_orchestration",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Implement a deterministic supervisor that routes independent tasks to capability-declaring workers.\n\nSignature: 'supervisor_orchestration(request, workers, scheduler, bus, limits, checkpoint_store, trace) -> OrchestrationResult'. Use 'MessageEnvelope', 'OrchestrationResult', 'RetryableToolError', and 'PermanentToolError' from 'torch_judge.harness.agents'.\n\n'request' is:\n\n'{\"run_id\":str, \"correlation_id\":str, \"tasks\":[{\"task_id\":str, \"capability\":str, \"payload\":dict, \"deadline\":number|None, \"idempotency_key\":str|None}, ...]}'\n\nTask ids are unique. 'limits' has positive integer 'max_concurrency' and 'max_attempts', non-negative integer 'max_queue', and optional boolean/callable 'cancelled'. The checkpoint store exposes 'contains(run_id, task_id)', 'get(...)', and 'put(...)'. Checkpointed results—including JSON null—are restored before queue admission and never rerun. Admit at most 'max_queue' remaining tasks; reject overflow with a typed 'queue_overflow' failure.\n\nProcess admitted work in deterministic waves no larger than 'max_concurrency'. This simulates a concurrency gate—the harness remains synchronous and does not claim wall-clock parallelism. Ask 'scheduler.choose(capability, workers)' for a worker. Send an isolated envelope through 'bus.send(envelope)' before 'worker.run(envelope)'. The first envelope has 'attempt=0'; retries increment it. Derive stable message ids from run/task/attempt, preserve the request correlation and parent run ids, and reuse the task idempotency key (or derive 'run_id:task_id') across retries.\n\nOn worker success, checkpoint before publishing the result. A checkpoint write failure is an infrastructure failure and must not create contradictory success. Requeue retryable failures and 'TimeoutError' at the tail for fairness until 'max_attempts'; retry exhaustion and permanent errors become typed dead-letter failures. Preserve all durable successful partial results. Missing capabilities are typed failures. Cancellation stops dispatching new waves and marks pending tasks cancelled. Return status 'completed', 'partial', 'failed', or 'cancelled', plus results, failures, attempt counts, observed maximum wave size, and resumed ids. A 'HarnessFailure' denotes a broken evaluator fixture and must escape unchanged.\n\nEmit 'orchestration.started', task lifecycle events, and exactly one terminal orchestration event. All events share the request run and correlation ids.\n\nOptional code reading: OpenClaw 'createSessionsSpawnTool' validates isolated subagent/ACP spawn context and passes requester run identity into child creation. Hermes 'dispatch_once' coordinates durable Kanban claims, worker processes, retry limits, and idempotency in SQLite. Microsoft Agent Framework 'ConcurrentBuilder' explicitly wires dispatcher fan-out, participant fan-in, an aggregator, and optional checkpoint storage.",
+      "descriptionZh": "Implement a deterministic supervisor that routes independent tasks to capability-declaring workers.\n\nSignature: 'supervisor_orchestration(request, workers, scheduler, bus, limits, checkpoint_store, trace) -> OrchestrationResult'. Use 'MessageEnvelope', 'OrchestrationResult', 'RetryableToolError', and 'PermanentToolError' from 'torch_judge.harness.agents'.\n\n'request' is:\n\n'{\"run_id\":str, \"correlation_id\":str, \"tasks\":[{\"task_id\":str, \"capability\":str, \"payload\":dict, \"deadline\":number|None, \"idempotency_key\":str|None}, ...]}'\n\nTask ids are unique. 'limits' has positive integer 'max_concurrency' and 'max_attempts', non-negative integer 'max_queue', and optional boolean/callable 'cancelled'. The checkpoint store exposes 'contains(run_id, task_id)', 'get(...)', and 'put(...)'. Checkpointed results—including JSON null—are restored before queue admission and never rerun. Admit at most 'max_queue' remaining tasks; reject overflow with a typed 'queue_overflow' failure.\n\nProcess admitted work in deterministic waves no larger than 'max_concurrency'. This simulates a concurrency gate—the harness remains synchronous and does not claim wall-clock parallelism. Ask 'scheduler.choose(capability, workers)' for a worker. Send an isolated envelope through 'bus.send(envelope)' before 'worker.run(envelope)'. The first envelope has 'attempt=0'; retries increment it. Derive stable message ids from run/task/attempt, preserve the request correlation and parent run ids, and reuse the task idempotency key (or derive 'run_id:task_id') across retries.\n\nOn worker success, checkpoint before publishing the result. A checkpoint write failure is an infrastructure failure and must not create contradictory success. Requeue retryable failures and 'TimeoutError' at the tail for fairness until 'max_attempts'; retry exhaustion and permanent errors become typed dead-letter failures. Preserve all durable successful partial results. Missing capabilities are typed failures. Cancellation stops dispatching new waves and marks pending tasks cancelled. Return status 'completed', 'partial', 'failed', or 'cancelled', plus results, failures, attempt counts, observed maximum wave size, and resumed ids. A 'HarnessFailure' denotes a broken evaluator fixture and must escape unchanged.\n\nEmit 'orchestration.started', task lifecycle events, and exactly one terminal orchestration event. All events share the request run and correlation ids.\n\nOptional code reading: OpenClaw 'createSessionsSpawnTool' validates isolated subagent/ACP spawn context and passes requester run identity into child creation. Hermes 'dispatch_once' coordinates durable Kanban claims, worker processes, retry limits, and idempotency in SQLite. Microsoft Agent Framework 'ConcurrentBuilder' explicitly wires dispatcher fan-out, participant fan-in, an aggregator, and optional checkpoint storage.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Bounded waves, fair routing, and correlated envelopes",
+          "code": "\nfrom torch_judge.harness.agents import InMemoryBus,InMemoryCheckpointStore,RoundRobinScheduler,ScriptedWorker,TraceRecorder\nworkers=[ScriptedWorker('a',{'search'},[{'by':'a'}]),ScriptedWorker('b',{'search'},[{'by':'b'}]),ScriptedWorker('calc',{'math'},[{'value':4}])]\nrequest={'run_id':'run','correlation_id':'corr','tasks':[\n {'task_id':'t1','capability':'search','payload':{'q':'x'},'deadline':5,'idempotency_key':'k1'},\n {'task_id':'t2','capability':'search','payload':{'q':'y'},'deadline':5,'idempotency_key':'k2'},\n {'task_id':'t3','capability':'math','payload':{'x':2},'deadline':None,'idempotency_key':None},\n]}\nbus=InMemoryBus(); store=InMemoryCheckpointStore(); trace=TraceRecorder()\nr={fn}(request,workers,RoundRobinScheduler(),bus,{'max_concurrency':2,'max_attempts':2,'max_queue':3},store,trace)\nassert r.status=='completed' and r.results=={'t1':{'by':'a'},'t2':{'by':'b'},'t3':{'value':4}}\nassert r.attempts=={'t1':1,'t2':1,'t3':1} and r.max_in_flight==2 and store.puts==3\nassert [(m.recipient,m.attempt,m.parent_run_id,m.correlation_id,m.idempotency_key) for m in bus.messages]==[\n ('a',0,'run','corr','k1'),('b',0,'run','corr','k2'),('calc',0,'run','corr','run:t3')]\nassert len({m.message_id for m in bus.messages})==3\nassert all(e.run_id=='run' and e.correlation_id=='corr' for e in trace.events)\n",
+          "behavior": "scheduler.concurrency"
+        },
+        {
+          "name": "Retries are fair and permanent failures are dead-lettered",
+          "code": "\nfrom torch_judge.harness.agents import InMemoryBus,InMemoryCheckpointStore,PermanentToolError,RetryableToolError,RoundRobinScheduler,ScriptedWorker,TraceRecorder\nretry=ScriptedWorker('retry',{'api'},[RetryableToolError('busy'),{'ok':True}])\ndeny=ScriptedWorker('deny',{'write'},[PermanentToolError('forbidden')])\nrequest={'run_id':'r','correlation_id':'c','tasks':[\n {'task_id':'a','capability':'api','payload':{},'deadline':None,'idempotency_key':'same'},\n {'task_id':'b','capability':'write','payload':{},'deadline':None,'idempotency_key':None},\n]}\nbus=InMemoryBus(); trace=TraceRecorder()\nr={fn}(request,[retry,deny],RoundRobinScheduler(),bus,{'max_concurrency':1,'max_attempts':2,'max_queue':2},InMemoryCheckpointStore(),trace)\nassert r.status=='partial' and r.results=={'a':{'ok':True}}\nassert r.failures=={'b':{'type':'dead_letter','reason':'permanent','worker':'deny','message':'forbidden'}}\nassert r.attempts=={'a':2,'b':1}\nassert [m.message_id for m in bus.messages]==['r:a:0','r:b:0','r:a:1']\nassert [m.attempt for m in retry.envelopes]==[0,1]\nassert [m.idempotency_key for m in retry.envelopes]==['same','same']\n",
+          "behavior": "retry.classification"
+        },
+        {
+          "name": "Resume precedes queue admission and avoids duplicate effects",
+          "visibility": "unshown",
+          "behavior": "checkpoint.recovery"
+        },
+        {
+          "name": "Missing workers, timeouts, and retry exhaustion stay failures",
+          "visibility": "unshown",
+          "behavior": "protocol.validation"
+        },
+        {
+          "name": "Cancellation stops later waves and preserves prior success",
+          "visibility": "unshown",
+          "behavior": "state.invariant"
+        },
+        {
+          "name": "Unexpected worker failures are isolated and dead-lettered",
+          "visibility": "unshown",
+          "behavior": "retry.classification"
+        },
+        {
+          "name": "A checkpointed null result is resumed",
+          "visibility": "unshown",
+          "behavior": "checkpoint.recovery"
+        },
+        {
+          "name": "Checkpoint write failure never publishes contradictory success",
+          "visibility": "unshown",
+          "behavior": "checkpoint.recovery"
+        },
+        {
+          "name": "Worker harness exhaustion remains an evaluator error",
+          "visibility": "unshown",
+          "behavior": "state.invariant"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which work must be restored before applying queue pressure? What makes a retry envelope different—and what must remain identical? Where should a retry be placed for fairness? When can a checkpoint be written safely? How do partial results survive another task's failure?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Validate and copy the request, restore checkpoints, then split remaining tasks into admitted and overflow. Pop at most max_concurrency items per wave. For each item choose an eligible worker, increment its attempt count, construct and send an envelope, and classify the outcome. Checkpoint success immediately; append retryable work to the queue tail; record every terminal failure without discarding results. Derive final status only after the queue is terminal or cancelled."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "tool_registry",
+        "budgeted_agent_loop"
+      ],
+      "modelConnections": [
+        "OpenClaw sessions_spawn carries requester run/session context, inherited tool policy, sandbox mode, and structured spawn failures into subagent or ACP runtimes.",
+        "Hermes Kanban uses a durable SQLite board, per-task retry/idempotency fields, worker claims, heartbeats, crash detection, and dispatch passes rather than fragile in-process-only swarms.",
+        "Microsoft Agent Framework ConcurrentBuilder wires dispatcher → fan-out participants → fan-in aggregator and accepts CheckpointStorage for resumable workflow state."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "A central supervisor gives one place to enforce global concurrency, queue pressure, retries, and observability.",
+          "Per-task checkpoints preserve partial progress and prevent repeated completed side effects after restart.",
+          "Typed correlated envelopes make routing and retry state inspectable across process or transport boundaries."
+        ],
+        "cons": [
+          "A central supervisor is a throughput and availability bottleneck unless replicated with coordinated state.",
+          "Wave-based deterministic execution demonstrates admission semantics but not real async race behavior.",
+          "Peer-to-peer delegation can reduce central load, but makes global budgets, termination, and debugging harder."
+        ]
+      },
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/openclaw/openclaw",
+          "commit": "40d31f34813c2a01284b097c0d0d785fbb173400",
+          "path": "src/agents/tools/sessions-spawn-tool.ts",
+          "symbol": "createSessionsSpawnTool",
+          "license": "MIT",
+          "adapted": "Structured spawn validation, requester/child run context, isolated task payload, runtime selection, and typed failure results.",
+          "simplifications": "No ACP, channel/thread binding, attachments, sandbox inheritance, model override, visibility mode, or asynchronous child registry."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/NousResearch/hermes-agent",
+          "commit": "299e409f15aa5615a8a64be488580be92cda351e",
+          "path": "hermes_cli/kanban_db.py",
+          "symbol": "Task, DispatchResult, dispatch_once, detect_crashed_workers",
+          "license": "MIT",
+          "adapted": "Durable task identity, idempotency keys, retry limits, worker dispatch, crash classification, and partial board state.",
+          "simplifications": "In-memory queue/checkpoints, synchronous workers, no SQLite claims, OS processes, heartbeats, workspace isolation, dependency graph, or stale-worker reclaim."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/microsoft/agent-framework",
+          "commit": "7c6b1e975f75193ace223a05c6535b8556f93ee4",
+          "path": "python/packages/orchestrations/agent_framework_orchestrations/_concurrent.py",
+          "symbol": "_DispatchToAllParticipants, _AggregateAgentConversations, ConcurrentBuilder.build",
+          "license": "MIT",
+          "adapted": "Explicit dispatcher fan-out, deterministic fan-in aggregation, participant execution, and optional checkpoint storage.",
+          "simplifications": "No async Workflow/Executor graph, streaming, human request-info loop, participant output selection, or agent conversation objects."
+        }
+      ],
+      "designNoteRubric": [
+        {
+          "field": "api_boundaries",
+          "label": "API boundaries and class responsibilities"
+        },
+        {
+          "field": "state_ownership",
+          "label": "State and ownership"
+        },
+        {
+          "field": "failure_recovery",
+          "label": "Failure behavior and recovery"
+        },
+        {
+          "field": "backpressure_concurrency",
+          "label": "Backpressure and concurrency"
+        },
+        {
+          "field": "durability_idempotency",
+          "label": "Durability and idempotency"
+        },
+        {
+          "field": "observability",
+          "label": "Observability"
+        },
+        {
+          "field": "security",
+          "label": "Security"
+        },
+        {
+          "field": "tradeoffs",
+          "label": "Explicit tradeoffs"
+        }
+      ]
     }
   ]
 }
