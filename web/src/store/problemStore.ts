@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { SubmissionResult, CustomTest, AiHelpConfig, SubmissionHistory } from '@/lib/types';
+import type { SubmissionResult, CustomTest, SubmissionHistory } from '@/lib/types';
 
 interface ProblemStore {
   currentCode: string;
@@ -25,12 +25,8 @@ interface ProblemStore {
   setRunResult: (r: SubmissionResult | null) => void;
   submissionHistory: SubmissionHistory[];
   setSubmissionHistory: (h: SubmissionHistory[]) => void;
-  aiHelpConfig: AiHelpConfig;
-  setAiHelpConfig: (patch: Partial<AiHelpConfig>) => void;
-  aiHelpConfigOpen: boolean;
-  setAiHelpConfigOpen: (value: boolean) => void;
-  aiHelpCustomPrompt: string;
-  setAiHelpCustomPrompt: (value: string) => void;
+  aiHelpQuery: string;
+  setAiHelpQuery: (value: string) => void;
   aiHelpResponse: string | null;
   setAiHelpResponse: (response: string | null) => void;
   aiHelpError: string | null;
@@ -69,23 +65,19 @@ export const useProblemStore = create<ProblemStore>((set) => ({
   setRunResult: (r) => set({ runResult: r }),
   submissionHistory: [],
   setSubmissionHistory: (h) => set({ submissionHistory: h }),
-  aiHelpConfig: {
-    baseUrl: '',
-    apiKey: '',
-    model: '',
-    includeUserCode: false,
-  },
-  setAiHelpConfig: (patch) => set((s) => ({ aiHelpConfig: { ...s.aiHelpConfig, ...patch } })),
-  aiHelpConfigOpen: false,
-  setAiHelpConfigOpen: (value) => set({ aiHelpConfigOpen: value }),
-  aiHelpCustomPrompt: '',
-  setAiHelpCustomPrompt: (value) => set({ aiHelpCustomPrompt: value }),
+  aiHelpQuery: '',
+  setAiHelpQuery: (value) => set({ aiHelpQuery: value }),
   aiHelpResponse: null,
   setAiHelpResponse: (response) => set({ aiHelpResponse: response }),
   aiHelpError: null,
   setAiHelpError: (error) => set({ aiHelpError: error }),
   aiHelpLoading: false,
   setAiHelpLoading: (value) => set({ aiHelpLoading: value }),
-  resetAiHelp: () => set({ aiHelpResponse: null, aiHelpError: null, aiHelpLoading: false }),
+  resetAiHelp: () => set({
+    aiHelpQuery: '',
+    aiHelpResponse: null,
+    aiHelpError: null,
+    aiHelpLoading: false,
+  }),
   resetTestPanel: () => set({ bottomTab: 'testcases', selectedCaseIndex: 0, customTests: [], runResult: null, submissionHistory: [] }),
 }));

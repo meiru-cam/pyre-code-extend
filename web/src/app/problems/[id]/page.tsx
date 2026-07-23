@@ -236,7 +236,10 @@ function WorkspacePageNew() {
           </Tabs.List>
         </div>
         <Tabs.Content value="description" className="flex-1 overflow-y-auto">
-          <DescriptionTab problem={problem} />
+          <DescriptionTab
+            problem={problem}
+            implementationStatus={progress[id]?.status ?? 'todo'}
+          />
         </Tabs.Content>
         <Tabs.Content value="solution" className="flex-1 overflow-y-auto">
           <SolutionTab problemId={id} />

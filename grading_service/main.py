@@ -11,10 +11,10 @@ import io
 import os
 import threading
 import time
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import FastAPI, Header, HTTPException
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from torch_judge.harness import HarnessFailure
 from torch_judge.tasks import get_task
@@ -33,6 +33,19 @@ _db_init_lock = threading.Lock()
 # ---------------------------------------------------------------------------
 
 _DB_PATH = os.environ.get("DB_PATH", str(Path(__file__).parent.parent / "data" / "pyre.db"))
+
+DESIGN_NOTE_FIELD_MAX_CHARS = 4_000
+DESIGN_NOTE_TOTAL_MAX_CHARS = 16_000
+DESIGN_NOTE_COLUMNS = (
+    "api_boundaries",
+    "state_ownership",
+    "failure_recovery",
+    "backpressure_concurrency",
+    "durability_idempotency",
+    "observability",
+    "security",
+    "tradeoffs",
+)
 
 
 def _ensure_column(conn: sqlite3.Connection, table: str, column: str, decl: str) -> None:
@@ -84,6 +97,12 @@ def _get_db() -> sqlite3.Connection:
             """)
             _ensure_column(conn, "progress", "contract_version", "INTEGER NOT NULL DEFAULT 1")
             _ensure_column(conn, "submissions", "contract_version", "INTEGER NOT NULL DEFAULT 1")
+            _ensure_column(
+                conn,
+                "submissions",
+                "design_note_present",
+                "INTEGER NOT NULL DEFAULT 0",
+            )
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS progress_revisions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -96,6 +115,24 @@ def _get_db() -> sqlite3.Connection:
                     solved_at TEXT,
                     FOREIGN KEY (user_id) REFERENCES users(id),
                     UNIQUE(user_id, task_id, contract_version)
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS design_notes (
+                    user_id INTEGER NOT NULL,
+                    task_id TEXT NOT NULL,
+                    contract_version INTEGER NOT NULL,
+                    api_boundaries TEXT NOT NULL,
+                    state_ownership TEXT NOT NULL,
+                    failure_recovery TEXT NOT NULL,
+                    backpressure_concurrency TEXT NOT NULL,
+                    durability_idempotency TEXT NOT NULL,
+                    observability TEXT NOT NULL,
+                    security TEXT NOT NULL,
+                    tradeoffs TEXT NOT NULL,
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    PRIMARY KEY (user_id, task_id, contract_version)
                 )
             """)
             conn.execute("""
@@ -381,6 +418,42 @@ class UserRequest(BaseModel):
     sessionToken: str
 
 
+class DesignNoteFields(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    api_boundaries: str = Field(max_length=DESIGN_NOTE_FIELD_MAX_CHARS)
+    state_ownership: str = Field(max_length=DESIGN_NOTE_FIELD_MAX_CHARS)
+    failure_recovery: str = Field(max_length=DESIGN_NOTE_FIELD_MAX_CHARS)
+    backpressure_concurrency: str = Field(max_length=DESIGN_NOTE_FIELD_MAX_CHARS)
+    durability_idempotency: str = Field(max_length=DESIGN_NOTE_FIELD_MAX_CHARS)
+    observability: str = Field(max_length=DESIGN_NOTE_FIELD_MAX_CHARS)
+    security: str = Field(max_length=DESIGN_NOTE_FIELD_MAX_CHARS)
+    tradeoffs: str = Field(max_length=DESIGN_NOTE_FIELD_MAX_CHARS)
+
+    @model_validator(mode="after")
+    def check_total_size(self) -> "DesignNoteFields":
+        if sum(len(getattr(self, column)) for column in DESIGN_NOTE_COLUMNS) > DESIGN_NOTE_TOTAL_MAX_CHARS:
+            raise ValueError(
+                f"design note exceeds {DESIGN_NOTE_TOTAL_MAX_CHARS} characters"
+            )
+        return self
+
+
+class DesignNoteUpsertRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    session_token: str = Field(min_length=1, max_length=200)
+    contract_version: int = Field(ge=1, strict=True)
+    fields: DesignNoteFields
+
+
+class DesignNoteResponse(BaseModel):
+    task_id: str
+    contract_version: int
+    fields: DesignNoteFields
+    updated_at: str
+
+
 class ProgressEntry(BaseModel):
     status: str
     bestTimeMs: float | None = None
@@ -407,6 +480,125 @@ def get_or_create_user(request: UserRequest) -> dict[str, int]:
             return {"userId": row[0]}
         cur = conn.execute("INSERT INTO users (session_token) VALUES (?)", (request.sessionToken,))
         return {"userId": cur.lastrowid}
+
+
+def _validate_design_note_version(
+    task_id: str,
+    contract_version: int,
+    *,
+    writing: bool,
+) -> dict:
+    task = get_task(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail=f"Task '{task_id}' not found")
+    if (
+        isinstance(contract_version, bool)
+        or not isinstance(contract_version, int)
+        or contract_version < 1
+    ):
+        raise HTTPException(status_code=422, detail="Invalid contract version")
+    current_version = task.get("version", 1)
+    if contract_version > current_version or (
+        writing and contract_version != current_version
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Contract version {contract_version} does not match "
+                f"current version {current_version}"
+            ),
+        )
+    return task
+
+
+def _design_note_from_row(task_id: str, row: sqlite3.Row | tuple) -> DesignNoteResponse:
+    return DesignNoteResponse(
+        task_id=task_id,
+        contract_version=row[0],
+        fields=DesignNoteFields(
+            **dict(zip(DESIGN_NOTE_COLUMNS, row[1:9], strict=True))
+        ),
+        updated_at=row[9],
+    )
+
+
+@app.put("/design-notes/{task_id}", response_model=DesignNoteResponse)
+def put_design_note(
+    task_id: str,
+    request: DesignNoteUpsertRequest,
+) -> DesignNoteResponse:
+    _validate_design_note_version(
+        task_id,
+        request.contract_version,
+        writing=True,
+    )
+    values = request.fields.model_dump()
+    with _get_db() as conn:
+        user = conn.execute(
+            "SELECT id FROM users WHERE session_token = ?",
+            (request.session_token,),
+        ).fetchone()
+        if user is None:
+            cursor = conn.execute(
+                "INSERT INTO users (session_token) VALUES (?)",
+                (request.session_token,),
+            )
+            user_id = cursor.lastrowid
+        else:
+            user_id = user[0]
+        columns = ", ".join(DESIGN_NOTE_COLUMNS)
+        placeholders = ", ".join("?" for _ in DESIGN_NOTE_COLUMNS)
+        updates = ", ".join(
+            f"{column} = excluded.{column}" for column in DESIGN_NOTE_COLUMNS
+        )
+        conn.execute(
+            f"INSERT INTO design_notes "
+            f"(user_id, task_id, contract_version, {columns}) "
+            f"VALUES (?, ?, ?, {placeholders}) "
+            f"ON CONFLICT(user_id, task_id, contract_version) DO UPDATE SET "
+            f"{updates}, updated_at = datetime('now')",
+            (
+                user_id,
+                task_id,
+                request.contract_version,
+                *(values[column] for column in DESIGN_NOTE_COLUMNS),
+            ),
+        )
+        row = conn.execute(
+            f"SELECT contract_version, {columns}, updated_at "
+            "FROM design_notes "
+            "WHERE user_id = ? AND task_id = ? AND contract_version = ?",
+            (user_id, task_id, request.contract_version),
+        ).fetchone()
+    return _design_note_from_row(task_id, row)
+
+
+@app.get("/design-notes/{task_id}", response_model=DesignNoteResponse)
+def get_design_note(
+    task_id: str,
+    contract_version: int,
+    session_token: Annotated[str, Header(alias="X-Session-Token")],
+) -> DesignNoteResponse:
+    _validate_design_note_version(task_id, contract_version, writing=False)
+    if not isinstance(session_token, str) or not session_token:
+        raise HTTPException(status_code=422, detail="Invalid session token")
+    columns = ", ".join(DESIGN_NOTE_COLUMNS)
+    with _get_db() as conn:
+        user = conn.execute(
+            "SELECT id FROM users WHERE session_token = ?",
+            (session_token,),
+        ).fetchone()
+        if user is None:
+            raise HTTPException(status_code=404, detail="Design note not found")
+        row = conn.execute(
+            f"SELECT contract_version, {columns}, updated_at "
+            "FROM design_notes "
+            "WHERE user_id = ? AND task_id = ? AND contract_version = ?",
+            (user[0], task_id, contract_version),
+        ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Design note not found")
+    return _design_note_from_row(task_id, row)
 
 
 @app.get("/progress/{user_id}")
@@ -562,13 +754,24 @@ def save_progress(request: SaveProgressRequest) -> dict[str, str]:
                     (user_id, request.taskId, request.status, None, contract_version)
                 )
         if request.code is not None:
+            note_predicate = " OR ".join(
+                f"trim({column}) <> ''" for column in DESIGN_NOTE_COLUMNS
+            )
+            note_present = conn.execute(
+                "SELECT 1 FROM design_notes "
+                "WHERE user_id = ? AND task_id = ? AND contract_version = ? "
+                f"AND ({note_predicate})",
+                (user_id, request.taskId, contract_version),
+            ).fetchone() is not None
             conn.execute(
                 "INSERT INTO submissions "
-                "(user_id, task_id, code, passed, exec_time_ms, contract_version) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
+                "(user_id, task_id, code, passed, exec_time_ms, "
+                "contract_version, design_note_present) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
                     user_id, request.taskId, request.code,
                     1 if request.allPassed else 0, request.execTimeMs, contract_version,
+                    1 if note_present else 0,
                 )
             )
     return {"ok": "true"}
@@ -578,7 +781,8 @@ def save_progress(request: SaveProgressRequest) -> dict[str, str]:
 def get_submissions(user_id: int, task_id: str) -> list[dict]:
     with _get_db() as conn:
         rows = conn.execute(
-            "SELECT id, passed, exec_time_ms, submitted_at, code, contract_version "
+            "SELECT id, passed, exec_time_ms, submitted_at, code, "
+            "contract_version, design_note_present "
             "FROM submissions "
             "WHERE user_id = ? AND task_id = ? ORDER BY submitted_at DESC LIMIT 50",
             (user_id, task_id)
@@ -587,6 +791,7 @@ def get_submissions(user_id: int, task_id: str) -> list[dict]:
         {
             "id": r[0], "passed": bool(r[1]), "execTimeMs": r[2],
             "submittedAt": r[3], "code": r[4], "contractVersion": r[5],
+            "designNotePresent": bool(r[6]),
         }
         for r in rows
     ]
