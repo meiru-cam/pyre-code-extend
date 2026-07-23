@@ -10,6 +10,12 @@ from torch_judge.harness.agents.assertions import (
     assert_retry_delays,
 )
 from torch_judge.harness.agents.fake_tools import FakeTool, PermanentToolError, RetryableToolError
+from torch_judge.harness.agents.guardrails import (
+    GuardrailCase,
+    GuardrailFixturePair,
+    evaluate_guardrail_case,
+    load_guardrail_fixtures,
+)
 from torch_judge.harness.agents.orchestration import (
     InMemoryBus,
     InMemoryCheckpointStore,
@@ -28,6 +34,8 @@ from torch_judge.harness.agents.virtual_clock import VirtualClock
 
 __all__ = [
     "FakeTool",
+    "GuardrailCase",
+    "GuardrailFixturePair",
     "AgentResult",
     "InMemoryBus",
     "InMemoryCheckpointStore",
@@ -51,4 +59,6 @@ __all__ = [
     "assert_max_concurrency",
     "assert_no_duplicate_effects",
     "assert_retry_delays",
+    "load_guardrail_fixtures",
+    "evaluate_guardrail_case",
 ]

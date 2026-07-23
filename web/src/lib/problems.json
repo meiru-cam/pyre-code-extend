@@ -3761,6 +3761,437 @@
           "label": "Explicit tradeoffs"
         }
       ]
+    },
+    {
+      "id": "policy_engine",
+      "title": "Composable Fail-Closed Policy Engine",
+      "titleZh": "Composable Fail-Closed Policy Engine",
+      "difficulty": "Medium",
+      "functionName": "PolicyEngine",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Implement 'PolicyDecision' and 'PolicyEngine(policies)'. Each policy has a non-empty 'name' and 'evaluate(context)' method returning a dictionary with 'action' equal to 'allow', 'deny', or 'transform', an optional string 'reason', and, for transform only, a 'changes' dictionary.\n\n'PolicyEngine.evaluate(context) -> PolicyDecision' evaluates policies in constructor order on isolated JSON-like state. Transformations compose in that order by updating the working context. An allow never removes a previous transform. Deny wins immediately, so later policies must not run. A policy exception or malformed result fails closed as deny with a stable reason naming the failing policy. Never mutate the caller's context or leak a policy's mutable result.\n\n'PolicyDecision' exposes 'action', 'context', and 'reasons'. The final action is deny, transform when any change was applied, otherwise allow. This deliberately uses deterministic local policy functions rather than live moderation. Production systems may combine classifiers, rules, and remote checks, but they still need explicit ordering, failure semantics, observability, and false-positive review.\n\nOptional code reading: OpenAI Agents SDK separates input/output guardrail execution and tripwire results. NeMo Guardrails composes configured input, retrieval, and output rails and exposes blocking or modified results. Compare their lifecycle placement with this compact sequential composition core.",
+      "descriptionZh": "Implement 'PolicyDecision' and 'PolicyEngine(policies)'. Each policy has a non-empty 'name' and 'evaluate(context)' method returning a dictionary with 'action' equal to 'allow', 'deny', or 'transform', an optional string 'reason', and, for transform only, a 'changes' dictionary.\n\n'PolicyEngine.evaluate(context) -> PolicyDecision' evaluates policies in constructor order on isolated JSON-like state. Transformations compose in that order by updating the working context. An allow never removes a previous transform. Deny wins immediately, so later policies must not run. A policy exception or malformed result fails closed as deny with a stable reason naming the failing policy. Never mutate the caller's context or leak a policy's mutable result.\n\n'PolicyDecision' exposes 'action', 'context', and 'reasons'. The final action is deny, transform when any change was applied, otherwise allow. This deliberately uses deterministic local policy functions rather than live moderation. Production systems may combine classifiers, rules, and remote checks, but they still need explicit ordering, failure semantics, observability, and false-positive review.\n\nOptional code reading: OpenAI Agents SDK separates input/output guardrail execution and tripwire results. NeMo Guardrails composes configured input, retrieval, and output rails and exposes blocking or modified results. Compare their lifecycle placement with this compact sequential composition core.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Transforms compose in deterministic order",
+          "code": "\nclass Policy:\n    def __init__(self,name,fn): self.name=name; self.fn=fn; self.seen=[]\n    def evaluate(self,context): self.seen.append(dict(context)); return self.fn(context)\nfirst=Policy('minimize',lambda c:{'action':'transform','reason':'drop private','changes':{'private':None,'step':1}})\nsecond=Policy('label',lambda c:{'action':'transform','reason':'label','changes':{'step':c['step']+1}})\ncontext={'public':'ok','private':'secret'}\ndecision={fn}([first,second]).evaluate(context)\nassert decision.action=='transform'\nassert decision.context=={'public':'ok','private':None,'step':2}\nassert decision.reasons==['minimize: drop private','label: label']\nassert context=={'public':'ok','private':'secret'}\nassert second.seen==[{'public':'ok','private':None,'step':1}]\n",
+          "behavior": "security.permission"
+        },
+        {
+          "name": "Deny wins and stops later policies",
+          "code": "\nclass Policy:\n    def __init__(self,name,result): self.name=name; self.result=result; self.calls=0\n    def evaluate(self,context): self.calls+=1; return self.result\nbefore=Policy('before',{'action':'transform','changes':{'safe':True}})\ndeny=Policy('capability',{'action':'deny','reason':'not granted'})\nafter=Policy('after',{'action':'transform','changes':{'bypass':True}})\ndecision={fn}([before,deny,after]).evaluate({'safe':False})\nassert decision.action=='deny' and decision.context=={'safe':True}\nassert decision.reasons==['capability: not granted']\nassert (before.calls,deny.calls,after.calls)==(1,1,0)\n",
+          "behavior": "security.permission"
+        },
+        {
+          "name": "Exceptions fail closed without mutating caller state",
+          "visibility": "unshown",
+          "behavior": "state.invariant"
+        },
+        {
+          "name": "Malformed and ambiguous results fail closed",
+          "visibility": "unshown",
+          "behavior": "security.permission"
+        },
+        {
+          "name": "Empty policy set allows an isolated context",
+          "visibility": "unshown",
+          "behavior": "state.invariant"
+        },
+        {
+          "name": "Harness author failures remain evaluator errors",
+          "visibility": "unshown",
+          "behavior": "state.invariant"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "What state does each policy see? If one policy transforms and the next allows, should the transform disappear? Which outcomes must stop evaluation? What should happen when policy code raises or returns an ambiguous result?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Deep-copy the input, keep an ordered reason list and a transformed flag, then evaluate each policy against another copy. Validate every response before applying it. Update only from transform changes, return immediately on deny, and convert exceptions or malformed results into a deny that names the policy. Return newly copied state in the decision."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "tool_registry"
+      ],
+      "modelConnections": [
+        "OpenAI Agents SDK InputGuardrail and OutputGuardrail wrap callable checks and expose tripwire outcomes; their run_in_parallel choice adds a latency-versus-prevention tradeoff beyond this sequential exercise.",
+        "NeMo Guardrails LLMRails.check_async selects input/output rails from message roles and reports passed, modified, or blocked results; this exercise isolates deterministic composition and fail-closed semantics.",
+        "A provider-neutral internal decision prevents model or moderation-provider response formats from controlling application policy directly."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Deterministic order makes conflicts reproducible and auditable.",
+          "Deny-wins and fail-closed behavior protect side-effecting boundaries.",
+          "Composed transforms support least-data minimization without forcing every safe request to fail."
+        ],
+        "cons": [
+          "Fail-closed dependencies can reduce availability.",
+          "Sequential checks add latency compared with parallel evaluation.",
+          "Conservative policies can create false positives and require an appeal or override path."
+        ]
+      },
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/openai/openai-agents-python",
+          "commit": "2fa463571e76dae8ff267622f1018eaf06ffeb9f",
+          "path": "src/agents/guardrail.py",
+          "symbol": "GuardrailFunctionOutput, InputGuardrail.run, OutputGuardrail.run",
+          "license": "MIT",
+          "adapted": "Typed check outcome, named guardrail callable boundary, and explicit pre/post lifecycle placement.",
+          "simplifications": "Synchronous local policies only; no asyncio, tracing spans, agents, generic context, or parallel execution."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/NVIDIA/NeMo-Guardrails",
+          "commit": "8cfaa12b79e68cf6ba3ac93ff675c16ff46e2716",
+          "path": "nemoguardrails/rails/llm/llmrails.py",
+          "symbol": "LLMRails.check_async and _determine_rails_from_messages",
+          "license": "Apache-2.0",
+          "adapted": "Input/output rail selection and passed/modified/blocked outcome vocabulary.",
+          "simplifications": "No Colang runtime, LLM calls, retrieval rails, streaming buffers, action dispatcher, or async parallel rails."
+        }
+      ],
+      "designNoteRubric": [
+        {
+          "field": "api_boundaries",
+          "label": "API boundaries and class responsibilities"
+        },
+        {
+          "field": "state_ownership",
+          "label": "State and ownership"
+        },
+        {
+          "field": "failure_recovery",
+          "label": "Failure behavior and recovery"
+        },
+        {
+          "field": "backpressure_concurrency",
+          "label": "Backpressure and concurrency"
+        },
+        {
+          "field": "durability_idempotency",
+          "label": "Durability and idempotency"
+        },
+        {
+          "field": "observability",
+          "label": "Observability"
+        },
+        {
+          "field": "security",
+          "label": "Security"
+        },
+        {
+          "field": "tradeoffs",
+          "label": "Explicit tradeoffs"
+        }
+      ]
+    },
+    {
+      "id": "approval_gate",
+      "title": "Capability-Bound Human Approval Gate",
+      "titleZh": "Capability-Bound Human Approval Gate",
+      "difficulty": "Hard",
+      "functionName": "ApprovalGate",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Implement 'ApprovalGate(approval_required, clock, ttl=60)' with 'classify(action, capabilities, provenance)' and 'approve(request, approver)'. Also define typed 'ApprovalRequest', 'ApprovedAction', and 'DeniedAction' results.\n\n'action' is a JSON-like dictionary containing non-empty 'tool', 'capability', 'actor', and 'arguments'. 'capabilities' is the exact set granted to that actor—do not infer parent/admin privileges or wildcard expansion. 'provenance' contains non-empty 'identity' and 'source' plus 'trust' ('trusted' or 'untrusted'); identity must equal action.actor. Deny malformed provenance, identity mismatch, or unauthorized capability before approval.\n\nFor authorized capabilities not in 'approval_required', return 'ApprovedAction'. For configured high-risk capabilities, untrusted provenance is denied; otherwise return an 'ApprovalRequest' bound to a canonical digest of tool, arguments, capability, actor, and provenance identity/source, with 'expires_at=clock.now()+ttl'. 'approve(request, approver)' accepts a trusted approver identity and creates a deterministic opaque token. A later action may include 'approval_token'. Accept it only when digest, actor identity, and expiry still match; consume it exactly once. Changed arguments, replay, expiry, or cross-identity reuse are denied.\n\nThis exercise models the authorization race explicitly: approval describes one immutable intended action, not a tool name. Production systems additionally persist grants transactionally, authenticate approvers, revoke sessions, and coordinate concurrent consumers.",
+      "descriptionZh": "Implement 'ApprovalGate(approval_required, clock, ttl=60)' with 'classify(action, capabilities, provenance)' and 'approve(request, approver)'. Also define typed 'ApprovalRequest', 'ApprovedAction', and 'DeniedAction' results.\n\n'action' is a JSON-like dictionary containing non-empty 'tool', 'capability', 'actor', and 'arguments'. 'capabilities' is the exact set granted to that actor—do not infer parent/admin privileges or wildcard expansion. 'provenance' contains non-empty 'identity' and 'source' plus 'trust' ('trusted' or 'untrusted'); identity must equal action.actor. Deny malformed provenance, identity mismatch, or unauthorized capability before approval.\n\nFor authorized capabilities not in 'approval_required', return 'ApprovedAction'. For configured high-risk capabilities, untrusted provenance is denied; otherwise return an 'ApprovalRequest' bound to a canonical digest of tool, arguments, capability, actor, and provenance identity/source, with 'expires_at=clock.now()+ttl'. 'approve(request, approver)' accepts a trusted approver identity and creates a deterministic opaque token. A later action may include 'approval_token'. Accept it only when digest, actor identity, and expiry still match; consume it exactly once. Changed arguments, replay, expiry, or cross-identity reuse are denied.\n\nThis exercise models the authorization race explicitly: approval describes one immutable intended action, not a tool name. Production systems additionally persist grants transactionally, authenticate approvers, revoke sessions, and coordinate concurrent consumers.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Low-risk exact capability is approved without a grant",
+          "code": "\nfrom torch_judge.harness.agents import VirtualClock\ngate={fn}({'payments.write'},VirtualClock(),ttl=10)\naction={'tool':'search','capability':'public.read','actor':'agent-1','arguments':{'q':'safe'}}\nprovenance={'identity':'agent-1','source':'user-session','trust':'trusted'}\nresult=gate.classify(action,{'public.read'},provenance)\nassert type(result).__name__=='ApprovedAction' and result.action==action\nresult.action['arguments']['q']='changed'\nassert action['arguments']['q']=='safe'\n",
+          "behavior": "security.permission"
+        },
+        {
+          "name": "High-risk approval is bound, expiring, and one-use",
+          "code": "\nfrom torch_judge.harness.agents import VirtualClock\nclock=VirtualClock(); gate={fn}({'payments.write'},clock,ttl=5)\nbase={'tool':'transfer','capability':'payments.write','actor':'agent-1','arguments':{'amount':10,'to':'A'}}\nprov={'identity':'agent-1','source':'user-session','trust':'trusted'}\nrequest=gate.classify(base,{'payments.write'},prov)\nassert type(request).__name__=='ApprovalRequest' and request.expires_at==5\ntoken=gate.approve(request,{'identity':'human-1','trust':'trusted'})\napproved=gate.classify({**base,'approval_token':token},{'payments.write'},prov)\nassert type(approved).__name__=='ApprovedAction'\nreplay=gate.classify({**base,'approval_token':token},{'payments.write'},prov)\nassert type(replay).__name__=='DeniedAction' and replay.reason=='approval_replayed'\n",
+          "behavior": "security.permission"
+        },
+        {
+          "name": "Changed arguments and cross-identity reuse are denied",
+          "visibility": "unshown",
+          "behavior": "security.permission"
+        },
+        {
+          "name": "Expiry, provenance, and least privilege fail closed",
+          "visibility": "unshown",
+          "behavior": "security.permission"
+        },
+        {
+          "name": "Approval issuance validates approver and request",
+          "visibility": "unshown",
+          "behavior": "state.invariant"
+        },
+        {
+          "name": "Approval request state is immutable to callers and approved once",
+          "visibility": "unshown",
+          "behavior": "security.permission"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which exact fields define the approved side effect? Can a tool name alone distinguish two transfers? Where do identity and expiry enter the digest? What state makes a token one-use? Which checks must happen before asking a human?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Validate/copy action and provenance, enforce exact capability membership and identity equality, then canonicalize the approval-bound fields with sorted JSON and SHA-256. Store issued token records containing digest, identity, expiry, and consumed state. Validate all fields and time before atomically marking a token consumed; never reuse an invalid token by silently creating a new approval request."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "policy_engine",
+        "tool_registry"
+      ],
+      "modelConnections": [
+        "OpenAI Agents SDK function tools expose needs_approval so a run can interrupt before tool execution and later resume from approved or rejected tool-call state.",
+        "OpenClaw tool policy layers construct a per-run allowed inventory; approval remains a second boundary for a particular high-risk invocation rather than a substitute for capability filtering.",
+        "Hermes separates tool schemas/dispatch from user-facing confirmation flows; digest binding prevents a confirmed description from authorizing changed execution arguments."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Exact capability checks enforce least privilege before involving a human.",
+          "Digest-bound one-use grants close changed-argument and replay races.",
+          "Typed outcomes make approval workflow state explicit and auditable."
+        ],
+        "cons": [
+          "Human approval adds latency and can become notification fatigue.",
+          "In-memory grants do not survive restarts or coordinate multiple processes.",
+          "Canonicalization and identity design must remain consistent across UI, gateway, and executor."
+        ]
+      },
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/openai/openai-agents-python",
+          "commit": "2fa463571e76dae8ff267622f1018eaf06ffeb9f",
+          "path": "src/agents/tool.py",
+          "symbol": "FunctionTool.needs_approval",
+          "license": "MIT",
+          "adapted": "Per-call approval boundary before function tool invocation.",
+          "simplifications": "Synchronous deterministic token store; no RunState, async callbacks, hosted tools, MCP, persistence, or streaming interruptions."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/openclaw/openclaw",
+          "commit": "40d31f34813c2a01284b097c0d0d785fbb173400",
+          "path": "src/agents/openclaw-tools.ts",
+          "symbol": "createOpenClawTools and filterToolsByClientCaps",
+          "license": "MIT",
+          "adapted": "Run-scoped capability filtering before tools become invocable.",
+          "simplifications": "Exact local capability strings; no plugins, channels, owner policy, sandbox, or dynamic runtime inventory."
+        }
+      ],
+      "designNoteRubric": [
+        {
+          "field": "api_boundaries",
+          "label": "API boundaries and class responsibilities"
+        },
+        {
+          "field": "state_ownership",
+          "label": "State and ownership"
+        },
+        {
+          "field": "failure_recovery",
+          "label": "Failure behavior and recovery"
+        },
+        {
+          "field": "backpressure_concurrency",
+          "label": "Backpressure and concurrency"
+        },
+        {
+          "field": "durability_idempotency",
+          "label": "Durability and idempotency"
+        },
+        {
+          "field": "observability",
+          "label": "Observability"
+        },
+        {
+          "field": "security",
+          "label": "Security"
+        },
+        {
+          "field": "tradeoffs",
+          "label": "Explicit tradeoffs"
+        }
+      ]
+    },
+    {
+      "id": "guarded_runtime",
+      "title": "Provenance-Aware Guarded Agent Runtime",
+      "titleZh": "Provenance-Aware Guarded Agent Runtime",
+      "difficulty": "Hard",
+      "functionName": "guarded_runtime",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Implement 'guarded_runtime(runtime, policy_engine, approval_gate, redactor, audit_sink, request) -> GuardedResult'. Everything is synchronous and offline.\n\n'request' contains non-empty 'run_id'; JSON-like 'input' with 'content' and explicit provenance {'source':str,'trust':'trusted'|'untrusted'}; a list of exact 'capabilities'; non-negative 'max_delegation_depth'; positive 'max_steps'; and optional boolean/callable 'cancelled'. 'runtime.events(input)' yields JSON-like event dictionaries in order. Supported kinds are 'model_input', 'tool_call', 'tool_output', 'memory_read', and 'output'. Every event carries provenance and non-negative 'delegation_depth'. Tool-call events carry an 'action' compatible with ApprovalGate. Other events carry 'content'. 'runtime.commit(event)' executes an approved tool call; 'runtime.cancel()' propagates cancellation.\n\nEvaluate the request input and every runtime event with 'policy_engine.evaluate' before use. Preserve provenance in the policy context so indirect tool-output injection and poisoned memory can be denied. A deny cancels the runtime and returns status 'denied'. A transform replaces only policy-approved context fields. Enforce max_steps and delegation depth before commit. Classify tool calls with ApprovalGate: deny is terminal; ApprovalRequest returns 'awaiting_approval' without committing; ApprovedAction may be committed. Re-check cancellation before and after approval classification.\n\nCall 'redactor.redact(value)' before any output leaves the function and before any data reaches 'audit_sink.append'. Emit an ordered audit record for each accepted/terminal event with sequence, event, sanitized data, previous hash, and SHA-256 hash over the canonical preceding fields. Never send raw secrets to the audit sink. Audit failure is fail-closed: propagate runtime cancellation and return a typed 'audit_failure' without attempting a success record. Runtime/tool failure similarly returns a typed failure while preserving already completed audit history. A broken evaluator 'HarnessFailure' must escape.\n\nThis compact protocol makes the enforcement order executable. Production implementations additionally need async cancellation, transactional tool/audit coordination, durable hash-chain anchoring, authenticated identities, streaming redaction, classifier calibration, and incident response.",
+      "descriptionZh": "Implement 'guarded_runtime(runtime, policy_engine, approval_gate, redactor, audit_sink, request) -> GuardedResult'. Everything is synchronous and offline.\n\n'request' contains non-empty 'run_id'; JSON-like 'input' with 'content' and explicit provenance {'source':str,'trust':'trusted'|'untrusted'}; a list of exact 'capabilities'; non-negative 'max_delegation_depth'; positive 'max_steps'; and optional boolean/callable 'cancelled'. 'runtime.events(input)' yields JSON-like event dictionaries in order. Supported kinds are 'model_input', 'tool_call', 'tool_output', 'memory_read', and 'output'. Every event carries provenance and non-negative 'delegation_depth'. Tool-call events carry an 'action' compatible with ApprovalGate. Other events carry 'content'. 'runtime.commit(event)' executes an approved tool call; 'runtime.cancel()' propagates cancellation.\n\nEvaluate the request input and every runtime event with 'policy_engine.evaluate' before use. Preserve provenance in the policy context so indirect tool-output injection and poisoned memory can be denied. A deny cancels the runtime and returns status 'denied'. A transform replaces only policy-approved context fields. Enforce max_steps and delegation depth before commit. Classify tool calls with ApprovalGate: deny is terminal; ApprovalRequest returns 'awaiting_approval' without committing; ApprovedAction may be committed. Re-check cancellation before and after approval classification.\n\nCall 'redactor.redact(value)' before any output leaves the function and before any data reaches 'audit_sink.append'. Emit an ordered audit record for each accepted/terminal event with sequence, event, sanitized data, previous hash, and SHA-256 hash over the canonical preceding fields. Never send raw secrets to the audit sink. Audit failure is fail-closed: propagate runtime cancellation and return a typed 'audit_failure' without attempting a success record. Runtime/tool failure similarly returns a typed failure while preserving already completed audit history. A broken evaluator 'HarnessFailure' must escape.\n\nThis compact protocol makes the enforcement order executable. Production implementations additionally need async cancellation, transactional tool/audit coordination, durable hash-chain anchoring, authenticated identities, streaming redaction, classifier calibration, and incident response.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Legitimate tool flow is approved, redacted, and hash chained",
+          "code": "\nfrom copy import deepcopy\nfrom types import SimpleNamespace\nclass Runtime:\n    def __init__(self): self.commits=[]; self.cancelled=False\n    def events(self,value): return iter([\n      {'kind':'model_input','content':'plan','provenance':{'source':'runtime','trust':'trusted'},'delegation_depth':0},\n      {'kind':'tool_call','action':{'tool':'search','capability':'public.read','actor':'a','arguments':{'q':'x'}},'provenance':{'source':'agent','trust':'trusted','identity':'a'},'delegation_depth':0},\n      {'kind':'tool_output','content':'email ada@example.com','provenance':{'source':'tool:search','trust':'untrusted'},'delegation_depth':0},\n      {'kind':'output','content':'email ada@example.com','provenance':{'source':'agent','trust':'trusted'},'delegation_depth':0}])\n    def commit(self,event): self.commits.append(deepcopy(event))\n    def cancel(self): self.cancelled=True\nclass Policies:\n    def __init__(self): self.seen=[]\n    def evaluate(self,c): self.seen.append(deepcopy(c)); return SimpleNamespace(action='allow',context=deepcopy(c),reasons=[])\nclass Gate:\n    def classify(self,a,c,p): return type('ApprovedAction',(),{'action':deepcopy(a)})()\nclass Redactor:\n    def redact(self,v): return deepcopy(v).replace('ada@example.com','[EMAIL]') if isinstance(v,str) else _walk(v)\ndef _walk(v):\n    if isinstance(v,dict): return {k:_walk(x) for k,x in v.items()}\n    if isinstance(v,list): return [_walk(x) for x in v]\n    return v.replace('ada@example.com','[EMAIL]') if isinstance(v,str) else v\nclass Sink:\n    def __init__(self): self.records=[]\n    def append(self,r): self.records.append(deepcopy(r))\nruntime=Runtime(); policies=Policies(); sink=Sink()\nrequest={'run_id':'r','input':{'content':'help','provenance':{'source':'user','trust':'trusted'}},'capabilities':['public.read'],'max_delegation_depth':1,'max_steps':5}\nresult={fn}(runtime,policies,Gate(),Redactor(),sink,request)\nassert result.status=='completed' and result.output=='email [EMAIL]'\nassert len(runtime.commits)==1 and runtime.cancelled is False\nassert len(sink.records)==len(result.audit_records)==7\nassert all('ada@example.com' not in repr(r) for r in sink.records)\nassert [r['sequence'] for r in sink.records]==list(range(7))\nassert sink.records[0]['previous_hash']=='0'*64\nassert all(sink.records[i]['previous_hash']==sink.records[i-1]['hash'] for i in range(1,7))\nassert any(c['kind']=='tool_output' and c['provenance']['trust']=='untrusted' for c in policies.seen)\n",
+          "behavior": "security.redaction"
+        },
+        {
+          "name": "Indirect injection and poisoned memory preserve provenance and deny",
+          "visibility": "unshown",
+          "behavior": "security.injection"
+        },
+        {
+          "name": "Approval pauses without side effects and observes cancellation",
+          "visibility": "unshown",
+          "behavior": "security.permission"
+        },
+        {
+          "name": "Depth, step budgets, and emergency cancellation stop dispatch",
+          "visibility": "unshown",
+          "behavior": "budget.enforcement"
+        },
+        {
+          "name": "Audit and runtime failures fail closed without secret leakage",
+          "visibility": "unshown",
+          "behavior": "security.redaction"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "At which boundary can a tool side effect first occur? Which checks must happen before commit? Does provenance survive into every policy context? Is redaction before or after audit? What must cancellation do while approval is pending? What state links one audit record to the next?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Validate/copy request state, define one terminal helper, and one audit helper that redacts before canonical hashing and sink append. Policy-check the initial input and each event; then enforce cancellation, step/depth limits, and approval before tool commit. Return awaiting_approval without executing. Catch runtime and audit failures separately, re-raise HarnessFailure, call runtime.cancel on every unsafe terminal path, and retain only sanitized audit records."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "policy_engine",
+        "approval_gate",
+        "supervisor_orchestration"
+      ],
+      "modelConnections": [
+        "OpenAI Agents SDK places input, output, and function-tool guardrails at different lifecycle boundaries; blocking versus parallel input checks changes whether unsafe work can start before a tripwire.",
+        "NeMo Guardrails runs configured input/retrieval/output rails and returns passed, modified, or blocked outcomes, including streaming output enforcement.",
+        "Meta Purple Llama Prompt Guard supplies a classifier layer for direct and indirect prompt injection, but classifier output still needs provenance-aware application policy and false-positive handling.",
+        "OpenClaw and Hermes construct runtime-specific tool inventories and dispatch boundaries; this exercise adds explicit approval, provenance, audit, and cancellation around a proposed tool event."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Defense at every event boundary catches indirect injection that input-only filtering misses.",
+          "Redaction-before-audit prevents the security log from becoming a secret store.",
+          "Hash-linked records and explicit provenance improve incident reconstruction and tamper evidence."
+        ],
+        "cons": [
+          "Sequential inspection increases latency and classifier cost.",
+          "Fail-closed audit dependencies can halt otherwise safe work.",
+          "An in-process hash chain detects edits only if an external anchor protects the final hash."
+        ]
+      },
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/openai/openai-agents-python",
+          "commit": "2fa463571e76dae8ff267622f1018eaf06ffeb9f",
+          "path": "src/agents/guardrail.py",
+          "symbol": "InputGuardrail.run, OutputGuardrail.run, GuardrailFunctionOutput",
+          "license": "MIT",
+          "adapted": "Typed lifecycle checks and tripwire-style terminal enforcement.",
+          "simplifications": "Synchronous event iterator; no async tasks, streaming runner, tracing backend, agent handoffs, or model provider."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/NVIDIA/NeMo-Guardrails",
+          "commit": "8cfaa12b79e68cf6ba3ac93ff675c16ff46e2716",
+          "path": "nemoguardrails/rails/llm/llmrails.py",
+          "symbol": "LLMRails.check_async and _run_output_rails_in_streaming",
+          "license": "Apache-2.0",
+          "adapted": "Input/output boundary selection, modified/blocked outcomes, and fail-closed sequential streaming rail errors.",
+          "simplifications": "No Colang, action dispatcher, LLM checks, retrieval rails, buffer strategies, or async streams."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/meta-llama/PurpleLlama",
+          "commit": "b71c6350a2acf2fb62c2328a734cbf440ecac386",
+          "path": "LlamaFirewall/src/llamafirewall/scanners/prompt_guard_scanner.py",
+          "symbol": "PromptGuardScanner.scan",
+          "license": "MIT",
+          "adapted": "Thresholded prompt-injection scan outcome at an untrusted-text boundary.",
+          "simplifications": "No model weights or inference; deterministic policies stand in for classifier outcomes."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/openclaw/openclaw",
+          "commit": "40d31f34813c2a01284b097c0d0d785fbb173400",
+          "path": "src/agents/openclaw-tools.ts",
+          "symbol": "createOpenClawTools",
+          "license": "MIT",
+          "adapted": "Per-run tool boundary and capability-filtered inventory.",
+          "simplifications": "No plugins, hooks, channels, sandbox inheritance, or provider-specific tool wrappers."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/NousResearch/hermes-agent",
+          "commit": "299e409f15aa5615a8a64be488580be92cda351e",
+          "path": "tools/registry.py",
+          "symbol": "ToolRegistry.dispatch",
+          "license": "MIT",
+          "adapted": "Central tool dispatch boundary suitable for pre/post enforcement.",
+          "simplifications": "No plugins, async bridge, terminal UI confirmation, or result sanitizer."
+        },
+        {
+          "kind": "paper",
+          "url": "https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/",
+          "section": "ASI01 Agent Goal Hijack, ASI02 Tool Misuse, ASI03 Identity and Privilege Abuse, ASI10 Rogue Agents",
+          "adapted": "Threat categories used to organize injection, permission, delegation, and provenance fixtures."
+        }
+      ],
+      "designNoteRubric": [
+        {
+          "field": "api_boundaries",
+          "label": "API boundaries and class responsibilities"
+        },
+        {
+          "field": "state_ownership",
+          "label": "State and ownership"
+        },
+        {
+          "field": "failure_recovery",
+          "label": "Failure behavior and recovery"
+        },
+        {
+          "field": "backpressure_concurrency",
+          "label": "Backpressure and concurrency"
+        },
+        {
+          "field": "durability_idempotency",
+          "label": "Durability and idempotency"
+        },
+        {
+          "field": "observability",
+          "label": "Observability"
+        },
+        {
+          "field": "security",
+          "label": "Security"
+        },
+        {
+          "field": "tradeoffs",
+          "label": "Explicit tradeoffs"
+        }
+      ]
     }
   ]
 }

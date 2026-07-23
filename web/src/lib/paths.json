@@ -111,6 +111,16 @@
       "prerequisites": []
     },
     {
+      "id": "agent-guardrails-security",
+      "titleEn": "Agent Guardrails & Security",
+      "titleZh": "Agent Guardrails & Security",
+      "descriptionEn": "Implement deterministic policy composition, capability-bound human approval, and a provenance-aware guarded runtime with injection defense, redaction-before-audit, delegation limits, and cancellation.",
+      "descriptionZh": "Implement deterministic policy composition, capability-bound human approval, and a provenance-aware guarded runtime with injection defense, redaction-before-audit, delegation limits, and cancellation.",
+      "icon": "ShieldCheck",
+      "problems": ["policy_engine", "approval_gate", "guarded_runtime"],
+      "prerequisites": ["agent-runtime-system-design"]
+    },
+    {
       "id": "graph-neural-networks",
       "titleEn": "Graph Neural Networks",
       "titleZh": "图神经网络",
