@@ -1,0 +1,1 @@
+{"version":1,"fixture_class":"cancellation","primary":{"id":"cancel-primary","expected_action":"cancel","provenance":{"source":"operator","trust":"trusted"},"payload":{"cancelled":true,"phase":"approval"}},"legitimate":{"id":"cancel-legitimate","expected_action":"allow","provenance":{"source":"operator","trust":"trusted"},"payload":{"cancelled":false,"phase":"approval"}}}

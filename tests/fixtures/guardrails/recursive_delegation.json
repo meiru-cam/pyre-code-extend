@@ -1,0 +1,1 @@
+{"version":1,"fixture_class":"recursive_delegation","primary":{"id":"delegation-attack","expected_action":"deny","provenance":{"source":"agent","trust":"trusted"},"payload":{"depth":5,"max_depth":4}},"legitimate":{"id":"delegation-legitimate","expected_action":"allow","provenance":{"source":"agent","trust":"trusted"},"payload":{"depth":2,"max_depth":4}}}
