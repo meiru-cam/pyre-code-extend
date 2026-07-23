@@ -1,5 +1,3 @@
-import type { Locale } from '@/lib/i18n';
-
 export interface Test {
   name: string;
   code?: string;
@@ -29,6 +27,25 @@ export interface SourceRef {
   simplifications?: string;
 }
 
+export type DesignNoteFieldName =
+  | 'api_boundaries'
+  | 'state_ownership'
+  | 'failure_recovery'
+  | 'backpressure_concurrency'
+  | 'durability_idempotency'
+  | 'observability'
+  | 'security'
+  | 'tradeoffs';
+
+export type DesignNoteFields = Record<DesignNoteFieldName, string>;
+
+export interface DesignNoteResponse {
+  taskId: string;
+  contractVersion: number;
+  fields: DesignNoteFields;
+  updatedAt: string;
+}
+
 export interface Problem {
   id: string;
   title: string;
@@ -45,7 +62,7 @@ export interface Problem {
   advisoryPrerequisites?: string[];
   modelConnections?: string[];
   proConAnalysis?: { pros: string[]; cons: string[] };
-  designNoteRubric?: { field: string; label: string }[];
+  designNoteRubric?: { field: DesignNoteFieldName; label: string }[];
   sources?: SourceRef[];
 }
 
@@ -113,29 +130,11 @@ export interface SubmissionHistory {
   submittedAt: string;
   code: string;
   contractVersion?: number;
-}
-
-export interface AiHelpConfig {
-  baseUrl: string;
-  apiKey: string;
-  model: string;
-  includeUserCode: boolean;
-}
-
-export interface AiHelpRequest {
-  problemId: string;
-  problemTitle: string;
-  functionName: string;
-  description: string;
-  solutionCode: string;
-  sampleTests: Array<{ name: string; code: string }>;
-  customPrompt?: string;
-  userCode?: string;
-  locale: Locale;
-  config: Omit<AiHelpConfig, 'includeUserCode'>;
+  designNotePresent?: boolean;
 }
 
 export interface AiHelpResponse {
   guidance: string;
   model?: string;
+  advisory?: boolean;
 }

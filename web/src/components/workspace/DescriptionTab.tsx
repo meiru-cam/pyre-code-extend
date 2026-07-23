@@ -7,6 +7,7 @@ import { useLocale } from '@/context/LocaleContext';
 import { getHintLevels } from '@/lib/hints';
 import type { Problem } from '@/lib/types';
 import { ProblemInformation } from './ProblemInformation';
+import { DesignNoteEditor } from './DesignNoteEditor';
 
 function parseInline(text: string): (string | JSX.Element)[] {
   const parts: (string | JSX.Element)[] = [];
@@ -57,9 +58,13 @@ function renderDescription(text: string) {
 
 interface DescriptionTabProps {
   problem: Problem;
+  implementationStatus?: 'todo' | 'attempted' | 'solved';
 }
 
-export function DescriptionTab({ problem }: DescriptionTabProps) {
+export function DescriptionTab({
+  problem,
+  implementationStatus = 'todo',
+}: DescriptionTabProps) {
   const [hintOpen, setHintOpen] = useState(false);
   const [openLevels, setOpenLevels] = useState<Record<number, boolean>>({});
   const { locale, t } = useLocale();
@@ -85,6 +90,12 @@ export function DescriptionTab({ problem }: DescriptionTabProps) {
       )}
 
       <ProblemInformation problem={problem} />
+
+      <DesignNoteEditor
+        problem={problem}
+        implementationStatus={implementationStatus}
+        locale={locale}
+      />
 
       {hintLevels.length > 0 ? (
         <div className="space-y-3">
