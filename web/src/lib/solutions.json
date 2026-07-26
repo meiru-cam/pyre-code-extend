@@ -623,6 +623,20 @@
       }
     ]
   },
+  "moe_shared_experts": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def shared_routed_moe(x, expert_indices, expert_weights, routed_experts, shared_experts):\n    if x.ndim != 2 or expert_indices.ndim != 2 or expert_weights.shape != expert_indices.shape:\n        raise ValueError(\"x and routed route tensors have invalid shapes\")\n    if expert_indices.shape[0] != x.shape[0] or expert_indices.dtype != torch.long:\n        raise ValueError(\"routed route tensors must align with tokens and indices must be long\")\n    if not routed_experts:\n        raise ValueError(\"at least one routed expert is required\")\n    if expert_indices.numel() and (int(expert_indices.min()) < 0 or int(expert_indices.max()) >= len(routed_experts)):\n        raise ValueError(\"routed expert index out of range\")\n    routed_out = torch.zeros_like(x)\n    routes = [[] for _ in routed_experts]\n    for token in range(expert_indices.shape[0]):\n        for slot in range(expert_indices.shape[1]):\n            routes[int(expert_indices[token, slot])].append((token, slot))\n    for expert_id, accepted in enumerate(routes):\n        if not accepted:\n            continue\n        token_ids = torch.tensor([token for token, _ in accepted], device=x.device)\n        slot_ids = torch.tensor([slot for _, slot in accepted], device=x.device)\n        expert_output = routed_experts[expert_id](x.index_select(0, token_ids))\n        route_weights = expert_weights[token_ids, slot_ids].to(expert_output.dtype).unsqueeze(-1)\n        routed_out.index_add_(0, token_ids, expert_output * route_weights)\n    shared_out = torch.zeros_like(x)\n    for shared in shared_experts:\n        shared_out = shared_out + shared(x)\n    return routed_out + shared_out",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "routed=[nn.Linear(4,4,bias=False) for _ in range(3)]\nshared=[nn.Linear(4,4,bias=False)]\nx=torch.randn(5,4)\nindices=torch.tensor([[0,1],[0,2],[1,2],[0,1],[2,0]])\nweights=torch.full((5,2),.5)\nprint(shared_routed_moe(x,indices,weights,routed,shared).shape)",
+        "role": "demo"
+      }
+    ]
+  },
   "moe_topk_router": {
     "cells": [
       {

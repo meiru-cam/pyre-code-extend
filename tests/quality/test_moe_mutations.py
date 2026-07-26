@@ -211,6 +211,60 @@ NOISY_ROUTING_MUTATIONS = [
 ]
 
 
+_ROUTED_BLOCK = """    routed_out = torch.zeros_like(x); routes = [[] for _ in routed_experts]
+    for t in range(expert_indices.shape[0]):
+        for s in range(expert_indices.shape[1]): routes[int(expert_indices[t, s])].append((t, s))
+    for eid, acc in enumerate(routes):
+        if not acc: continue
+        tid = torch.tensor([t for t, _ in acc]); sid = torch.tensor([s for _, s in acc])
+        o = routed_experts[eid](x.index_select(0, tid)); w = expert_weights[tid, sid].to(o.dtype).unsqueeze(-1)
+        routed_out.index_add_(0, tid, o * w)
+"""
+_SHARED_HEAD = "def shared_routed_moe(x, expert_indices, expert_weights, routed_experts, shared_experts):\n"
+
+SHARED_EXPERTS_MUTATIONS = [
+    Mutation("no_shared", _SHARED_HEAD + _ROUTED_BLOCK + "    return routed_out\n"),
+    Mutation("shared_drops_last_token", _SHARED_HEAD + _ROUTED_BLOCK +
+        "    shared_out = torch.zeros_like(x)\n"
+        "    for sh in shared_experts: shared_out[:-1] = shared_out[:-1] + sh(x[:-1])\n"
+        "    return routed_out + shared_out\n"),
+    Mutation("shared_gate_weighted", _SHARED_HEAD + _ROUTED_BLOCK +
+        "    shared_out = torch.zeros_like(x)\n"
+        "    for sh in shared_experts: shared_out = shared_out + sh(x) * expert_weights[:, :1].sum(-1, keepdim=True)\n"
+        "    return routed_out + shared_out\n"),
+    Mutation("unweighted_routed", _SHARED_HEAD +
+        "    routed_out = torch.zeros_like(x); routes = [[] for _ in routed_experts]\n"
+        "    for t in range(expert_indices.shape[0]):\n"
+        "        for s in range(expert_indices.shape[1]): routes[int(expert_indices[t, s])].append((t, s))\n"
+        "    for eid, acc in enumerate(routes):\n"
+        "        if not acc: continue\n"
+        "        tid = torch.tensor([t for t, _ in acc]); routed_out.index_add_(0, tid, routed_experts[eid](x.index_select(0, tid)))\n"
+        "    shared_out = torch.zeros_like(x)\n"
+        "    for sh in shared_experts: shared_out = shared_out + sh(x)\n"
+        "    return routed_out + shared_out\n"),
+    Mutation("execute_all_routed", _SHARED_HEAD +
+        "    dense = [e(x) for e in routed_experts]; routed_out = torch.zeros_like(x)\n"
+        "    for t in range(expert_indices.shape[0]):\n"
+        "        for s in range(expert_indices.shape[1]):\n"
+        "            e = int(expert_indices[t, s]); routed_out[t] += expert_weights[t, s] * dense[e][t]\n"
+        "    shared_out = torch.zeros_like(x)\n"
+        "    for sh in shared_experts: shared_out = shared_out + sh(x)\n"
+        "    return routed_out + shared_out\n"),
+    Mutation("detached_weights", _SHARED_HEAD +
+        "    routed_out = torch.zeros_like(x); routes = [[] for _ in routed_experts]\n"
+        "    for t in range(expert_indices.shape[0]):\n"
+        "        for s in range(expert_indices.shape[1]): routes[int(expert_indices[t, s])].append((t, s))\n"
+        "    for eid, acc in enumerate(routes):\n"
+        "        if not acc: continue\n"
+        "        tid = torch.tensor([t for t, _ in acc]); sid = torch.tensor([s for _, s in acc])\n"
+        "        o = routed_experts[eid](x.index_select(0, tid)); w = expert_weights[tid, sid].detach().to(o.dtype).unsqueeze(-1)\n"
+        "        routed_out.index_add_(0, tid, o * w)\n"
+        "    shared_out = torch.zeros_like(x)\n"
+        "    for sh in shared_experts: shared_out = shared_out + sh(x)\n"
+        "    return routed_out + shared_out\n"),
+]
+
+
 def _assert_metadata(task_id: str):
     task = get_task(task_id)
     assert task is not None
@@ -253,6 +307,11 @@ def test_moe_metadata_contracts_and_model_coverage():
 @pytest.mark.parametrize("_repeat", range(3))
 def test_sparse_ffn_reference_and_mutations(_repeat):
     assert set(assert_mutations_rejected("dense_vs_sparse_ffn", SPARSE_FFN_MUTATIONS)) == {m.name for m in SPARSE_FFN_MUTATIONS}
+
+
+@pytest.mark.parametrize("_repeat", range(3))
+def test_shared_experts_reference_and_mutations(_repeat):
+    assert set(assert_mutations_rejected("moe_shared_experts", SHARED_EXPERTS_MUTATIONS)) == {m.name for m in SHARED_EXPERTS_MUTATIONS}
 
 
 @pytest.mark.parametrize("_repeat", range(3))

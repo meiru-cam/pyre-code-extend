@@ -97,7 +97,7 @@
       "descriptionEn": "Implement token-choice routing, capacity-aware sparse dispatch, and a complete TinyMoE training step; connect utilization and stability tradeoffs to pinned DeepSeek, Kimi, GLM, and Qwen code.",
       "descriptionZh": "Implement token-choice routing, capacity-aware sparse dispatch, and a complete TinyMoE training step; connect utilization and stability tradeoffs to pinned DeepSeek, Kimi, GLM, and Qwen code.",
       "icon": "Network",
-      "problems": ["moe", "dense_vs_sparse_ffn", "moe_load_balance", "moe_topk_router", "moe_noisy_routing", "moe_router_zloss", "moe_capacity_dispatch", "tiny_moe_train_step"],
+      "problems": ["moe", "dense_vs_sparse_ffn", "moe_load_balance", "moe_topk_router", "moe_noisy_routing", "moe_router_zloss", "moe_capacity_dispatch", "moe_shared_experts", "tiny_moe_train_step"],
       "prerequisites": ["transformer-internals"]
     },
     {

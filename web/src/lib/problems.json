@@ -4486,6 +4486,111 @@
           "section": "2.1 Noisy Top-K Gating"
         }
       ]
+    },
+    {
+      "id": "moe_shared_experts",
+      "title": "Shared and Routed Experts",
+      "titleZh": "Shared and Routed Experts",
+      "difficulty": "Medium",
+      "functionName": "shared_routed_moe",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Implement a Mixture-of-Experts forward that combines always-on shared experts with sparsely routed experts, the design DeepSeek and Qwen use.\n\nSignature: 'shared_routed_moe(x, expert_indices, expert_weights, routed_experts, shared_experts) -> output'\n\n'x' has shape '(tokens, d_model)'. 'expert_indices' and 'expert_weights' both have shape '(tokens, k)' and route only into 'routed_experts'. 'shared_experts' is a separate list of always-on modules. Each module maps '(n, d_model)' to '(n, d_model)'.\n\nFor every token the output is the sum of two branches:\n\n- Shared branch: every shared expert runs on the full token batch and its outputs are added directly (no gate weighting).\n- Routed branch: for each token, its k routed experts run sparsely and their outputs are weighted by the gate and accumulated back to the token.\n\n'output = sum_over_shared( shared(x) ) + sum_over_routed_slots( weight * routed_expert(x_token) )'\n\nReturn one output row per token. Shared experts always execute on all tokens and must never appear in routed selection or in routed accounting; routed experts execute only on the tokens that selected them, and unused routed experts must never run.\n\nIsolating a shared expert lets it capture common knowledge every token needs, so the routed experts specialize instead of each re-learning shared features. The shared branch is dense and cheap relative to the routed pool. Validate the routed route tensors, reject out-of-range routed ids, and require at least one routed expert; the shared list may be empty.",
+      "descriptionZh": "Implement a Mixture-of-Experts forward that combines always-on shared experts with sparsely routed experts, the design DeepSeek and Qwen use.\n\nSignature: 'shared_routed_moe(x, expert_indices, expert_weights, routed_experts, shared_experts) -> output'\n\n'x' has shape '(tokens, d_model)'. 'expert_indices' and 'expert_weights' both have shape '(tokens, k)' and route only into 'routed_experts'. 'shared_experts' is a separate list of always-on modules. Each module maps '(n, d_model)' to '(n, d_model)'.\n\nFor every token the output is the sum of two branches:\n\n- Shared branch: every shared expert runs on the full token batch and its outputs are added directly (no gate weighting).\n- Routed branch: for each token, its k routed experts run sparsely and their outputs are weighted by the gate and accumulated back to the token.\n\n'output = sum_over_shared( shared(x) ) + sum_over_routed_slots( weight * routed_expert(x_token) )'\n\nReturn one output row per token. Shared experts always execute on all tokens and must never appear in routed selection or in routed accounting; routed experts execute only on the tokens that selected them, and unused routed experts must never run.\n\nIsolating a shared expert lets it capture common knowledge every token needs, so the routed experts specialize instead of each re-learning shared features. The shared branch is dense and cheap relative to the routed pool. Validate the routed route tensors, reject out-of-range routed ids, and require at least one routed expert; the shared list may be empty.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Hand-calculated shared plus routed sum",
+          "code": "\nimport torch\nimport torch.nn as nn\ndef expert(scale):\n    layer=nn.Linear(2,2,bias=False)\n    with torch.no_grad(): layer.weight.copy_(torch.eye(2)*scale)\n    return layer\nx=torch.tensor([[1.,2.],[3.,4.]])\nindices=torch.tensor([[0],[1]])\nweights=torch.tensor([[0.5],[0.5]])\nrouted=[expert(2.),expert(4.)]\nshared=[expert(1.)]\nout={fn}(x,indices,weights,routed,shared)\n# token0: shared 1*[1,2] + 0.5*2*[1,2] = [2,4]; token1: 1*[3,4] + 0.5*4*[3,4] = [9,12]\nassert torch.allclose(out,torch.tensor([[2.,4.],[9.,12.]]))\n",
+          "behavior": "dispatch.token_conservation"
+        },
+        {
+          "name": "Rejects malformed routed routes",
+          "code": "\nimport torch\nimport torch.nn as nn\nx=torch.randn(3,4); routed=[nn.Identity()]\nfor indices in (torch.tensor([[0],[0]]), torch.tensor([[1],[0],[0]])):\n    try: {fn}(x, indices, torch.ones(indices.shape), routed, [])\n    except (ValueError, RuntimeError): pass\n    else: raise AssertionError('malformed routed routes must raise')\ntry: {fn}(x, torch.zeros(3,1,dtype=torch.long), torch.ones(3,1), [], [nn.Identity()])\nexcept ValueError: pass\nelse: raise AssertionError('empty routed_experts must raise')\n",
+          "behavior": "edge.empty_or_boundary"
+        },
+        {
+          "name": "Independent oracle: dense shared plus sparse routed",
+          "visibility": "unshown",
+          "behavior": "dispatch.token_conservation"
+        },
+        {
+          "name": "Shared run on all tokens, routed run sparsely",
+          "visibility": "unshown",
+          "behavior": "experts.sparsity"
+        },
+        {
+          "name": "Gradients reach selected routed, all shared, and gates",
+          "visibility": "unshown",
+          "behavior": "gradient.flow"
+        },
+        {
+          "name": "Routed permutation preserves output",
+          "visibility": "unshown",
+          "behavior": "state.invariant"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which experts run for every token, and which run for only a few? Are shared experts gate-weighted? Should a shared expert ever appear in the routed indices or counts? How do the two branches combine into one output row?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Accumulate the routed branch exactly like sparse dispatch: group accepted (token, slot) pairs per routed expert, call each used expert once, weight by the gate, and index_add to a routed output. Separately run every shared expert on the whole batch and sum. Return routed_output + shared_output. Keep the two accountings disjoint."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "moe",
+        "moe_topk_router",
+        "moe_capacity_dispatch"
+      ],
+      "modelConnections": [
+        "DeepSeekMoE isolates one or more shared experts that process every token, letting routed experts specialize on residual knowledge.",
+        "DeepSeek-V3 MoE.forward adds an always-on shared-expert branch to the routed sum, exactly the two-branch structure here.",
+        "Qwen and GLM MoE blocks similarly compose a shared/dense path with sparse routed experts and a weighted gather."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "A shared expert captures common features so routed experts specialize rather than duplicate them.",
+          "The shared branch is dense and predictable, improving stability without large sparse cost.",
+          "Keeping shared experts out of routed accounting yields clean load and utilization statistics."
+        ],
+        "cons": [
+          "The always-on branch adds fixed compute for every token.",
+          "Too much shared capacity can crowd out expert specialization.",
+          "Two branches complicate load-balancing and capacity bookkeeping."
+        ]
+      },
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/deepseek-ai/DeepSeek-V3",
+          "commit": "9b4e9788e4a3a731f7567338ed15d3ec549ce03b",
+          "path": "inference/model.py",
+          "symbol": "MoE.forward",
+          "license": "MIT",
+          "adapted": "Always-on shared-expert branch added to the routed sparse sum.",
+          "simplifications": "Single process, explicit shared list, no expert parallelism, and no capacity limit."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/huggingface/transformers",
+          "commit": "7ea2320c76117e6742364808a666ef6f2fb40a67",
+          "path": "src/transformers/models/glm4_moe/modeling_glm4_moe.py",
+          "symbol": "Glm4MoeMoE.forward",
+          "license": "Apache-2.0",
+          "adapted": "Composition of a shared/dense branch with routed sparse experts and weighted gather.",
+          "simplifications": "No routing groups, capacity, or model wrapper."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2401.06066",
+          "section": "3.2 Shared Expert Isolation"
+        }
+      ]
     }
   ]
 }

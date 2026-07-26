@@ -70,6 +70,7 @@
   "dense_vs_sparse_ffn": "def sparse_ffn_forward(x, expert_indices, expert_weights, experts):\n    pass",
   "moe_router_zloss": "def router_z_loss(router_logits):\n    pass",
   "moe_noisy_routing": "def noisy_topk_route(clean_logits, noise, noise_std, k):\n    pass",
+  "moe_shared_experts": "def shared_routed_moe(x, expert_indices, expert_weights, routed_experts, shared_experts):\n    pass",
   "tiny_moe_train_step": "def tiny_moe_train_step(model, optimizer, x, targets, balance_weight=0.01, z_weight=0.001):\n    pass",
   "tool_registry": "class ToolRegistry:\n\n    def __init__(self):\n        pass\n\n    def register(self, tool):\n        pass\n\n    def describe(self):\n        pass\n\n    def invoke(self, name, arguments, idempotency_key=None):\n        pass",
   "budgeted_agent_loop": "def budgeted_agent_loop(model, registry, messages, limits, retry_policy, clock, trace):\n    pass",
