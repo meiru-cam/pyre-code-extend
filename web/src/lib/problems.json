@@ -4407,6 +4407,85 @@
           "section": "3.2 Router z-loss"
         }
       ]
+    },
+    {
+      "id": "moe_noisy_routing",
+      "title": "Noisy Top-k Routing",
+      "titleZh": "Noisy Top-k Routing",
+      "difficulty": "Medium",
+      "functionName": "noisy_topk_route",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Implement noisy top-k gating, the exploration mechanism from the original sparsely-gated Mixture-of-Experts layer.\n\nSignature: 'noisy_topk_route(clean_logits, noise, noise_std, k) -> (indices, weights)'\n\n'clean_logits' and 'noise' both have shape '(tokens, num_experts)'. 'noise' holds standard-normal samples supplied by the caller so the exercise stays deterministic; in production the layer samples this noise itself and scales it by a learned per-expert amount. Add the scaled noise to the logits, softmax over experts, take the top-k experts per token, and renormalize the selected probabilities so each token's gate weights sum to one:\n\n'noisy = clean_logits + noise_std * noise'\n'probs = softmax(noisy, dim=-1)'\n'weights, indices = topk(probs, k); weights = weights / weights.sum(-1, keepdim=True)'\n\nReturn long 'indices' of shape '(tokens, k)' and floating 'weights' of the same shape. When 'noise_std' is zero the result must exactly match noiseless top-k routing. The gate weights must stay differentiable with respect to 'clean_logits'; the injected noise is treated as a constant.\n\nNoise perturbs which experts win the top-k, so tokens occasionally explore experts they would not otherwise pick. Early in training this spreads load and prevents a few experts from monopolizing routing before the load-balancing loss takes effect; annealing 'noise_std' toward zero recovers deterministic routing for inference. Validate the shapes, that 'k' is within '[1, num_experts]', and that 'noise_std' is non-negative.",
+      "descriptionZh": "Implement noisy top-k gating, the exploration mechanism from the original sparsely-gated Mixture-of-Experts layer.\n\nSignature: 'noisy_topk_route(clean_logits, noise, noise_std, k) -> (indices, weights)'\n\n'clean_logits' and 'noise' both have shape '(tokens, num_experts)'. 'noise' holds standard-normal samples supplied by the caller so the exercise stays deterministic; in production the layer samples this noise itself and scales it by a learned per-expert amount. Add the scaled noise to the logits, softmax over experts, take the top-k experts per token, and renormalize the selected probabilities so each token's gate weights sum to one:\n\n'noisy = clean_logits + noise_std * noise'\n'probs = softmax(noisy, dim=-1)'\n'weights, indices = topk(probs, k); weights = weights / weights.sum(-1, keepdim=True)'\n\nReturn long 'indices' of shape '(tokens, k)' and floating 'weights' of the same shape. When 'noise_std' is zero the result must exactly match noiseless top-k routing. The gate weights must stay differentiable with respect to 'clean_logits'; the injected noise is treated as a constant.\n\nNoise perturbs which experts win the top-k, so tokens occasionally explore experts they would not otherwise pick. Early in training this spreads load and prevents a few experts from monopolizing routing before the load-balancing loss takes effect; annealing 'noise_std' toward zero recovers deterministic routing for inference. Validate the shapes, that 'k' is within '[1, num_experts]', and that 'noise_std' is non-negative.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Zero noise matches plain top-k routing",
+          "code": "\nimport torch\nlogits=torch.tensor([[0.,1.,2.],[3.,1.,2.]])\nnoise=torch.randn(2,3)\nindices,weights={fn}(logits,noise,0.0,2)\nprobs=torch.softmax(logits,dim=-1)\nev,ei=torch.topk(probs,2,dim=-1); ev=ev/ev.sum(-1,keepdim=True)\nassert torch.equal(indices,ei) and torch.allclose(weights,ev)\n",
+          "behavior": "routing.selection"
+        },
+        {
+          "name": "Rejects invalid k and mismatched noise",
+          "code": "\nimport torch\nlogits=torch.randn(2,3); noise=torch.randn(2,3)\nfor bad_k in (0,4,-1):\n    try: {fn}(logits,noise,0.1,bad_k)\n    except ValueError: pass\n    else: raise AssertionError('invalid k must raise')\ntry: {fn}(logits,torch.randn(2,4),0.1,2)\nexcept (ValueError,RuntimeError): pass\nelse: raise AssertionError('mismatched noise shape must raise')\ntry: {fn}(logits,noise,-1.0,2)\nexcept ValueError: pass\nelse: raise AssertionError('negative noise_std must raise')\n",
+          "behavior": "edge.empty_or_boundary"
+        },
+        {
+          "name": "Independent seeded oracle with active noise",
+          "visibility": "unshown",
+          "behavior": "routing.selection"
+        },
+        {
+          "name": "Gradient reaches clean logits, noise is constant",
+          "visibility": "unshown",
+          "behavior": "gradient.flow"
+        },
+        {
+          "name": "Deterministic and expert-permutation consistent",
+          "visibility": "unshown",
+          "behavior": "state.invariant"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "At what point does the noise enter — before or after selecting experts? What must the result equal when noise_std is zero? Which tensor should gradients reach, and which is a constant? Do the selected weights still need to sum to one?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Form noisy logits as clean_logits + noise_std * noise, softmax over the expert dimension, take torch.topk, and divide the selected probabilities by their per-token sum. Selection happens on the noisy probabilities but the whole path stays differentiable in clean_logits because noise and noise_std are constants. noise_std == 0 collapses to plain top-k routing."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "softmax",
+        "moe_topk_router"
+      ],
+      "modelConnections": [
+        "Shazeer et al.'s sparsely-gated MoE adds tunable Gaussian noise before top-k gating to encourage exploration and balance expert load.",
+        "GShard and Switch Transformer variants use jitter/noise on routing during training and disable it at inference, mirroring the noise_std anneal here.",
+        "Modern DeepSeek/Qwen routers rely more on auxiliary balance losses than injected noise, but the exploration-versus-determinism tradeoff is the same design axis."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Injecting noise before selection lets tokens explore non-argmax experts and spreads early load.",
+          "Deterministic when noise_std is zero, so the same code serves training and inference.",
+          "Keeps gate weights differentiable in the clean logits while treating noise as a constant."
+        ],
+        "cons": [
+          "Too much noise destabilizes routing and slows convergence.",
+          "Exploration overlaps with the load-balancing loss, adding another schedule to tune.",
+          "Sampling and annealing noise adds training-time bookkeeping absent at inference."
+        ]
+      },
+      "sources": [
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/1701.06538",
+          "section": "2.1 Noisy Top-K Gating"
+        }
+      ]
     }
   ]
 }

@@ -595,6 +595,20 @@
       }
     ]
   },
+  "moe_noisy_routing": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def noisy_topk_route(clean_logits, noise, noise_std, k):\n    if clean_logits.ndim != 2 or not isinstance(noise, torch.Tensor) or noise.shape != clean_logits.shape:\n        raise ValueError(\"clean_logits and noise must be matching (tokens, num_experts) tensors\")\n    if not clean_logits.is_floating_point():\n        raise ValueError(\"clean_logits must be floating point\")\n    num_experts = clean_logits.shape[-1]\n    if not isinstance(k, int) or isinstance(k, bool) or k < 1 or k > num_experts:\n        raise ValueError(\"k must be an integer in [1, num_experts]\")\n    if noise_std < 0:\n        raise ValueError(\"noise_std must be non-negative\")\n    noisy = clean_logits + noise_std * noise\n    probs = torch.softmax(noisy, dim=-1)\n    weights, indices = torch.topk(probs, k, dim=-1)\n    weights = weights / weights.sum(-1, keepdim=True)\n    return indices, weights",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "logits=torch.randn(4,8); noise=torch.randn(4,8)\nidx,w=noisy_topk_route(logits,noise,0.5,2)\nprint(idx.shape, w.sum(-1))",
+        "role": "demo"
+      }
+    ]
+  },
   "moe_router_zloss": {
     "cells": [
       {

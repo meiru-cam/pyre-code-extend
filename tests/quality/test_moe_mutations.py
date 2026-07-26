@@ -201,6 +201,16 @@ ZLOSS_MUTATIONS = [
 ]
 
 
+NOISY_ROUTING_MUTATIONS = [
+    Mutation("ignores_noise", "def noisy_topk_route(clean_logits, noise, noise_std, k):\n    probs = torch.softmax(clean_logits, dim=-1)\n    w, i = torch.topk(probs, k, dim=-1)\n    return i, w / w.sum(-1, keepdim=True)\n"),
+    Mutation("unscaled_noise", "def noisy_topk_route(clean_logits, noise, noise_std, k):\n    probs = torch.softmax(clean_logits + noise, dim=-1)\n    w, i = torch.topk(probs, k, dim=-1)\n    return i, w / w.sum(-1, keepdim=True)\n"),
+    Mutation("raw_logits", "def noisy_topk_route(clean_logits, noise, noise_std, k):\n    noisy = clean_logits + noise_std * noise\n    w, i = torch.topk(noisy, k, dim=-1)\n    return i, w / w.sum(-1, keepdim=True)\n"),
+    Mutation("unnormalized", "def noisy_topk_route(clean_logits, noise, noise_std, k):\n    probs = torch.softmax(clean_logits + noise_std * noise, dim=-1)\n    w, i = torch.topk(probs, k, dim=-1)\n    return i, w\n"),
+    Mutation("wrong_softmax_dim", "def noisy_topk_route(clean_logits, noise, noise_std, k):\n    probs = torch.softmax(clean_logits + noise_std * noise, dim=0)\n    w, i = torch.topk(probs, k, dim=-1)\n    return i, w / w.sum(-1, keepdim=True)\n"),
+    Mutation("detached_weights", "def noisy_topk_route(clean_logits, noise, noise_std, k):\n    probs = torch.softmax(clean_logits + noise_std * noise, dim=-1)\n    w, i = torch.topk(probs, k, dim=-1)\n    return i, (w / w.sum(-1, keepdim=True)).detach()\n"),
+]
+
+
 def _assert_metadata(task_id: str):
     task = get_task(task_id)
     assert task is not None
@@ -243,6 +253,11 @@ def test_moe_metadata_contracts_and_model_coverage():
 @pytest.mark.parametrize("_repeat", range(3))
 def test_sparse_ffn_reference_and_mutations(_repeat):
     assert set(assert_mutations_rejected("dense_vs_sparse_ffn", SPARSE_FFN_MUTATIONS)) == {m.name for m in SPARSE_FFN_MUTATIONS}
+
+
+@pytest.mark.parametrize("_repeat", range(3))
+def test_noisy_routing_reference_and_mutations(_repeat):
+    assert set(assert_mutations_rejected("moe_noisy_routing", NOISY_ROUTING_MUTATIONS)) == {m.name for m in NOISY_ROUTING_MUTATIONS}
 
 
 @pytest.mark.parametrize("_repeat", range(3))
