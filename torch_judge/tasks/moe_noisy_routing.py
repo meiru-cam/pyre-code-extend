@@ -83,10 +83,12 @@ for seed,std,k in [(3,0.5,2),(8,1.5,1),(14,0.25,3)]:
 """},
         {"name": "Gradient reaches clean logits, noise is constant", "behavior": "gradient.flow", "visibility": "unshown", "failure_message": "Gate weights must stay differentiable in clean_logits while noise is treated as a constant.", "code": r"""
 import torch
-logits=torch.randn(4,6,dtype=torch.float64,requires_grad=True)
-noise=torch.randn(4,6,dtype=torch.float64)
+generator=torch.Generator().manual_seed(31)
+logits=torch.randn(4,6,generator=generator,dtype=torch.float64).requires_grad_(True)
+noise=torch.randn(4,6,generator=generator,dtype=torch.float64)
 indices,weights={fn}(logits,noise,0.7,3)
-weights.sum().backward()
+# weights renormalize to sum to one per token, so use a distribution-sensitive loss.
+(weights.square().sum()).backward()
 assert logits.grad is not None and bool(torch.count_nonzero(logits.grad))
 assert bool(torch.isfinite(logits.grad).all())
 """},
