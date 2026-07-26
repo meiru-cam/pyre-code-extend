@@ -21,6 +21,7 @@ def test_moe_training_is_separate_and_progressive():
         "dense_vs_sparse_ffn",
         "moe_load_balance",
         "moe_topk_router",
+        "moe_router_zloss",
         "moe_capacity_dispatch",
         "tiny_moe_train_step",
     ]

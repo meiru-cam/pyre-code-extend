@@ -191,6 +191,16 @@ SPARSE_FFN_MUTATIONS = [
 ]
 
 
+ZLOSS_MUTATIONS = [
+    Mutation("no_square", "def router_z_loss(router_logits):\n    return torch.logsumexp(router_logits, dim=-1).mean()\n"),
+    Mutation("mean_then_square", "def router_z_loss(router_logits):\n    return torch.logsumexp(router_logits, dim=-1).mean().square()\n"),
+    Mutation("sum_not_mean", "def router_z_loss(router_logits):\n    return torch.logsumexp(router_logits, dim=-1).square().sum()\n"),
+    Mutation("naive_logsumexp", "def router_z_loss(router_logits):\n    return torch.log(torch.exp(router_logits).sum(dim=-1)).square().mean()\n"),
+    Mutation("wrong_dim", "def router_z_loss(router_logits):\n    return torch.logsumexp(router_logits, dim=0).square().mean()\n"),
+    Mutation("detached", "def router_z_loss(router_logits):\n    return torch.logsumexp(router_logits, dim=-1).square().mean().detach()\n"),
+]
+
+
 def _assert_metadata(task_id: str):
     task = get_task(task_id)
     assert task is not None
@@ -233,6 +243,11 @@ def test_moe_metadata_contracts_and_model_coverage():
 @pytest.mark.parametrize("_repeat", range(3))
 def test_sparse_ffn_reference_and_mutations(_repeat):
     assert set(assert_mutations_rejected("dense_vs_sparse_ffn", SPARSE_FFN_MUTATIONS)) == {m.name for m in SPARSE_FFN_MUTATIONS}
+
+
+@pytest.mark.parametrize("_repeat", range(3))
+def test_router_zloss_reference_and_mutations(_repeat):
+    assert set(assert_mutations_rejected("moe_router_zloss", ZLOSS_MUTATIONS)) == {m.name for m in ZLOSS_MUTATIONS}
 
 
 @pytest.mark.parametrize("_repeat", range(3))

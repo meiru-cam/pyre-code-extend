@@ -595,6 +595,20 @@
       }
     ]
   },
+  "moe_router_zloss": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def router_z_loss(router_logits):\n    if not isinstance(router_logits, torch.Tensor) or router_logits.ndim != 2:\n        raise ValueError(\"router_logits must be a (tokens, num_experts) tensor\")\n    if not router_logits.is_floating_point():\n        raise ValueError(\"router_logits must be floating point\")\n    log_partition = torch.logsumexp(router_logits, dim=-1)\n    return log_partition.square().mean()",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "logits=torch.randn(8,16)\nprint(float(router_z_loss(logits)))",
+        "role": "demo"
+      }
+    ]
+  },
   "moe_topk_router": {
     "cells": [
       {
