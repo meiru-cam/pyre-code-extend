@@ -11,9 +11,9 @@ TASK = {
 
 `q` and `k` may have any floating-point shape whose final dimension is the head dimension. Normalize each Q vector and each K vector **independently** over that final dimension:
 
-\[
-\operatorname{rmsnorm}(x) = x\,(\operatorname{mean}(x^2, \mathrm{dim}=-1) + \epsilon)^{-1/2}.
-\]
+```
+rmsnorm(x) = x * (mean(x**2, dim=-1) + eps) ** -0.5
+```
 
 Preserve shape, dtype, device, and autograd connectivity. `eps` must keep an all-zero vector finite. This exercise uses no learned scale; production blocks often attach a learned RMSNorm weight.
 
