@@ -51,11 +51,35 @@ BEHAVIOR_CATEGORIES = frozenset({
 })
 
 
+# The description renderer (web MarkdownContent) has no KaTeX support and no
+# task uses LaTeX; formulas are written in plain text or code blocks. Reject
+# LaTeX/math markup so it cannot silently render as literal source.
+_MATH_MARKUP = re.compile(
+    r"\\\[|\\\]|\\\(|\\\)|\$\$"
+    r"|\\(?:operatorname|frac|sqrt|sum|prod|int|epsilon|varepsilon|alpha|beta"
+    r"|gamma|delta|sigma|lambda|theta|mu|rho|phi|psi|omega|cdot|times|div|odot"
+    r"|otimes|mathrm|mathbb|mathcal|mathbf|boldsymbol|partial|nabla|langle"
+    r"|rangle|leq|geq|approx|neq|equiv|infty|begin|end|left|right|hat|bar"
+    r"|tilde|vec|text)\b"
+)
+
+
 class TaskValidationError(ValueError):
     def __init__(self, task_id: str, field: str, message: str):
         self.task_id = task_id
         self.field = field
         super().__init__(f"Task '{task_id}', field '{field}': {message}")
+
+
+def _reject_math_markup(task_id: str, field: str, text: str) -> None:
+    match = _MATH_MARKUP.search(text)
+    if match is not None:
+        raise TaskValidationError(
+            task_id,
+            field,
+            f"unsupported LaTeX/math markup {match.group(0)!r}; the description "
+            "renderer has no KaTeX, so write formulas in plain text or a code block",
+        )
 
 
 def build_design_note_rubric() -> list[dict[str, str]]:
@@ -157,6 +181,10 @@ def validate_task(task_id: str, task: dict, known_ids: set[str] | None = None) -
             task_id, "difficulty", f"must be one of {sorted(DIFFICULTIES)}"
         )
 
+    _reject_math_markup(task_id, "description_en", task["description_en"])
+    if isinstance(task.get("description_zh"), str):
+        _reject_math_markup(task_id, "description_zh", task["description_zh"])
+
     version = task.get("version", 1)
     if not isinstance(version, int) or isinstance(version, bool) or version < 1:
         raise TaskValidationError(task_id, "version", "must be an integer >= 1")
@@ -165,8 +193,12 @@ def validate_task(task_id: str, task: dict, known_ids: set[str] | None = None) -
         raise TaskValidationError(task_id, "hints", "task needs legacy 'hint' or new 'hints'")
     if "hint" in task:
         _require_str(task_id, task, "hint")
+        _reject_math_markup(task_id, "hint", task["hint"])
     if "hints" in task:
         _validate_hints(task_id, task["hints"])
+        for i, hint in enumerate(task["hints"]):
+            if isinstance(hint, dict) and isinstance(hint.get("content"), str):
+                _reject_math_markup(task_id, f"hints[{i}]", hint["content"])
 
     tests = task.get("tests")
     if not isinstance(tests, list) or not tests:
