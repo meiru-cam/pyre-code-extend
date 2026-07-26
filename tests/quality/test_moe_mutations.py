@@ -136,6 +136,61 @@ TRAIN_MUTATIONS = [
 ]
 
 
+SPARSE_FFN_MUTATIONS = [
+    Mutation("execute_all_experts", """def sparse_ffn_forward(x, expert_indices, expert_weights, experts):
+    dense = [e(x) for e in experts]; out = torch.zeros_like(x)
+    for t in range(expert_indices.shape[0]):
+        for s in range(expert_indices.shape[1]):
+            e = int(expert_indices[t, s]); out[t] += expert_weights[t, s] * dense[e][t]
+    return out
+"""),
+    Mutation("unweighted_gather", """def sparse_ffn_forward(x, expert_indices, expert_weights, experts):
+    out = torch.zeros_like(x); routes = [[] for _ in experts]
+    for t in range(expert_indices.shape[0]):
+        for s in range(expert_indices.shape[1]): routes[int(expert_indices[t, s])].append((t, s))
+    for eid, acc in enumerate(routes):
+        if not acc: continue
+        tid = torch.tensor([t for t, _ in acc]); out.index_add_(0, tid, experts[eid](x.index_select(0, tid)))
+    return out
+"""),
+    Mutation("only_first_route", """def sparse_ffn_forward(x, expert_indices, expert_weights, experts):
+    out = torch.zeros_like(x)
+    for t in range(expert_indices.shape[0]):
+        e = int(expert_indices[t, 0]); out[t] = expert_weights[t, 0] * experts[e](x[t:t+1])[0]
+    return out
+"""),
+    Mutation("overwrite_token", """def sparse_ffn_forward(x, expert_indices, expert_weights, experts):
+    out = torch.zeros_like(x); routes = [[] for _ in experts]
+    for t in range(expert_indices.shape[0]):
+        for s in range(expert_indices.shape[1]): routes[int(expert_indices[t, s])].append((t, s))
+    for eid, acc in enumerate(routes):
+        if not acc: continue
+        tid = torch.tensor([t for t, _ in acc]); sid = torch.tensor([s for _, s in acc])
+        o = experts[eid](x.index_select(0, tid)); w = expert_weights[tid, sid].to(o.dtype).unsqueeze(-1)
+        out[tid] = o * w
+    return out
+"""),
+    Mutation("detached_weights", """def sparse_ffn_forward(x, expert_indices, expert_weights, experts):
+    out = torch.zeros_like(x); routes = [[] for _ in experts]
+    for t in range(expert_indices.shape[0]):
+        for s in range(expert_indices.shape[1]): routes[int(expert_indices[t, s])].append((t, s))
+    for eid, acc in enumerate(routes):
+        if not acc: continue
+        tid = torch.tensor([t for t, _ in acc]); sid = torch.tensor([s for _, s in acc])
+        o = experts[eid](x.index_select(0, tid)); w = expert_weights[tid, sid].detach().to(o.dtype).unsqueeze(-1)
+        out.index_add_(0, tid, o * w)
+    return out
+"""),
+    Mutation("per_token_calls", """def sparse_ffn_forward(x, expert_indices, expert_weights, experts):
+    out = torch.zeros_like(x)
+    for t in range(expert_indices.shape[0]):
+        for s in range(expert_indices.shape[1]):
+            e = int(expert_indices[t, s]); out[t] += expert_weights[t, s] * experts[e](x[t:t+1])[0]
+    return out
+"""),
+]
+
+
 def _assert_metadata(task_id: str):
     task = get_task(task_id)
     assert task is not None
@@ -173,6 +228,11 @@ def test_moe_metadata_contracts_and_model_coverage():
         }
         assert "python/sglang/srt/models/deepseek_v2.py" in paths
         assert "src/transformers/models/glm4_moe/modeling_glm4_moe.py" in paths
+
+
+@pytest.mark.parametrize("_repeat", range(3))
+def test_sparse_ffn_reference_and_mutations(_repeat):
+    assert set(assert_mutations_rejected("dense_vs_sparse_ffn", SPARSE_FFN_MUTATIONS)) == {m.name for m in SPARSE_FFN_MUTATIONS}
 
 
 @pytest.mark.parametrize("_repeat", range(3))

@@ -409,6 +409,20 @@
       }
     ]
   },
+  "dense_vs_sparse_ffn": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def sparse_ffn_forward(x, expert_indices, expert_weights, experts):\n    if x.ndim != 2 or expert_indices.ndim != 2 or expert_weights.shape != expert_indices.shape:\n        raise ValueError(\"x and route tensors have invalid shapes\")\n    if expert_indices.shape[0] != x.shape[0] or expert_indices.dtype != torch.long:\n        raise ValueError(\"route tensors must align with tokens and indices must be long\")\n    if not experts:\n        raise ValueError(\"at least one expert is required\")\n    if expert_indices.numel() and (int(expert_indices.min()) < 0 or int(expert_indices.max()) >= len(experts)):\n        raise ValueError(\"expert index out of range\")\n    routes = [[] for _ in experts]\n    for token in range(expert_indices.shape[0]):\n        for slot in range(expert_indices.shape[1]):\n            routes[int(expert_indices[token, slot])].append((token, slot))\n    output = torch.zeros_like(x)\n    for expert_id, accepted in enumerate(routes):\n        if not accepted:\n            continue\n        token_ids = torch.tensor([token for token, _ in accepted], device=x.device)\n        slot_ids = torch.tensor([slot for _, slot in accepted], device=x.device)\n        expert_output = experts[expert_id](x.index_select(0, token_ids))\n        route_weights = expert_weights[token_ids, slot_ids].to(expert_output.dtype).unsqueeze(-1)\n        output.index_add_(0, token_ids, expert_output * route_weights)\n    return output",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "experts=[nn.Linear(4,4,bias=False) for _ in range(3)]\nx=torch.randn(5,4)\nindices=torch.tensor([[0,1],[0,2],[1,2],[0,1],[2,0]])\nweights=torch.full((5,2),.5)\nprint(sparse_ffn_forward(x,indices,weights,experts).shape)",
+        "role": "demo"
+      }
+    ]
+  },
   "depthwise_conv": {
     "cells": [
       {

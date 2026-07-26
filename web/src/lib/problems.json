@@ -4192,6 +4192,121 @@
           "label": "Explicit tradeoffs"
         }
       ]
+    },
+    {
+      "id": "dense_vs_sparse_ffn",
+      "title": "Dense FFN versus Sparse Experts",
+      "titleZh": "Dense FFN versus Sparse Experts",
+      "difficulty": "Medium",
+      "functionName": "sparse_ffn_forward",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Implement the sparse expert forward that a Mixture-of-Experts layer runs in place of one dense feed-forward network.\n\nSignature: 'sparse_ffn_forward(x, expert_indices, expert_weights, experts) -> output'\n\n'x' has shape '(tokens, d_model)'. 'expert_indices' and 'expert_weights' both have shape '(tokens, k)': for each token they name its k routed experts and the gate weight for each route. 'experts' is an ordered sequence of modules mapping '(n, d_model)' to '(n, d_model)'. Every routed assignment is kept — there is no capacity limit in this exercise.\n\nFor each token, the output is the weighted sum over its k routes of 'expert_weight * expert(x_token)'. Return one output row per input token with the same shape, dtype, and device as 'x'.\n\nThe point of the exercise is that this must be **sparse**: batch the accepted rows for one expert into a single call, execute only the experts that at least one token selected, and never run an unused expert. A dense oracle that evaluates every expert on every token and then gathers the selected results produces the identical answer, but does 'num_experts / k' times the work. Sparse execution is what makes a large expert pool affordable; the exercise measures it with expert invocation counts rather than wall-clock timing.\n\nValidate shapes and route dtype up front, reject out-of-range expert ids, and require at least one expert. Real MoE blocks add capacity limits, shared always-on experts, and expert-parallel communication; those are separate exercises.",
+      "descriptionZh": "Implement the sparse expert forward that a Mixture-of-Experts layer runs in place of one dense feed-forward network.\n\nSignature: 'sparse_ffn_forward(x, expert_indices, expert_weights, experts) -> output'\n\n'x' has shape '(tokens, d_model)'. 'expert_indices' and 'expert_weights' both have shape '(tokens, k)': for each token they name its k routed experts and the gate weight for each route. 'experts' is an ordered sequence of modules mapping '(n, d_model)' to '(n, d_model)'. Every routed assignment is kept — there is no capacity limit in this exercise.\n\nFor each token, the output is the weighted sum over its k routes of 'expert_weight * expert(x_token)'. Return one output row per input token with the same shape, dtype, and device as 'x'.\n\nThe point of the exercise is that this must be **sparse**: batch the accepted rows for one expert into a single call, execute only the experts that at least one token selected, and never run an unused expert. A dense oracle that evaluates every expert on every token and then gathers the selected results produces the identical answer, but does 'num_experts / k' times the work. Sparse execution is what makes a large expert pool affordable; the exercise measures it with expert invocation counts rather than wall-clock timing.\n\nValidate shapes and route dtype up front, reject out-of-range expert ids, and require at least one expert. Real MoE blocks add capacity limits, shared always-on experts, and expert-parallel communication; those are separate exercises.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Hand-calculated weighted sparse sum",
+          "code": "\nimport torch\nimport torch.nn as nn\ndef expert(scale):\n    layer=nn.Linear(2,2,bias=False)\n    with torch.no_grad(): layer.weight.copy_(torch.eye(2)*scale)\n    return layer\nx=torch.tensor([[1.,2.],[3.,4.]])\nindices=torch.tensor([[0,1],[1,0]])\nweights=torch.tensor([[.75,.25],[.4,.6]])\nout={fn}(x,indices,weights,[expert(1.),expert(10.)])\n# token0: .75*[1,2] + .25*10*[1,2] = [3.25,6.5]; token1: .4*10*[3,4] + .6*[3,4] = [13.8,18.4]\nassert torch.allclose(out,torch.tensor([[3.25,6.5],[13.8,18.4]]))\n",
+          "behavior": "dispatch.token_conservation"
+        },
+        {
+          "name": "Rejects malformed routes",
+          "code": "\nimport torch\nimport torch.nn as nn\nexperts=[nn.Identity()]\nx=torch.randn(3,4)\nfor indices in (torch.tensor([[0],[0]]), torch.zeros(3,1,dtype=torch.float32), torch.tensor([[1],[0],[0]])):\n    try:\n        {fn}(x, indices, torch.ones(indices.shape), experts)\n    except (ValueError, RuntimeError):\n        pass\n    else:\n        raise AssertionError('malformed route tensors must raise')\n",
+          "behavior": "edge.empty_or_boundary"
+        },
+        {
+          "name": "Independent dense oracle and token conservation",
+          "visibility": "unshown",
+          "behavior": "dispatch.token_conservation"
+        },
+        {
+          "name": "Only selected experts run, once each",
+          "visibility": "unshown",
+          "behavior": "experts.sparsity"
+        },
+        {
+          "name": "Gradients reach selected experts and gates only",
+          "visibility": "unshown",
+          "behavior": "gradient.flow"
+        },
+        {
+          "name": "Expert permutation preserves output",
+          "visibility": "unshown",
+          "behavior": "state.invariant"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "How many experts should actually run for a batch that routes to only a few of them? Can a token receive output from more than one route? What does a dense reference compute that the sparse version must match exactly? Where do the gate weights enter?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Group accepted (token, slot) pairs into one list per expert. For each non-empty list, index_select that expert's token rows, call the expert once, multiply by the matching gate weights, and index_add the weighted rows back to their tokens. Experts with no routed tokens are never called, which is what separates sparse execution from a dense gather."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "mlp",
+        "moe"
+      ],
+      "modelConnections": [
+        "Switch Transformer replaces the dense FFN sublayer with a single routed expert per token, trading constant FLOPs per token for a much larger parameter pool.",
+        "Qwen3-MoE builds per-expert token masks and executes each expert only on its selected rows, then index-adds the weighted outputs — the sparse pattern this exercise isolates without capacity or shared experts.",
+        "DeepSeek-V3 MoE.forward runs only the routed (and locally hosted) experts and sums their weighted outputs, demonstrating that the dense FFN is never materialized for every expert.",
+        "GLM-4.5's Glm4MoeExperts executes selected-token expert calls and a weighted index-add gather, the same sparse-execution contract measured here by invocation counts."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Executing only selected experts keeps per-token compute constant while the parameter count scales with the number of experts.",
+          "One batched call per used expert avoids per-token kernel launches and matches production sparse blocks.",
+          "Invocation-count checks make the sparse/dense distinction observable and testable without timing."
+        ],
+        "cons": [
+          "Python route lists and index_add do not represent fused distributed expert kernels.",
+          "Without capacity limits, real load imbalance and communication cost are hidden.",
+          "Materializing per-expert token batches costs gather/scatter memory traffic that a dense matmul avoids at small scale."
+        ]
+      },
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/huggingface/transformers",
+          "commit": "7ea2320c76117e6742364808a666ef6f2fb40a67",
+          "path": "src/transformers/models/qwen3_moe/modeling_qwen3_moe.py",
+          "symbol": "Qwen3MoeSparseMoeBlock.forward",
+          "license": "Apache-2.0",
+          "adapted": "Per-expert token selection and index_add gather of weighted expert outputs.",
+          "simplifications": "No capacity, shared expert, gate module, sequence flattening, or model wrapper."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/deepseek-ai/DeepSeek-V3",
+          "commit": "9b4e9788e4a3a731f7567338ed15d3ec549ce03b",
+          "path": "inference/model.py",
+          "symbol": "MoE.forward",
+          "license": "MIT",
+          "adapted": "Executing only routed experts and summing weighted outputs.",
+          "simplifications": "Single process, no shared expert, no capacity, and no expert-parallel communication."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/huggingface/transformers",
+          "commit": "7ea2320c76117e6742364808a666ef6f2fb40a67",
+          "path": "src/transformers/models/glm4_moe/modeling_glm4_moe.py",
+          "symbol": "Glm4MoeExperts.forward",
+          "license": "Apache-2.0",
+          "adapted": "Selected-token expert execution and weighted index-add gather.",
+          "simplifications": "Omits capacity, shared experts, routing groups, and the transformer block."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2101.03961",
+          "section": "2.1 Simplifying Sparse Routing"
+        }
+      ]
     }
   ]
 }
