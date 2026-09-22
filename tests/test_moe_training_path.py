@@ -18,9 +18,13 @@ def test_moe_training_is_separate_and_progressive():
     path = paths["moe-training"]
     assert path["problems"] == [
         "moe",
+        "dense_vs_sparse_ffn",
         "moe_load_balance",
         "moe_topk_router",
+        "moe_noisy_routing",
+        "moe_router_zloss",
         "moe_capacity_dispatch",
+        "moe_shared_experts",
         "tiny_moe_train_step",
     ]
     assert path["prerequisites"] == ["transformer-internals"]

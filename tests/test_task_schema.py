@@ -87,6 +87,33 @@ def test_missing_required_field(key):
         validate_task("relu", task)
 
 
+@pytest.mark.parametrize("markup", [
+    r"\[ x = 1 \]",
+    r"\operatorname{rmsnorm}(x)",
+    r"$$ y = x^2 $$",
+    r"the value \frac{a}{b} appears",
+    r"\epsilon keeps it finite",
+])
+def test_latex_math_markup_rejected(markup):
+    task = make_new_task()
+    task["description_en"] = f"Implement it. {markup}"
+    with pytest.raises(TaskValidationError, match="LaTeX/math markup"):
+        validate_task("t", task, known_ids={"softmax", "moe"})
+
+
+def test_latex_math_markup_rejected_in_hint():
+    task = make_new_task()
+    task["hints"][1]["content"] = r"compute \sqrt{mean(x**2)}"
+    with pytest.raises(TaskValidationError, match="LaTeX/math markup"):
+        validate_task("t", task, known_ids={"softmax", "moe"})
+
+
+def test_plain_formula_still_valid():
+    task = make_new_task()
+    task["description_en"] = "Normalize: rmsnorm(x) = x * (mean(x**2, dim=-1) + eps) ** -0.5"
+    validate_task("t", task, known_ids={"softmax", "moe"})
+
+
 def test_bad_difficulty():
     task = make_legacy_task()
     task["difficulty"] = "medium"
@@ -201,5 +228,28 @@ def test_design_note_rubric_requires_all_structured_dimensions():
         validate_task("t", task)
 
 
+RL_BEHAVIOR_CATEGORIES = frozenset({
+    "rl.logprob",
+    "rl.advantage",
+    "rl.kl_estimator",
+    "rl.clipping",
+    "rl.masking",
+    "rl.reward_verifiable",
+    "rl.rollout_assembly",
+    "rl.trajectory",
+})
+
+
 def test_behavior_categories_match_spec_count():
-    assert len(BEHAVIOR_CATEGORIES) == 27
+    """The 27 categories of the advanced-curriculum spec, plus the RL path's 8."""
+    assert RL_BEHAVIOR_CATEGORIES <= BEHAVIOR_CATEGORIES
+    assert len(BEHAVIOR_CATEGORIES - RL_BEHAVIOR_CATEGORIES) == 27
+    assert len(BEHAVIOR_CATEGORIES) == 35
+
+
+def test_rl_behavior_categories_are_namespaced():
+    """RL categories stay under the rl. prefix so the two sets never collide."""
+    assert all(name.startswith("rl.") for name in RL_BEHAVIOR_CATEGORIES)
+    assert not any(
+        name.startswith("rl.") for name in BEHAVIOR_CATEGORIES - RL_BEHAVIOR_CATEGORIES
+    )

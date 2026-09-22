@@ -3,6 +3,10 @@ export interface Test {
   code?: string;
   behavior?: string;
   visibility?: 'visible' | 'unshown';
+  /** Unshown cases only: what the check looks for, phrased as the failure diagnosis. */
+  failureMessage?: string;
+  /** Unshown cases only: the evaluator code, revealed in the results pane after grading. */
+  hiddenCode?: string;
 }
 
 export interface HintLevel {
@@ -75,6 +79,10 @@ export interface TestResult {
   behavior?: string;
   visibility?: string;
   testIndex?: number;
+  /** 1-based line the exception came from, within whichever body errorScope names. */
+  errorLine?: number;
+  errorLineText?: string;
+  errorScope?: 'test' | 'solution';
 }
 
 export interface SubmissionResult {

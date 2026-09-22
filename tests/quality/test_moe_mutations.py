@@ -136,6 +136,135 @@ TRAIN_MUTATIONS = [
 ]
 
 
+SPARSE_FFN_MUTATIONS = [
+    Mutation("execute_all_experts", """def sparse_ffn_forward(x, expert_indices, expert_weights, experts):
+    dense = [e(x) for e in experts]; out = torch.zeros_like(x)
+    for t in range(expert_indices.shape[0]):
+        for s in range(expert_indices.shape[1]):
+            e = int(expert_indices[t, s]); out[t] += expert_weights[t, s] * dense[e][t]
+    return out
+"""),
+    Mutation("unweighted_gather", """def sparse_ffn_forward(x, expert_indices, expert_weights, experts):
+    out = torch.zeros_like(x); routes = [[] for _ in experts]
+    for t in range(expert_indices.shape[0]):
+        for s in range(expert_indices.shape[1]): routes[int(expert_indices[t, s])].append((t, s))
+    for eid, acc in enumerate(routes):
+        if not acc: continue
+        tid = torch.tensor([t for t, _ in acc]); out.index_add_(0, tid, experts[eid](x.index_select(0, tid)))
+    return out
+"""),
+    Mutation("only_first_route", """def sparse_ffn_forward(x, expert_indices, expert_weights, experts):
+    out = torch.zeros_like(x)
+    for t in range(expert_indices.shape[0]):
+        e = int(expert_indices[t, 0]); out[t] = expert_weights[t, 0] * experts[e](x[t:t+1])[0]
+    return out
+"""),
+    Mutation("overwrite_token", """def sparse_ffn_forward(x, expert_indices, expert_weights, experts):
+    out = torch.zeros_like(x); routes = [[] for _ in experts]
+    for t in range(expert_indices.shape[0]):
+        for s in range(expert_indices.shape[1]): routes[int(expert_indices[t, s])].append((t, s))
+    for eid, acc in enumerate(routes):
+        if not acc: continue
+        tid = torch.tensor([t for t, _ in acc]); sid = torch.tensor([s for _, s in acc])
+        o = experts[eid](x.index_select(0, tid)); w = expert_weights[tid, sid].to(o.dtype).unsqueeze(-1)
+        out[tid] = o * w
+    return out
+"""),
+    Mutation("detached_weights", """def sparse_ffn_forward(x, expert_indices, expert_weights, experts):
+    out = torch.zeros_like(x); routes = [[] for _ in experts]
+    for t in range(expert_indices.shape[0]):
+        for s in range(expert_indices.shape[1]): routes[int(expert_indices[t, s])].append((t, s))
+    for eid, acc in enumerate(routes):
+        if not acc: continue
+        tid = torch.tensor([t for t, _ in acc]); sid = torch.tensor([s for _, s in acc])
+        o = experts[eid](x.index_select(0, tid)); w = expert_weights[tid, sid].detach().to(o.dtype).unsqueeze(-1)
+        out.index_add_(0, tid, o * w)
+    return out
+"""),
+    Mutation("per_token_calls", """def sparse_ffn_forward(x, expert_indices, expert_weights, experts):
+    out = torch.zeros_like(x)
+    for t in range(expert_indices.shape[0]):
+        for s in range(expert_indices.shape[1]):
+            e = int(expert_indices[t, s]); out[t] += expert_weights[t, s] * experts[e](x[t:t+1])[0]
+    return out
+"""),
+]
+
+
+ZLOSS_MUTATIONS = [
+    Mutation("no_square", "def router_z_loss(router_logits):\n    return torch.logsumexp(router_logits, dim=-1).mean()\n"),
+    Mutation("mean_then_square", "def router_z_loss(router_logits):\n    return torch.logsumexp(router_logits, dim=-1).mean().square()\n"),
+    Mutation("sum_not_mean", "def router_z_loss(router_logits):\n    return torch.logsumexp(router_logits, dim=-1).square().sum()\n"),
+    Mutation("naive_logsumexp", "def router_z_loss(router_logits):\n    return torch.log(torch.exp(router_logits).sum(dim=-1)).square().mean()\n"),
+    Mutation("wrong_dim", "def router_z_loss(router_logits):\n    return torch.logsumexp(router_logits, dim=0).square().mean()\n"),
+    Mutation("detached", "def router_z_loss(router_logits):\n    return torch.logsumexp(router_logits, dim=-1).square().mean().detach()\n"),
+]
+
+
+NOISY_ROUTING_MUTATIONS = [
+    Mutation("ignores_noise", "def noisy_topk_route(clean_logits, noise, noise_std, k):\n    probs = torch.softmax(clean_logits, dim=-1)\n    w, i = torch.topk(probs, k, dim=-1)\n    return i, w / w.sum(-1, keepdim=True)\n"),
+    Mutation("unscaled_noise", "def noisy_topk_route(clean_logits, noise, noise_std, k):\n    probs = torch.softmax(clean_logits + noise, dim=-1)\n    w, i = torch.topk(probs, k, dim=-1)\n    return i, w / w.sum(-1, keepdim=True)\n"),
+    Mutation("raw_logits", "def noisy_topk_route(clean_logits, noise, noise_std, k):\n    noisy = clean_logits + noise_std * noise\n    w, i = torch.topk(noisy, k, dim=-1)\n    return i, w / w.sum(-1, keepdim=True)\n"),
+    Mutation("unnormalized", "def noisy_topk_route(clean_logits, noise, noise_std, k):\n    probs = torch.softmax(clean_logits + noise_std * noise, dim=-1)\n    w, i = torch.topk(probs, k, dim=-1)\n    return i, w\n"),
+    Mutation("wrong_softmax_dim", "def noisy_topk_route(clean_logits, noise, noise_std, k):\n    probs = torch.softmax(clean_logits + noise_std * noise, dim=0)\n    w, i = torch.topk(probs, k, dim=-1)\n    return i, w / w.sum(-1, keepdim=True)\n"),
+    Mutation("detached_weights", "def noisy_topk_route(clean_logits, noise, noise_std, k):\n    probs = torch.softmax(clean_logits + noise_std * noise, dim=-1)\n    w, i = torch.topk(probs, k, dim=-1)\n    return i, (w / w.sum(-1, keepdim=True)).detach()\n"),
+]
+
+
+_ROUTED_BLOCK = """    routed_out = torch.zeros_like(x); routes = [[] for _ in routed_experts]
+    for t in range(expert_indices.shape[0]):
+        for s in range(expert_indices.shape[1]): routes[int(expert_indices[t, s])].append((t, s))
+    for eid, acc in enumerate(routes):
+        if not acc: continue
+        tid = torch.tensor([t for t, _ in acc]); sid = torch.tensor([s for _, s in acc])
+        o = routed_experts[eid](x.index_select(0, tid)); w = expert_weights[tid, sid].to(o.dtype).unsqueeze(-1)
+        routed_out.index_add_(0, tid, o * w)
+"""
+_SHARED_HEAD = "def shared_routed_moe(x, expert_indices, expert_weights, routed_experts, shared_experts):\n"
+
+SHARED_EXPERTS_MUTATIONS = [
+    Mutation("no_shared", _SHARED_HEAD + _ROUTED_BLOCK + "    return routed_out\n"),
+    Mutation("shared_drops_last_token", _SHARED_HEAD + _ROUTED_BLOCK +
+        "    shared_out = torch.zeros_like(x)\n"
+        "    for sh in shared_experts: shared_out[:-1] = shared_out[:-1] + sh(x[:-1])\n"
+        "    return routed_out + shared_out\n"),
+    Mutation("shared_gate_weighted", _SHARED_HEAD + _ROUTED_BLOCK +
+        "    shared_out = torch.zeros_like(x)\n"
+        "    for sh in shared_experts: shared_out = shared_out + sh(x) * expert_weights[:, :1].sum(-1, keepdim=True)\n"
+        "    return routed_out + shared_out\n"),
+    Mutation("unweighted_routed", _SHARED_HEAD +
+        "    routed_out = torch.zeros_like(x); routes = [[] for _ in routed_experts]\n"
+        "    for t in range(expert_indices.shape[0]):\n"
+        "        for s in range(expert_indices.shape[1]): routes[int(expert_indices[t, s])].append((t, s))\n"
+        "    for eid, acc in enumerate(routes):\n"
+        "        if not acc: continue\n"
+        "        tid = torch.tensor([t for t, _ in acc]); routed_out.index_add_(0, tid, routed_experts[eid](x.index_select(0, tid)))\n"
+        "    shared_out = torch.zeros_like(x)\n"
+        "    for sh in shared_experts: shared_out = shared_out + sh(x)\n"
+        "    return routed_out + shared_out\n"),
+    Mutation("execute_all_routed", _SHARED_HEAD +
+        "    dense = [e(x) for e in routed_experts]; routed_out = torch.zeros_like(x)\n"
+        "    for t in range(expert_indices.shape[0]):\n"
+        "        for s in range(expert_indices.shape[1]):\n"
+        "            e = int(expert_indices[t, s]); routed_out[t] += expert_weights[t, s] * dense[e][t]\n"
+        "    shared_out = torch.zeros_like(x)\n"
+        "    for sh in shared_experts: shared_out = shared_out + sh(x)\n"
+        "    return routed_out + shared_out\n"),
+    Mutation("detached_weights", _SHARED_HEAD +
+        "    routed_out = torch.zeros_like(x); routes = [[] for _ in routed_experts]\n"
+        "    for t in range(expert_indices.shape[0]):\n"
+        "        for s in range(expert_indices.shape[1]): routes[int(expert_indices[t, s])].append((t, s))\n"
+        "    for eid, acc in enumerate(routes):\n"
+        "        if not acc: continue\n"
+        "        tid = torch.tensor([t for t, _ in acc]); sid = torch.tensor([s for _, s in acc])\n"
+        "        o = routed_experts[eid](x.index_select(0, tid)); w = expert_weights[tid, sid].detach().to(o.dtype).unsqueeze(-1)\n"
+        "        routed_out.index_add_(0, tid, o * w)\n"
+        "    shared_out = torch.zeros_like(x)\n"
+        "    for sh in shared_experts: shared_out = shared_out + sh(x)\n"
+        "    return routed_out + shared_out\n"),
+]
+
+
 def _assert_metadata(task_id: str):
     task = get_task(task_id)
     assert task is not None
@@ -173,6 +302,26 @@ def test_moe_metadata_contracts_and_model_coverage():
         }
         assert "python/sglang/srt/models/deepseek_v2.py" in paths
         assert "src/transformers/models/glm4_moe/modeling_glm4_moe.py" in paths
+
+
+@pytest.mark.parametrize("_repeat", range(3))
+def test_sparse_ffn_reference_and_mutations(_repeat):
+    assert set(assert_mutations_rejected("dense_vs_sparse_ffn", SPARSE_FFN_MUTATIONS)) == {m.name for m in SPARSE_FFN_MUTATIONS}
+
+
+@pytest.mark.parametrize("_repeat", range(3))
+def test_shared_experts_reference_and_mutations(_repeat):
+    assert set(assert_mutations_rejected("moe_shared_experts", SHARED_EXPERTS_MUTATIONS)) == {m.name for m in SHARED_EXPERTS_MUTATIONS}
+
+
+@pytest.mark.parametrize("_repeat", range(3))
+def test_noisy_routing_reference_and_mutations(_repeat):
+    assert set(assert_mutations_rejected("moe_noisy_routing", NOISY_ROUTING_MUTATIONS)) == {m.name for m in NOISY_ROUTING_MUTATIONS}
+
+
+@pytest.mark.parametrize("_repeat", range(3))
+def test_router_zloss_reference_and_mutations(_repeat):
+    assert set(assert_mutations_rejected("moe_router_zloss", ZLOSS_MUTATIONS)) == {m.name for m in ZLOSS_MUTATIONS}
 
 
 @pytest.mark.parametrize("_repeat", range(3))

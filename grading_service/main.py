@@ -11,6 +11,7 @@ import io
 import os
 import threading
 import time
+import traceback
 from typing import Annotated, Any
 
 from fastapi import FastAPI, Header, HTTPException
@@ -169,6 +170,11 @@ class TestResult(BaseModel):
     behavior: str | None = None
     visibility: str = "visible"
     testIndex: int
+    # Where the exception was raised: 1-based line, that line's text, and whether it sits
+    # in the evaluator case or in the submitted solution.
+    errorLine: int | None = None
+    errorLineText: str | None = None
+    errorScope: str | None = None
 
 
 class GradeResponse(BaseModel):
@@ -198,6 +204,28 @@ def _validate_code(code: str) -> str | None:
         if not isinstance(node, allowed):
             return f"Only definitions and assignments are allowed at the top level (found: {type(node).__name__})"
     return None
+
+
+TEST_FILENAME = "<evaluator-case>"
+SOLUTION_FILENAME = "<submitted-solution>"
+
+
+def _error_location(test_code: str, submitted_code: str) -> tuple[int | None, str | None, str | None]:
+    """Find the innermost frame of the live exception that belongs to code we can show.
+
+    Both bodies are exec'd, so they are given distinct pseudo-filenames at compile time;
+    that is the only way to tell an evaluator frame from a solution frame in the traceback.
+    """
+    sources = {TEST_FILENAME: test_code, SOLUTION_FILENAME: submitted_code}
+    for frame in reversed(traceback.extract_tb(sys.exc_info()[2])):
+        source = sources.get(frame.filename)
+        if source is None or frame.lineno is None:
+            continue
+        lines = source.splitlines()
+        text = lines[frame.lineno - 1].strip() if 0 < frame.lineno <= len(lines) else None
+        scope = "test" if frame.filename == TEST_FILENAME else "solution"
+        return frame.lineno, text, scope
+    return None, None, None
 
 
 def _finalize_result(result: TestResult, test: dict, test_index: int) -> TestResult:
@@ -230,7 +258,7 @@ def _execute_tests(code: str, task: dict, test_indices: list[int] | None = None,
         "math": math,
     }
     try:
-        exec(code, user_ns)
+        exec(compile(code, SOLUTION_FILENAME, "exec"), user_ns)
     except SyntaxError as e:
         return GradeResponse(passed=0, total=0, allPassed=False, results=[], totalTimeMs=0.0, error=f"Syntax error: {e}")
 
@@ -275,6 +303,7 @@ def _execute_tests(code: str, task: dict, test_indices: list[int] | None = None,
             fn_name: user_ns[fn_name],
         }
         test_code = test["code"].replace("{fn}", fn_name)
+        compiled_test = compile(test_code, TEST_FILENAME, "exec")
 
         # Capture stdout for print output
         output = None
@@ -284,7 +313,7 @@ def _execute_tests(code: str, task: dict, test_indices: list[int] | None = None,
                 sys.stdout = captured = io.StringIO()
                 try:
                     start = time.perf_counter()
-                    exec(test_code, test_ns)
+                    exec(compiled_test, test_ns)
                     exec_time_ms = (time.perf_counter() - start) * 1000
                     output = captured.getvalue() or None
                     results.append(_finalize_result(
@@ -301,10 +330,12 @@ def _execute_tests(code: str, task: dict, test_indices: list[int] | None = None,
                 except AssertionError as e:
                     exec_time_ms = (time.perf_counter() - start) * 1000
                     output = captured.getvalue() or None
+                    line, line_text, scope = _error_location(test_code, code)
                     results.append(_finalize_result(
                         TestResult(
                             name=test["name"], passed=False, execTimeMs=exec_time_ms,
                             error=str(e), output=output, testIndex=test_index,
+                            errorLine=line, errorLineText=line_text, errorScope=scope,
                         ),
                         test,
                         test_index,
@@ -312,11 +343,13 @@ def _execute_tests(code: str, task: dict, test_indices: list[int] | None = None,
                 except Exception as e:
                     exec_time_ms = (time.perf_counter() - start) * 1000
                     output = captured.getvalue() or None
+                    line, line_text, scope = _error_location(test_code, code)
                     results.append(_finalize_result(
                         TestResult(
                             name=test["name"], passed=False, execTimeMs=exec_time_ms,
                             error=f"{type(e).__name__}: {e}", output=output,
                             testIndex=test_index,
+                            errorLine=line, errorLineText=line_text, errorScope=scope,
                         ),
                         test,
                         test_index,
@@ -326,7 +359,7 @@ def _execute_tests(code: str, task: dict, test_indices: list[int] | None = None,
         else:
             start = time.perf_counter()
             try:
-                exec(test_code, test_ns)
+                exec(compiled_test, test_ns)
                 exec_time_ms = (time.perf_counter() - start) * 1000
                 results.append(_finalize_result(
                     TestResult(
@@ -341,20 +374,24 @@ def _execute_tests(code: str, task: dict, test_indices: list[int] | None = None,
                 raise
             except AssertionError as e:
                 exec_time_ms = (time.perf_counter() - start) * 1000
+                line, line_text, scope = _error_location(test_code, code)
                 results.append(_finalize_result(
                     TestResult(
                         name=test["name"], passed=False, execTimeMs=exec_time_ms,
                         error=str(e), testIndex=test_index,
+                        errorLine=line, errorLineText=line_text, errorScope=scope,
                     ),
                     test,
                     test_index,
                 ))
             except Exception as e:
                 exec_time_ms = (time.perf_counter() - start) * 1000
+                line, line_text, scope = _error_location(test_code, code)
                 results.append(_finalize_result(
                     TestResult(
                         name=test["name"], passed=False, execTimeMs=exec_time_ms,
                         error=f"{type(e).__name__}: {e}", testIndex=test_index,
+                        errorLine=line, errorLineText=line_text, errorScope=scope,
                     ),
                     test,
                     test_index,

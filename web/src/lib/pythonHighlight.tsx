@@ -23,7 +23,7 @@ const BUILTINS = new Set([
   'enumerate','hasattr','getattr','setattr','super','self','F','nn',
 ]);
 
-type Token = { text: string; color: string };
+type Token = { text: string; color: string; italic?: boolean };
 
 function tokenize(code: string): Token[] {
   const tokens: Token[] = [];
@@ -34,7 +34,7 @@ function tokenize(code: string): Token[] {
     if (code[i] === '#') {
       const end = code.indexOf('\n', i);
       const text = end === -1 ? code.slice(i) : code.slice(i, end);
-      tokens.push({ text, color: COLORS.comment });
+      tokens.push({ text, color: COLORS.comment, italic: true });
       i += text.length;
       continue;
     }
@@ -101,7 +101,7 @@ export function PythonCode({ code }: { code: string }): ReactNode {
   return (
     <>
       {tokens.map((tok, i) => (
-        <span key={i} style={{ color: tok.color }}>
+        <span key={i} style={{ color: tok.color, fontStyle: tok.italic ? 'italic' : undefined }}>
           {tok.text}
         </span>
       ))}

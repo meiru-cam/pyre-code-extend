@@ -97,7 +97,17 @@
       "descriptionEn": "Implement token-choice routing, capacity-aware sparse dispatch, and a complete TinyMoE training step; connect utilization and stability tradeoffs to pinned DeepSeek, Kimi, GLM, and Qwen code.",
       "descriptionZh": "Implement token-choice routing, capacity-aware sparse dispatch, and a complete TinyMoE training step; connect utilization and stability tradeoffs to pinned DeepSeek, Kimi, GLM, and Qwen code.",
       "icon": "Network",
-      "problems": ["moe", "moe_load_balance", "moe_topk_router", "moe_capacity_dispatch", "tiny_moe_train_step"],
+      "problems": ["moe", "dense_vs_sparse_ffn", "moe_load_balance", "moe_topk_router", "moe_noisy_routing", "moe_router_zloss", "moe_capacity_dispatch", "moe_shared_experts", "tiny_moe_train_step"],
+      "prerequisites": ["transformer-internals"]
+    },
+    {
+      "id": "rl-posttraining",
+      "titleEn": "Post-Training & Agentic RL",
+      "titleZh": "Post-Training & Agentic RL",
+      "descriptionEn": "Build the RL post-training stack one contract at a time — per-token log-probabilities, group-relative advantages, the k3 KL estimator, response masking, and verifiable rewards — then assemble a full GRPO step and an agentic rollout, with pinned nano-aha-moment, simple_GRPO, and OpenRLHF code connections.",
+      "descriptionZh": "Build the RL post-training stack one contract at a time — per-token log-probabilities, group-relative advantages, the k3 KL estimator, response masking, and verifiable rewards — then assemble a full GRPO step and an agentic rollout, with pinned nano-aha-moment, simple_GRPO, and OpenRLHF code connections.",
+      "icon": "Trophy",
+      "problems": ["per_token_logprobs", "group_relative_advantage", "k3_kl_penalty", "response_token_mask", "rlvr_format_reward", "grpo_token_loss", "ppo_clipped_policy_loss", "ppo_value_loss", "gae_advantage", "gspo_sequence_ratio", "dapo_dynamic_sampling", "vineppo_mc_value", "rollout_batch_assembly", "grpo_train_step", "agentic_rollout_loop"],
       "prerequisites": ["transformer-internals"]
     },
     {
