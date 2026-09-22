@@ -117,7 +117,7 @@
       "descriptionEn": "Implement a validated tool API, a budgeted retrying agent loop, and resumable supervisor-worker orchestration with deterministic failure injection, backpressure, idempotency, checkpoints, and pinned OpenClaw, Hermes, and Microsoft Agent Framework code connections.",
       "descriptionZh": "Implement a validated tool API, a budgeted retrying agent loop, and resumable supervisor-worker orchestration with deterministic failure injection, backpressure, idempotency, checkpoints, and pinned OpenClaw, Hermes, and Microsoft Agent Framework code connections.",
       "icon": "Workflow",
-      "problems": ["tool_registry", "budgeted_agent_loop", "supervisor_orchestration", "context_compaction"],
+      "problems": ["tool_registry", "budgeted_agent_loop", "supervisor_orchestration", "context_compaction", "tool_call_dag", "tool_call_stream_parser"],
       "prerequisites": []
     },
     {
