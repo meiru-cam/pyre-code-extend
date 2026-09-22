@@ -24,12 +24,14 @@
     --medium:      #f59e0b;
     --hard:        #ef4444;
 
-    --code-keyword: #3b82f6;
-    --code-string:  #10b981;
-    --code-comment: #94a3b8;
-    --code-number:  #f59e0b;
-    --code-builtin: #8b5cf6;
-    --code-func:    #f59e0b;
+    /* Every token holds >= 4.5:1 against --bg-elev, --bg-sunken and the editor's
+       own background; comments sit at 4.8:1 — quiet next to 16:1 body text, but read. */
+    --code-keyword: #9333ea;
+    --code-string:  #047857;
+    --code-comment: #5f6e80;
+    --code-number:  #b45309;
+    --code-builtin: #1d4ed8;
+    --code-func:    #0e7490;
   }
 
   [data-theme="dark"] {
@@ -50,12 +52,12 @@
     --medium:      #fbbf24;
     --hard:        #f87171;
 
-    --code-keyword: #60a5fa;
-    --code-string:  #34d399;
-    --code-comment: #64748b;
+    --code-keyword: #c084fc;
+    --code-string:  #6ee7b7;
+    --code-comment: #93a3b8;
     --code-number:  #fbbf24;
-    --code-builtin: #c084fc;
-    --code-func:    #fbbf24;
+    --code-builtin: #7dd3fc;
+    --code-func:    #67e8f9;
   }
 
   *, *::before, *::after { box-sizing: border-box; }

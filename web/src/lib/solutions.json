@@ -185,6 +185,15 @@
       }
     ]
   },
+  "per_token_logprobs": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\n\n\ndef per_token_logprobs(logits, input_ids):\n    log_probs = torch.log_softmax(logits, dim=-1)\n    return torch.gather(log_probs, dim=-1, index=input_ids.unsqueeze(-1)).squeeze(-1)",
+        "role": "solution"
+      }
+    ]
+  },
   "relu": {
     "cells": [
       {
@@ -196,6 +205,15 @@
         "type": "code",
         "source": "x = torch.tensor([-2., -1., 0., 1., 2.])\nprint(\"Input: \", x)\nprint(\"Output:\", relu(x))",
         "role": "demo"
+      }
+    ]
+  },
+  "response_token_mask": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\n\n\ndef response_token_mask(prompt_lens, total_lens, max_len):\n    if prompt_lens.shape != total_lens.shape:\n        raise ValueError(\n            f\"shape mismatch: {tuple(prompt_lens.shape)} vs {tuple(total_lens.shape)}\"\n        )\n    if not isinstance(max_len, int) or max_len <= 0:\n        raise ValueError(f\"max_len must be a positive integer, got {max_len!r}\")\n    if (prompt_lens < 0).any() or (total_lens < prompt_lens).any() or (total_lens > max_len).any():\n        raise ValueError(\"every row must satisfy 0 <= prompt_lens <= total_lens <= max_len\")\n    positions = torch.arange(max_len, device=prompt_lens.device).unsqueeze(0)\n    return (positions >= prompt_lens.unsqueeze(-1)) & (positions < total_lens.unsqueeze(-1))",
+        "role": "solution"
       }
     ]
   },
@@ -395,6 +413,15 @@
       }
     ]
   },
+  "dapo_dynamic_sampling": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\n\n\ndef dapo_dynamic_sampling(rewards, group_size, tol=0.0):\n    if not isinstance(group_size, int) or group_size <= 0:\n        raise ValueError(f\"group_size must be a positive integer, got {group_size!r}\")\n    if rewards.numel() % group_size != 0:\n        raise ValueError(\n            f\"group_size {group_size} does not divide {rewards.numel()} rewards\"\n        )\n    if tol < 0:\n        raise ValueError(f\"tol must be non-negative, got {tol}\")\n\n    grouped = rewards.reshape(-1, group_size)\n    spread = grouped.max(dim=-1).values - grouped.min(dim=-1).values\n    keep = spread > tol\n    return keep.repeat_interleave(group_size)",
+        "role": "solution"
+      }
+    ]
+  },
   "ddim_step": {
     "cells": [
       {
@@ -483,6 +510,24 @@
       }
     ]
   },
+  "group_relative_advantage": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\n\n\ndef group_relative_advantage(rewards, group_size, eps=1e-4):\n    if not isinstance(group_size, int) or group_size <= 0:\n        raise ValueError(f\"group_size must be a positive integer, got {group_size!r}\")\n    if rewards.numel() % group_size != 0:\n        raise ValueError(\n            f\"group_size {group_size} does not divide {rewards.numel()} rewards\"\n        )\n    grouped = rewards.reshape(-1, group_size)\n    mean = grouped.mean(dim=-1, keepdim=True)\n    std = grouped.std(dim=-1, unbiased=False, keepdim=True)\n    return ((grouped - mean) / (std + eps)).reshape(-1)",
+        "role": "solution"
+      }
+    ]
+  },
+  "gspo_sequence_ratio": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\n\n\ndef gspo_sequence_ratio(logprobs, old_logprobs, mask):\n    shapes = (logprobs.shape, old_logprobs.shape, mask.shape)\n    if len(set(shapes)) != 1:\n        raise ValueError(f\"all tensors must share a shape, got {shapes}\")\n\n    keep = mask.to(logprobs.dtype)\n    log_ratio = (logprobs - old_logprobs) * keep\n    count = keep.sum(dim=-1)\n    mean_log_ratio = log_ratio.sum(dim=-1) / count.clamp(min=1.0)\n    return torch.exp(mean_log_ratio)",
+        "role": "solution"
+      }
+    ]
+  },
   "hybrid_attention_schedule": {
     "cells": [
       {
@@ -494,6 +539,15 @@
         "type": "code",
         "source": "Q = torch.zeros(1, 4, 1)\nK = torch.zeros(1, 4, 1)\nV = torch.arange(1, 5, dtype=torch.float32).view(1, 4, 1)\nprint('local:', hybrid_attention_schedule(Q, K, V, 0, 1, 2).flatten())\nprint('global:', hybrid_attention_schedule(Q, K, V, 1, 1, 2).flatten())",
         "role": "demo"
+      }
+    ]
+  },
+  "k3_kl_penalty": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\n\n\ndef k3_kl_penalty(logprobs, ref_logprobs):\n    if logprobs.shape != ref_logprobs.shape:\n        raise ValueError(\n            f\"shape mismatch: {tuple(logprobs.shape)} vs {tuple(ref_logprobs.shape)}\"\n        )\n    log_ratio = ref_logprobs - logprobs\n    return torch.exp(log_ratio) - log_ratio - 1.0",
+        "role": "solution"
       }
     ]
   },
@@ -702,6 +756,15 @@
       }
     ]
   },
+  "ppo_value_loss": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\n\n\ndef ppo_value_loss(values, old_values, returns, mask, clip_eps=0.2):\n    shapes = (values.shape, old_values.shape, returns.shape, mask.shape)\n    if len(set(shapes)) != 1:\n        raise ValueError(f\"all tensors must share a shape, got {shapes}\")\n    if clip_eps <= 0:\n        raise ValueError(f\"clip_eps must be positive, got {clip_eps}\")\n\n    keep = mask.to(values.dtype)\n    denominator = keep.sum()\n    if denominator == 0:\n        return torch.zeros((), dtype=values.dtype, device=values.device)\n\n    clipped_value = old_values + (values - old_values).clamp(-clip_eps, clip_eps)\n    unclipped_error = (values - returns) ** 2\n    clipped_error = (clipped_value - returns) ** 2\n    per_token = 0.5 * torch.max(unclipped_error, clipped_error)\n    return (per_token * keep).sum() / denominator",
+        "role": "solution"
+      }
+    ]
+  },
   "qk_norm": {
     "cells": [
       {
@@ -727,6 +790,15 @@
         "type": "code",
         "source": "torch.manual_seed(0)\n\nB, D = 8, 64\nreward_head = torch.randn(D, 1)\n\nh = torch.randn(B, D)\nloss_equal = reward_model_loss(h, h, reward_head)\nprint(f\"Equal hidden states => loss = {loss_equal.item():.4f}  (expected ≈ {math.log(2):.4f})\")\n\nchosen  = torch.ones(B, D)\nrejected = -torch.ones(B, D)\nloss_good = reward_model_loss(chosen, rejected, reward_head)\nprint(f\"Chosen >> rejected  => loss = {loss_good.item():.4f}  (expected small)\")",
         "role": "demo"
+      }
+    ]
+  },
+  "rlvr_format_reward": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "THINK_OPEN = \"<think>\"\nTHINK_CLOSE = \"</think>\"\nANSWER_OPEN = \"<answer>\"\nANSWER_CLOSE = \"</answer>\"\nTAGS = (THINK_OPEN, THINK_CLOSE, ANSWER_OPEN, ANSWER_CLOSE)\n\n\ndef rlvr_format_reward(completion, eos_token):\n    if not eos_token or not completion.endswith(eos_token):\n        return 0.0\n    body = completion[: -len(eos_token)]\n\n    if any(body.count(tag) != 1 for tag in TAGS):\n        return 0.0\n\n    positions = [body.index(tag) for tag in TAGS]\n    if positions != sorted(positions):\n        return 0.0\n\n    think = body[positions[0] + len(THINK_OPEN) : positions[1]]\n    answer = body[positions[2] + len(ANSWER_OPEN) : positions[3]]\n\n    ideal = THINK_OPEN + think + THINK_CLOSE + ANSWER_OPEN + answer + ANSWER_CLOSE\n    if body.strip() != ideal.strip():\n        gap = body[positions[1] + len(THINK_CLOSE) : positions[2]]\n        prefix = body[: positions[0]]\n        suffix = body[positions[3] + len(ANSWER_CLOSE) :]\n        if prefix.strip() or suffix.strip() or gap.strip():\n            return 0.5\n    if not think.strip() or not answer.strip():\n        return 0.5\n    return 1.0",
+        "role": "solution"
       }
     ]
   },
@@ -825,6 +897,15 @@
         "type": "code",
         "source": "pe = PatchEmbedding(224, 16, 3, 768)\nx = torch.randn(1, 3, 224, 224)\nprint('Output:', pe(x).shape)\nprint('Patches:', pe.num_patches)",
         "role": "demo"
+      }
+    ]
+  },
+  "agentic_rollout_loop": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def agentic_rollout_loop(model, tools, initial_messages, max_turns, reward_fn):\n    if max_turns < 1:\n        raise ValueError(f\"max_turns must be at least 1, got {max_turns}\")\n\n    messages = [dict(message) for message in initial_messages]\n    trainable = [message.get(\"role\") == \"assistant\" for message in messages]\n    turns = 0\n    tool_calls = 0\n    stop_reason = \"max_turns\"\n\n    while turns < max_turns:\n        response = model.call(messages)\n        turns += 1\n\n        messages.append({\"role\": \"assistant\", \"content\": response.get(\"content\", \"\")})\n        trainable.append(True)\n\n        requested = response.get(\"tool_calls\") or []\n        if not requested:\n            stop_reason = \"finished\"\n            break\n\n        for call in requested:\n            name = call[\"name\"]\n            if name not in tools:\n                raise ValueError(f\"response named unknown tool {name!r}\")\n            result = tools[name].invoke(call.get(\"arguments\", {}))\n            tool_calls += 1\n            messages.append({\"role\": \"tool\", \"name\": name, \"content\": result})\n            trainable.append(False)\n\n    return {\n        \"messages\": messages,\n        \"trainable\": trainable,\n        \"turns\": turns,\n        \"tool_calls\": tool_calls,\n        \"stop_reason\": stop_reason,\n        \"reward\": float(reward_fn(messages)),\n    }",
+        "role": "solution"
       }
     ]
   },
@@ -935,6 +1016,15 @@
       }
     ]
   },
+  "gae_advantage": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\n\n\ndef gae_advantage(rewards, values, dones, gamma=0.99, lam=0.95):\n    if rewards.shape != dones.shape:\n        raise ValueError(\n            f\"rewards {tuple(rewards.shape)} and dones {tuple(dones.shape)} must match\"\n        )\n    horizon = rewards.shape[-1]\n    if values.shape[:-1] != rewards.shape[:-1] or values.shape[-1] != horizon + 1:\n        raise ValueError(\n            f\"values {tuple(values.shape)} must have exactly one more column than \"\n            f\"rewards {tuple(rewards.shape)}\"\n        )\n    if not 0.0 <= gamma <= 1.0:\n        raise ValueError(f\"gamma must lie in [0, 1], got {gamma}\")\n    if not 0.0 <= lam <= 1.0:\n        raise ValueError(f\"lam must lie in [0, 1], got {lam}\")\n\n    not_done = 1.0 - dones.to(rewards.dtype)\n    deltas = rewards + gamma * values[..., 1:] * not_done - values[..., :-1]\n\n    advantages = torch.zeros_like(rewards)\n    running = torch.zeros_like(rewards[..., 0])\n    for t in reversed(range(horizon)):\n        running = deltas[..., t] + gamma * lam * not_done[..., t] * running\n        advantages[..., t] = running\n    return advantages",
+        "role": "solution"
+      }
+    ]
+  },
   "gpt2_block": {
     "cells": [
       {
@@ -983,6 +1073,24 @@
         "type": "code",
         "source": "logps = torch.tensor([0.0, -0.5, -1.0, -1.5])\nrewards = torch.tensor([1.0, 0.8, 0.2, 0.0])\ngroup_ids = torch.tensor([0, 0, 1, 1])\nprint('Loss:', grpo_loss(logps, rewards, group_ids).item())",
         "role": "demo"
+      }
+    ]
+  },
+  "grpo_token_loss": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\n\n\ndef grpo_token_loss(logprobs, ref_logprobs, advantages, mask, beta=0.04):\n    if logprobs.shape != ref_logprobs.shape or logprobs.shape != mask.shape:\n        raise ValueError(\n            f\"logprobs {tuple(logprobs.shape)}, ref_logprobs {tuple(ref_logprobs.shape)} \"\n            f\"and mask {tuple(mask.shape)} must share a shape\"\n        )\n    if advantages.shape != logprobs.shape[:1]:\n        raise ValueError(\n            f\"advantages {tuple(advantages.shape)} must have one entry per row of \"\n            f\"{tuple(logprobs.shape)}\"\n        )\n    if beta < 0:\n        raise ValueError(f\"beta must be non-negative, got {beta}\")\n\n    keep = mask.to(logprobs.dtype)\n    denominator = keep.sum()\n    if denominator == 0:\n        return torch.zeros((), dtype=logprobs.dtype, device=logprobs.device)\n\n    log_ratio = ref_logprobs - logprobs\n    kl = torch.exp(log_ratio) - log_ratio - 1.0\n    objective = advantages.unsqueeze(-1) * logprobs - beta * kl\n    return -(objective * keep).sum() / denominator",
+        "role": "solution"
+      }
+    ]
+  },
+  "grpo_train_step": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\n\n\ndef grpo_train_step(model, ref_model, optimizer, batch, beta=0.04):\n    required = (\"input_ids\", \"mask\", \"advantages\")\n    missing = [key for key in required if key not in batch]\n    if missing:\n        raise ValueError(f\"batch is missing {missing}\")\n    if beta < 0:\n        raise ValueError(f\"beta must be non-negative, got {beta}\")\n\n    input_ids = batch[\"input_ids\"]\n    mask = batch[\"mask\"]\n    advantages = batch[\"advantages\"]\n\n    optimizer.zero_grad()\n\n    logits = model(input_ids)\n    logprobs = torch.gather(\n        torch.log_softmax(logits, dim=-1), dim=-1, index=input_ids.unsqueeze(-1)\n    ).squeeze(-1)\n\n    with torch.no_grad():\n        ref_logits = ref_model(input_ids)\n        ref_logprobs = torch.gather(\n            torch.log_softmax(ref_logits, dim=-1), dim=-1, index=input_ids.unsqueeze(-1)\n        ).squeeze(-1)\n\n    keep = mask.to(logprobs.dtype)\n    denominator = keep.sum()\n\n    log_ratio = ref_logprobs - logprobs\n    kl = torch.exp(log_ratio) - log_ratio - 1.0\n    weighted_logprobs = advantages.unsqueeze(-1) * logprobs\n    objective = weighted_logprobs - beta * kl\n    loss = -(objective * keep).sum() / denominator\n\n    loss.backward()\n    optimizer.step()\n\n    return {\n        \"loss\": loss.detach(),\n        \"pg_loss\": (-(weighted_logprobs * keep).sum() / denominator).detach(),\n        \"kl\": ((kl * keep).sum() / denominator).detach(),\n        \"num_tokens\": denominator.detach(),\n    }",
+        "role": "solution"
       }
     ]
   },
@@ -1149,6 +1257,15 @@
       }
     ]
   },
+  "ppo_clipped_policy_loss": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\n\n\ndef ppo_clipped_policy_loss(\n    logprobs, old_logprobs, advantages, mask, clip_eps=0.2, dual_clip=None\n):\n    shapes = (logprobs.shape, old_logprobs.shape, advantages.shape, mask.shape)\n    if len(set(shapes)) != 1:\n        raise ValueError(f\"all tensors must share a shape, got {shapes}\")\n    if clip_eps <= 0:\n        raise ValueError(f\"clip_eps must be positive, got {clip_eps}\")\n    if dual_clip is not None and dual_clip <= 1.0:\n        raise ValueError(f\"dual_clip must be greater than 1.0, got {dual_clip}\")\n\n    keep = mask.to(logprobs.dtype)\n    denominator = keep.sum()\n    if denominator == 0:\n        return torch.zeros((), dtype=logprobs.dtype, device=logprobs.device)\n\n    ratio = torch.exp(logprobs - old_logprobs)\n    unclipped = ratio * advantages\n    clipped = ratio.clamp(1.0 - clip_eps, 1.0 + clip_eps) * advantages\n    per_token = -torch.min(unclipped, clipped)\n\n    if dual_clip is not None:\n        bounded = torch.min(per_token, -dual_clip * advantages)\n        per_token = torch.where(advantages < 0, bounded, per_token)\n\n    return (per_token * keep).sum() / denominator",
+        "role": "solution"
+      }
+    ]
+  },
   "qlora": {
     "cells": [
       {
@@ -1174,6 +1291,15 @@
         "type": "code",
         "source": "torch.manual_seed(42)\nB, S, D = 2, 8, 16\nQ = torch.randn(B, S, D)\nK = torch.randn(B, S, D)\nV = torch.randn(B, S, D)\n\nscale = D ** -0.5\nscores_ref = (Q @ K.transpose(-2, -1)) * scale\nref_out = torch.softmax(scores_ref, dim=-1) @ V\n\nfor num_devices in [2, 4]:\n    ring_out = ring_attention(Q, K, V, num_devices=num_devices)\n    max_diff = (ring_out - ref_out).abs().max().item()\n    match = torch.allclose(ring_out, ref_out, atol=1e-5)\n    print(f'num_devices={num_devices}  shape={tuple(ring_out.shape)}  max_diff={max_diff:.2e}  match={match}')",
         "role": "demo"
+      }
+    ]
+  },
+  "rollout_batch_assembly": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\n\n\ndef rollout_batch_assembly(prompt_ids, generation_ids, advantages, pad_id=0):\n    batch_size = len(prompt_ids)\n    if batch_size == 0:\n        raise ValueError(\"the batch must hold at least one response\")\n    if len(generation_ids) != batch_size:\n        raise ValueError(\n            f\"prompt_ids has {batch_size} rows but generation_ids has {len(generation_ids)}\"\n        )\n    if advantages.ndim != 1 or advantages.shape[0] != batch_size:\n        raise ValueError(\n            f\"advantages must have shape ({batch_size},), got {tuple(advantages.shape)}\"\n        )\n\n    device = advantages.device\n    prompt_lens = torch.tensor([len(p) for p in prompt_ids], device=device)\n    gen_lens = torch.tensor([len(g) for g in generation_ids], device=device)\n    total_lens = prompt_lens + gen_lens\n    width = int(total_lens.max())\n\n    input_ids = torch.full((batch_size, width), pad_id, dtype=torch.long, device=device)\n    for row, (prompt, generation) in enumerate(zip(prompt_ids, generation_ids)):\n        tokens = list(prompt) + list(generation)\n        if tokens:\n            input_ids[row, : len(tokens)] = torch.tensor(\n                tokens, dtype=torch.long, device=device\n            )\n\n    positions = torch.arange(width, device=device).unsqueeze(0)\n    mask = (positions >= prompt_lens.unsqueeze(-1)) & (positions < total_lens.unsqueeze(-1))\n    token_advantages = advantages.unsqueeze(-1) * mask.to(advantages.dtype)\n\n    return {\n        \"input_ids\": input_ids,\n        \"mask\": mask,\n        \"token_advantages\": token_advantages,\n        \"lengths\": gen_lens,\n    }",
+        "role": "solution"
       }
     ]
   },
@@ -1230,6 +1356,15 @@
         "type": "code",
         "source": "model=nn.Sequential()\n# Supply a model whose forward returns (task_logits, router_logits), then:\n# metrics=tiny_moe_train_step(model,optimizer,x,targets)\n# print({name: float(value) for name,value in metrics.items()})",
         "role": "demo"
+      }
+    ]
+  },
+  "vineppo_mc_value": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\n\n\ndef vineppo_mc_value(rollout_rewards, final_reward):\n    if rollout_rewards.ndim != 2:\n        raise ValueError(\n            f\"rollout_rewards must be two-dimensional, got {tuple(rollout_rewards.shape)}\"\n        )\n    states, continuations = rollout_rewards.shape\n    if states == 0 or continuations == 0:\n        raise ValueError(\n            f\"need at least one state and one continuation, got {tuple(rollout_rewards.shape)}\"\n        )\n\n    values = rollout_rewards.mean(dim=-1)\n    bootstrap = final_reward.reshape(1).to(values.dtype)\n    next_value = torch.cat([values[1:], bootstrap])\n    return values, next_value - values",
+        "role": "solution"
       }
     ]
   },

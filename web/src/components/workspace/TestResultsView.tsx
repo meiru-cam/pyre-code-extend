@@ -26,6 +26,34 @@ function padIndex(i: number): string {
   return String(i + 1).padStart(2, '0');
 }
 
+/** Renders code line by line so the line that raised can be marked in place. The failing
+ *  line is matched by its text, not its number: formatTestCode drops the import lines, so
+ *  the displayed line numbers no longer line up with the ones the grader reports. */
+function CodeBlock({ code, functionName, highlight }: { code: string; functionName: string; highlight?: string }) {
+  const lines = formatTestCode(code, functionName).split('\n');
+  const target = highlight?.trim();
+  return (
+    <pre className="rounded-lg text-xs font-mono overflow-x-auto leading-relaxed" style={{ background: 'var(--bg-sunken)', padding: '10px 0' }}>
+      {lines.map((line, i) => {
+        const isFailing = !!target && line.trim() === target;
+        return (
+          <div
+            key={i}
+            className="whitespace-pre-wrap break-words"
+            style={{
+              padding: '0 12px',
+              background: isFailing ? 'color-mix(in oklab, var(--hard) 12%, transparent)' : undefined,
+              borderLeft: isFailing ? '2px solid var(--hard)' : '2px solid transparent',
+            }}
+          >
+            <PythonCode code={line} />
+          </div>
+        );
+      })}
+    </pre>
+  );
+}
+
 export function TestResultsView({ result, tests, functionName }: TestResultsViewProps) {
   const { t } = useLocale();
   const { selectedCaseIndex, setSelectedCaseIndex } = useProblemStore();
@@ -140,22 +168,64 @@ export function TestResultsView({ result, tests, functionName }: TestResultsView
             {activeTest?.code && (
               <div>
                 <h4 className="eyebrow mb-1.5">{t('testCasesTab')}</h4>
-                <pre className="p-3 rounded-lg text-xs font-mono overflow-x-auto whitespace-pre-wrap break-words leading-relaxed" style={{ background: 'var(--bg-sunken)' }}>
-                  <PythonCode code={formatTestCode(activeTest.code, functionName)} />
-                </pre>
+                <CodeBlock
+                  code={activeTest.code}
+                  functionName={functionName}
+                  highlight={activeResult.errorScope === 'test' ? activeResult.errorLineText : undefined}
+                />
               </div>
             )}
 
             {activeTest && !activeTest.code && (
-              <p className="text-xs text-text-3">
-                Unshown evaluator case — the check runs during grading, but its inputs are not displayed.
-              </p>
+              <div className="space-y-3">
+                <p className="text-xs text-text-3">
+                  Unshown evaluator case — hidden while you work, shown here now that it has run.
+                </p>
+                {activeTest.hiddenCode && (
+                  <div>
+                    <h4 className="eyebrow mb-1.5">Evaluator code</h4>
+                    <CodeBlock
+                      code={activeTest.hiddenCode}
+                      functionName={functionName}
+                      highlight={activeResult.errorScope === 'test' ? activeResult.errorLineText : undefined}
+                    />
+                  </div>
+                )}
+                {/* On a failure the same sentence is already the error below, so show it
+                    here only while the case passes — phrased as the diagnosis it would be. */}
+                {activeTest.failureMessage && activeResult.passed && (
+                  <div>
+                    <h4 className="eyebrow mb-1.5">If this case fails</h4>
+                    <p
+                      className="text-xs text-text-2 p-3 rounded-lg leading-relaxed"
+                      style={{ background: 'var(--bg-sunken)' }}
+                    >
+                      {activeTest.failureMessage}
+                    </p>
+                  </div>
+                )}
+              </div>
             )}
 
             {/* Error with expected/got diff */}
             {activeResult.error && (
               <div>
                 <h4 className="eyebrow mb-1.5">Error</h4>
+                {activeResult.errorLineText && (
+                  <div
+                    className="mb-2 px-3 py-2 rounded-lg text-xs"
+                    style={{ background: 'var(--bg-sunken)', borderLeft: '2px solid var(--hard)' }}
+                  >
+                    <span className="text-text-3">
+                      {activeResult.errorScope === 'solution'
+                        ? `Raised in your code, line ${activeResult.errorLine}`
+                        : 'Raised in the evaluator case'}
+                    </span>
+                    <div className="font-mono mt-1 whitespace-pre-wrap break-words">
+                      <PythonCode code={activeResult.errorLineText} />
+                    </div>
+                  </div>
+                )}
                 {!activeResult.passed && activeResult.error.includes('Expected') ? (
                   <div className="rounded-lg overflow-hidden text-xs font-mono" style={{ border: '1px solid var(--line)' }}>
                     {activeResult.error.split('\n').map((line, li) => {
