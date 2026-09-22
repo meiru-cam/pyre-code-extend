@@ -228,5 +228,28 @@ def test_design_note_rubric_requires_all_structured_dimensions():
         validate_task("t", task)
 
 
+RL_BEHAVIOR_CATEGORIES = frozenset({
+    "rl.logprob",
+    "rl.advantage",
+    "rl.kl_estimator",
+    "rl.clipping",
+    "rl.masking",
+    "rl.reward_verifiable",
+    "rl.rollout_assembly",
+    "rl.trajectory",
+})
+
+
 def test_behavior_categories_match_spec_count():
-    assert len(BEHAVIOR_CATEGORIES) == 27
+    """The 27 categories of the advanced-curriculum spec, plus the RL path's 8."""
+    assert RL_BEHAVIOR_CATEGORIES <= BEHAVIOR_CATEGORIES
+    assert len(BEHAVIOR_CATEGORIES - RL_BEHAVIOR_CATEGORIES) == 27
+    assert len(BEHAVIOR_CATEGORIES) == 35
+
+
+def test_rl_behavior_categories_are_namespaced():
+    """RL categories stay under the rl. prefix so the two sets never collide."""
+    assert all(name.startswith("rl.") for name in RL_BEHAVIOR_CATEGORIES)
+    assert not any(
+        name.startswith("rl.") for name in BEHAVIOR_CATEGORIES - RL_BEHAVIOR_CATEGORIES
+    )

@@ -48,6 +48,14 @@ BEHAVIOR_CATEGORIES = frozenset({
     "security.permission",
     "security.injection",
     "security.redaction",
+    "rl.logprob",
+    "rl.advantage",
+    "rl.kl_estimator",
+    "rl.clipping",
+    "rl.masking",
+    "rl.reward_verifiable",
+    "rl.rollout_assembly",
+    "rl.trajectory",
 })
 
 
