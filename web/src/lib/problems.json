@@ -6641,6 +6641,155 @@
           "section": "2.3 Reinforcement learning with multi-stage training"
         }
       ]
+    },
+    {
+      "id": "context_compaction",
+      "title": "Context Compaction",
+      "titleZh": "Context Compaction",
+      "difficulty": "Hard",
+      "functionName": "compact_context",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Compact a conversation so it fits a token budget, summarizing what you drop.\n\n**Signature:** `compact_context(messages, token_budget, summary_budget, count_tokens, summarize) -> dict`\n\n**Parameters:**\n- `messages` — a list of message dictionaries. Every message has a non-empty string `role`. An assistant message may carry a non-empty `tool_calls` list; a message with role `tool` is the result of one such call.\n- `token_budget` — non-negative integer. The returned conversation must cost no more than this.\n- `summary_budget` — non-negative integer, no larger than `token_budget`. The room set aside for the summary when anything is dropped.\n- `count_tokens` — `count_tokens(message) -> int`. The cost of one message. Call it as often as you like; it is pure.\n- `summarize` — `summarize(dropped_messages) -> str`. Call it **at most once**, and only when something is actually dropped.\n\n**Returns:** a dictionary with exactly four keys:\n\n- `messages` — the compacted conversation, in order.\n- `dropped` — the number of original messages that did not survive.\n- `compacted` — True when a summary was inserted, False otherwise.\n- `tokens` — the total `count_tokens` cost of `messages`.\n\n**The pinned message.** If `messages[0]` has role `system`, that one message is pinned: it is never dropped, never summarized, and always stays first. Only index 0, and only one message.\n\n**Blocks.** Group everything after the pinned message into atomic blocks:\n\n- An assistant message with a non-empty `tool_calls` list opens a block, which extends through every `tool` message that immediately follows it.\n- Every other message is a block of its own.\n\nA block is kept whole or dropped whole. A `tool` message that does not immediately follow such an assistant message, or follows one only across an intervening message of another role, is malformed input.\n\n**The rule:**\n\n1. If the whole conversation already costs `token_budget` or less, return it unchanged. Do not call `summarize`.\n2. Otherwise keep the **longest suffix of blocks** that costs no more than `token_budget - pinned - summary_budget`, scanning from the newest block backwards and stopping at the first block that does not fit.\n3. Call `summarize` once with the dropped messages, in their original order. Insert `{\"role\": \"system\", \"content\": <the summary>, \"compacted\": True}` immediately after the pinned message, or at the front when there is no pinned message.\n\n**Constraints:**\n- Recency wins. Keep the newest blocks, not the oldest.\n- The summary costs tokens too. Reserving `summary_budget` before choosing the suffix is the whole point of step 2.\n- Never return a `tool` message whose opening assistant message was dropped.\n- Do not mutate `messages` or any message in it. Return fresh dictionaries.\n- Raise a `ValueError` when: `token_budget` or `summary_budget` is not a non-negative integer; `summary_budget` exceeds `token_budget`; a message has no non-empty string `role`; a `tool` message is orphaned; the pinned message alone exceeds `token_budget`; there is no room for the summary inside `token_budget`; or `summarize` returns a non-string, an empty string, or a summary costing more than `summary_budget`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why blocks.** The tempting implementation walks backwards message by message until the budget runs out. It produces a conversation that starts with a `tool` message answering a call nobody made. Most providers reject that outright, and the ones that accept it give the model a result with no question attached. Tool-call atomicity is the single constraint that separates a working compactor from one that fails in production the first time a long tool result lands near the boundary.\n\n**Why the summary budget is a parameter.** The cost of the summary depends on what you drop, and what you drop depends on how much room the summary leaves. That circularity has no clean fixed point, so production systems break it by reserving a fixed slice up front and treating an overrun as a failure of the summarizer rather than of the compactor. This exercise does the same, which is why an overrunning `summarize` raises instead of triggering a second pass.\n\n**Why `compacted` is a separate flag.** `dropped == 0` and `compacted == False` are the same thing here, but the caller usually wants to log or meter compaction events, and a boolean that means exactly one thing survives refactoring better than a count that has to be compared against zero.\n\n**What this leaves out.** Real compactors also score messages for importance rather than trusting recency, keep a pinned set that is not just index 0, summarize incrementally so the summary itself compounds, and re-order messages to keep a provider's prompt-cache prefix stable. Each of those is a separate decision on top of this one.",
+      "descriptionZh": "Compact a conversation so it fits a token budget, summarizing what you drop.\n\n**Signature:** `compact_context(messages, token_budget, summary_budget, count_tokens, summarize) -> dict`\n\n**Parameters:**\n- `messages` — a list of message dictionaries. Every message has a non-empty string `role`. An assistant message may carry a non-empty `tool_calls` list; a message with role `tool` is the result of one such call.\n- `token_budget` — non-negative integer. The returned conversation must cost no more than this.\n- `summary_budget` — non-negative integer, no larger than `token_budget`. The room set aside for the summary when anything is dropped.\n- `count_tokens` — `count_tokens(message) -> int`. The cost of one message. Call it as often as you like; it is pure.\n- `summarize` — `summarize(dropped_messages) -> str`. Call it **at most once**, and only when something is actually dropped.\n\n**Returns:** a dictionary with exactly four keys:\n\n- `messages` — the compacted conversation, in order.\n- `dropped` — the number of original messages that did not survive.\n- `compacted` — True when a summary was inserted, False otherwise.\n- `tokens` — the total `count_tokens` cost of `messages`.\n\n**The pinned message.** If `messages[0]` has role `system`, that one message is pinned: it is never dropped, never summarized, and always stays first. Only index 0, and only one message.\n\n**Blocks.** Group everything after the pinned message into atomic blocks:\n\n- An assistant message with a non-empty `tool_calls` list opens a block, which extends through every `tool` message that immediately follows it.\n- Every other message is a block of its own.\n\nA block is kept whole or dropped whole. A `tool` message that does not immediately follow such an assistant message, or follows one only across an intervening message of another role, is malformed input.\n\n**The rule:**\n\n1. If the whole conversation already costs `token_budget` or less, return it unchanged. Do not call `summarize`.\n2. Otherwise keep the **longest suffix of blocks** that costs no more than `token_budget - pinned - summary_budget`, scanning from the newest block backwards and stopping at the first block that does not fit.\n3. Call `summarize` once with the dropped messages, in their original order. Insert `{\"role\": \"system\", \"content\": <the summary>, \"compacted\": True}` immediately after the pinned message, or at the front when there is no pinned message.\n\n**Constraints:**\n- Recency wins. Keep the newest blocks, not the oldest.\n- The summary costs tokens too. Reserving `summary_budget` before choosing the suffix is the whole point of step 2.\n- Never return a `tool` message whose opening assistant message was dropped.\n- Do not mutate `messages` or any message in it. Return fresh dictionaries.\n- Raise a `ValueError` when: `token_budget` or `summary_budget` is not a non-negative integer; `summary_budget` exceeds `token_budget`; a message has no non-empty string `role`; a `tool` message is orphaned; the pinned message alone exceeds `token_budget`; there is no room for the summary inside `token_budget`; or `summarize` returns a non-string, an empty string, or a summary costing more than `summary_budget`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why blocks.** The tempting implementation walks backwards message by message until the budget runs out. It produces a conversation that starts with a `tool` message answering a call nobody made. Most providers reject that outright, and the ones that accept it give the model a result with no question attached. Tool-call atomicity is the single constraint that separates a working compactor from one that fails in production the first time a long tool result lands near the boundary.\n\n**Why the summary budget is a parameter.** The cost of the summary depends on what you drop, and what you drop depends on how much room the summary leaves. That circularity has no clean fixed point, so production systems break it by reserving a fixed slice up front and treating an overrun as a failure of the summarizer rather than of the compactor. This exercise does the same, which is why an overrunning `summarize` raises instead of triggering a second pass.\n\n**Why `compacted` is a separate flag.** `dropped == 0` and `compacted == False` are the same thing here, but the caller usually wants to log or meter compaction events, and a boolean that means exactly one thing survives refactoring better than a count that has to be compared against zero.\n\n**What this leaves out.** Real compactors also score messages for importance rather than trusting recency, keep a pinned set that is not just index 0, summarize incrementally so the summary itself compounds, and re-order messages to keep a provider's prompt-cache prefix stable. Each of those is a separate decision on top of this one.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "A conversation that already fits is returned unchanged",
+          "code": "\ncalls = []\ndef count(m):\n    return len(m['content'])\ndef summarize(dropped):\n    calls.append(list(dropped))\n    return 'summary'\n\nmessages = [\n    {'role': 'system', 'content': 'sys'},\n    {'role': 'user', 'content': 'hello'},\n    {'role': 'assistant', 'content': 'hi'},\n]\nout = {fn}(messages, 100, 20, count, summarize)\nassert out['compacted'] is False, out['compacted']\nassert out['dropped'] == 0, out['dropped']\nassert out['tokens'] == 3 + 5 + 2, out['tokens']\nassert [m['role'] for m in out['messages']] == ['system', 'user', 'assistant']\nassert calls == [], 'summarize must not be called when nothing is dropped'\n"
+        },
+        {
+          "name": "Dropping keeps the newest blocks and inserts the summary after the system message",
+          "code": "\ndef count(m):\n    return len(m['content'])\ndef summarize(dropped):\n    return 'S' * 4\n\nmessages = [\n    {'role': 'system', 'content': 'sys'},\n    {'role': 'user', 'content': 'aaaaaaaaaa'},\n    {'role': 'assistant', 'content': 'bbbbbbbbbb'},\n    {'role': 'user', 'content': 'cc'},\n    {'role': 'assistant', 'content': 'dd'},\n]\nout = {fn}(messages, 20, 6, count, summarize)\nassert out['compacted'] is True, out['compacted']\nassert out['dropped'] == 2, out['dropped']\nroles = [m['role'] for m in out['messages']]\nassert roles == ['system', 'system', 'user', 'assistant'], roles\nassert out['messages'][1]['content'] == 'SSSS', out['messages'][1]\nassert out['messages'][1].get('compacted') is True, out['messages'][1]\nassert [m['content'] for m in out['messages'][2:]] == ['cc', 'dd']\nassert out['tokens'] == 3 + 4 + 2 + 2, out['tokens']\nassert out['tokens'] <= 20\n"
+        },
+        {
+          "name": "A tool block is kept or dropped whole",
+          "visibility": "unshown",
+          "behavior": "protocol.validation",
+          "failureMessage": "A tool message survived without the assistant message that called it. An assistant turn with tool_calls and the tool results that follow it form one block that is kept or dropped together.",
+          "hiddenCode": "\ndef count(m):\n    return m.get('cost', len(m['content']))\ndef summarize(dropped):\n    return 'sum'\n\nmessages = [\n    {'role': 'user', 'content': 'q', 'cost': 4},\n    {'role': 'assistant', 'content': 'call', 'cost': 2, 'tool_calls': [{'id': 'c1', 'name': 't'}]},\n    {'role': 'tool', 'content': 'r1', 'cost': 9, 'tool_call_id': 'c1'},\n    {'role': 'tool', 'content': 'r2', 'cost': 9, 'tool_call_id': 'c1'},\n]\n# Budget leaves room for the two cheap messages but not the 20-token tool block.\nout = {fn}(messages, 12, 3, count, summarize)\nroles = [m['role'] for m in out['messages']]\nassert 'tool' not in roles, roles\nassert not any(m.get('tool_calls') for m in out['messages']), roles\nassert out['dropped'] == 4, out['dropped']\n\n# With room for the block, all four survive together.\nwide = {fn}(messages, 100, 10, count, summarize)\nassert [m['role'] for m in wide['messages']] == ['user', 'assistant', 'tool', 'tool']\n"
+        },
+        {
+          "name": "The summary budget is reserved before the suffix is chosen",
+          "visibility": "unshown",
+          "behavior": "budget.enforcement",
+          "failureMessage": "The compacted conversation cost more than token_budget. The summary is counted too, so its budget has to be subtracted before blocks are fitted, not after.",
+          "hiddenCode": "\ndef count(m):\n    return m.get('cost', len(m['content']))\ndef summarize(dropped):\n    return 'x' * 7\n\nfor budget, reserve in ((30, 7), (24, 7), (18, 7), (40, 12)):\n    messages = [{'role': 'system', 'content': 's', 'cost': 5}] + [\n        {'role': 'user', 'content': str(i), 'cost': 6} for i in range(8)\n    ]\n    out = {fn}(messages, budget, reserve, count, summarize)\n    total = sum(count(m) for m in out['messages'])\n    assert total <= budget, f'budget {budget}: cost {total}'\n    assert out['tokens'] == total, (out['tokens'], total)\n"
+        },
+        {
+          "name": "Summarize is called once with exactly the dropped messages in order",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "summarize was called the wrong number of times or with the wrong messages. It takes the dropped messages, in their original order, exactly once.",
+          "hiddenCode": "\ncalls = []\ndef count(m):\n    return m.get('cost', len(m['content']))\ndef summarize(dropped):\n    calls.append([m['content'] for m in dropped])\n    return 'sum'\n\nmessages = [{'role': 'system', 'content': 'sys', 'cost': 2}] + [\n    {'role': 'user', 'content': f'm{i}', 'cost': 5} for i in range(6)\n]\nout = {fn}(messages, 24, 4, count, summarize)\nassert len(calls) == 1, f'summarize called {len(calls)} times'\nkept = [m['content'] for m in out['messages'][2:]]\nassert calls[0] + kept == [f'm{i}' for i in range(6)], (calls[0], kept)\nassert out['dropped'] == len(calls[0]), (out['dropped'], calls[0])\n"
+        },
+        {
+          "name": "The leading system message is pinned, never summarized",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "The leading system message was dropped, summarized, or moved. It stays first and is never handed to summarize.",
+          "hiddenCode": "\nseen = []\ndef count(m):\n    return m.get('cost', len(m['content']))\ndef summarize(dropped):\n    seen.extend(m['role'] for m in dropped)\n    return 'sum'\n\nmessages = [{'role': 'system', 'content': 'sys', 'cost': 4}] + [\n    {'role': 'user', 'content': str(i), 'cost': 9} for i in range(5)\n]\nout = {fn}(messages, 20, 3, count, summarize)\nassert out['messages'][0]['content'] == 'sys', out['messages'][0]\nassert 'system' not in seen, seen\n\n# No pinned message: the summary goes to the very front.\ntail = [{'role': 'user', 'content': str(i), 'cost': 9} for i in range(5)]\nout2 = {fn}(tail, 20, 3, count, summarize)\nassert out2['messages'][0].get('compacted') is True, out2['messages'][0]\n"
+        },
+        {
+          "name": "The input is never mutated and the output holds fresh dictionaries",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "The caller's messages were mutated or handed back by reference. Copy before returning so a later edit cannot reach back into the conversation.",
+          "hiddenCode": "\nimport copy\ndef count(m):\n    return m.get('cost', len(m['content']))\ndef summarize(dropped):\n    return 'sum'\n\nmessages = [{'role': 'system', 'content': 'sys', 'cost': 3}] + [\n    {'role': 'user', 'content': str(i), 'cost': 7} for i in range(6)\n]\nbefore = copy.deepcopy(messages)\nout = {fn}(messages, 26, 4, count, summarize)\nassert messages == before, 'input was mutated'\noriginals = {id(m) for m in messages}\nassert not any(id(m) in originals for m in out['messages']), 'returned a caller dictionary by reference'\n\n# The same holds on the path where nothing is dropped.\nwhole = {fn}(messages, 1000, 4, count, summarize)\nassert whole['compacted'] is False, whole['compacted']\nassert messages == before, 'input was mutated'\nassert not any(id(m) in originals for m in whole['messages']), 'returned a caller dictionary by reference'\n"
+        },
+        {
+          "name": "Malformed input and impossible budgets raise ValueError",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "An invalid budget, an orphaned tool message, or an oversized summary was accepted instead of raising ValueError.",
+          "hiddenCode": "\ndef count(m):\n    return m.get('cost', len(m['content']))\ndef summarize(dropped):\n    return 'sum'\ndef huge(dropped):\n    return 'x' * 500\n\nok = [{'role': 'user', 'content': 'a', 'cost': 9} for _ in range(5)]\norphan = [{'role': 'user', 'content': 'a', 'cost': 1}, {'role': 'tool', 'content': 'r', 'cost': 1}]\nsplit = [\n    {'role': 'assistant', 'content': 'c', 'cost': 1, 'tool_calls': [{'id': 'c1'}]},\n    {'role': 'user', 'content': 'u', 'cost': 1},\n    {'role': 'tool', 'content': 'r', 'cost': 1},\n]\ncases = (\n    (ok, -1, 2, summarize),\n    (ok, 10, -1, summarize),\n    (ok, 10, 20, summarize),\n    (ok, 10, True, summarize),\n    ([{'role': '', 'content': 'x', 'cost': 1}], 10, 2, summarize),\n    (orphan, 10, 2, summarize),\n    (split, 10, 2, summarize),\n    ([{'role': 'system', 'content': 's', 'cost': 50}] + ok, 20, 2, summarize),\n    (ok, 20, 2, huge),\n    (ok, 20, 2, lambda dropped: ''),\n    (ok, 20, 2, lambda dropped: None),\n)\nfor messages, budget, reserve, fn_sum in cases:\n    try:\n        {fn}(messages, budget, reserve, count, fn_sum)\n    except ValueError:\n        continue\n    raise AssertionError(f'budget={budget} reserve={reserve} should raise ValueError')\n"
+        },
+        {
+          "name": "Empty and boundary conversations behave",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "An empty conversation, an exact-fit budget, or a window with no room for any block was handled wrong.",
+          "hiddenCode": "\ndef count(m):\n    return m.get('cost', len(m['content']))\ndef summarize(dropped):\n    return 'ss'\n\nempty = {fn}([], 10, 2, count, summarize)\nassert empty['messages'] == [] and empty['dropped'] == 0 and empty['compacted'] is False, empty\nassert empty['tokens'] == 0, empty\n\nexact = [{'role': 'user', 'content': 'a', 'cost': 5}, {'role': 'user', 'content': 'b', 'cost': 5}]\nout = {fn}(exact, 10, 3, count, summarize)\nassert out['compacted'] is False and out['dropped'] == 0, out\n\n# summarize returns 2 tokens; reserve is 2, so nothing else fits.\ntight = [{'role': 'user', 'content': str(i), 'cost': 4} for i in range(3)]\nout2 = {fn}(tight, 2, 2, count, summarize)\nassert out2['dropped'] == 3, out2\nassert [m.get('compacted') for m in out2['messages']] == [True], out2['messages']\nassert out2['tokens'] == 2, out2\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Start with the grouping, not the budget. What exactly makes two adjacent messages inseparable, and what does your code do when a tool message appears with no assistant call in front of it? Once you have blocks, ask which end you scan from and why — if you scan from the oldest, what does the result look like? Then the budget: you subtract the pinned cost, but what is the second thing you must subtract before you start fitting blocks, and what goes wrong if you subtract it after? Finally, trace the case where the conversation already fits: how many times does summarize get called, and does your code agree?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Build the block list in one forward pass: an assistant message with a non-empty tool_calls list appends a new block, a tool message appends to the current block after checking that the current block was opened by such an assistant message, and anything else appends a block of its own. That check is what turns an orphan tool message into a ValueError instead of a silently broken conversation. Then compute the total; the early return happens before any summary reasoning, so summarize stays uncalled. For the compaction path, walk the block list from the last index down, accumulating cost and breaking on the first block that would exceed token_budget minus pinned minus summary_budget — break, do not continue, or you will skip a large block and keep an older small one, which reorders nothing but silently drops a turn out of the middle of the window. Two errors here never raise on their own: reserving summary_budget after choosing the suffix leaves a result that is over budget by exactly the summary cost, and accumulating per message instead of per block cuts a tool block in half. Both pass a naive length check. The returned tokens value is pinned plus the summary cost plus the accumulated block cost, which should equal recounting the returned list — if it does not, you counted something you did not return."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "tool_registry"
+      ],
+      "modelConnections": [
+        "LangChain's trim_messages solves the same budget problem with strategy='last' and include_system, and its start_on parameter exists for the same reason blocks do here: a trimmed window that opens on the wrong role is invalid to the provider.",
+        "Agent frameworks that summarize rather than trim insert the summary as a system message near the front, so the model reads the compressed past before the live window, which is the placement this exercise requires.",
+        "In agentic RL the same boundary shows up during rollout: a trajectory that outgrows the context window has to be cut somewhere, and cutting inside a tool-call block corrupts the trajectory for both the rollout and the loss mask computed from it."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Recency plus a summary keeps the live window exact and the distant past approximate, which matches how most agent errors are actually caused by the last few turns.",
+          "Block atomicity makes every returned conversation valid to send, with no provider-specific repair pass afterwards.",
+          "Reserving a fixed summary budget makes the result's cost predictable before the summarizer runs."
+        ],
+        "cons": [
+          "Recency is a crude importance proxy: a critical fact stated in turn two is compressed into prose while three turns of retries survive intact.",
+          "A single large block near the boundary can force a much smaller window than the budget would otherwise allow, because the block cannot be split.",
+          "Summarizing once per compaction loses information cumulatively; a long-running agent ends up summarizing summaries with no record of what was already lost."
+        ]
+      },
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/langchain-ai/langchain",
+          "commit": "877ad8c7bfa3f74377caa6fd33cbc20687e0052f",
+          "path": "libs/core/langchain_core/messages/utils.py",
+          "symbol": "trim_messages",
+          "license": "MIT",
+          "adapted": "The token-budgeted last-strategy trim: keep the newest messages within a budget, pin a leading system message, and refuse to start the kept window on a role that would be invalid to send.",
+          "simplifications": "Replaced the message classes with plain dictionaries and the tokenizer with an injected count_tokens callable. Dropped partial-message splitting, the 'first' strategy, and the end_on parameter. Added the summary step and its reserved budget, which trim_messages does not have: it drops the old messages outright."
+        }
+      ],
+      "designNoteRubric": [
+        {
+          "field": "api_boundaries",
+          "label": "API boundaries and class responsibilities"
+        },
+        {
+          "field": "state_ownership",
+          "label": "State and ownership"
+        },
+        {
+          "field": "failure_recovery",
+          "label": "Failure behavior and recovery"
+        },
+        {
+          "field": "backpressure_concurrency",
+          "label": "Backpressure and concurrency"
+        },
+        {
+          "field": "durability_idempotency",
+          "label": "Durability and idempotency"
+        },
+        {
+          "field": "observability",
+          "label": "Observability"
+        },
+        {
+          "field": "security",
+          "label": "Security"
+        },
+        {
+          "field": "tradeoffs",
+          "label": "Explicit tradeoffs"
+        }
+      ]
     }
   ]
 }

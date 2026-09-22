@@ -38,8 +38,12 @@ def test_guardrail_tasks_export_with_starters_hints_and_security_metadata():
 
 
 def test_agent_runtime_path_remains_unchanged():
+    # The guardrails slice must not disturb the runtime path it sits beside. Later
+    # exercises may be appended, so this pins the original prefix rather than the
+    # whole list; the exact contents are asserted in test_agent_runtime_path.py.
     paths = {item["id"]: item for item in _json("web/src/lib/paths.json")["paths"]}
-    assert paths["agent-runtime-system-design"]["problems"] == [
+    problems = paths["agent-runtime-system-design"]["problems"]
+    assert problems[:3] == [
         "tool_registry", "budgeted_agent_loop", "supervisor_orchestration"
     ]
 
