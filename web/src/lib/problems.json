@@ -6790,6 +6790,299 @@
           "label": "Explicit tradeoffs"
         }
       ]
+    },
+    {
+      "id": "tool_call_dag",
+      "title": "Tool-Call DAG Scheduler",
+      "titleZh": "Tool-Call DAG Scheduler",
+      "difficulty": "Hard",
+      "functionName": "schedule_tool_calls",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Run a batch of tool calls whose arguments depend on each other's results, in parallel rounds.\n\n**Signature:** `schedule_tool_calls(calls, execute, max_parallel) -> dict`\n\n**Parameters:**\n- `calls` — a list of dictionaries, each with a string `id` and a list `deps` of the ids it depends on. Any other keys belong to the caller; pass the dictionary through untouched.\n- `execute` — `execute(call, dep_results) -> result`. Runs one call. `dep_results` maps each id in that call's `deps` to its result — those ids and no others. It may raise any `Exception`.\n- `max_parallel` — positive integer. The most calls one round may run.\n\n**Returns:** a dictionary with exactly four keys:\n\n- `results` — maps the id of every call that succeeded to its result.\n- `errors` — maps the id of every call that raised to the exception it raised.\n- `skipped` — ids of calls that never ran because a dependency failed or was itself skipped, in input order.\n- `rounds` — a list of lists: the ids run in each round, in the order they ran.\n\n**The schedule, per round:**\n\n1. A call is ready when every one of its dependencies succeeded in an **earlier** round.\n2. Run the ready calls in input order, at most `max_parallel` of them. Ready calls beyond the cap wait for the next round; they are not lost.\n3. When a call raises, record the exception, then mark every call that depends on it — directly or through any chain — as skipped. Never run a skipped call.\n4. Stop when no call is ready. Every call ends in exactly one of `results`, `errors`, or `skipped`.\n\n**Constraints:**\n- A failure stops only what depends on it. Independent branches keep running.\n- Validate the whole graph before running anything. Raise a `ValueError`, without calling `execute`, when: `max_parallel` is not a positive integer; an id is not a string or appears twice; `deps` is not a list; a dependency names an unknown id; a call depends on itself; or the dependencies contain a cycle.\n- Only `Exception` subclasses count as call failures. Do not catch anything broader.\n- Do not mutate `calls` or any dictionary in it.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Where this shows up.** A model that emits several tool calls in one turn often emits calls that need each other: search, then fetch the top result, then summarize two fetches together. Running them one at a time wastes the latency the model bought by planning ahead; running them all at once feeds a call a result that does not exist yet. The scheduler in between is a topological sort that runs in waves.\n\n**Rounds make the schedule observable.** A real executor runs a call the moment its last dependency lands. Grouping into rounds — the superstep model — gives up a little latency in exchange for a schedule you can assert on, log, and replay. That trade is why this exercise can be graded deterministically, and it is the same shape as a bulk-synchronous graph engine.\n\n**Why validate up front.** A cycle or an unknown dependency leaves some call never ready. A loop that polls for ready work without checking for progress spins forever, and a scheduler that discovers the problem halfway through has already paid for side effects it cannot take back. Kahn's algorithm finds both before anything runs.\n\n**What skipping buys.** A failed call has no result to hand its dependents. Running them anyway means inventing a value; waiting for them means waiting forever. Skipping them — transitively — and reporting which ones were skipped keeps every call accounted for, so the caller can tell the model exactly which parts of its plan did not happen.",
+      "descriptionZh": "Run a batch of tool calls whose arguments depend on each other's results, in parallel rounds.\n\n**Signature:** `schedule_tool_calls(calls, execute, max_parallel) -> dict`\n\n**Parameters:**\n- `calls` — a list of dictionaries, each with a string `id` and a list `deps` of the ids it depends on. Any other keys belong to the caller; pass the dictionary through untouched.\n- `execute` — `execute(call, dep_results) -> result`. Runs one call. `dep_results` maps each id in that call's `deps` to its result — those ids and no others. It may raise any `Exception`.\n- `max_parallel` — positive integer. The most calls one round may run.\n\n**Returns:** a dictionary with exactly four keys:\n\n- `results` — maps the id of every call that succeeded to its result.\n- `errors` — maps the id of every call that raised to the exception it raised.\n- `skipped` — ids of calls that never ran because a dependency failed or was itself skipped, in input order.\n- `rounds` — a list of lists: the ids run in each round, in the order they ran.\n\n**The schedule, per round:**\n\n1. A call is ready when every one of its dependencies succeeded in an **earlier** round.\n2. Run the ready calls in input order, at most `max_parallel` of them. Ready calls beyond the cap wait for the next round; they are not lost.\n3. When a call raises, record the exception, then mark every call that depends on it — directly or through any chain — as skipped. Never run a skipped call.\n4. Stop when no call is ready. Every call ends in exactly one of `results`, `errors`, or `skipped`.\n\n**Constraints:**\n- A failure stops only what depends on it. Independent branches keep running.\n- Validate the whole graph before running anything. Raise a `ValueError`, without calling `execute`, when: `max_parallel` is not a positive integer; an id is not a string or appears twice; `deps` is not a list; a dependency names an unknown id; a call depends on itself; or the dependencies contain a cycle.\n- Only `Exception` subclasses count as call failures. Do not catch anything broader.\n- Do not mutate `calls` or any dictionary in it.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Where this shows up.** A model that emits several tool calls in one turn often emits calls that need each other: search, then fetch the top result, then summarize two fetches together. Running them one at a time wastes the latency the model bought by planning ahead; running them all at once feeds a call a result that does not exist yet. The scheduler in between is a topological sort that runs in waves.\n\n**Rounds make the schedule observable.** A real executor runs a call the moment its last dependency lands. Grouping into rounds — the superstep model — gives up a little latency in exchange for a schedule you can assert on, log, and replay. That trade is why this exercise can be graded deterministically, and it is the same shape as a bulk-synchronous graph engine.\n\n**Why validate up front.** A cycle or an unknown dependency leaves some call never ready. A loop that polls for ready work without checking for progress spins forever, and a scheduler that discovers the problem halfway through has already paid for side effects it cannot take back. Kahn's algorithm finds both before anything runs.\n\n**What skipping buys.** A failed call has no result to hand its dependents. Running them anyway means inventing a value; waiting for them means waiting forever. Skipping them — transitively — and reporting which ones were skipped keeps every call accounted for, so the caller can tell the model exactly which parts of its plan did not happen.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "A diamond runs in three rounds with each call seeing only its own dependencies",
+          "code": "\nseen = {}\ndef execute(call, dep_results):\n    seen[call['id']] = dict(dep_results)\n    return call['id'].upper() + ''.join(sorted(dep_results.values()))\n\ncalls = [\n    {'id': 'a', 'deps': []},\n    {'id': 'b', 'deps': ['a']},\n    {'id': 'c', 'deps': ['a']},\n    {'id': 'd', 'deps': ['b', 'c']},\n]\nout = {fn}(calls, execute, 4)\nassert out['rounds'] == [['a'], ['b', 'c'], ['d']], out['rounds']\nassert seen['a'] == {}, seen['a']\nassert seen['b'] == {'a': 'A'}, seen['b']\nassert seen['d'] == {'b': 'BA', 'c': 'CA'}, seen['d']\nassert out['results'] == {'a': 'A', 'b': 'BA', 'c': 'CA', 'd': 'DBACA'}, out['results']\nassert out['errors'] == {} and out['skipped'] == [], out\n"
+        },
+        {
+          "name": "A failure skips its dependents and nothing else",
+          "code": "\nran = []\ndef execute(call, dep_results):\n    ran.append(call['id'])\n    if call['id'] == 'b':\n        raise RuntimeError('boom')\n    return call['id']\n\ncalls = [\n    {'id': 'a', 'deps': []},\n    {'id': 'b', 'deps': ['a']},\n    {'id': 'c', 'deps': ['b']},\n    {'id': 'x', 'deps': []},\n    {'id': 'y', 'deps': ['x']},\n    {'id': 'z', 'deps': ['y']},\n]\nout = {fn}(calls, execute, 4)\nassert isinstance(out['errors'].get('b'), RuntimeError), out['errors']\nassert out['skipped'] == ['c'], out['skipped']\n# z is still waiting when b fails; the failure must not reach it.\nassert out['results'] == {'a': 'a', 'x': 'x', 'y': 'y', 'z': 'z'}, out['results']\nassert 'c' not in ran, ran\n"
+        },
+        {
+          "name": "A dependent never runs in the same round as its dependency",
+          "visibility": "unshown",
+          "behavior": "events.ordering",
+          "failureMessage": "A call ran in the same round as one of its dependencies. Readiness is decided at the start of a round, from calls that succeeded in earlier rounds only.",
+          "hiddenCode": "\ndef execute(call, dep_results):\n    for dep in call['deps']:\n        assert dep in dep_results, f\"{call['id']} ran before {dep} had a result\"\n    return call['id']\n\nchain = [{'id': f'n{i}', 'deps': [f'n{i-1}'] if i else []} for i in range(5)]\nout = {fn}(chain, execute, 8)\nassert out['rounds'] == [[f'n{i}'] for i in range(5)], out['rounds']\n\nwhere = {}\nwide = [\n    {'id': 'p', 'deps': []}, {'id': 'q', 'deps': ['p']},\n    {'id': 'r', 'deps': []}, {'id': 's', 'deps': ['r', 'q']},\n]\nout = {fn}(wide, execute, 8)\nfor index, ids in enumerate(out['rounds']):\n    for i in ids:\n        where[i] = index\nfor call in wide:\n    for dep in call['deps']:\n        assert where[dep] < where[call['id']], out['rounds']\n"
+        },
+        {
+          "name": "Skips propagate through every chain of dependents",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "A call downstream of a failure was left pending or was run. Skipping is transitive: a dependent of a skipped call is skipped too, and every call ends in exactly one bucket.",
+          "hiddenCode": "\nran = []\ndef execute(call, dep_results):\n    ran.append(call['id'])\n    if call['id'] == 'root':\n        raise ValueError('bad input')\n    return 1\n\ncalls = [\n    {'id': 'root', 'deps': []},\n    {'id': 'fetch', 'deps': ['root']},\n    {'id': 'cite', 'deps': ['fetch']},\n    {'id': 'audit', 'deps': ['cite', 'other']},\n    {'id': 'other', 'deps': []},\n]\nout = {fn}(calls, execute, 2)\n# Input order, which is deliberately not alphabetical.\nassert out['skipped'] == ['fetch', 'cite', 'audit'], out['skipped']\nassert set(ran) == {'root', 'other'}, ran\nids = [c['id'] for c in calls]\nbuckets = list(out['results']) + list(out['errors']) + out['skipped']\nassert sorted(buckets) == sorted(ids), buckets\n"
+        },
+        {
+          "name": "The concurrency cap is respected and deferred calls still run",
+          "visibility": "unshown",
+          "behavior": "scheduler.concurrency",
+          "failureMessage": "A round ran more than max_parallel calls, or a ready call beyond the cap was dropped or reordered. Excess ready calls wait for the next round, in input order.",
+          "hiddenCode": "\ndef execute(call, dep_results):\n    return call['id']\n\ncalls = [{'id': f't{i}', 'deps': []} for i in range(7)] + [{'id': 'join', 'deps': ['t0', 't6']}]\nout = {fn}(calls, execute, 3)\nassert all(len(r) <= 3 for r in out['rounds']), out['rounds']\nassert out['rounds'][:3] == [['t0', 't1', 't2'], ['t3', 't4', 't5'], ['t6']], out['rounds']\nassert out['rounds'][3] == ['join'], out['rounds']\nassert len(out['results']) == 8, out['results']\n\none = {fn}(calls, execute, 1)\nassert [r for r in one['rounds']] == [[c['id']] for c in calls], one['rounds']\n"
+        },
+        {
+          "name": "An invalid graph is rejected before anything runs",
+          "visibility": "unshown",
+          "behavior": "protocol.validation",
+          "failureMessage": "A cycle, unknown dependency, self-dependency, duplicate id or bad cap was not rejected with ValueError before execute ran. Validate the whole graph up front.",
+          "hiddenCode": "\nran = []\ndef execute(call, dep_results):\n    ran.append(call['id'])\n    return 0\n\nok = [{'id': 'a', 'deps': []}]\ncases = (\n    ([{'id': 'a', 'deps': ['b']}, {'id': 'b', 'deps': ['a']}], 2),\n    ([{'id': 'x', 'deps': []}, {'id': 'a', 'deps': ['c']}, {'id': 'b', 'deps': ['a']}, {'id': 'c', 'deps': ['b']}], 2),\n    ([{'id': 'a', 'deps': ['a']}], 2),\n    ([{'id': 'a', 'deps': ['ghost']}], 2),\n    ([{'id': 'a', 'deps': []}, {'id': 'a', 'deps': []}], 2),\n    ([{'id': 3, 'deps': []}], 2),\n    ([{'id': 'a', 'deps': 'b'}], 2),\n    (ok, 0),\n    (ok, -1),\n    (ok, True),\n    (ok, 1.5),\n)\nfor calls, cap in cases:\n    try:\n        {fn}(calls, execute, cap)\n    except ValueError:\n        assert ran == [], f'execute ran before validation failed: {ran}'\n        continue\n    raise AssertionError(f'{calls!r} with cap {cap!r} should raise ValueError')\n"
+        },
+        {
+          "name": "Calls are passed through untouched and never mutated",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "The caller's call dictionaries were mutated or replaced. Pass each call to execute exactly as given, and leave the input list unchanged.",
+          "hiddenCode": "\nimport copy\nreceived = []\ndef execute(call, dep_results):\n    received.append(call)\n    return len(dep_results)\n\ncalls = [\n    {'id': 'a', 'deps': [], 'tool': 'search', 'args': {'q': 'x'}},\n    {'id': 'b', 'deps': ['a'], 'tool': 'fetch', 'args': {'url': '$a'}},\n]\nbefore = copy.deepcopy(calls)\n{fn}(calls, execute, 2)\nassert calls == before, 'input was mutated'\nassert received[0] is calls[0] and received[1] is calls[1], 'execute must receive the caller dictionaries'\n"
+        },
+        {
+          "name": "Only Exception subclasses are treated as call failures",
+          "visibility": "unshown",
+          "behavior": "retry.classification",
+          "failureMessage": "A BaseException such as KeyboardInterrupt was swallowed as a call failure. Catch Exception, not everything.",
+          "hiddenCode": "\ndef execute(call, dep_results):\n    if call['id'] == 'stop':\n        raise KeyboardInterrupt()\n    return 1\n\ncalls = [{'id': 'ok', 'deps': []}, {'id': 'stop', 'deps': []}]\ntry:\n    {fn}(calls, execute, 2)\nexcept KeyboardInterrupt:\n    pass\nelse:\n    raise AssertionError('KeyboardInterrupt must propagate, not become a call error')\n"
+        },
+        {
+          "name": "Empty and fully failed plans are accounted for",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "An empty plan, or a plan whose every root fails, produced the wrong buckets or rounds.",
+          "hiddenCode": "\ndef fail(call, dep_results):\n    raise RuntimeError(call['id'])\n\nempty = {fn}([], fail, 3)\nassert empty == {'results': {}, 'errors': {}, 'skipped': [], 'rounds': []}, empty\n\ncalls = [{'id': 'a', 'deps': []}, {'id': 'b', 'deps': []}, {'id': 'c', 'deps': ['a', 'b']}]\nout = {fn}(calls, fail, 5)\nassert out['rounds'] == [['a', 'b']], out['rounds']\nassert sorted(out['errors']) == ['a', 'b'], out['errors']\nassert out['skipped'] == ['c'] and out['results'] == {}, out\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Before scheduling anything, what could make some call never become ready, and how would you detect it without running a single call? Once the graph is known to be sound: what exactly makes a call ready — is 'its dependencies have been started' enough, or does something stronger have to be true? When a call fails, which calls does that affect: only the ones that list it directly, or more? And which calls must it not affect? Last, if six calls are ready and the cap is four, where do the other two go, and in what order do they run?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Validate first: check max_parallel, then collect ids into a dict while checking for non-strings and duplicates, then check every dependency is known and not the call itself. For cycles, run Kahn's algorithm on in-degrees — if fewer calls are emitted than exist, there is a cycle; raise before touching execute. Then schedule with a status per id. Each round, compute the ready list by walking calls in input order and keeping those still pending whose every dependency has status 'succeeded' as of the start of the round; take the first max_parallel. Computing readiness once per round, before running anything in it, is what stops a dependent from running in the same round as its dependency — updating status mid-round and re-scanning is the easy way to get that wrong. On a failure, walk the reverse edges from the failed id with a stack and mark every pending descendant skipped. Marking only direct dependents leaves grandchildren pending forever, so they end up in no bucket at all. Build dep_results from the call's deps only, and pass the original call dictionary through without copying fields into it."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "budgeted_agent_loop"
+      ],
+      "modelConnections": [
+        "LLMCompiler's TaskFetchingUnit schedules a planner's function calls by dependency, substituting each dependency's observation into the arguments that reference it, which is the dep_results mapping here.",
+        "Its scheduling loop polls for executable tasks until every task's done event is set, with no cycle check, no concurrency cap and no failure path: a task that raises never sets its event, so the loop waits on it forever. This exercise requires all three.",
+        "Parallel function calling in model APIs returns several calls per turn and leaves ordering to the client; clients that need one call's output as another's input end up building this scheduler themselves.",
+        "Graph runtimes that execute agent workflows in supersteps run every node whose inputs are ready, then synchronize, which is the round structure used here."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Independent calls run concurrently while dependent ones still see real results, so latency tracks the depth of the plan rather than its size.",
+          "Up-front validation means a malformed plan costs nothing: no side effect runs before the cycle or unknown dependency is found.",
+          "Transitive skipping keeps every call in exactly one bucket, so the model can be told precisely what did not happen and why."
+        ],
+        "cons": [
+          "Round barriers add latency: a fast call's dependent waits for the slowest call of the round before it can start.",
+          "Skipping is all-or-nothing; a dependent that could have run with a partial or default input is skipped anyway.",
+          "A static graph cannot express calls whose dependencies are only known after an earlier result arrives; that needs re-planning, which is a different loop."
+        ]
+      },
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/SqueezeAILab/LLMCompiler",
+          "commit": "a00c9d35507507da70e8c637eee64efc8c1857ae",
+          "path": "src/llm_compiler/task_fetching_unit.py",
+          "symbol": "TaskFetchingUnit.schedule",
+          "license": "MIT",
+          "adapted": "Dependency-driven execution of a planner's function calls: a task becomes executable when all its dependencies are done, and each dependency's observation is made available to the tasks that reference it.",
+          "simplifications": "Replaced the asyncio polling loop with deterministic rounds, and the ${n} argument-string substitution with a dep_results mapping. Added what upstream lacks: up-front cycle and unknown-dependency detection, a concurrency cap, deterministic input-order scheduling instead of iterating a set, and a failure path that skips dependents transitively instead of leaving the loop waiting on a done event that is never set."
+        }
+      ],
+      "designNoteRubric": [
+        {
+          "field": "api_boundaries",
+          "label": "API boundaries and class responsibilities"
+        },
+        {
+          "field": "state_ownership",
+          "label": "State and ownership"
+        },
+        {
+          "field": "failure_recovery",
+          "label": "Failure behavior and recovery"
+        },
+        {
+          "field": "backpressure_concurrency",
+          "label": "Backpressure and concurrency"
+        },
+        {
+          "field": "durability_idempotency",
+          "label": "Durability and idempotency"
+        },
+        {
+          "field": "observability",
+          "label": "Observability"
+        },
+        {
+          "field": "security",
+          "label": "Security"
+        },
+        {
+          "field": "tradeoffs",
+          "label": "Explicit tradeoffs"
+        }
+      ]
+    },
+    {
+      "id": "tool_call_stream_parser",
+      "title": "Streaming Tool-Call Parser",
+      "titleZh": "Streaming Tool-Call Parser",
+      "difficulty": "Hard",
+      "functionName": "ToolCallStreamParser",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Parse tool calls out of a model's response as it streams in, chunk by chunk.\n\nThe model writes plain text and, between an open tag and a close tag, a JSON tool call:\n\n    Let me look that up.<tool_call>{\"name\": \"search\", \"arguments\": {\"q\": \"rope\"}}</tool_call>\n\nChunks split the text anywhere — including in the middle of a tag.\n\n**Define a class** `ToolCallStreamParser(open_tag=\"<tool_call>\", close_tag=\"</tool_call>\")` with:\n\n- `feed(chunk) -> list` — consume the next piece of the stream and return the events it completes, in stream order.\n- `finish() -> list` — the stream has ended. Return the events still pending, in order.\n\n**Events** are dictionaries of exactly these shapes:\n\n- `{\"type\": \"text\", \"content\": str}` — text outside any tool call. Never empty.\n- `{\"type\": \"tool_call\", \"name\": str, \"arguments\": dict}` — one complete, well-formed call.\n- `{\"type\": \"error\", \"raw\": str, \"reason\": str}` — a call that could not be used. `raw` is everything between the tags.\n\n**Parsing a call.** The body between the tags must be a JSON object with a non-empty string `name`. `arguments` is optional and defaults to `{}`; when present it must be a JSON object. The **first** close tag after an open tag ends the body. The `reason` of an error is one of:\n\n- `invalid_json` — the body is not valid JSON.\n- `not_a_call` — valid JSON, but not an object, or `name` is missing, empty or not a string, or `arguments` is not an object.\n- `unterminated` — the stream ended inside a call.\n\n**Release text as early as possible.** Everything that cannot be the start of an open tag must be returned by the `feed` call that delivered it. Hold back only the **longest suffix** of the pending text that is a proper prefix of the open tag. Text may be split across several text events; how you split it is up to you.\n\n**Constraints:**\n- A malformed call produces an error event and parsing continues. One bad call never hides the calls or text after it.\n- At `finish`, held-back text is released as text — a partial tag at the very end is just text. A call still open is reported as an `unterminated` error.\n- Raise a `ValueError` when: a tag is not a non-empty string; the two tags are equal; a chunk is not a string; or `feed` or `finish` is called after `finish`.\n- The events must not depend on how the stream was chunked, apart from how text is split.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why stream at all.** The point of streaming is that the user sees text while the model is still writing and the agent can start routing a call the moment it closes, instead of waiting for the whole response. A parser that buffers the entire response and runs a regex at the end is correct, and throws both of those away.\n\n**The held-back suffix is the whole problem.** If a chunk ends in `<tool`, you cannot know yet whether it is the start of a tag or a less-than sign in prose. Release it and a tag split across chunks leaks into the text as literal characters, and the call inside is lost. Hold back a fixed number of characters instead and the stream stutters for no reason on text that could not possibly be a tag. The longest suffix that is also a prefix of the tag is the least you can hold and still be right. A tag that repeats its own first characters, such as `<<call>>`, is where a shortcut like \"hold back from the last `<`\" breaks.\n\n**Why errors are events.** In a rollout, a malformed call is information: the policy produced it, and the reward and the loss mask both need to know. A parser that logs and drops it makes the trajectory look like the model chose not to call a tool, which trains the wrong lesson.\n\n**What this leaves out.** Production parsers also stream the arguments of a call while it is still open — emitting the function name early so a router can warm up the tool — and handle formats with no closing tag at all, where the end of the response is the end of the call.",
+      "descriptionZh": "Parse tool calls out of a model's response as it streams in, chunk by chunk.\n\nThe model writes plain text and, between an open tag and a close tag, a JSON tool call:\n\n    Let me look that up.<tool_call>{\"name\": \"search\", \"arguments\": {\"q\": \"rope\"}}</tool_call>\n\nChunks split the text anywhere — including in the middle of a tag.\n\n**Define a class** `ToolCallStreamParser(open_tag=\"<tool_call>\", close_tag=\"</tool_call>\")` with:\n\n- `feed(chunk) -> list` — consume the next piece of the stream and return the events it completes, in stream order.\n- `finish() -> list` — the stream has ended. Return the events still pending, in order.\n\n**Events** are dictionaries of exactly these shapes:\n\n- `{\"type\": \"text\", \"content\": str}` — text outside any tool call. Never empty.\n- `{\"type\": \"tool_call\", \"name\": str, \"arguments\": dict}` — one complete, well-formed call.\n- `{\"type\": \"error\", \"raw\": str, \"reason\": str}` — a call that could not be used. `raw` is everything between the tags.\n\n**Parsing a call.** The body between the tags must be a JSON object with a non-empty string `name`. `arguments` is optional and defaults to `{}`; when present it must be a JSON object. The **first** close tag after an open tag ends the body. The `reason` of an error is one of:\n\n- `invalid_json` — the body is not valid JSON.\n- `not_a_call` — valid JSON, but not an object, or `name` is missing, empty or not a string, or `arguments` is not an object.\n- `unterminated` — the stream ended inside a call.\n\n**Release text as early as possible.** Everything that cannot be the start of an open tag must be returned by the `feed` call that delivered it. Hold back only the **longest suffix** of the pending text that is a proper prefix of the open tag. Text may be split across several text events; how you split it is up to you.\n\n**Constraints:**\n- A malformed call produces an error event and parsing continues. One bad call never hides the calls or text after it.\n- At `finish`, held-back text is released as text — a partial tag at the very end is just text. A call still open is reported as an `unterminated` error.\n- Raise a `ValueError` when: a tag is not a non-empty string; the two tags are equal; a chunk is not a string; or `feed` or `finish` is called after `finish`.\n- The events must not depend on how the stream was chunked, apart from how text is split.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why stream at all.** The point of streaming is that the user sees text while the model is still writing and the agent can start routing a call the moment it closes, instead of waiting for the whole response. A parser that buffers the entire response and runs a regex at the end is correct, and throws both of those away.\n\n**The held-back suffix is the whole problem.** If a chunk ends in `<tool`, you cannot know yet whether it is the start of a tag or a less-than sign in prose. Release it and a tag split across chunks leaks into the text as literal characters, and the call inside is lost. Hold back a fixed number of characters instead and the stream stutters for no reason on text that could not possibly be a tag. The longest suffix that is also a prefix of the tag is the least you can hold and still be right. A tag that repeats its own first characters, such as `<<call>>`, is where a shortcut like \"hold back from the last `<`\" breaks.\n\n**Why errors are events.** In a rollout, a malformed call is information: the policy produced it, and the reward and the loss mask both need to know. A parser that logs and drops it makes the trajectory look like the model chose not to call a tool, which trains the wrong lesson.\n\n**What this leaves out.** Production parsers also stream the arguments of a call while it is still open — emitting the function name early so a router can warm up the tool — and handle formats with no closing tag at all, where the end of the response is the end of the call.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "A whole response yields text, the call, and the trailing text",
+          "code": "\np = {fn}()\nevents = p.feed('Let me check.<tool_call>{\"name\": \"search\", \"arguments\": {\"q\": \"rope\"}}</tool_call>Done.')\nevents += p.finish()\nassert events == [\n    {'type': 'text', 'content': 'Let me check.'},\n    {'type': 'tool_call', 'name': 'search', 'arguments': {'q': 'rope'}},\n    {'type': 'text', 'content': 'Done.'},\n], events\n"
+        },
+        {
+          "name": "Tags split across chunks are held back, then recognized",
+          "code": "\np = {fn}()\nfirst = p.feed('Hi <tool_')\nassert first == [{'type': 'text', 'content': 'Hi '}], first\nsecond = p.feed('call>{\"name\": \"clock\"}</tool')\nassert second == [], second\nthird = p.feed('_call>')\nassert third == [{'type': 'tool_call', 'name': 'clock', 'arguments': {}}], third\nassert p.finish() == []\n"
+        },
+        {
+          "name": "Text that cannot start a tag is released immediately",
+          "visibility": "unshown",
+          "behavior": "events.ordering",
+          "failureMessage": "Text was held back longer than necessary. Only the longest suffix that is a prefix of the open tag may be withheld; everything before it belongs to the feed that delivered it.",
+          "hiddenCode": "\ndef text_of(events):\n    return ''.join(e['content'] for e in events if e['type'] == 'text')\n\np = {fn}()\nassert text_of(p.feed('hello world')) == 'hello world'\nassert text_of(p.feed('a < b')) == 'a < b'\nassert text_of(p.feed(' x<')) == ' x'\nassert text_of(p.feed('b')) == '<b'\nassert text_of(p.feed('<tool_ca')) == ''\nassert text_of(p.feed('ke')) == '<tool_cake'\n"
+        },
+        {
+          "name": "Self-overlapping tags hold back the longest matching suffix",
+          "visibility": "unshown",
+          "behavior": "protocol.validation",
+          "failureMessage": "A tag that repeats its own opening characters was missed or leaked into the text. Hold back the longest suffix that is a prefix of the tag, not just a trailing first character.",
+          "hiddenCode": "\np = {fn}(open_tag='<<call>>', close_tag='<</call>>')\nevents = p.feed('note<')\nevents += p.feed('<')\nevents += p.feed('call>>{\"name\": \"ping\"}<</call>>')\nevents += p.finish()\nmerged = []\nfor e in events:\n    if e['type'] == 'text' and merged and merged[-1]['type'] == 'text':\n        merged[-1] = {'type': 'text', 'content': merged[-1]['content'] + e['content']}\n    else:\n        merged.append(dict(e))\nassert merged == [\n    {'type': 'text', 'content': 'note'},\n    {'type': 'tool_call', 'name': 'ping', 'arguments': {}},\n], merged\n"
+        },
+        {
+          "name": "Any chunking gives the same events",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "The events changed with how the stream was chunked. Feeding the stream whole, one character at a time, or split at random must give the same calls, errors and text.",
+          "hiddenCode": "\nimport random\n\ndef merged(events):\n    out = []\n    for e in events:\n        assert not (e['type'] == 'text' and e['content'] == ''), 'empty text event'\n        if e['type'] == 'text' and out and out[-1]['type'] == 'text':\n            out[-1] = {'type': 'text', 'content': out[-1]['content'] + e['content']}\n        else:\n            out.append(dict(e))\n    return out\n\nstream = (\n    'Plan: a<b and <tool_call>{\"name\": \"add\", \"arguments\": {\"x\": 1, \"y\": 2}}</tool_call>'\n    ' then <tool_call>{broken</tool_call> and <tool_call>{\"name\": \"mul\", \"arguments\": {\"s\": \"</tool\"}}</tool_call>'\n    '<tool_call>[1, 2]</tool_call> end <tool_'\n)\nexpected = [\n    {'type': 'text', 'content': 'Plan: a<b and '},\n    {'type': 'tool_call', 'name': 'add', 'arguments': {'x': 1, 'y': 2}},\n    {'type': 'text', 'content': ' then '},\n    {'type': 'error', 'raw': '{broken', 'reason': 'invalid_json'},\n    {'type': 'text', 'content': ' and '},\n    {'type': 'tool_call', 'name': 'mul', 'arguments': {'s': '</tool'}},\n    {'type': 'error', 'raw': '[1, 2]', 'reason': 'not_a_call'},\n    {'type': 'text', 'content': ' end <tool_'},\n]\n\ndef run(chunks):\n    p = {fn}()\n    events = []\n    for c in chunks:\n        events += p.feed(c)\n    return merged(events + p.finish())\n\nassert run([stream]) == expected, run([stream])\nassert run(list(stream)) == expected, 'one character at a time differs'\nfor seed in range(25):\n    rng = random.Random(seed)\n    cuts = sorted(rng.sample(range(1, len(stream)), rng.randint(1, 40)))\n    pieces = [stream[i:j] for i, j in zip([0] + cuts, cuts + [len(stream)])]\n    assert run(pieces) == expected, f'seed {seed} differs'\n"
+        },
+        {
+          "name": "Malformed calls become errors and parsing continues",
+          "visibility": "unshown",
+          "behavior": "protocol.validation",
+          "failureMessage": "A malformed call was dropped, raised, or misclassified, or it hid the call after it. Report invalid_json or not_a_call as an error event and keep parsing.",
+          "hiddenCode": "\nbodies = [\n    ('{\"name\": \"ok\", \"arguments\": {\"a\": 1}}', {'type': 'tool_call', 'name': 'ok', 'arguments': {'a': 1}}),\n    ('not json', {'type': 'error', 'raw': 'not json', 'reason': 'invalid_json'}),\n    ('', {'type': 'error', 'raw': '', 'reason': 'invalid_json'}),\n    ('\"just a string\"', {'type': 'error', 'raw': '\"just a string\"', 'reason': 'not_a_call'}),\n    ('{\"arguments\": {}}', {'type': 'error', 'raw': '{\"arguments\": {}}', 'reason': 'not_a_call'}),\n    ('{\"name\": \"\"}', {'type': 'error', 'raw': '{\"name\": \"\"}', 'reason': 'not_a_call'}),\n    ('{\"name\": 7}', {'type': 'error', 'raw': '{\"name\": 7}', 'reason': 'not_a_call'}),\n    ('{\"name\": \"f\", \"arguments\": [1]}', {'type': 'error', 'raw': '{\"name\": \"f\", \"arguments\": [1]}', 'reason': 'not_a_call'}),\n    ('{\"name\": \"f\", \"arguments\": \"{}\"}', {'type': 'error', 'raw': '{\"name\": \"f\", \"arguments\": \"{}\"}', 'reason': 'not_a_call'}),\n]\np = {fn}()\nevents = []\nfor body, _ in bodies:\n    events += p.feed('<tool_call>' + body + '</tool_call>')\nevents += p.finish()\nassert events == [want for _, want in bodies], events\n"
+        },
+        {
+          "name": "Finish flushes held text, reports an open call, and closes the parser",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "The end of the stream was handled wrong. Held-back text is released as text, an open call is an unterminated error with its body as raw, and the parser refuses input after finish.",
+          "hiddenCode": "\np = {fn}()\nassert p.feed('costs <') == [{'type': 'text', 'content': 'costs '}]\nassert p.finish() == [{'type': 'text', 'content': '<'}]\n\np = {fn}()\np.feed('go <tool_call>{\"name\": \"slow\", \"argu')\nassert p.finish() == [{'type': 'error', 'raw': '{\"name\": \"slow\", \"argu', 'reason': 'unterminated'}]\n\np = {fn}()\nassert p.feed('') == []\nassert p.finish() == []\nfor action in (lambda: p.feed('x'), lambda: p.finish()):\n    try:\n        action()\n    except ValueError:\n        continue\n    raise AssertionError('the parser must refuse feed and finish after finish')\n"
+        },
+        {
+          "name": "Bad tags and non-string chunks are rejected",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "An empty, non-string or identical pair of tags, or a non-string chunk, was accepted instead of raising ValueError.",
+          "hiddenCode": "\nfor kwargs in ({'open_tag': ''}, {'close_tag': ''}, {'open_tag': None},\n               {'open_tag': '[x]', 'close_tag': '[x]'}):\n    try:\n        {fn}(**kwargs)\n    except ValueError:\n        continue\n    raise AssertionError(f'{kwargs} should raise ValueError')\n\np = {fn}()\nfor bad in (None, b'<tool_call>', 3):\n    try:\n        p.feed(bad)\n    except ValueError:\n        continue\n    raise AssertionError(f'feed({bad!r}) should raise ValueError')\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "You are always in one of two states: outside a call, or inside one. What are you looking for in each? Outside a call, suppose the pending text ends in '<to' — can you release it? What about 'hello'? What exactly is the rule that decides how many characters at the end you must keep? Try it on a tag like '<<call>>' with pending text 'x<<' — does your rule give the right answer? Inside a call, the close tag can be split across chunks too; does your code notice a close tag that arrives in two halves? Last, what do you owe the caller when the stream ends in each state?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Keep one string buffer and a flag for inside-or-outside. On each feed, append the chunk and loop. Outside: find the open tag in the buffer. If found, emit the text before it (if non-empty), drop the tag, flip to inside, and loop again — one chunk can hold several calls. If not found, compute how much to hold: for sizes from min(len(buffer), len(open_tag) - 1) down to 1, the first size whose buffer suffix is a prefix of the open tag is the answer; emit everything before that suffix and keep the suffix. Checking only whether the buffer ends in the tag's first character fails on self-overlapping tags. Inside: find the close tag in the buffer; if it is absent, keep buffering and stop — the close tag may complete on the next chunk. If found, the body is everything before it; parse it with json.loads, classify failures into invalid_json or not_a_call, and emit either a tool_call or an error. Then flip back to outside and loop. On finish, the buffer is either held-back text or an unfinished body, and each has exactly one right event. A good self-test: feed the same stream whole and one character at a time, merge adjacent text events, and compare."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "agentic_rollout_loop"
+      ],
+      "modelConnections": [
+        "verl's HermesToolParser decodes the whole response and extracts calls with a regex over the completed text, so tool parsing in its agent loop happens once per turn rather than while tokens arrive.",
+        "The same parser logs and discards a call whose JSON fails to load. The trajectory then carries no record that the model attempted a call, which is the case this exercise surfaces as an error event instead.",
+        "verl notes its Hermes parser is adapted from vLLM's, whose serving path has a streaming variant for exactly this reason: a client streaming text cannot wait for the end of the response to find out whether it contained a call.",
+        "Qwen and Hermes-format models are trained to wrap calls in these tags, which is why the same format shows up in both inference servers and RL rollout code."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Text reaches the user with at most a tag's length of delay, and a call is available the moment its close tag arrives.",
+          "Chunking-independence makes the parser testable: the same stream fed whole and one character at a time must give the same calls.",
+          "Malformed calls stay visible as events, so both the agent loop and a training pipeline can react to them rather than silently losing them."
+        ],
+        "cons": [
+          "The first close tag ends a call, so a JSON string argument that contains the close tag literally is cut short. Fixing that needs a JSON-aware scanner, which costs more than it usually buys.",
+          "Re-searching a growing call body on every chunk is quadratic in the body's length when chunks are tiny; a long call fed one token at a time pays for it.",
+          "Arguments are only available once the call closes, so a slow call with large arguments cannot be routed early."
+        ]
+      },
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/volcengine/verl",
+          "commit": "12ebe0cb4d300c58449fb6c675379e8700015c51",
+          "path": "verl/experimental/agent_loop/tool_parser.py",
+          "symbol": "HermesToolParser.extract_tool_calls",
+          "license": "Apache-2.0",
+          "adapted": "Hermes-format tool-call extraction: calls are JSON objects with name and arguments between <tool_call> and </tool_call>, and the text outside the tags is returned as content.",
+          "simplifications": "Upstream decodes token ids with a tokenizer and runs a non-greedy regex over the finished text; this exercise takes text chunks and parses incrementally, which upstream does not do. Upstream also requires an arguments key and drops a call that fails to load, logging the error; here arguments default to an empty object and a failed call becomes an error event. Upstream leaves an unterminated call in the content as literal text; here it is an unterminated error."
+        }
+      ],
+      "designNoteRubric": [
+        {
+          "field": "api_boundaries",
+          "label": "API boundaries and class responsibilities"
+        },
+        {
+          "field": "state_ownership",
+          "label": "State and ownership"
+        },
+        {
+          "field": "failure_recovery",
+          "label": "Failure behavior and recovery"
+        },
+        {
+          "field": "backpressure_concurrency",
+          "label": "Backpressure and concurrency"
+        },
+        {
+          "field": "durability_idempotency",
+          "label": "Durability and idempotency"
+        },
+        {
+          "field": "observability",
+          "label": "Observability"
+        },
+        {
+          "field": "security",
+          "label": "Security"
+        },
+        {
+          "field": "tradeoffs",
+          "label": "Explicit tradeoffs"
+        }
+      ]
     }
   ]
 }

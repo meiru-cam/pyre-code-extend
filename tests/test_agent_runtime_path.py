@@ -21,6 +21,8 @@ def test_agent_runtime_path_is_separate_and_progressive():
         "budgeted_agent_loop",
         "supervisor_orchestration",
         "context_compaction",
+        "tool_call_dag",
+        "tool_call_stream_parser",
     ]
     assert path["prerequisites"] == []
     assert "system" in path["titleEn"].lower()

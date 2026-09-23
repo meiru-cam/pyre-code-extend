@@ -107,5 +107,7 @@
   "mpnn_layer": "def mpnn_layer(A, X, E, W_msg, W_upd):\n    # A: adjacency (N, N), X: node features (N, F)\n    # E: edge features (N, N, D_e)\n    # W_msg: (2*F+D_e, F_msg), W_upd: (F+F_msg, F_out)\n    pass",
   "link_prediction": "def link_prediction(A, X, edges):\n    # A: adjacency matrix (N, N)\n    # X: node features (N, F)\n    # edges: (M, 2) node pairs to predict\n    pass",
   "graphsage_layer": "def graphsage_layer(A, X, W, k=None):\n    # A: adjacency matrix (N, N)\n    # X: node features (N, F_in)\n    # W: weight matrix (2*F_in, F_out)\n    # k: max neighbors to sample (None = all)\n    pass",
-  "context_compaction": "def compact_context(messages, token_budget, summary_budget, count_tokens, summarize):\n    pass"
+  "context_compaction": "def compact_context(messages, token_budget, summary_budget, count_tokens, summarize):\n    pass",
+  "tool_call_dag": "def schedule_tool_calls(calls, execute, max_parallel):\n    pass",
+  "tool_call_stream_parser": "class ToolCallStreamParser:\n\n    def __init__(self, open_tag=\"<tool_call>\", close_tag=\"</tool_call>\"):\n        pass\n\n    def feed(self, chunk):\n        pass\n\n    def finish(self):\n        pass"
 }
