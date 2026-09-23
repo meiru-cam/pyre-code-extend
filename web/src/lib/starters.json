@@ -109,5 +109,6 @@
   "graphsage_layer": "def graphsage_layer(A, X, W, k=None):\n    # A: adjacency matrix (N, N)\n    # X: node features (N, F_in)\n    # W: weight matrix (2*F_in, F_out)\n    # k: max neighbors to sample (None = all)\n    pass",
   "context_compaction": "def compact_context(messages, token_budget, summary_budget, count_tokens, summarize):\n    pass",
   "tool_call_dag": "def schedule_tool_calls(calls, execute, max_parallel):\n    pass",
-  "tool_call_stream_parser": "class ToolCallStreamParser:\n\n    def __init__(self, open_tag=\"<tool_call>\", close_tag=\"</tool_call>\"):\n        pass\n\n    def feed(self, chunk):\n        pass\n\n    def finish(self):\n        pass"
+  "tool_call_stream_parser": "class ToolCallStreamParser:\n\n    def __init__(self, open_tag=\"<tool_call>\", close_tag=\"</tool_call>\"):\n        pass\n\n    def feed(self, chunk):\n        pass\n\n    def finish(self):\n        pass",
+  "agent_rollout_truncation": "def finalize_agent_rollout(response_ids, response_mask, rollout_log_probs, reward, max_response_length, overlong_penalty):\n    pass"
 }

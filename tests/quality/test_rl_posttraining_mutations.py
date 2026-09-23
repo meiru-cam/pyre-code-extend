@@ -1032,6 +1032,7 @@ RL_TASK_IDS = [
     "rollout_batch_assembly",
     "grpo_train_step",
     "agentic_rollout_loop",
+    "agent_rollout_truncation",
 ]
 
 
@@ -1403,7 +1404,7 @@ def test_agentic_rollout_loop_reference_and_mutations(_repeat):
 
 
 def test_the_rl_path_is_complete():
-    """All 15 tickets of the 2026-09-12 backlog: P1-P5, S1-S8 (S9 cut), I1-I2."""
+    """The original 15-ticket stack plus rollout-length finalization."""
     import json
 
     paths = json.loads(
@@ -1415,7 +1416,7 @@ def test_the_rl_path_is_complete():
         "the path order must match the backlog's primitive -> subsystem -> integrative "
         "progression"
     )
-    assert len(RL_TASK_IDS) == 15
+    assert len(RL_TASK_IDS) == 16
 
 
 def test_rl_harness_never_imports_a_task_solution():
