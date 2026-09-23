@@ -7,6 +7,8 @@ from pathlib import Path
 # Add project root to sys.path for torch_judge imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import contextlib
+import ctypes
 import io
 import os
 import threading
@@ -209,6 +211,72 @@ def _validate_code(code: str) -> str | None:
 TEST_FILENAME = "<evaluator-case>"
 SOLUTION_FILENAME = "<submitted-solution>"
 
+# Wall-clock budget for loading a submission and for each evaluator case. The slowest
+# reference case takes about 1.3s, so the default leaves room for a correct but slow
+# solution while still bounding a submission that never finishes.
+CASE_TIMEOUT_SECONDS = float(os.environ.get("PYRE_CASE_TIMEOUT_SECONDS", "10"))
+_REINJECT_SECONDS = 0.25
+
+
+class GradingTimeout(BaseException):
+    """Raised inside submitted code that outruns its deadline.
+
+    A BaseException, so that an ``except Exception`` in the submission cannot swallow it.
+    """
+
+
+@contextlib.contextmanager
+def _deadline(seconds: float):
+    """Interrupt the current thread with GradingTimeout once ``seconds`` have passed.
+
+    The grading endpoints are synchronous, so they run on a worker thread that signals
+    cannot reach; the exception is delivered with PyThreadState_SetAsyncExc instead.
+    It lands at the next bytecode boundary, so a long call into C (a large matmul,
+    time.sleep) finishes before it fires. It is re-sent until the block exits, so one
+    ``except BaseException`` in the submission does not defeat it. A loop that catches
+    BaseException on every iteration still can; only process isolation closes that.
+    """
+    target = ctypes.c_ulong(threading.get_ident())
+    done = threading.Event()
+    guard = threading.Lock()
+
+    def watchdog() -> None:
+        if done.wait(seconds):
+            return
+        while True:
+            with guard:
+                if done.is_set():
+                    return
+                ctypes.pythonapi.PyThreadState_SetAsyncExc(target, ctypes.py_object(GradingTimeout))
+            if done.wait(_REINJECT_SECONDS):
+                return
+
+    threading.Thread(target=watchdog, name="grading-deadline", daemon=True).start()
+    try:
+        yield
+    finally:
+        # Disarm under the watchdog's lock, then drop any exception that was sent but not
+        # yet delivered, so none can surface later in grader code. A pending one may be
+        # delivered while this runs; retry until the disarm itself completes.
+        while True:
+            try:
+                with guard:
+                    done.set()
+                    ctypes.pythonapi.PyThreadState_SetAsyncExc(target, None)
+                break
+            except GradingTimeout:
+                continue
+
+
+def _timeout_message(seconds: float) -> str:
+    return (
+        f"Timed out after {seconds:g}s. The code did not finish; look for a loop "
+        "that can keep running without making progress."
+    )
+
+
+NOT_RUN_AFTER_TIMEOUT = "Not run: an earlier case timed out."
+
 
 def _error_location(test_code: str, submitted_code: str) -> tuple[int | None, str | None, str | None]:
     """Find the innermost frame of the live exception that belongs to code we can show.
@@ -228,14 +296,20 @@ def _error_location(test_code: str, submitted_code: str) -> tuple[int | None, st
     return None, None, None
 
 
-def _finalize_result(result: TestResult, test: dict, test_index: int) -> TestResult:
-    """Attach behavior metadata and mask unshown-case details."""
+def _finalize_result(
+    result: TestResult, test: dict, test_index: int, grader_message: bool = False,
+) -> TestResult:
+    """Attach behavior metadata and mask unshown-case details.
+
+    ``grader_message`` marks an error the grader wrote itself, such as a timeout. It is
+    kept as is: the case's failure_message describes a wrong answer, not one never given.
+    """
     result.behavior = test.get("behavior")
     result.visibility = test.get("visibility", "visible")
     result.testIndex = test_index
     if result.visibility == "unshown":
         result.output = None
-        if not result.passed:
+        if not result.passed and not grader_message:
             result.error = test.get("failure_message") or (
                 f"Behavior check failed: {result.behavior}"
                 if result.behavior
@@ -257,10 +331,20 @@ def _execute_tests(code: str, task: dict, test_indices: list[int] | None = None,
         "np": __import__("numpy"),
         "math": math,
     }
+    timeout = CASE_TIMEOUT_SECONDS
     try:
-        exec(compile(code, SOLUTION_FILENAME, "exec"), user_ns)
+        with _deadline(timeout):
+            exec(compile(code, SOLUTION_FILENAME, "exec"), user_ns)
     except SyntaxError as e:
         return GradeResponse(passed=0, total=0, allPassed=False, results=[], totalTimeMs=0.0, error=f"Syntax error: {e}")
+    except GradingTimeout:
+        return GradeResponse(
+            passed=0, total=0, allPassed=False, results=[], totalTimeMs=0.0,
+            error=(
+                f"Loading your code timed out after {timeout:g}s. Top-level statements run "
+                "once when the code loads; keep long-running work inside the function."
+            ),
+        )
 
     fn_name = task.get("function_name")
     if fn_name is None:
@@ -290,8 +374,22 @@ def _execute_tests(code: str, task: dict, test_indices: list[int] | None = None,
     results: list[TestResult] = []
     passed = 0
     total_time_ms = 0.0
+    timed_out = False
 
     for test_index, test in indexed_tests:
+        # One timeout already means the submission hangs; running the rest would only
+        # multiply the wait, and hold the stdout lock that every other request needs.
+        if timed_out:
+            results.append(_finalize_result(
+                TestResult(
+                    name=test["name"], passed=False, execTimeMs=0.0,
+                    error=NOT_RUN_AFTER_TIMEOUT, testIndex=test_index,
+                ),
+                test,
+                test_index,
+                grader_message=True,
+            ))
+            continue
         _torch = __import__("torch")
         test_ns: dict[str, Any] = {
             "torch": _torch,
@@ -313,7 +411,8 @@ def _execute_tests(code: str, task: dict, test_indices: list[int] | None = None,
                 sys.stdout = captured = io.StringIO()
                 try:
                     start = time.perf_counter()
-                    exec(compiled_test, test_ns)
+                    with _deadline(timeout):
+                        exec(compiled_test, test_ns)
                     exec_time_ms = (time.perf_counter() - start) * 1000
                     output = captured.getvalue() or None
                     results.append(_finalize_result(
@@ -327,6 +426,22 @@ def _execute_tests(code: str, task: dict, test_indices: list[int] | None = None,
                     passed += 1
                 except HarnessFailure:
                     raise
+                except GradingTimeout:
+                    timed_out = True
+                    exec_time_ms = (time.perf_counter() - start) * 1000
+                    output = captured.getvalue() or None
+                    line, line_text, scope = _error_location(test_code, code)
+                    results.append(_finalize_result(
+                        TestResult(
+                            name=test["name"], passed=False, execTimeMs=exec_time_ms,
+                            error=_timeout_message(timeout), output=output,
+                            testIndex=test_index,
+                            errorLine=line, errorLineText=line_text, errorScope=scope,
+                        ),
+                        test,
+                        test_index,
+                        grader_message=True,
+                    ))
                 except AssertionError as e:
                     exec_time_ms = (time.perf_counter() - start) * 1000
                     output = captured.getvalue() or None
@@ -359,7 +474,8 @@ def _execute_tests(code: str, task: dict, test_indices: list[int] | None = None,
         else:
             start = time.perf_counter()
             try:
-                exec(compiled_test, test_ns)
+                with _deadline(timeout):
+                    exec(compiled_test, test_ns)
                 exec_time_ms = (time.perf_counter() - start) * 1000
                 results.append(_finalize_result(
                     TestResult(
@@ -372,6 +488,20 @@ def _execute_tests(code: str, task: dict, test_indices: list[int] | None = None,
                 passed += 1
             except HarnessFailure:
                 raise
+            except GradingTimeout:
+                timed_out = True
+                exec_time_ms = (time.perf_counter() - start) * 1000
+                line, line_text, scope = _error_location(test_code, code)
+                results.append(_finalize_result(
+                    TestResult(
+                        name=test["name"], passed=False, execTimeMs=exec_time_ms,
+                        error=_timeout_message(timeout), testIndex=test_index,
+                        errorLine=line, errorLineText=line_text, errorScope=scope,
+                    ),
+                    test,
+                    test_index,
+                    grader_message=True,
+                ))
             except AssertionError as e:
                 exec_time_ms = (time.perf_counter() - start) * 1000
                 line, line_text, scope = _error_location(test_code, code)
