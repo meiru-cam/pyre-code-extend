@@ -51,13 +51,13 @@ def test_agent_rollout_truncation_rejects_documented_mistakes():
         ),
         _mutation(
             "adds the overlong penalty instead of subtracting it",
-            "    effective_reward = float(reward) - (float(overlong_penalty) if truncated else 0.0)",
-            "    effective_reward = float(reward) + (float(overlong_penalty) if truncated else 0.0)",
+            "    effective_reward = float(reward) - (penalty if truncated else 0.0)",
+            "    effective_reward = float(reward) + (penalty if truncated else 0.0)",
         ),
         _mutation(
             "penalizes every trajectory",
-            "    effective_reward = float(reward) - (float(overlong_penalty) if truncated else 0.0)",
-            "    effective_reward = float(reward) - float(overlong_penalty)",
+            "    effective_reward = float(reward) - (penalty if truncated else 0.0)",
+            "    effective_reward = float(reward) - penalty",
         ),
         _mutation(
             "puts terminal reward on the last policy token",
@@ -68,6 +68,26 @@ def test_agent_rollout_truncation_rejects_documented_mistakes():
             "returns the caller's tensor views",
             "    kept_ids = response_ids[:kept].clone()",
             "    kept_ids = response_ids[:kept]",
+        ),
+        _mutation(
+            "returns the caller's mask view",
+            "    kept_mask = response_mask[:kept].clone()",
+            "    kept_mask = response_mask[:kept]",
+        ),
+        _mutation(
+            "returns the caller's log-probability view",
+            "    kept_log_probs = rollout_log_probs[:kept].clone()",
+            "    kept_log_probs = rollout_log_probs[:kept]",
+        ),
+        _mutation(
+            "accepts complex token ids as integers",
+            " or torch.is_complex(response_ids)",
+            "",
+        ),
+        _mutation(
+            "accepts a NaN penalty",
+            "    if math.isnan(penalty) or penalty < 0:",
+            "    if penalty < 0:",
         ),
     ]
     rejected = assert_mutations_rejected(TASK_ID, mutations)

@@ -28,6 +28,7 @@ from torch_judge.harness.rl.vendored import (
     openrlhf_gspo_ratio,
     openrlhf_policy_loss,
     openrlhf_value_loss,
+    verl_finalize_agent_rollout,
 )
 from torch_judge.tasks import get_task
 
@@ -247,6 +248,29 @@ def test_gspo_sequence_ratio_matches_openrlhf(seed):
 
 
 # --------------------------------------------------------------------------
+# verl
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_agent_rollout_truncation_matches_verl_prefix_and_reward_layout(seed):
+    fn = reference("agent_rollout_truncation")
+    generator = torch.Generator().manual_seed(seed)
+    for original_length, limit in ((7, 4), (4, 4), (3, 8)):
+        ids = torch.randint(1, 100, (original_length,), generator=generator)
+        mask = torch.rand(original_length, generator=generator) > 0.4
+        log_probs = torch.randn(original_length, generator=generator)
+        reward = float(torch.randn((), generator=generator))
+
+        mine = fn(ids, mask, log_probs, reward, limit, overlong_penalty=0.0)
+        theirs = verl_finalize_agent_rollout(ids, mask, log_probs, reward, limit)
+
+        for key in ("response_ids", "response_mask", "rollout_log_probs", "token_rewards"):
+            assert torch.equal(mine[key], theirs[key]), (key, mine[key], theirs[key])
+        assert mine["truncated"] is (original_length > limit)
+
+
+# --------------------------------------------------------------------------
 # Provenance hygiene
 # --------------------------------------------------------------------------
 
@@ -266,7 +290,9 @@ def test_vendored_modules_never_import_a_task_solution():
             )
 
 
-@pytest.mark.parametrize("module", ["openrlhf_loss.py", "nano_aha_moment.py"])
+@pytest.mark.parametrize(
+    "module", ["openrlhf_loss.py", "nano_aha_moment.py", "verl_agent_loop.py"]
+)
 def test_vendored_modules_carry_provenance_and_license(module):
     source = (VENDORED_DIR / module).read_text()
     for marker in ("Upstream:", "License:", "WHAT WAS CHANGED"):

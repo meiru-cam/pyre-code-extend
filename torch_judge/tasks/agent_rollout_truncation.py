@@ -258,6 +258,7 @@ bad_cases = [
     (valid_ids, valid_mask, torch.tensor([-0.1, 0.0])),
     (valid_ids.reshape(1, 3), valid_mask, valid_logs),
     (valid_ids.float(), valid_mask, valid_logs),
+    (valid_ids.to(torch.complex64), valid_mask, valid_logs),
     (valid_ids, valid_mask.long(), valid_logs),
     (valid_ids, valid_mask, valid_logs.long()),
 ]
@@ -284,6 +285,7 @@ cases = [
     (torch.tensor([1]), torch.tensor([True]), torch.tensor([-0.1]), 0, 0.0),
     (torch.tensor([1]), torch.tensor([True]), torch.tensor([-0.1]), -2, 0.0),
     (torch.tensor([1]), torch.tensor([True]), torch.tensor([-0.1]), 1, -0.1),
+    (torch.tensor([1]), torch.tensor([True]), torch.tensor([-0.1]), 1, float('nan')),
 ]
 for ids, mask, logs, limit, penalty in cases:
     try:
@@ -295,6 +297,7 @@ for ids, mask, logs, limit, penalty in cases:
         },
     ],
     "solution": '''def finalize_agent_rollout(response_ids, response_mask, rollout_log_probs, reward, max_response_length, overlong_penalty):
+    import math
     import torch
 
     tensors = (response_ids, response_mask, rollout_log_probs)
@@ -306,7 +309,7 @@ for ids, mask, logs, limit, penalty in cases:
         raise ValueError("response tensors must have the same length")
     if not (response_ids.device == response_mask.device == rollout_log_probs.device):
         raise ValueError("response tensors must be on the same device")
-    if response_ids.dtype.is_floating_point or response_ids.dtype == torch.bool:
+    if response_ids.dtype == torch.bool or torch.is_floating_point(response_ids) or torch.is_complex(response_ids):
         raise ValueError("response_ids must use an integer dtype")
     if response_mask.dtype != torch.bool:
         raise ValueError("response_mask must use boolean dtype")
@@ -314,7 +317,8 @@ for ids, mask, logs, limit, penalty in cases:
         raise ValueError("rollout_log_probs must use a floating-point dtype")
     if not isinstance(max_response_length, int) or isinstance(max_response_length, bool) or max_response_length < 1:
         raise ValueError("max_response_length must be a positive integer")
-    if float(overlong_penalty) < 0:
+    penalty = float(overlong_penalty)
+    if math.isnan(penalty) or penalty < 0:
         raise ValueError("overlong_penalty must be non-negative")
 
     original_length = response_ids.numel()
@@ -324,7 +328,7 @@ for ids, mask, logs, limit, penalty in cases:
     kept_mask = response_mask[:kept].clone()
     kept_log_probs = rollout_log_probs[:kept].clone()
 
-    effective_reward = float(reward) - (float(overlong_penalty) if truncated else 0.0)
+    effective_reward = float(reward) - (penalty if truncated else 0.0)
     token_rewards = torch.zeros_like(kept_log_probs)
     token_rewards[-1] = effective_reward
 
