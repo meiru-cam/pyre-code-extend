@@ -15,6 +15,7 @@ No module in this package may import `torch_judge.tasks`.
 Licenses of vendored material:
   * openrlhf_loss.py    — Apache License 2.0, the OpenRLHF authors
   * nano_aha_moment.py  — MIT License, Copyright (c) 2025 McGill NLP
+  * verl_agent_loop.py  — Apache License 2.0, Bytedance Ltd. and affiliates
 """
 
 from torch_judge.harness.rl.vendored.nano_aha_moment import (
@@ -33,6 +34,7 @@ from torch_judge.harness.rl.vendored.openrlhf_loss import (
     openrlhf_policy_loss,
     openrlhf_value_loss,
 )
+from torch_judge.harness.rl.vendored.verl_agent_loop import verl_finalize_agent_rollout
 
 __all__ = [
     "NANO_ADVANTAGE_EPS",
@@ -47,4 +49,5 @@ __all__ = [
     "openrlhf_gspo_ratio",
     "openrlhf_policy_loss",
     "openrlhf_value_loss",
+    "verl_finalize_agent_rollout",
 ]

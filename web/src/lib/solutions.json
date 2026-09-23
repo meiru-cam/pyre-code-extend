@@ -900,6 +900,15 @@
       }
     ]
   },
+  "agent_rollout_truncation": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def finalize_agent_rollout(response_ids, response_mask, rollout_log_probs, reward, max_response_length, overlong_penalty):\n    import math\n    import torch\n\n    tensors = (response_ids, response_mask, rollout_log_probs)\n    if any(not isinstance(tensor, torch.Tensor) or tensor.ndim != 1 for tensor in tensors):\n        raise ValueError(\"response tensors must be one-dimensional tensors\")\n    if response_ids.numel() == 0:\n        raise ValueError(\"response tensors must be non-empty\")\n    if not (response_ids.numel() == response_mask.numel() == rollout_log_probs.numel()):\n        raise ValueError(\"response tensors must have the same length\")\n    if not (response_ids.device == response_mask.device == rollout_log_probs.device):\n        raise ValueError(\"response tensors must be on the same device\")\n    if response_ids.dtype == torch.bool or torch.is_floating_point(response_ids) or torch.is_complex(response_ids):\n        raise ValueError(\"response_ids must use an integer dtype\")\n    if response_mask.dtype != torch.bool:\n        raise ValueError(\"response_mask must use boolean dtype\")\n    if not rollout_log_probs.dtype.is_floating_point:\n        raise ValueError(\"rollout_log_probs must use a floating-point dtype\")\n    if not isinstance(max_response_length, int) or isinstance(max_response_length, bool) or max_response_length < 1:\n        raise ValueError(\"max_response_length must be a positive integer\")\n    penalty = float(overlong_penalty)\n    if math.isnan(penalty) or penalty < 0:\n        raise ValueError(\"overlong_penalty must be non-negative\")\n\n    original_length = response_ids.numel()\n    truncated = original_length > max_response_length\n    kept = min(original_length, max_response_length)\n    kept_ids = response_ids[:kept].clone()\n    kept_mask = response_mask[:kept].clone()\n    kept_log_probs = rollout_log_probs[:kept].clone()\n\n    effective_reward = float(reward) - (penalty if truncated else 0.0)\n    token_rewards = torch.zeros_like(kept_log_probs)\n    token_rewards[-1] = effective_reward\n\n    return {\n        \"response_ids\": kept_ids,\n        \"response_mask\": kept_mask,\n        \"rollout_log_probs\": kept_log_probs,\n        \"token_rewards\": token_rewards,\n        \"truncated\": truncated,\n    }",
+        "role": "solution"
+      }
+    ]
+  },
   "agentic_rollout_loop": {
     "cells": [
       {

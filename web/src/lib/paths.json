@@ -107,7 +107,7 @@
       "descriptionEn": "Build the RL post-training stack one contract at a time — per-token log-probabilities, group-relative advantages, the k3 KL estimator, response masking, and verifiable rewards — then assemble a full GRPO step and an agentic rollout, with pinned nano-aha-moment, simple_GRPO, and OpenRLHF code connections.",
       "descriptionZh": "Build the RL post-training stack one contract at a time — per-token log-probabilities, group-relative advantages, the k3 KL estimator, response masking, and verifiable rewards — then assemble a full GRPO step and an agentic rollout, with pinned nano-aha-moment, simple_GRPO, and OpenRLHF code connections.",
       "icon": "Trophy",
-      "problems": ["per_token_logprobs", "group_relative_advantage", "k3_kl_penalty", "response_token_mask", "rlvr_format_reward", "grpo_token_loss", "ppo_clipped_policy_loss", "ppo_value_loss", "gae_advantage", "gspo_sequence_ratio", "dapo_dynamic_sampling", "vineppo_mc_value", "rollout_batch_assembly", "grpo_train_step", "agentic_rollout_loop"],
+      "problems": ["per_token_logprobs", "group_relative_advantage", "k3_kl_penalty", "response_token_mask", "rlvr_format_reward", "grpo_token_loss", "ppo_clipped_policy_loss", "ppo_value_loss", "gae_advantage", "gspo_sequence_ratio", "dapo_dynamic_sampling", "vineppo_mc_value", "rollout_batch_assembly", "grpo_train_step", "agentic_rollout_loop", "agent_rollout_truncation"],
       "prerequisites": ["transformer-internals"]
     },
     {
