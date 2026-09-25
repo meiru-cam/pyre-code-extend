@@ -1022,17 +1022,28 @@ RL_TASK_IDS = [
     "k3_kl_penalty",
     "response_token_mask",
     "rlvr_format_reward",
+    "reinforce_discounted_returns",
+    "reinforce_policy_loss",
     "grpo_token_loss",
     "ppo_clipped_policy_loss",
     "ppo_value_loss",
     "gae_advantage",
     "gspo_sequence_ratio",
     "dapo_dynamic_sampling",
+    "dapo_clip_higher_loss",
     "vineppo_mc_value",
     "rollout_batch_assembly",
+    "verl_dataproto_filter_chunk",
     "grpo_train_step",
     "agentic_rollout_loop",
     "agent_rollout_truncation",
+    "rl_eval_loop",
+    "async_agent_rollout",
+    "agent_env_adapter",
+    "slime_custom_generate_hook",
+    "rollout_train_boundary",
+    "fully_async_rollout_buffer",
+    "rollout_weight_sync_staleness",
 ]
 
 
@@ -1257,7 +1268,14 @@ def test_rl_task_has_pinned_code_provenance(task_id):
     sources = get_task(task_id)["sources"]
     code_sources = [source for source in sources if source["kind"] == "code"]
     assert code_sources, f"{task_id} needs at least one pinned code source"
-    assert any(source["kind"] == "paper" for source in sources), f"{task_id} needs a paper source"
+    # Runtime and framework contracts come from implementation/docs, not an algorithm paper.
+    framework_api_tasks = {
+        "rl_eval_loop", "async_agent_rollout", "agent_env_adapter",
+        "rollout_train_boundary", "fully_async_rollout_buffer",
+        "verl_dataproto_filter_chunk", "slime_custom_generate_hook",
+    }
+    if task_id not in framework_api_tasks:
+        assert any(source["kind"] == "paper" for source in sources), f"{task_id} needs a paper source"
 
 
 @pytest.mark.parametrize("task_id", RL_TASK_IDS)
@@ -1404,7 +1422,7 @@ def test_agentic_rollout_loop_reference_and_mutations(_repeat):
 
 
 def test_the_rl_path_is_complete():
-    """The original 15-ticket stack plus rollout-length finalization."""
+    """The RL path contains each exercise in its learner-facing order."""
     import json
 
     paths = json.loads(
@@ -1416,7 +1434,22 @@ def test_the_rl_path_is_complete():
         "the path order must match the backlog's primitive -> subsystem -> integrative "
         "progression"
     )
-    assert len(RL_TASK_IDS) == 16
+    assert len(RL_TASK_IDS) == 27
+
+
+def test_rl_path_teaches_foundations_before_integrative_training():
+    order = {task_id: index for index, task_id in enumerate(RL_TASK_IDS)}
+    for foundation in (
+        "reinforce_discounted_returns",
+        "reinforce_policy_loss",
+        "dapo_clip_higher_loss",
+        "verl_dataproto_filter_chunk",
+    ):
+        assert order[foundation] < order["grpo_train_step"], foundation
+    for task_id in RL_TASK_IDS:
+        for prerequisite in get_task(task_id).get("advisory_prerequisites", []):
+            if prerequisite in order:
+                assert order[prerequisite] < order[task_id], (prerequisite, task_id)
 
 
 def test_rl_harness_never_imports_a_task_solution():

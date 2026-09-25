@@ -110,5 +110,16 @@
   "context_compaction": "def compact_context(messages, token_budget, summary_budget, count_tokens, summarize):\n    pass",
   "tool_call_dag": "def schedule_tool_calls(calls, execute, max_parallel):\n    pass",
   "tool_call_stream_parser": "class ToolCallStreamParser:\n\n    def __init__(self, open_tag=\"<tool_call>\", close_tag=\"</tool_call>\"):\n        pass\n\n    def feed(self, chunk):\n        pass\n\n    def finish(self):\n        pass",
-  "agent_rollout_truncation": "def finalize_agent_rollout(response_ids, response_mask, rollout_log_probs, reward, max_response_length, overlong_penalty):\n    pass"
+  "agent_rollout_truncation": "def finalize_agent_rollout(response_ids, response_mask, rollout_log_probs, reward, max_response_length, overlong_penalty):\n    pass",
+  "rl_eval_loop": "def rl_eval_loop(env, policy, episodes, seed=0):\n    pass",
+  "async_agent_rollout": "async def async_agent_rollout(rollout_fn, items, max_concurrency, timeout):\n    pass",
+  "agent_env_adapter": "def agent_env_adapter(env, policy, max_steps):\n    pass",
+  "rollout_train_boundary": "def rollout_train_boundary(trajectories):\n    pass",
+  "fully_async_rollout_buffer": "async def fully_async_rollout_buffer(rollout_fn, train_fn, items, max_concurrency, train_batch_size, timeout):\n    pass",
+  "reinforce_discounted_returns": "def reinforce_discounted_returns(rewards, dones, gamma=1.0):\n    pass",
+  "reinforce_policy_loss": "def reinforce_policy_loss(log_probs, returns, baseline, mask):\n    pass",
+  "dapo_clip_higher_loss": "def dapo_clip_higher_loss(log_probs, old_log_probs, advantages, mask, clip_low=0.2, clip_high=0.28):\n    pass",
+  "verl_dataproto_filter_chunk": "def verl_dataproto_filter_chunk(data, chunks):\n    pass",
+  "rollout_weight_sync_staleness": "def rollout_weight_sync_staleness(samples, trainer_version, serving_version, max_staleness, in_flight, sync_weights):\n    pass",
+  "slime_custom_generate_hook": "async def slime_custom_generate_hook(args, sample, sampling_params):\n    pass"
 }

@@ -272,6 +272,12 @@ Exercises are attemptable without opening external sources. An optional referenc
 
 References are additional information, not prerequisites.
 
+For RL exercises, cite a precise paper section for an algorithmic objective
+and pin the implementation source to a commit, file, and symbol. A framework
+or runtime API-contract exercise may use pinned implementation sources alone
+when no paper directly specifies that interface; do not attach an unrelated
+paper merely to fill the `sources` field.
+
 ## Evaluation Model
 
 ### Visible and unshown cases

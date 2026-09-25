@@ -301,6 +301,15 @@
       }
     ]
   },
+  "agent_env_adapter": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def agent_env_adapter(env, policy, max_steps):\n    if not isinstance(max_steps, int) or isinstance(max_steps, bool) or max_steps <= 0:\n        raise ValueError(\"max_steps must be a positive integer\")\n    observation = env.reset()\n    response_ids, response_mask, rewards = [], [], []\n    terminated = truncated = False\n    for _ in range(max_steps):\n        output = policy(observation)\n        token_ids = list(output[\"token_ids\"])\n        response_ids.extend(token_ids)\n        response_mask.extend([True] * len(token_ids))\n        observation, reward, terminated, truncated, _ = env.step(output[\"action\"])\n        rewards.append(float(reward))\n        if terminated or truncated:\n            break\n    return {\n        \"response_ids\": response_ids,\n        \"response_mask\": response_mask,\n        \"rewards\": rewards,\n        \"return\": sum(rewards),\n        \"terminated\": bool(terminated),\n        \"truncated\": bool(truncated),\n    }",
+        "role": "solution"
+      }
+    ]
+  },
   "alibi": {
     "cells": [
       {
@@ -779,6 +788,24 @@
       }
     ]
   },
+  "reinforce_discounted_returns": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def reinforce_discounted_returns(rewards, dones, gamma=1.0):\n    import torch\n    if (rewards.ndim != 1 or not rewards.is_floating_point() or rewards.numel() == 0\n            or dones.ndim != 1 or dones.dtype != torch.bool\n            or dones.shape != rewards.shape or dones.device != rewards.device\n            or not 0 <= gamma <= 1):\n        raise ValueError(\"invalid rewards, dones, or gamma\")\n    out = torch.empty_like(rewards)\n    carry = rewards.new_zeros(())\n    for index in range(rewards.numel() - 1, -1, -1):\n        carry = rewards[index] + gamma * carry * (~dones[index])\n        out[index] = carry\n    return out",
+        "role": "solution"
+      }
+    ]
+  },
+  "reinforce_policy_loss": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def reinforce_policy_loss(log_probs, returns, baseline, mask):\n    import torch\n    tensors = (log_probs, returns, baseline, mask)\n    if (any(x.ndim != 1 for x in tensors)\n            or any(x.shape != log_probs.shape or x.device != log_probs.device for x in tensors)\n            or any(not x.is_floating_point() or not torch.isfinite(x).all()\n                   for x in (log_probs, returns, baseline))\n            or mask.dtype != torch.bool or not bool(mask.any())):\n        raise ValueError(\"invalid policy-gradient inputs\")\n    advantage = returns.detach() - baseline.detach()\n    return -(log_probs * advantage * mask).sum() / mask.sum()",
+        "role": "solution"
+      }
+    ]
+  },
   "reward_model": {
     "cells": [
       {
@@ -790,6 +817,15 @@
         "type": "code",
         "source": "torch.manual_seed(0)\n\nB, D = 8, 64\nreward_head = torch.randn(D, 1)\n\nh = torch.randn(B, D)\nloss_equal = reward_model_loss(h, h, reward_head)\nprint(f\"Equal hidden states => loss = {loss_equal.item():.4f}  (expected ≈ {math.log(2):.4f})\")\n\nchosen  = torch.ones(B, D)\nrejected = -torch.ones(B, D)\nloss_good = reward_model_loss(chosen, rejected, reward_head)\nprint(f\"Chosen >> rejected  => loss = {loss_good.item():.4f}  (expected small)\")",
         "role": "demo"
+      }
+    ]
+  },
+  "rl_eval_loop": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def rl_eval_loop(env, policy, episodes, seed=0):\n    if not isinstance(episodes, int) or isinstance(episodes, bool) or episodes <= 0:\n        raise ValueError(\"episodes must be a positive integer\")\n    returns, lengths, successes = [], [], []\n    for episode in range(episodes):\n        observation = env.reset(seed=seed + episode)\n        total, length, success = 0.0, 0, False\n        while True:\n            action = policy(observation)\n            observation, reward, terminated, truncated, info = env.step(action)\n            total += float(reward)\n            length += 1\n            success = bool(info.get(\"success\", False))\n            if terminated or truncated:\n                break\n        returns.append(total)\n        lengths.append(length)\n        successes.append(success)\n    return {\n        \"average_return\": sum(returns) / episodes,\n        \"average_length\": sum(lengths) / episodes,\n        \"success_rate\": sum(successes) / episodes,\n        \"episodes\": episodes,\n    }",
+        "role": "solution"
       }
     ]
   },
@@ -841,6 +877,15 @@
         "type": "code",
         "source": "Q=torch.randn(1,6,8); K=torch.randn(1,6,8); V=torch.randn(1,6,8)\nprint('window=0==V?', torch.allclose(sliding_window_attention(Q,K,V,0), V, atol=1e-5))",
         "role": "demo"
+      }
+    ]
+  },
+  "slime_custom_generate_hook": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "async def slime_custom_generate_hook(args, sample, sampling_params):\n    output = await args.generate(sample.prompt, sampling_params)\n    ids = output[\"token_ids\"]\n    reason = output[\"finish_reason\"]\n    if not isinstance(ids, list) or any(not isinstance(x, int) or isinstance(x, bool) for x in ids):\n        raise ValueError(\"token_ids must be a list of integers\")\n    statuses = {\n        \"stop\": sample.Status.COMPLETED,\n        \"length\": sample.Status.TRUNCATED,\n        \"abort\": sample.Status.ABORTED,\n    }\n    if reason not in statuses:\n        raise ValueError(\"unknown finish reason\")\n    sample.tokens = list(sample.tokens) + ids\n    sample.response_length = len(ids)\n    sample.loss_mask = [1] * len(ids)\n    sample.response = output[\"text\"]\n    sample.status = statuses[reason]\n    return sample",
+        "role": "solution"
       }
     ]
   },
@@ -932,6 +977,15 @@
       }
     ]
   },
+  "async_agent_rollout": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "async def async_agent_rollout(rollout_fn, items, max_concurrency, timeout):\n    import asyncio\n    if not isinstance(max_concurrency, int) or isinstance(max_concurrency, bool) or max_concurrency <= 0:\n        raise ValueError(\"max_concurrency must be positive\")\n    if timeout <= 0:\n        raise ValueError(\"timeout must be positive\")\n\n    async def run_one(index, item, semaphore):\n        async with semaphore:\n            try:\n                value = await asyncio.wait_for(rollout_fn(item), timeout=timeout)\n            except asyncio.TimeoutError:\n                return index, {\"item\": item, \"status\": \"timeout\", \"value\": None}\n            except Exception:\n                return index, {\"item\": item, \"status\": \"error\", \"value\": None}\n            return index, {\"item\": item, \"status\": \"ok\", \"value\": value}\n\n    async def run_all():\n        semaphore = asyncio.Semaphore(max_concurrency)\n        results = await asyncio.gather(\n            *(run_one(index, item, semaphore) for index, item in enumerate(items))\n        )\n        return [entry for _, entry in sorted(results)]\n\n    return await run_all()",
+        "role": "solution"
+      }
+    ]
+  },
   "bpe": {
     "cells": [
       {
@@ -965,6 +1019,15 @@
       {
         "type": "code",
         "source": "def compact_context(messages, token_budget, summary_budget, count_tokens, summarize):\n    if not isinstance(messages, list):\n        raise ValueError(\"messages must be a list\")\n    for message in messages:\n        if not isinstance(message, dict):\n            raise ValueError(\"every message must be a dictionary\")\n        role = message.get(\"role\")\n        if not isinstance(role, str) or not role:\n            raise ValueError(\"every message needs a non-empty string role\")\n    for name, value in ((\"token_budget\", token_budget), (\"summary_budget\", summary_budget)):\n        if not isinstance(value, int) or isinstance(value, bool) or value < 0:\n            raise ValueError(f\"{name} must be a non-negative integer\")\n    if summary_budget > token_budget:\n        raise ValueError(\"summary_budget cannot exceed token_budget\")\n\n    pinned = messages[:1] if messages and messages[0][\"role\"] == \"system\" else []\n\n    blocks = []\n    for message in messages[len(pinned):]:\n        if message[\"role\"] == \"tool\":\n            if not blocks or not blocks[-1][0].get(\"tool_calls\"):\n                raise ValueError(\"a tool message must follow the assistant turn that called it\")\n            blocks[-1].append(message)\n        else:\n            blocks.append([message])\n\n    pinned_tokens = sum(count_tokens(message) for message in pinned)\n    if pinned_tokens > token_budget:\n        raise ValueError(\"the pinned system message alone exceeds token_budget\")\n\n    block_tokens = [sum(count_tokens(message) for message in block) for block in blocks]\n    total = pinned_tokens + sum(block_tokens)\n    if total <= token_budget:\n        return {\n            \"messages\": [dict(message) for message in messages],\n            \"dropped\": 0,\n            \"compacted\": False,\n            \"tokens\": total,\n        }\n\n    if pinned_tokens + summary_budget > token_budget:\n        raise ValueError(\"no room for the summary inside token_budget\")\n    available = token_budget - pinned_tokens - summary_budget\n\n    start = len(blocks)\n    used = 0\n    for index in range(len(blocks) - 1, -1, -1):\n        if used + block_tokens[index] > available:\n            break\n        used += block_tokens[index]\n        start = index\n\n    dropped = [message for block in blocks[:start] for message in block]\n    text = summarize(dropped)\n    if not isinstance(text, str) or not text.strip():\n        raise ValueError(\"summarize must return a non-empty string\")\n    summary = {\"role\": \"system\", \"content\": text, \"compacted\": True}\n    summary_tokens = count_tokens(summary)\n    if summary_tokens > summary_budget:\n        raise ValueError(\"the summary exceeded summary_budget\")\n\n    kept = [dict(message) for block in blocks[start:] for message in block]\n    return {\n        \"messages\": [dict(message) for message in pinned] + [summary] + kept,\n        \"dropped\": len(dropped),\n        \"compacted\": True,\n        \"tokens\": pinned_tokens + summary_tokens + used,\n    }",
+        "role": "solution"
+      }
+    ]
+  },
+  "dapo_clip_higher_loss": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def dapo_clip_higher_loss(log_probs, old_log_probs, advantages, mask, clip_low=0.2, clip_high=0.28):\n    import torch\n    values = (log_probs, old_log_probs, advantages, mask)\n    if (any(x.ndim != 1 or x.shape != log_probs.shape or x.device != log_probs.device for x in values)\n            or any(not x.is_floating_point() for x in values[:3])\n            or mask.dtype != torch.bool or not bool(mask.any())\n            or not (0 <= clip_low < 1 and clip_high >= clip_low)):\n        raise ValueError(\"invalid DAPO inputs\")\n    valid = mask\n    ratio = torch.exp(log_probs[valid] - old_log_probs[valid].detach())\n    advantage = advantages[valid].detach()\n    raw = ratio * advantage\n    clipped = torch.clamp(ratio, 1 - clip_low, 1 + clip_high) * advantage\n    return -torch.minimum(raw, clipped).mean()",
         "role": "solution"
       }
     ]
@@ -1022,6 +1085,15 @@
         "type": "code",
         "source": "torch.manual_seed(0)\nworld_size = 4\nshard_size = 8\n\nparam_shards = [torch.randn(shard_size) for _ in range(world_size)]\n\ngrad_fn = lambda p: 2.0 * p\n\nnew_shards = fsdp_step(param_shards, grad_fn, world_size)\nfsdp_result = torch.cat(new_shards)\n\nfull_param = torch.cat(param_shards)\nref_result = full_param - 0.01 * grad_fn(full_param)\n\nprint(\"FSDP result shape:\", fsdp_result.shape)  # expect (32,)\nprint(\"Max diff vs SGD reference:\", (fsdp_result - ref_result).abs().max().item())  # expect ~0",
         "role": "demo"
+      }
+    ]
+  },
+  "fully_async_rollout_buffer": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "async def fully_async_rollout_buffer(rollout_fn, train_fn, items, max_concurrency, train_batch_size, timeout):\n    import asyncio\n    if not isinstance(max_concurrency, int) or isinstance(max_concurrency, bool) or max_concurrency <= 0:\n        raise ValueError(\"max_concurrency must be positive\")\n    if not isinstance(train_batch_size, int) or isinstance(train_batch_size, bool) or train_batch_size <= 0:\n        raise ValueError(\"train_batch_size must be positive\")\n    if timeout <= 0:\n        raise ValueError(\"timeout must be positive\")\n\n    async def produce(index, item, semaphore):\n        async with semaphore:\n            try:\n                value = await asyncio.wait_for(rollout_fn(item), timeout=timeout)\n            except asyncio.TimeoutError:\n                return index, {\"item\": item, \"status\": \"timeout\", \"value\": None}\n            except Exception:\n                return index, {\"item\": item, \"status\": \"error\", \"value\": None}\n            return index, {\"item\": item, \"status\": \"ok\", \"value\": value}\n\n    semaphore = asyncio.Semaphore(max_concurrency)\n    tasks = [\n        asyncio.create_task(produce(index, item, semaphore))\n        for index, item in enumerate(items)\n    ]\n    buffer, failures, trained_batches = [], [], []\n\n    async def emit_ready(force=False):\n        while len(buffer) >= train_batch_size or (force and buffer):\n            batch = sorted(buffer[:train_batch_size], key=lambda entry: entry[0])\n            del buffer[:train_batch_size]\n            public_batch = [entry[1] for entry in batch]\n            await train_fn(public_batch)\n            trained_batches.append(public_batch)\n\n    for completed in asyncio.as_completed(tasks):\n        index, result = await completed\n        if result[\"status\"] == \"ok\":\n            buffer.append((index, result))\n            await emit_ready()\n        else:\n            failures.append((index, result))\n\n    await emit_ready(force=True)\n    failures = [result for _, result in sorted(failures)]\n    return {\"trained_batches\": trained_batches, \"failures\": failures}",
+        "role": "solution"
       }
     ]
   },
@@ -1321,6 +1393,24 @@
       }
     ]
   },
+  "rollout_train_boundary": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def rollout_train_boundary(trajectories):\n    output = {\"input_ids\": [], \"loss_mask\": [], \"advantages\": [], \"episode_ids\": []}\n    for episode_id, trajectory in enumerate(trajectories):\n        try:\n            ids = trajectory[\"response_ids\"]\n            mask = trajectory[\"response_mask\"]\n            rewards = trajectory[\"rewards\"]\n        except (KeyError, TypeError):\n            raise ValueError(\"trajectory is missing a required field\")\n        if not ids or not rewards or len(ids) != len(mask):\n            raise ValueError(\"trajectory fields must be non-empty and aligned\")\n        total_reward = sum(float(reward) for reward in rewards)\n        for token_id, trainable in zip(ids, mask):\n            output[\"input_ids\"].append(token_id)\n            output[\"episode_ids\"].append(episode_id)\n            output[\"loss_mask\"].append(bool(trainable))\n            output[\"advantages\"].append(total_reward if trainable else 0.0)\n    return output",
+        "role": "solution"
+      }
+    ]
+  },
+  "rollout_weight_sync_staleness": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def rollout_weight_sync_staleness(samples, trainer_version, serving_version, max_staleness, in_flight, sync_weights):\n    for value in (trainer_version, serving_version, max_staleness, in_flight):\n        if not isinstance(value, int) or isinstance(value, bool) or value < 0:\n            raise ValueError(\"versions and counts must be non-negative integers\")\n    if serving_version > trainer_version:\n        raise ValueError(\"serving version is ahead of trainer\")\n    train, retry, dropped, seen = [], [], [], set()\n    for sample in samples:\n        try:\n            sample_id = sample[\"sample_id\"]\n            version = sample[\"weight_version\"]\n            status = sample[\"status\"]\n        except (KeyError, TypeError):\n            raise ValueError(\"malformed sample\")\n        if sample_id in seen or status not in (\"complete\", \"aborted\", \"failed\"):\n            raise ValueError(\"duplicate id or unknown status\")\n        seen.add(sample_id)\n        if not isinstance(version, int) or isinstance(version, bool) or version < 0 or version > trainer_version:\n            raise ValueError(\"invalid sample version\")\n        if status == \"failed\":\n            dropped.append(sample)\n        elif status == \"aborted\" or trainer_version - version > max_staleness:\n            retry.append(sample)\n        else:\n            train.append(sample)\n    sync_deferred = serving_version != trainer_version and in_flight > 0\n    if serving_version != trainer_version and not sync_deferred:\n        sync_weights(trainer_version)\n        serving_version = trainer_version\n    return {\n        \"train\": train, \"retry\": retry, \"dropped\": dropped,\n        \"serving_version\": serving_version, \"sync_deferred\": sync_deferred,\n    }",
+        "role": "solution"
+      }
+    ]
+  },
   "speculative_decoding": {
     "cells": [
       {
@@ -1391,6 +1481,15 @@
       {
         "type": "code",
         "source": "import json\n\n\nclass ToolCallStreamParser:\n    def __init__(self, open_tag=\"<tool_call>\", close_tag=\"</tool_call>\"):\n        for tag in (open_tag, close_tag):\n            if not isinstance(tag, str) or not tag:\n                raise ValueError(\"tags must be non-empty strings\")\n        if open_tag == close_tag:\n            raise ValueError(\"the open and close tags must differ\")\n        self._open = open_tag\n        self._close = close_tag\n        self._buffer = \"\"\n        self._inside = False\n        self._finished = False\n\n    def feed(self, chunk):\n        if self._finished:\n            raise ValueError(\"feed called after finish\")\n        if not isinstance(chunk, str):\n            raise ValueError(\"chunk must be a string\")\n        self._buffer += chunk\n        events = []\n        while True:\n            if self._inside:\n                end = self._buffer.find(self._close)\n                if end < 0:\n                    break\n                body = self._buffer[:end]\n                self._buffer = self._buffer[end + len(self._close):]\n                self._inside = False\n                events.append(self._parse(body))\n                continue\n            start = self._buffer.find(self._open)\n            if start >= 0:\n                if start:\n                    events.append({\"type\": \"text\", \"content\": self._buffer[:start]})\n                self._buffer = self._buffer[start + len(self._open):]\n                self._inside = True\n                continue\n            held = self._held_back(self._buffer)\n            release = self._buffer[: len(self._buffer) - held]\n            if release:\n                events.append({\"type\": \"text\", \"content\": release})\n            self._buffer = self._buffer[len(release):]\n            break\n        return events\n\n    def finish(self):\n        if self._finished:\n            raise ValueError(\"finish called twice\")\n        self._finished = True\n        events = []\n        if self._inside:\n            events.append({\"type\": \"error\", \"raw\": self._buffer, \"reason\": \"unterminated\"})\n        elif self._buffer:\n            events.append({\"type\": \"text\", \"content\": self._buffer})\n        self._buffer = \"\"\n        return events\n\n    def _held_back(self, text):\n        for size in range(min(len(text), len(self._open) - 1), 0, -1):\n            if self._open.startswith(text[-size:]):\n                return size\n        return 0\n\n    @staticmethod\n    def _parse(body):\n        try:\n            payload = json.loads(body)\n        except ValueError:\n            return {\"type\": \"error\", \"raw\": body, \"reason\": \"invalid_json\"}\n        if not isinstance(payload, dict):\n            return {\"type\": \"error\", \"raw\": body, \"reason\": \"not_a_call\"}\n        name = payload.get(\"name\")\n        arguments = payload.get(\"arguments\", {})\n        if not isinstance(name, str) or not name or not isinstance(arguments, dict):\n            return {\"type\": \"error\", \"raw\": body, \"reason\": \"not_a_call\"}\n        return {\"type\": \"tool_call\", \"name\": name, \"arguments\": arguments}",
+        "role": "solution"
+      }
+    ]
+  },
+  "verl_dataproto_filter_chunk": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def verl_dataproto_filter_chunk(data, chunks):\n    import torch\n    if not isinstance(chunks, int) or isinstance(chunks, bool) or chunks <= 0:\n        raise ValueError(\"chunks must be positive\")\n    mask = data.batch[\"response_mask\"]\n    if mask.ndim != 2 or mask.dtype != torch.bool:\n        raise ValueError(\"response_mask must be a boolean matrix\")\n    indices = torch.nonzero(mask.any(dim=1), as_tuple=False).flatten().tolist()\n    if not indices or len(indices) % chunks:\n        raise ValueError(\"selected rows cannot form equal chunks\")\n    return data.select_idxs(indices).chunk(chunks)",
         "role": "solution"
       }
     ]

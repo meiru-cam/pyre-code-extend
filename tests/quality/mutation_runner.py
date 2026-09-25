@@ -24,7 +24,9 @@ def _failed_behaviors(response) -> set[str]:
     }
 
 
-def assert_mutations_rejected(task_id: str, mutations: list[Mutation]) -> dict[str, set[str]]:
+def assert_mutations_rejected(
+    task_id: str, mutations: list[Mutation], *, require_unshown: bool = False
+) -> dict[str, set[str]]:
     """Require the task reference to pass and every named mutation to fail."""
     task = get_task(task_id)
     if task is None:
@@ -40,5 +42,10 @@ def assert_mutations_rejected(task_id: str, mutations: list[Mutation]) -> dict[s
         response = _execute_tests(mutation.code, task, capture_output=False)
         failed = _failed_behaviors(response)
         assert failed, f"mutation survived for {task_id}: {mutation.name}"
+        if require_unshown:
+            assert any(
+                not result.passed and result.visibility == "unshown"
+                for result in response.results
+            ), f"mutation escaped unshown cases for {task_id}: {mutation.name}"
         rejected[mutation.name] = failed
     return rejected

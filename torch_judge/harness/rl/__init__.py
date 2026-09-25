@@ -1,6 +1,7 @@
 """Public RL-harness API used by authored evaluator cases."""
 
 from torch_judge.harness import HarnessFailure
+from torch_judge.harness.rl.mini_dataproto import MiniDataProto
 from torch_judge.harness.rl.scripted_rollout import (
     TRAINABLE_ROLES,
     assistant_turn,
@@ -23,6 +24,7 @@ from torch_judge.harness.rl.tiny_policy import (
 
 __all__ = [
     "HarnessFailure",
+    "MiniDataProto",
     "TRAINABLE_ROLES",
     "TinyPolicy",
     "assistant_turn",

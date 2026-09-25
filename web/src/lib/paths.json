@@ -104,10 +104,10 @@
       "id": "rl-posttraining",
       "titleEn": "Post-Training & Agentic RL",
       "titleZh": "Post-Training & Agentic RL",
-      "descriptionEn": "Build the RL post-training stack one contract at a time — per-token log-probabilities, group-relative advantages, the k3 KL estimator, response masking, and verifiable rewards — then assemble a full GRPO step and an agentic rollout, with pinned nano-aha-moment, simple_GRPO, and OpenRLHF code connections.",
-      "descriptionZh": "Build the RL post-training stack one contract at a time — per-token log-probabilities, group-relative advantages, the k3 KL estimator, response masking, and verifiable rewards — then assemble a full GRPO step and an agentic rollout, with pinned nano-aha-moment, simple_GRPO, and OpenRLHF code connections.",
+      "descriptionEn": "Build REINFORCE, GRPO, and DAPO foundations, then complete a GRPO training step and agentic rollout. An advanced follow-on sequence applies those skills to evaluation, asynchronous rollout, VERL DataProto sharding, and Slime generation and weight-sync boundaries.",
+      "descriptionZh": "Build REINFORCE, GRPO, and DAPO foundations, then complete a GRPO training step and agentic rollout. An advanced follow-on sequence applies those skills to evaluation, asynchronous rollout, VERL DataProto sharding, and Slime generation and weight-sync boundaries.",
       "icon": "Trophy",
-      "problems": ["per_token_logprobs", "group_relative_advantage", "k3_kl_penalty", "response_token_mask", "rlvr_format_reward", "grpo_token_loss", "ppo_clipped_policy_loss", "ppo_value_loss", "gae_advantage", "gspo_sequence_ratio", "dapo_dynamic_sampling", "vineppo_mc_value", "rollout_batch_assembly", "grpo_train_step", "agentic_rollout_loop", "agent_rollout_truncation"],
+      "problems": ["per_token_logprobs", "group_relative_advantage", "k3_kl_penalty", "response_token_mask", "rlvr_format_reward", "reinforce_discounted_returns", "reinforce_policy_loss", "grpo_token_loss", "ppo_clipped_policy_loss", "ppo_value_loss", "gae_advantage", "gspo_sequence_ratio", "dapo_dynamic_sampling", "dapo_clip_higher_loss", "vineppo_mc_value", "rollout_batch_assembly", "verl_dataproto_filter_chunk", "grpo_train_step", "agentic_rollout_loop", "agent_rollout_truncation", "rl_eval_loop", "async_agent_rollout", "agent_env_adapter", "slime_custom_generate_hook", "rollout_train_boundary", "fully_async_rollout_buffer", "rollout_weight_sync_staleness"],
       "prerequisites": ["transformer-internals"]
     },
     {
