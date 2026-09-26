@@ -50,3 +50,20 @@ def test_mutation_runner_returns_failed_behaviors(monkeypatch):
         [Mutation("adds_one", "def identity(x):\n    return x + 1")],
     )
     assert result == {"adds_one": {"state.invariant", "edge.empty_or_boundary"}}
+
+
+def test_mutation_runner_can_use_a_seeded_task_variant(monkeypatch):
+    monkeypatch.setattr("tests.quality.mutation_runner.get_task", lambda _task_id: None)
+    variant = {
+        "function_name": "identity",
+        "solution": "def identity(x):\n    return x",
+        "tests": [
+            {"name": "unshown nonzero", "visibility": "unshown", "behavior": "state.invariant",
+             "failure_message": "wrong result", "code": "assert {fn}(7) == 7"},
+        ],
+    }
+    result = assert_mutations_rejected(
+        "fake", [Mutation("zeroes", "def identity(x):\n    return 0")],
+        require_unshown=True, task_override=variant,
+    )
+    assert result == {"zeroes": {"state.invariant"}}

@@ -121,5 +121,13 @@
   "dapo_clip_higher_loss": "def dapo_clip_higher_loss(log_probs, old_log_probs, advantages, mask, clip_low=0.2, clip_high=0.28):\n    pass",
   "verl_dataproto_filter_chunk": "def verl_dataproto_filter_chunk(data, chunks):\n    pass",
   "rollout_weight_sync_staleness": "def rollout_weight_sync_staleness(samples, trainer_version, serving_version, max_staleness, in_flight, sync_weights):\n    pass",
+  "rl_data_audit": "def rl_data_audit(train, eval_rows):\n    pass",
+  "masked_perplexity": "def masked_perplexity(logprobs, mask):\n    pass",
+  "confidence_calibration": "def confidence_calibration(confidences, correct, bins=10):\n    pass",
+  "embedding_diversity_selection": "def embedding_diversity_selection(embeddings, k, seed_index=0):\n    pass",
+  "gradient_orthogonality_audit": "def gradient_orthogonality_audit(gradients):\n    pass",
+  "masked_kd_kl": "def masked_kd_kl(student_logits, teacher_logits, mask, temperature=1.0):\n    pass",
+  "opd_sampled_kl_advantage": "def opd_sampled_kl_advantage(advantages, student_logprobs, teacher_logprobs, mask, beta=1.0):\n    pass",
+  "opsd_privileged_context_kl": "def opsd_privileged_context_kl(model, problems, gold_solutions, max_new_tokens):\n    pass",
   "slime_custom_generate_hook": "async def slime_custom_generate_hook(args, sample, sampling_params):\n    pass"
 }

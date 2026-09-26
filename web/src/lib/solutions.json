@@ -366,6 +366,15 @@
       }
     ]
   },
+  "confidence_calibration": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\n\ndef confidence_calibration(confidences, correct, bins=10):\n    if (confidences.ndim != 1 or correct.ndim != 1 or confidences.shape != correct.shape\n            or confidences.numel() == 0 or not isinstance(bins, int) or isinstance(bins, bool) or bins <= 0):\n        raise ValueError(\"invalid shape or bins\")\n    if (not torch.isfinite(confidences).all() or (confidences < 0).any() or (confidences > 1).any()\n            or not torch.isfinite(correct).all() or ((correct != 0) & (correct != 1)).any()):\n        raise ValueError(\"invalid probabilities or labels\")\n    labels = correct.to(confidences.dtype)\n    bucket = (confidences * bins).long().clamp(max=bins - 1)\n    ece = confidences.new_zeros(())\n    for index in range(bins):\n        chosen = bucket == index\n        if chosen.any():\n            ece = ece + chosen.float().mean() * (confidences[chosen].mean() - labels[chosen].mean()).abs()\n    return {\"accuracy\": labels.mean().item(), \"brier\": ((confidences - labels) ** 2).mean().item(), \"ece\": ece.item()}",
+        "role": "solution"
+      }
+    ]
+  },
   "contrastive_loss": {
     "cells": [
       {
@@ -616,6 +625,24 @@
       }
     ]
   },
+  "masked_kd_kl": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import math\nimport torch\n\ndef masked_kd_kl(student_logits, teacher_logits, mask, temperature=1.0):\n    if (student_logits.ndim != 3 or student_logits.shape != teacher_logits.shape\n            or mask.shape != student_logits.shape[:2] or student_logits.shape[-1] < 2\n            or not math.isfinite(float(temperature)) or temperature <= 0 or not mask.bool().any()):\n        raise ValueError(\"invalid logits, mask, or temperature\")\n    valid = mask.bool()\n    student_logp = torch.log_softmax(student_logits[valid] / temperature, dim=-1)\n    teacher_logp = torch.log_softmax(teacher_logits.detach()[valid] / temperature, dim=-1)\n    teacher_prob = teacher_logp.exp()\n    per_token = (teacher_prob * (teacher_logp - student_logp)).sum(dim=-1)\n    return per_token.mean() * temperature ** 2",
+        "role": "solution"
+      }
+    ]
+  },
+  "masked_perplexity": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\n\ndef masked_perplexity(logprobs, mask):\n    if logprobs.shape != mask.shape:\n        raise ValueError(\"shape mismatch\")\n    valid = mask.bool()\n    if not valid.any():\n        raise ValueError(\"no valid tokens\")\n    return torch.exp(-logprobs[valid].mean())",
+        "role": "solution"
+      }
+    ]
+  },
   "mixed_precision": {
     "cells": [
       {
@@ -817,6 +844,15 @@
         "type": "code",
         "source": "torch.manual_seed(0)\n\nB, D = 8, 64\nreward_head = torch.randn(D, 1)\n\nh = torch.randn(B, D)\nloss_equal = reward_model_loss(h, h, reward_head)\nprint(f\"Equal hidden states => loss = {loss_equal.item():.4f}  (expected ≈ {math.log(2):.4f})\")\n\nchosen  = torch.ones(B, D)\nrejected = -torch.ones(B, D)\nloss_good = reward_model_loss(chosen, rejected, reward_head)\nprint(f\"Chosen >> rejected  => loss = {loss_good.item():.4f}  (expected small)\")",
         "role": "demo"
+      }
+    ]
+  },
+  "rl_data_audit": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "from collections import Counter\n\ndef rl_data_audit(train, eval_rows):\n    def inspect(rows):\n        missing = []\n        ids = []\n        for index, row in enumerate(rows):\n            if any(not isinstance(row.get(key), str) or not row.get(key) for key in (\"sample_id\", \"prompt\", \"response\")):\n                missing.append(index)\n            sample_id = row.get(\"sample_id\")\n            if isinstance(sample_id, str) and sample_id:\n                ids.append(sample_id)\n        return missing, Counter(ids)\n\n    missing_train, train_ids = inspect(train)\n    missing_eval, eval_ids = inspect(eval_rows)\n    all_ids = train_ids.keys() | eval_ids.keys()\n    return {\n        \"missing_train\": missing_train,\n        \"missing_eval\": missing_eval,\n        \"duplicate_ids\": sorted(key for key in all_ids if train_ids[key] > 1 or eval_ids[key] > 1),\n        \"leakage_ids\": sorted(train_ids.keys() & eval_ids.keys()),\n    }",
+        "role": "solution"
       }
     ]
   },
@@ -1046,6 +1082,15 @@
       }
     ]
   },
+  "embedding_diversity_selection": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\nimport torch.nn.functional as F\n\ndef embedding_diversity_selection(embeddings, k, seed_index=0):\n    if (embeddings.ndim != 2 or embeddings.shape[0] == 0 or embeddings.shape[1] == 0\n            or not torch.is_floating_point(embeddings) or not torch.isfinite(embeddings).all()\n            or (embeddings.norm(dim=1) == 0).any() or not isinstance(k, int) or isinstance(k, bool)\n            or k < 1 or k > embeddings.shape[0] or not isinstance(seed_index, int)\n            or isinstance(seed_index, bool) or seed_index < 0 or seed_index >= embeddings.shape[0]):\n        raise ValueError(\"invalid embeddings or selection size\")\n    normalized = F.normalize(embeddings, dim=1)\n    distances = 1 - normalized @ normalized.T\n    selected = [seed_index]\n    while len(selected) < k:\n        candidate = max((i for i in range(len(embeddings)) if i not in selected),\n                        key=lambda i: (min(distances[i, j].item() for j in selected), -i))\n        selected.append(candidate)\n    return selected",
+        "role": "solution"
+      }
+    ]
+  },
   "flash_attention": {
     "cells": [
       {
@@ -1140,6 +1185,15 @@
         "type": "code",
         "source": "gqa = GroupQueryAttention(32, 8, 2)\nprint('Output:', gqa.forward(torch.randn(1, 4, 32)).shape)",
         "role": "demo"
+      }
+    ]
+  },
+  "gradient_orthogonality_audit": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\nimport torch.nn.functional as F\n\ndef gradient_orthogonality_audit(gradients):\n    if (gradients.ndim != 2 or gradients.shape[0] < 2 or gradients.shape[1] == 0\n            or not torch.is_floating_point(gradients) or not torch.isfinite(gradients).all()\n            or (gradients.norm(dim=1) == 0).any()):\n        raise ValueError(\"invalid gradients\")\n    normalized = F.normalize(gradients, dim=1)\n    cosine = normalized @ normalized.T\n    cosine.diagonal().fill_(1)\n    upper = cosine[torch.triu_indices(len(gradients), len(gradients), offset=1).unbind()]\n    return {\"cosine\": cosine, \"conflict_pairs\": int((upper < 0).sum().item()),\n            \"max_abs_overlap\": upper.abs().max().item()}",
+        "role": "solution"
       }
     ]
   },
@@ -1330,6 +1384,24 @@
         "type": "code",
         "source": "experts=[nn.Linear(4,4,bias=False) for _ in range(3)]\nx=torch.randn(5,4)\nindices=torch.tensor([[0,1],[0,2],[1,2],[0,1],[2,0]])\nweights=torch.full((5,2),.5)\noutput,stats=moe_capacity_dispatch(x,indices,weights,experts,capacity=2)\nprint(output.shape,stats)",
         "role": "demo"
+      }
+    ]
+  },
+  "opd_sampled_kl_advantage": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import math\nimport torch\n\ndef opd_sampled_kl_advantage(advantages, student_logprobs, teacher_logprobs, mask, beta=1.0):\n    if (advantages.shape != student_logprobs.shape or advantages.shape != teacher_logprobs.shape\n            or advantages.shape != mask.shape or advantages.ndim != 2 or not mask.bool().any()\n            or not math.isfinite(float(beta)) or beta < 0):\n        raise ValueError(\"invalid shape, mask, or beta\")\n    valid = mask.bool()\n    shaped = torch.zeros_like(advantages)\n    shaped[valid] = (advantages[valid] - beta * (student_logprobs[valid] - teacher_logprobs[valid])).detach()\n    return shaped.detach()",
+        "role": "solution"
+      }
+    ]
+  },
+  "opsd_privileged_context_kl": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\n\ndef opsd_privileged_context_kl(model, problems, gold_solutions, max_new_tokens):\n    if (len(problems) == 0 or len(problems) != len(gold_solutions)\n            or not isinstance(max_new_tokens, int) or isinstance(max_new_tokens, bool)\n            or max_new_tokens <= 0):\n        raise ValueError(\"invalid problems or generation limit\")\n    tokens, mask = model.generate(problems, max_new_tokens)\n    if (tokens.ndim != 2 or mask.shape != tokens.shape or tokens.shape[0] != len(problems)\n            or not mask.bool().any()):\n        raise ValueError(\"invalid generated batch or mask\")\n    student_logits = model.logits(problems, tokens, privileged_context=None)\n    privileged_teacher_logits = model.logits(problems, tokens, privileged_context=gold_solutions)\n    if (student_logits.ndim != 3 or student_logits.shape != privileged_teacher_logits.shape\n            or student_logits.shape[:2] != tokens.shape or student_logits.shape[-1] < 2):\n        raise ValueError(\"invalid score shapes\")\n    valid = mask.bool()\n    student_logp = torch.log_softmax(student_logits[valid], dim=-1)\n    teacher_logp = torch.log_softmax(privileged_teacher_logits.detach()[valid], dim=-1)\n    per_token = (teacher_logp.exp() * (teacher_logp - student_logp)).sum(dim=-1)\n    return per_token.mean()",
+        "role": "solution"
       }
     ]
   },

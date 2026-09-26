@@ -25,10 +25,11 @@ def _failed_behaviors(response) -> set[str]:
 
 
 def assert_mutations_rejected(
-    task_id: str, mutations: list[Mutation], *, require_unshown: bool = False
+    task_id: str, mutations: list[Mutation], *, require_unshown: bool = False,
+    task_override: dict | None = None,
 ) -> dict[str, set[str]]:
     """Require the task reference to pass and every named mutation to fail."""
-    task = get_task(task_id)
+    task = task_override if task_override is not None else get_task(task_id)
     if task is None:
         raise AssertionError(f"unknown task {task_id!r}")
     reference = _execute_tests(task["solution"], task, capture_output=False)

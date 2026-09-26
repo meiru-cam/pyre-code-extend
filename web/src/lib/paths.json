@@ -104,10 +104,10 @@
       "id": "rl-posttraining",
       "titleEn": "Post-Training & Agentic RL",
       "titleZh": "Post-Training & Agentic RL",
-      "descriptionEn": "Build REINFORCE, GRPO, and DAPO foundations, then complete a GRPO training step and agentic rollout. An advanced follow-on sequence applies those skills to evaluation, asynchronous rollout, VERL DataProto sharding, and Slime generation and weight-sync boundaries.",
-      "descriptionZh": "Build REINFORCE, GRPO, and DAPO foundations, then complete a GRPO training step and agentic rollout. An advanced follow-on sequence applies those skills to evaluation, asynchronous rollout, VERL DataProto sharding, and Slime generation and weight-sync boundaries.",
+      "descriptionEn": "Build REINFORCE, GRPO, and DAPO foundations, then complete agentic and asynchronous rollouts. Audit RL data, perplexity, confidence, embedding diversity, and gradient orthogonality before implementing KD, sampled-token OPD, and privileged-context OPSD.",
+      "descriptionZh": "从 REINFORCE、GRPO、DAPO 到 agentic 异步 rollout；再练习数据审计、困惑度、置信度、两种正交性，以及 KD、OPD 和 OPSD 蒸馏。",
       "icon": "Trophy",
-      "problems": ["per_token_logprobs", "group_relative_advantage", "k3_kl_penalty", "response_token_mask", "rlvr_format_reward", "reinforce_discounted_returns", "reinforce_policy_loss", "grpo_token_loss", "ppo_clipped_policy_loss", "ppo_value_loss", "gae_advantage", "gspo_sequence_ratio", "dapo_dynamic_sampling", "dapo_clip_higher_loss", "vineppo_mc_value", "rollout_batch_assembly", "verl_dataproto_filter_chunk", "grpo_train_step", "agentic_rollout_loop", "agent_rollout_truncation", "rl_eval_loop", "async_agent_rollout", "agent_env_adapter", "slime_custom_generate_hook", "rollout_train_boundary", "fully_async_rollout_buffer", "rollout_weight_sync_staleness"],
+      "problems": ["per_token_logprobs", "group_relative_advantage", "k3_kl_penalty", "response_token_mask", "rlvr_format_reward", "reinforce_discounted_returns", "reinforce_policy_loss", "grpo_token_loss", "ppo_clipped_policy_loss", "ppo_value_loss", "gae_advantage", "gspo_sequence_ratio", "dapo_dynamic_sampling", "dapo_clip_higher_loss", "vineppo_mc_value", "rollout_batch_assembly", "verl_dataproto_filter_chunk", "grpo_train_step", "agentic_rollout_loop", "agent_rollout_truncation", "rl_eval_loop", "async_agent_rollout", "agent_env_adapter", "slime_custom_generate_hook", "rollout_train_boundary", "fully_async_rollout_buffer", "rollout_weight_sync_staleness", "rl_data_audit", "masked_perplexity", "confidence_calibration", "embedding_diversity_selection", "gradient_orthogonality_audit", "masked_kd_kl", "opd_sampled_kl_advantage", "opsd_privileged_context_kl"],
       "prerequisites": ["transformer-internals"]
     },
     {

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import copy
+import re
 from pathlib import Path
 
 import pytest
@@ -1044,7 +1046,91 @@ RL_TASK_IDS = [
     "rollout_train_boundary",
     "fully_async_rollout_buffer",
     "rollout_weight_sync_staleness",
+    "rl_data_audit",
+    "masked_perplexity",
+    "confidence_calibration",
+    "embedding_diversity_selection",
+    "gradient_orthogonality_audit",
+    "masked_kd_kl",
+    "opd_sampled_kl_advantage",
+    "opsd_privileged_context_kl",
 ]
+
+
+DATA_DISTILLATION_MUTATIONS = {
+    "rl_data_audit": [
+        ("misses cross-split leakage", '"leakage_ids": sorted(train_ids.keys() & eval_ids.keys())', '"leakage_ids": []'),
+        ("misses duplicates", '"duplicate_ids": sorted(key for key in all_ids if train_ids[key] > 1 or eval_ids[key] > 1)', '"duplicate_ids": []'),
+        ("misses invalid training rows", '"missing_train": missing_train', '"missing_train": []'),
+    ],
+    "masked_perplexity": [
+        ("uses padded denominator", 'logprobs[valid].mean()', 'logprobs[valid].sum() / logprobs.numel()'),
+        ("includes padding", 'valid = mask.bool()', 'valid = torch.ones_like(mask, dtype=torch.bool)'),
+        ("reverses negative log likelihood", 'torch.exp(-logprobs[valid].mean())', 'torch.exp(logprobs[valid].mean())'),
+    ],
+    "confidence_calibration": [
+        ("uses absolute error instead of Brier", '((confidences - labels) ** 2).mean()', '(confidences - labels).abs().mean()'),
+        ("weights bins equally", 'chosen.float().mean()', '1.0 / bins'),
+        ("drops probability one", 'bucket = (confidences * bins).long().clamp(max=bins - 1)', 'bucket = (confidences * bins).long()'),
+    ],
+    "embedding_diversity_selection": [
+        ("maximizes farthest instead of nearest distance", 'min(distances[i, j].item() for j in selected)', 'max(distances[i, j].item() for j in selected)'),
+        ("uses raw dot products", 'normalized @ normalized.T', 'embeddings @ embeddings.T'),
+        ("ignores selected seed", 'selected = [seed_index]', 'selected = [0]'),
+    ],
+    "gradient_orthogonality_audit": [
+        ("counts aligned gradients as conflicts", '(upper < 0)', '(upper > 0)'),
+        ("returns mean overlap instead of maximum", 'upper.abs().max()', 'upper.abs().mean()'),
+        ("skips cosine normalization", 'normalized = F.normalize(gradients, dim=1)', 'normalized = gradients'),
+    ],
+    "masked_kd_kl": [
+        ("uses reverse KL", '(teacher_prob * (teacher_logp - student_logp))', '(student_logp.exp() * (student_logp - teacher_logp))'),
+        ("omits temperature-square scaling", 'per_token.mean() * temperature ** 2', 'per_token.mean()'),
+        ("trains teacher branch", 'teacher_logits.detach()[valid]', 'teacher_logits[valid]'),
+        ("includes masked logits", 'valid = mask.bool()', 'valid = torch.ones_like(mask, dtype=torch.bool)'),
+    ],
+    "opd_sampled_kl_advantage": [
+        ("reverses sampled KL sign", 'advantages[valid] - beta *', 'advantages[valid] + beta *'),
+        ("ignores distillation strength", 'beta * (student_logprobs[valid]', '0 * (student_logprobs[valid]'),
+        ("returns a trainable advantage", 'shaped[valid] = (advantages[valid] - beta * (student_logprobs[valid] - teacher_logprobs[valid])).detach()\n    return shaped.detach()', 'shaped[valid] = advantages[valid] - beta * (student_logprobs[valid] - teacher_logprobs[valid])\n    return shaped'),
+        ("includes masked scores", 'valid = mask.bool()', 'valid = torch.ones_like(mask, dtype=torch.bool)'),
+    ],
+    "opsd_privileged_context_kl": [
+        ("uses reverse full-vocabulary KL", '(teacher_logp.exp() * (teacher_logp - student_logp))', '(student_logp.exp() * (student_logp - teacher_logp))'),
+        ("generates from gold solution", 'model.generate(problems, max_new_tokens)', 'model.generate(gold_solutions, max_new_tokens)'),
+        ("omits privileged teacher context", 'privileged_context=gold_solutions', 'privileged_context=None'),
+        ("trains privileged teacher branch", 'privileged_teacher_logits.detach()[valid]', 'privileged_teacher_logits[valid]'),
+    ],
+}
+
+
+def _seeded_task_variant(task_id, repeat):
+    task = copy.deepcopy(get_task(task_id))
+    changed = 0
+    for case in task["tests"]:
+        def shift_seed(match):
+            nonlocal changed
+            changed += 1
+            return f"{match.group(1)}({int(match.group(2)) + repeat})"
+
+        case["code"] = re.sub(r"(torch\.manual_seed|random\.seed)\((\d+)\)", shift_seed, case["code"])
+    assert changed, f"{task_id} needs a seeded unshown oracle"
+    return task
+
+
+@pytest.mark.parametrize("repeat", range(3))
+@pytest.mark.parametrize("task_id,targets", DATA_DISTILLATION_MUTATIONS.items())
+def test_data_distillation_mutations_across_distinct_seeds(task_id, targets, repeat):
+    original = get_task(task_id)["solution"]
+    mutations = []
+    for name, old, new in targets:
+        assert old in original, f"mutation target drifted: {task_id}/{name}"
+        mutations.append(Mutation(name, original.replace(old, new, 1)))
+    variant = _seeded_task_variant(task_id, repeat)
+    rejected = assert_mutations_rejected(
+        task_id, mutations, require_unshown=True, task_override=variant,
+    )
+    assert set(rejected) == {name for name, _, _ in targets}
 
 
 _ROLLOUT_SIGNATURE = (
@@ -1273,6 +1359,7 @@ def test_rl_task_has_pinned_code_provenance(task_id):
         "rl_eval_loop", "async_agent_rollout", "agent_env_adapter",
         "rollout_train_boundary", "fully_async_rollout_buffer",
         "verl_dataproto_filter_chunk", "slime_custom_generate_hook",
+        "rl_data_audit",
     }
     if task_id not in framework_api_tasks:
         assert any(source["kind"] == "paper" for source in sources), f"{task_id} needs a paper source"
@@ -1434,7 +1521,7 @@ def test_the_rl_path_is_complete():
         "the path order must match the backlog's primitive -> subsystem -> integrative "
         "progression"
     )
-    assert len(RL_TASK_IDS) == 27
+    assert len(RL_TASK_IDS) == 35
 
 
 def test_rl_path_teaches_foundations_before_integrative_training():

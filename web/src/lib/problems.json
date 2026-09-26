@@ -8164,6 +8164,653 @@
           "simplifications": "Tests use a tiny local object with the same relevant fields and enum names."
         }
       ]
+    },
+    {
+      "id": "confidence_calibration",
+      "title": "RL Confidence and Calibration",
+      "titleZh": "RL Confidence and Calibration",
+      "difficulty": "Medium",
+      "functionName": "confidence_calibration",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Implement `confidence_calibration(confidences, correct, bins=10) -> dict`. Inputs are equal-length one-dimensional tensors. `confidences[i]` is the probability assigned to the answer being correct, in [0,1]; `correct[i]` is 0/1 ground truth. Return Python floats `accuracy`, `brier`, and `ece`. Accuracy is mean correctness. Brier is mean squared `(confidence-correct)` error. ECE is sum over nonempty equal-width bins of `(bin_count/N) * abs(mean_confidence - mean_correct)`. Assign confidence 0 to the first bin and confidence 1 to the last; boundaries `k/bins` belong to the higher bin. Reject empty inputs, non-1D or mismatched shapes, invalid probabilities/labels, and nonpositive integer bins with `ValueError`. This binary calibration audit is not token-level entropy or a confidence score for a free-form response.",
+      "descriptionZh": "Implement `confidence_calibration(confidences, correct, bins=10) -> dict`. Inputs are equal-length one-dimensional tensors. `confidences[i]` is the probability assigned to the answer being correct, in [0,1]; `correct[i]` is 0/1 ground truth. Return Python floats `accuracy`, `brier`, and `ece`. Accuracy is mean correctness. Brier is mean squared `(confidence-correct)` error. ECE is sum over nonempty equal-width bins of `(bin_count/N) * abs(mean_confidence - mean_correct)`. Assign confidence 0 to the first bin and confidence 1 to the last; boundaries `k/bins` belong to the higher bin. Reject empty inputs, non-1D or mismatched shapes, invalid probabilities/labels, and nonpositive integer bins with `ValueError`. This binary calibration audit is not token-level entropy or a confidence score for a free-form response.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Hand-calculated two-bin example",
+          "code": "\nimport torch\nout={fn}(torch.tensor([0.2,0.8]),torch.tensor([0,1]),bins=2)\nassert abs(out['accuracy']-0.5)<1e-7\nassert abs(out['brier']-0.04)<1e-6\nassert abs(out['ece']-0.2)<1e-6\n",
+          "behavior": "numerics.stability"
+        },
+        {
+          "name": "Seeded independent bin oracle",
+          "visibility": "unshown",
+          "behavior": "numerics.stability",
+          "failureMessage": "Seeded independent bin oracle: check the stated contract and edge cases.",
+          "hiddenCode": "\nimport torch, random\nrandom.seed(39)\nfor bins in (2,3,7):\n    c=[random.random() for _ in range(31)]+[0.0,1.0]\n    y=[random.randrange(2) for _ in c]\n    groups=[[] for _ in range(bins)]\n    for p,label in zip(c,y): groups[min(int(p*bins),bins-1)].append((p,label))\n    ece=sum(len(g)/len(c)*abs(sum(p for p,_ in g)/len(g)-sum(z for _,z in g)/len(g)) for g in groups if g)\n    out={fn}(torch.tensor(c),torch.tensor(y),bins)\n    assert abs(out['accuracy']-sum(y)/len(y))<1e-6\n    assert abs(out['brier']-sum((p-z)**2 for p,z in zip(c,y))/len(c))<1e-6\n    assert abs(out['ece']-ece)<1e-6\n"
+        },
+        {
+          "name": "Invalid inputs and bin boundary",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "Invalid inputs and bin boundary: check the stated contract and edge cases.",
+          "hiddenCode": "\nimport torch\nfor c,y,b in [(torch.tensor([]),torch.tensor([]),2),(torch.tensor([1.1]),torch.tensor([1]),2),(torch.tensor([0.5]),torch.tensor([2]),2),(torch.tensor([0.5]),torch.tensor([1]),0),(torch.ones(2),torch.ones(1),2)]:\n    try: {fn}(c,y,b)\n    except ValueError: pass\n    else: raise AssertionError('expected ValueError')\nout={fn}(torch.tensor([0.5,1.0]),torch.tensor([0,1]),2)\nassert abs(out['ece']-0.25)<1e-6\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Is an accurate model necessarily calibrated? Which bin contains confidence exactly 1.0?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Compute Brier and accuracy across examples. For ECE, floor(confidence*bins) and cap at bins-1, then use bin-size weighting."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "rl_eval_loop"
+      ],
+      "modelConnections": [
+        "TorchMetrics' calibration-error implementation bins confidences and compares confidence with empirical correctness; this task adds binary Brier score and accuracy."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "ECE and Brier expose overconfidence that accuracy alone hides."
+        ],
+        "cons": [
+          "ECE depends on bin count and these binary scores need a defensible correctness label."
+        ]
+      },
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/Lightning-AI/torchmetrics",
+          "commit": "6c551c6469dc04fe92291c000ce2607860df92d2",
+          "path": "src/torchmetrics/functional/classification/calibration_error.py",
+          "symbol": "_binning_bucketize; _ce_compute",
+          "license": "Apache-2.0",
+          "adapted": "Confidence binning and expected calibration error.",
+          "simplifications": "Binary correctness labels and scalar CPU summary; adds Brier and accuracy."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/1706.04599",
+          "section": "Section 2: Expected Calibration Error and reliability diagrams"
+        }
+      ]
+    },
+    {
+      "id": "masked_kd_kl",
+      "title": "Masked Temperature KD",
+      "titleZh": "Masked Temperature KD",
+      "difficulty": "Medium",
+      "functionName": "masked_kd_kl",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Implement `masked_kd_kl(student_logits, teacher_logits, mask, temperature=1.0) -> Tensor`. Logits have matching `[batch,time,vocab]` shape; mask is `[batch,time]`. At each valid token compute full-vocabulary forward KL `KL(softmax(teacher/T) || softmax(student/T))`, average across all valid tokens, then multiply by `T*T`. Reject invalid shapes, no valid tokens, or nonpositive/nonfinite temperature with `ValueError`. Detach teacher logits so gradients update only the student. Masked positions must receive zero gradient. This is teacher-forced distribution matching; it does not itself make rollouts on-policy.",
+      "descriptionZh": "Implement `masked_kd_kl(student_logits, teacher_logits, mask, temperature=1.0) -> Tensor`. Logits have matching `[batch,time,vocab]` shape; mask is `[batch,time]`. At each valid token compute full-vocabulary forward KL `KL(softmax(teacher/T) || softmax(student/T))`, average across all valid tokens, then multiply by `T*T`. Reject invalid shapes, no valid tokens, or nonpositive/nonfinite temperature with `ValueError`. Detach teacher logits so gradients update only the student. Masked positions must receive zero gradient. This is teacher-forced distribution matching; it does not itself make rollouts on-policy.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Visible nonzero temperature-scaled forward KL",
+          "code": "\nimport torch, math\nstudent=torch.tensor([[[0.,0.]]])\nteacher=torch.tensor([[[2*math.log(3),0.]]])\nexpected=4*(.75*math.log(.75/.5)+.25*math.log(.25/.5))\nassert abs({fn}(student,teacher,torch.tensor([[1]]),2.0).item()-expected)<1e-6\n",
+          "behavior": "rl.kl_estimator"
+        },
+        {
+          "name": "Equal distributions have zero KL",
+          "code": "\nimport torch\nx=torch.tensor([[[1.,2.],[-1.,3.]]])\nout={fn}(x,x.clone(),torch.tensor([[1,0]]),2.0)\nassert abs(out.item())<1e-6\n",
+          "behavior": "rl.kl_estimator"
+        },
+        {
+          "name": "Seeded independent softmax oracle and gradient isolation",
+          "visibility": "unshown",
+          "behavior": "gradient.flow",
+          "failureMessage": "Seeded independent softmax oracle and gradient isolation: check the stated contract and edge cases.",
+          "hiddenCode": "\nimport torch, math\ntorch.manual_seed(51)\nfor temp in (0.5,1.0,2.0):\n    s=torch.randn(2,3,4,requires_grad=True)\n    t=torch.randn(2,3,4,requires_grad=True)\n    mask=torch.tensor([[1,0,1],[0,1,0]])\n    terms=[]\n    for i,j in [(0,0),(0,2),(1,1)]:\n        a=(t[i,j].detach()/temp).tolist(); b=(s[i,j].detach()/temp).tolist()\n        pa=[math.exp(z-max(a)) for z in a]; pa=[z/sum(pa) for z in pa]\n        pb=[math.exp(z-max(b)) for z in b]; pb=[z/sum(pb) for z in pb]\n        terms.append(sum(p*math.log(p/q) for p,q in zip(pa,pb)))\n    out={fn}(s,t,mask,temp)\n    assert abs(out.item()-sum(terms)/3*temp*temp)<1e-5\n    out.backward()\n    assert t.grad is None or torch.all(t.grad==0)\n    assert torch.all(s.grad[mask==0]==0)\n    assert torch.any(s.grad[mask==1]!=0)\n"
+        },
+        {
+          "name": "Invalid shape, mask, and temperature",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "Invalid shape, mask, and temperature: check the stated contract and edge cases.",
+          "hiddenCode": "\nimport torch\ns=torch.zeros(1,2,3)\nfor t,m,temp in [(s,torch.zeros(1,2),1),(s,torch.ones(1,2),0),(torch.zeros(1,2,4),torch.ones(1,2),1),(s,torch.ones(2,1),1)]:\n    try: {fn}(s,t,m,temp)\n    except ValueError: pass\n    else: raise AssertionError('expected ValueError')\n"
+        },
+        {
+          "name": "Masked invalid logits have no effect",
+          "visibility": "unshown",
+          "behavior": "rl.masking",
+          "failureMessage": "Masked invalid logits have no effect: check the stated contract and edge cases.",
+          "hiddenCode": "\nimport torch\ns=torch.tensor([[[0.,1.],[float('-inf'),float('-inf')]]],requires_grad=True)\nt=torch.tensor([[[1.,0.],[float('-inf'),float('-inf')]]])\nout={fn}(s,t,torch.tensor([[1,0]]))\nassert torch.isfinite(out)\nout.backward()\nassert torch.isfinite(s.grad).all() and torch.all(s.grad[0,1]==0)\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which distribution weights the log-ratio in forward KL? Why multiply by temperature squared?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Apply log_softmax to both logits divided by T, take teacher probability times teacher-minus-student log probability, mask and token-average, then scale by T squared. Detach the teacher first."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "per_token_logprobs",
+        "response_token_mask"
+      ],
+      "modelConnections": [
+        "TRL GKD computes temperature-scaled token distribution divergence between a teacher and student; this exercise fixes the divergence to forward KL."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Full-vocabulary targets transmit more information than hard teacher labels."
+        ],
+        "cons": [
+          "Teacher-forced tokens need not match the student's rollout distribution and full logits cost memory."
+        ]
+      },
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/huggingface/trl",
+          "commit": "a7c34f363a8716473a0f15378621a3358b994417",
+          "path": "trl/experimental/gkd/gkd_trainer.py",
+          "symbol": "GKDTrainer.generalized_jsd_loss",
+          "license": "Apache-2.0",
+          "adapted": "Temperature-scaled full-vocabulary teacher-to-student KL.",
+          "simplifications": "Fixes the divergence to forward KL and isolates masked logits from trainer/model plumbing."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/1503.02531",
+          "section": "Section 2: Distillation and temperature scaling"
+        }
+      ]
+    },
+    {
+      "id": "masked_perplexity",
+      "title": "Masked Response Perplexity",
+      "titleZh": "Masked Response Perplexity",
+      "difficulty": "Medium",
+      "functionName": "masked_perplexity",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Implement `masked_perplexity(logprobs, mask) -> Tensor`. Both tensors have the same `[batch, time]` shape. `logprobs` contains log-probabilities of the realized next tokens; `mask` marks response tokens (1/True) and excludes prompt and padding (0/False). Return a scalar `exp(-sum(mask * logprobs) / sum(mask))`. This is token-weighted across the whole batch, not the mean of per-sequence perplexities. Reject shape mismatch or an all-zero mask with `ValueError`. Keep gradients to valid log-probabilities; masked positions have zero gradient. The caller has already aligned logits to next-token labels.",
+      "descriptionZh": "Implement `masked_perplexity(logprobs, mask) -> Tensor`. Both tensors have the same `[batch, time]` shape. `logprobs` contains log-probabilities of the realized next tokens; `mask` marks response tokens (1/True) and excludes prompt and padding (0/False). Return a scalar `exp(-sum(mask * logprobs) / sum(mask))`. This is token-weighted across the whole batch, not the mean of per-sequence perplexities. Reject shape mismatch or an all-zero mask with `ValueError`. Keep gradients to valid log-probabilities; masked positions have zero gradient. The caller has already aligned logits to next-token labels.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "One valid token gives perplexity two",
+          "code": "\nimport torch, math\nlp=torch.tensor([[-math.log(2),-99.0]])\nassert torch.allclose({fn}(lp,torch.tensor([[1,0]])),torch.tensor(2.0))\n",
+          "behavior": "rl.masking"
+        },
+        {
+          "name": "Seeded token-weighted oracle and gradient",
+          "visibility": "unshown",
+          "behavior": "gradient.flow",
+          "failureMessage": "Seeded token-weighted oracle and gradient: check the stated contract and edge cases.",
+          "hiddenCode": "\nimport torch, math\ntorch.manual_seed(31)\nfor n,t in [(2,3),(4,6)]:\n    lp=(-torch.rand(n,t)*3).requires_grad_()\n    mask=torch.randint(0,2,(n,t)); mask[0,0]=1\n    values=[-lp[i,j].item() for i in range(n) for j in range(t) if mask[i,j]]\n    expected=math.exp(sum(values)/len(values))\n    out={fn}(lp,mask)\n    assert abs(out.item()-expected)<1e-5\n    out.backward()\n    assert torch.all(lp.grad[mask==0]==0)\n    assert torch.all(lp.grad[mask==1]<0)\n"
+        },
+        {
+          "name": "Rejects empty and shape mismatch",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "Rejects empty and shape mismatch: check the stated contract and edge cases.",
+          "hiddenCode": "\nimport torch\nfor lp,mask in [(torch.zeros(2,3),torch.zeros(2,3)),(torch.zeros(2,3),torch.ones(3,2))]:\n    try: {fn}(lp,mask)\n    except ValueError: pass\n    else: raise AssertionError('expected ValueError')\n"
+        },
+        {
+          "name": "Nonfinite padding is excluded exactly",
+          "visibility": "unshown",
+          "behavior": "rl.masking",
+          "failureMessage": "Nonfinite padding is excluded exactly: check the stated contract and edge cases.",
+          "hiddenCode": "\nimport torch, math\nlp=torch.tensor([[-math.log(4),-float('inf')]],requires_grad=True)\nout={fn}(lp,torch.tensor([[1,0]]))\nassert torch.isfinite(out) and abs(out.item()-4)<1e-6\nout.backward()\nassert lp.grad[0,1]==0 and torch.isfinite(lp.grad).all()\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Should a long response count more than a short one? What does perplexity become for constant log probability -ln(2)?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Use the total number of valid tokens as denominator, then exponentiate the negative masked mean. Avoid averaging already exponentiated per-row values."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "per_token_logprobs",
+        "response_token_mask"
+      ],
+      "modelConnections": [
+        "nano-aha-moment computes realized-token log probabilities; this task reduces those scores into response-only token-weighted perplexity."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "A single scalar exposes deteriorating likelihood on the exact response tokens used for RL."
+        ],
+        "cons": [
+          "Token-weighted batch perplexity differs from the mean of per-sequence perplexities reported by some trainers."
+        ]
+      },
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/McGill-NLP/nano-aha-moment",
+          "commit": "5314e6f8fc60efaa0f4b8fdb62353e9bd451638a",
+          "path": "nano_r1_script.py",
+          "symbol": "compute_pg_loss",
+          "license": "MIT",
+          "adapted": "Realized-token log probabilities used to form a masked response NLL.",
+          "simplifications": "Only the masked perplexity reduction remains."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/1904.09751",
+          "section": "Section 4.2: Perplexity"
+        }
+      ]
+    },
+    {
+      "id": "rl_data_audit",
+      "title": "RL Dataset Integrity Audit",
+      "titleZh": "RL Dataset Integrity Audit",
+      "difficulty": "Medium",
+      "functionName": "rl_data_audit",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Implement `rl_data_audit(train, eval_rows) -> dict` for two lists of record dictionaries.\n\nEach record must have nonempty string `sample_id`, `prompt`, and `response` fields. Return exactly four keys: `missing_train` and `missing_eval` are ascending zero-based row indices with any missing/empty required field; `duplicate_ids` is a sorted list of IDs appearing more than once within either split; `leakage_ids` is a sorted list of IDs present in both splits. Count IDs even on rows with a missing prompt or response, but ignore missing/empty IDs in duplicate and leakage checks. Never mutate input records. This audit detects identity leakage, not paraphrase or semantic similarity.",
+      "descriptionZh": "Implement `rl_data_audit(train, eval_rows) -> dict` for two lists of record dictionaries.\n\nEach record must have nonempty string `sample_id`, `prompt`, and `response` fields. Return exactly four keys: `missing_train` and `missing_eval` are ascending zero-based row indices with any missing/empty required field; `duplicate_ids` is a sorted list of IDs appearing more than once within either split; `leakage_ids` is a sorted list of IDs present in both splits. Count IDs even on rows with a missing prompt or response, but ignore missing/empty IDs in duplicate and leakage checks. Never mutate input records. This audit detects identity leakage, not paraphrase or semantic similarity.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Visible missing, duplicate, and leakage",
+          "code": "\ntrain=[{'sample_id':'a','prompt':'p','response':'r'},{'sample_id':'a','prompt':'p','response':''},{'sample_id':'b','prompt':'p','response':'r'}]\nev=[{'sample_id':'b','prompt':'p','response':'r'},{'sample_id':'c','prompt':'p','response':'r'}]\nassert {fn}(train,ev)=={'missing_train':[1],'missing_eval':[],'duplicate_ids':['a'],'leakage_ids':['b']}\n",
+          "behavior": "protocol.validation"
+        },
+        {
+          "name": "Independent count oracle and no mutation",
+          "visibility": "unshown",
+          "behavior": "protocol.validation",
+          "failureMessage": "Independent count oracle and no mutation: check the stated contract and edge cases.",
+          "hiddenCode": "\nfrom collections import Counter\nimport copy, random\nrandom.seed(41)\nfor _ in range(5):\n    rows=[[{'sample_id':random.choice(['a','b','c','d','']), 'prompt':random.choice(['q','']), 'response':random.choice(['r',''])} for _ in range(11)] for _ in range(2)]\n    before=copy.deepcopy(rows)\n    valid=lambda x:isinstance(x,str) and bool(x)\n    ids=[[r['sample_id'] for r in split if valid(r['sample_id'])] for split in rows]\n    counts=[Counter(part) for part in ids]\n    expected={'missing_train':[i for i,r in enumerate(rows[0]) if not all(valid(r[k]) for k in ('sample_id','prompt','response'))], 'missing_eval':[i for i,r in enumerate(rows[1]) if not all(valid(r[k]) for k in ('sample_id','prompt','response'))], 'duplicate_ids':sorted(k for k in counts[0].keys() | counts[1].keys() if counts[0][k]>1 or counts[1][k]>1), 'leakage_ids':sorted(set(ids[0]) & set(ids[1]))}\n    assert {fn}(*rows)==expected\n    assert rows==before\n"
+        },
+        {
+          "name": "Absent keys, empty IDs, and within-split duplicates",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "Absent keys, empty IDs, and within-split duplicates: check the stated contract and edge cases.",
+          "hiddenCode": "\ntrain=[{}, {'sample_id':'', 'prompt':'p','response':'r'}, {'sample_id':'x','prompt':'p','response':'r'}, {'sample_id':'x','prompt':'p','response':'r'}]\nev=[{'sample_id':'', 'prompt':'p','response':'r'}, {'sample_id':'z','prompt':'p','response':'r'}]\nassert {fn}(train,ev)=={'missing_train':[0,1],'missing_eval':[0],'duplicate_ids':['x'],'leakage_ids':[]}\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which fields make a record usable? Should a row with a valid ID but no response still participate in leakage checks?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Scan each split once for invalid row indices and ID counts. Build the cross-split intersection from nonempty IDs; sort the final ID lists for deterministic output."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "verl_dataproto_filter_chunk"
+      ],
+      "modelConnections": [
+        "Hugging Face Datasets' DatasetDict.unique yields unique IDs per split; this task additionally counts duplicates and intersects the train/eval ID sets."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Exact-ID checks quickly expose duplicate rows and train/eval leakage before RL training."
+        ],
+        "cons": [
+          "Paraphrases or semantically identical prompts with different IDs are not detected."
+        ]
+      },
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/huggingface/datasets",
+          "commit": "a4ee9cf1b9ba07d59766b17c33f91412a69969c4",
+          "path": "src/datasets/dataset_dict.py",
+          "symbol": "DatasetDict.unique",
+          "license": "Apache-2.0",
+          "adapted": "Split-wise unique sample IDs are the basis for exact-ID overlap checks.",
+          "simplifications": "Adds per-split counting and required-field validation to the split-wise unique operation; plain dictionaries replace Arrow datasets."
+        }
+      ]
+    },
+    {
+      "id": "embedding_diversity_selection",
+      "title": "Embedding-Space Data Diversity",
+      "titleZh": "Embedding-Space Data Diversity",
+      "difficulty": "Hard",
+      "functionName": "embedding_diversity_selection",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Implement `embedding_diversity_selection(embeddings, k, seed_index=0) -> list[int]`. `embeddings` is a finite, nonzero-row float tensor `[N,D]`. Select `k` distinct row indices with greedy farthest-first traversal under cosine distance `1 - cosine_similarity`. Start with `seed_index`. At each step choose the remaining row whose distance to its *nearest selected row* is greatest (max-min diversity). Break exact ties by lower row index. Return indices in selection order. Reject empty/invalid shape, zero vectors, nonfinite entries, invalid `k`, and out-of-range seed with `ValueError`. This measures representation diversity, not gradient orthogonality or train/eval leakage.",
+      "descriptionZh": "Implement `embedding_diversity_selection(embeddings, k, seed_index=0) -> list[int]`. `embeddings` is a finite, nonzero-row float tensor `[N,D]`. Select `k` distinct row indices with greedy farthest-first traversal under cosine distance `1 - cosine_similarity`. Start with `seed_index`. At each step choose the remaining row whose distance to its *nearest selected row* is greatest (max-min diversity). Break exact ties by lower row index. Return indices in selection order. Reject empty/invalid shape, zero vectors, nonfinite entries, invalid `k`, and out-of-range seed with `ValueError`. This measures representation diversity, not gradient orthogonality or train/eval leakage.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Opposite vector is selected first",
+          "code": "\nimport torch\nx=torch.tensor([[1.,0.],[-1.,0.],[0.,1.]])\nassert {fn}(x,3)==[0,1,2]\n",
+          "behavior": "routing.selection"
+        },
+        {
+          "name": "Seeded independent greedy cosine oracle",
+          "visibility": "unshown",
+          "behavior": "routing.selection",
+          "failureMessage": "Seeded independent greedy cosine oracle: check the stated contract and edge cases.",
+          "hiddenCode": "\nimport torch, math\ntorch.manual_seed(83)\nfor n,d,k in [(5,3,3),(9,4,5)]:\n    x=torch.randn(n,d)\n    rows=x.tolist()\n    def dist(i,j):\n        a,b=rows[i],rows[j]\n        return 1-sum(u*v for u,v in zip(a,b))/(math.sqrt(sum(u*u for u in a))*math.sqrt(sum(v*v for v in b)))\n    expected=[2]\n    while len(expected)<k:\n        expected.append(max((i for i in range(n) if i not in expected),key=lambda i:(min(dist(i,j) for j in expected),-i)))\n    assert {fn}(x,k,2)==expected\n"
+        },
+        {
+          "name": "Ties and invalid rows",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "Ties and invalid rows: check the stated contract and edge cases.",
+          "hiddenCode": "\nimport torch\nx=torch.tensor([[1.,0.],[0.,1.],[0.,-1.]])\nassert {fn}(x,2)==[0,1]\nfor y,k,s in [(torch.zeros(2,2),1,0),(torch.ones(2,2),3,0),(torch.ones(2,2),1,2),(torch.ones(0,2),1,0)]:\n    try: {fn}(y,k,s)\n    except ValueError: pass\n    else: raise AssertionError('expected ValueError')\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Why use the minimum distance to already-selected examples instead of mean distance? How should exact ties resolve?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Normalize each row, form cosine distances, and greedily maximize each candidate's minimum distance to the selected set. Keep selection order explicit."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "rl_data_audit"
+      ],
+      "modelConnections": [
+        "scikit-learn's cosine_similarity supplies the geometry; the core-set k-center objective supplies the farthest-first selection rule."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Greedy max-min selection avoids choosing many near-duplicate embeddings."
+        ],
+        "cons": [
+          "The chosen seed and embedding quality can dominate the selected subset; cosine diversity is not gradient diversity."
+        ]
+      },
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/scikit-learn/scikit-learn",
+          "commit": "857849927da6e988d7d026b17aef214d43e5f26e",
+          "path": "sklearn/metrics/pairwise.py",
+          "symbol": "cosine_similarity",
+          "license": "BSD-3-Clause",
+          "adapted": "Cosine matrix used by farthest-first selection; the greedy rule follows the cited core-set paper.",
+          "simplifications": "PyTorch tensor implementation with a fixed seed and tie rule."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/1708.00489",
+          "section": "Section 2: Core-set selection with a k-center objective"
+        }
+      ]
+    },
+    {
+      "id": "gradient_orthogonality_audit",
+      "title": "Gradient Orthogonality Audit",
+      "titleZh": "Gradient Orthogonality Audit",
+      "difficulty": "Hard",
+      "functionName": "gradient_orthogonality_audit",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Implement `gradient_orthogonality_audit(gradients) -> dict` for a finite float tensor `[N,D]` of flattened per-example gradients, with `N >= 2` and every row nonzero. Return `cosine`: the symmetric `[N,N]` pairwise cosine-similarity tensor (diagonal one); `conflict_pairs`: number of unordered off-diagonal pairs with cosine strictly below zero; and `max_abs_overlap`: largest absolute off-diagonal cosine as a Python float. Near-zero cosine means orthogonal update directions, while a negative value indicates opposing directions. Do not confuse this with embedding-space diversity. Reject invalid shape, nonfinite values, or zero gradients with `ValueError`. Preserve input dtype; no gradient backpropagation through this diagnostic is required. This is a per-example pairwise audit of the gradient-interference geometry discussed by PCGrad, not PCGrad's task-level projection algorithm.",
+      "descriptionZh": "Implement `gradient_orthogonality_audit(gradients) -> dict` for a finite float tensor `[N,D]` of flattened per-example gradients, with `N >= 2` and every row nonzero. Return `cosine`: the symmetric `[N,N]` pairwise cosine-similarity tensor (diagonal one); `conflict_pairs`: number of unordered off-diagonal pairs with cosine strictly below zero; and `max_abs_overlap`: largest absolute off-diagonal cosine as a Python float. Near-zero cosine means orthogonal update directions, while a negative value indicates opposing directions. Do not confuse this with embedding-space diversity. Reject invalid shape, nonfinite values, or zero gradients with `ValueError`. Preserve input dtype; no gradient backpropagation through this diagnostic is required. This is a per-example pairwise audit of the gradient-interference geometry discussed by PCGrad, not PCGrad's task-level projection algorithm.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Orthogonal and conflicting gradients",
+          "code": "\nimport torch\nx=torch.tensor([[1.,0.],[0.,1.],[-1.,0.]])\nout={fn}(x)\nassert out['conflict_pairs']==1\nassert abs(out['max_abs_overlap']-1)<1e-6\nassert torch.allclose(out['cosine'],torch.tensor([[1.,0.,-1.],[0.,1.,0.],[-1.,0.,1.]]),atol=1e-6)\n",
+          "behavior": "numerics.stability"
+        },
+        {
+          "name": "Independent seeded pairwise oracle",
+          "visibility": "unshown",
+          "behavior": "numerics.stability",
+          "failureMessage": "Independent seeded pairwise oracle: check the stated contract and edge cases.",
+          "hiddenCode": "\nimport torch, math\ntorch.manual_seed(61)\nfor n,d in [(3,4),(7,6)]:\n    x=torch.randn(n,d,dtype=torch.float64)\n    out={fn}(x)\n    rows=x.tolist()\n    expected=torch.tensor([[sum(a*b for a,b in zip(u,v))/(math.sqrt(sum(a*a for a in u))*math.sqrt(sum(b*b for b in v))) for v in rows] for u in rows],dtype=x.dtype)\n    assert out['cosine'].dtype==x.dtype\n    assert torch.allclose(out['cosine'],expected,atol=1e-12)\n    pairs=[expected[i,j].item() for i in range(n) for j in range(i+1,n)]\n    assert out['conflict_pairs']==sum(z<0 for z in pairs)\n    assert abs(out['max_abs_overlap']-max(abs(z) for z in pairs))<1e-12\n"
+        },
+        {
+          "name": "Rejects zero and nonfinite gradients",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "Rejects zero and nonfinite gradients: check the stated contract and edge cases.",
+          "hiddenCode": "\nimport torch\nfor x in [torch.zeros(2,3),torch.ones(1,3),torch.ones(2,0),torch.tensor([[1.,0.],[float('nan'),1.]])]:\n    try: {fn}(x)\n    except ValueError: pass\n    else: raise AssertionError('expected ValueError')\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "What does cosine -1 mean for two training examples? Should diagonal entries count as overlaps?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Normalize rows, multiply by their transpose, then inspect only upper-triangular off-diagonal entries for conflict and overlap."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "rl_data_audit"
+      ],
+      "modelConnections": [
+        "scikit-learn supplies pairwise cosine geometry; PCGrad motivates treating negative gradient similarity as interference, though this task only audits per-example gradients."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Separates aligned, orthogonal, and opposing sample updates before deciding how to mix training data."
+        ],
+        "cons": [
+          "Per-example gradients are costly to obtain, and pairwise cosine alone does not predict final training benefit."
+        ]
+      },
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/scikit-learn/scikit-learn",
+          "commit": "857849927da6e988d7d026b17aef214d43e5f26e",
+          "path": "sklearn/metrics/pairwise.py",
+          "symbol": "cosine_similarity",
+          "license": "BSD-3-Clause",
+          "adapted": "Pairwise cosine matrix applied to flattened per-example gradients.",
+          "simplifications": "PyTorch tensors rather than scikit-learn; PCGrad's task-level projection is not implemented."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2001.06782",
+          "section": "Section 2: conflicting gradients and cosine similarity"
+        }
+      ]
+    },
+    {
+      "id": "opd_sampled_kl_advantage",
+      "title": "OPD Sampled-KL Advantage",
+      "titleZh": "OPD Sampled-KL Advantage",
+      "difficulty": "Hard",
+      "functionName": "opd_sampled_kl_advantage",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Implement `opd_sampled_kl_advantage(advantages, student_logprobs, teacher_logprobs, mask, beta=1.0) -> Tensor`. All four tensors have matching `[batch,time]` shape. They refer to the *same tokens generated by the student*; teacher log-probabilities are evaluated on those tokens without sampling teacher trajectories. Return a detached, masked advantage tensor: `mask * (advantages - beta * (student_logprobs - teacher_logprobs))`. This sampled-token reverse-KL signal is reward/advantage shaping for a later policy-gradient loss, not a full-vocabulary KL loss; do not backpropagate through its values here. Reject shape mismatch, negative/nonfinite beta, or an all-zero mask with `ValueError`. Excluded positions are exactly zero.",
+      "descriptionZh": "Implement `opd_sampled_kl_advantage(advantages, student_logprobs, teacher_logprobs, mask, beta=1.0) -> Tensor`. All four tensors have matching `[batch,time]` shape. They refer to the *same tokens generated by the student*; teacher log-probabilities are evaluated on those tokens without sampling teacher trajectories. Return a detached, masked advantage tensor: `mask * (advantages - beta * (student_logprobs - teacher_logprobs))`. This sampled-token reverse-KL signal is reward/advantage shaping for a later policy-gradient loss, not a full-vocabulary KL loss; do not backpropagate through its values here. Reject shape mismatch, negative/nonfinite beta, or an all-zero mask with `ValueError`. Excluded positions are exactly zero.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Hand-calculated sampled advantage",
+          "code": "\nimport torch\na=torch.tensor([[2.,3.]])\ns=torch.tensor([[-2.,-4.]])\nt=torch.tensor([[-1.,-5.]])\nassert torch.allclose({fn}(a,s,t,torch.tensor([[1,0]]),0.5),torch.tensor([[2.5,0.]]))\n",
+          "behavior": "rl.advantage"
+        },
+        {
+          "name": "Seeded independent oracle and stop gradient",
+          "visibility": "unshown",
+          "behavior": "gradient.flow",
+          "failureMessage": "Seeded independent oracle and stop gradient: check the stated contract and edge cases.",
+          "hiddenCode": "\nimport torch, random\nrandom.seed(67)\ntorch.manual_seed(67)\nfor shape in [(2,4),(3,5)]:\n    a=torch.randn(shape,requires_grad=True); s=torch.randn(shape,requires_grad=True); t=torch.randn(shape,requires_grad=True)\n    mask=torch.randint(0,2,shape); mask[0,0]=1\n    beta=random.uniform(0.1,2)\n    out={fn}(a,s,t,mask,beta)\n    expected=torch.zeros(shape)\n    for i in range(shape[0]):\n        for j in range(shape[1]):\n            if mask[i,j]: expected[i,j]=a[i,j].item()-beta*(s[i,j].item()-t[i,j].item())\n    assert torch.allclose(out,expected,atol=1e-6)\n    assert not out.requires_grad\n"
+        },
+        {
+          "name": "Rejects zero mask and mismatched shape",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "Rejects zero mask and mismatched shape: check the stated contract and edge cases.",
+          "hiddenCode": "\nimport torch\nx=torch.zeros(2,3)\nfor a,s,t,m,b in [(x,x,x,torch.zeros_like(x),1),(x,x,x,torch.ones(3,2),1),(x,x,x,torch.ones_like(x),-1)]:\n    try: {fn}(a,s,t,m,b)\n    except ValueError: pass\n    else: raise AssertionError('expected ValueError')\n"
+        },
+        {
+          "name": "Nonfinite masked scores cannot leak",
+          "visibility": "unshown",
+          "behavior": "rl.masking",
+          "failureMessage": "Nonfinite masked scores cannot leak: check the stated contract and edge cases.",
+          "hiddenCode": "\nimport torch\na=torch.tensor([[3.,float('nan')]])\ns=torch.tensor([[-2.,-float('inf')]])\nt=torch.tensor([[-1.,-float('inf')]])\nout={fn}(a,s,t,torch.tensor([[1,0]]))\nassert torch.isfinite(out).all() and torch.allclose(out,torch.tensor([[4.,0.]]))\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which model sampled the trajectory? Is the teacher asked for all vocabulary logits or only realized-token log probabilities?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Form the student-minus-teacher sampled log-ratio, subtract its beta-weighted value from the incoming advantage, detach the result, then zero masked positions. The policy loss is a separate exercise."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "k3_kl_penalty",
+        "reinforce_policy_loss"
+      ],
+      "modelConnections": [
+        "Slime's apply_opd_kl_to_advantages subtracts sampled student-minus-teacher log probability after the base advantage estimator."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Only the sampled token needs a teacher score, so the signal fits an existing policy-gradient trainer."
+        ],
+        "cons": [
+          "A single sampled token gives a noisier teacher signal than a full-vocabulary divergence."
+        ]
+      },
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/THUDM/slime",
+          "commit": "8ee9c1e1c8871ccd6dc8ec812edfaefa3dd1156b",
+          "path": "slime/backends/megatron_utils/loss.py",
+          "symbol": "apply_opd_kl_to_advantages",
+          "license": "Apache-2.0",
+          "adapted": "Subtracts sampled student-minus-teacher log-probability from advantages.",
+          "simplifications": "Pure masked tensor interface rather than mutating a distributed RolloutBatch."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2601.18734",
+          "section": "Section 4.3.5: sampled-token advantage versus full-vocabulary distillation"
+        }
+      ]
+    },
+    {
+      "id": "opsd_privileged_context_kl",
+      "title": "OPSD Privileged-Context KL",
+      "titleZh": "OPSD Privileged-Context KL",
+      "difficulty": "Hard",
+      "functionName": "opsd_privileged_context_kl",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Implement `opsd_privileged_context_kl(model, problems, gold_solutions, max_new_tokens) -> Tensor` on a tiny offline model interface.\n\n`problems` and `gold_solutions` are equal-length nonempty lists. Call `model.generate(problems, max_new_tokens)` **without the gold solutions**; it returns `(tokens, mask)` with matching `[batch,time]` shapes. Then call the *same model object* twice on those exact generated tokens: `model.logits(problems, tokens, privileged_context=None)` for the student and `model.logits(problems, tokens, privileged_context=gold_solutions)` for the privileged teacher. Each call returns aligned `[batch,time,vocab]` logits. The teacher must not generate another trajectory. At every valid token compute the full-vocabulary forward KL `KL(teacher || student)` and return its valid-token mean. Detach teacher logits; only the student score branch receives gradients. Reject empty or mismatched input lists, nonpositive `max_new_tokens`, malformed token/mask/logit shapes, vocab smaller than two, or an all-zero mask with `ValueError`. Padding scores are excluded before arithmetic. Unlike sampled OPD, every vocabulary probability contributes; unlike temperature KD, no temperature scaling is used.",
+      "descriptionZh": "Implement `opsd_privileged_context_kl(model, problems, gold_solutions, max_new_tokens) -> Tensor` on a tiny offline model interface.\n\n`problems` and `gold_solutions` are equal-length nonempty lists. Call `model.generate(problems, max_new_tokens)` **without the gold solutions**; it returns `(tokens, mask)` with matching `[batch,time]` shapes. Then call the *same model object* twice on those exact generated tokens: `model.logits(problems, tokens, privileged_context=None)` for the student and `model.logits(problems, tokens, privileged_context=gold_solutions)` for the privileged teacher. Each call returns aligned `[batch,time,vocab]` logits. The teacher must not generate another trajectory. At every valid token compute the full-vocabulary forward KL `KL(teacher || student)` and return its valid-token mean. Detach teacher logits; only the student score branch receives gradients. Reject empty or mismatched input lists, nonpositive `max_new_tokens`, malformed token/mask/logit shapes, vocab smaller than two, or an all-zero mask with `ValueError`. Padding scores are excluded before arithmetic. Unlike sampled OPD, every vocabulary probability contributes; unlike temperature KD, no temperature scaling is used.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Visible nonzero KL on student-generated tokens",
+          "code": "\nimport torch, math\nclass TinyModel:\n    def generate(self, problems, max_new_tokens):\n        assert problems == ['2+2'] and max_new_tokens == 2\n        return torch.tensor([[4, 0]]), torch.tensor([[1, 0]])\n    def logits(self, problems, tokens, privileged_context=None):\n        assert problems == ['2+2'] and tokens.tolist() == [[4, 0]]\n        return (torch.tensor([[[math.log(3), 0.], [0., 0.]]]) if privileged_context == ['4']\n                else torch.tensor([[[0., 0.], [0., 0.]]]))\nout = {fn}(TinyModel(), ['2+2'], ['4'], 2)\nexpected = .75 * math.log(.75 / .5) + .25 * math.log(.25 / .5)\nassert abs(out.item() - expected) < 1e-6\n",
+          "behavior": "rl.kl_estimator"
+        },
+        {
+          "name": "Generation and both score calls use the required contexts",
+          "visibility": "unshown",
+          "behavior": "gradient.flow",
+          "failureMessage": "Generation and both score calls use the required contexts: check the stated contract and edge cases.",
+          "hiddenCode": "\nimport torch, math\nclass RecordingModel:\n    def __init__(self):\n        self.calls=[]\n        self.student=torch.tensor([[[0.,0.]]],requires_grad=True)\n        self.teacher=torch.tensor([[[math.log(3),0.]]],requires_grad=True)\n    def generate(self, problems, max_new_tokens):\n        self.calls.append(('generate',list(problems),max_new_tokens))\n        return torch.tensor([[7]]),torch.tensor([[1]])\n    def logits(self, problems, tokens, privileged_context=None):\n        self.calls.append(('logits',list(problems),tokens.tolist(),privileged_context))\n        return self.student if privileged_context is None else self.teacher\nm=RecordingModel()\nout={fn}(m,['question'],['answer'],1)\nassert m.calls==[('generate',['question'],1),('logits',['question'],[[7]],None),('logits',['question'],[[7]],['answer'])]\nout.backward()\nassert m.student.grad is not None and torch.any(m.student.grad!=0)\nassert m.teacher.grad is None or torch.all(m.teacher.grad==0)\n"
+        },
+        {
+          "name": "Seeded independent full-vocabulary oracle",
+          "visibility": "unshown",
+          "behavior": "numerics.stability",
+          "failureMessage": "Seeded independent full-vocabulary oracle: check the stated contract and edge cases.",
+          "hiddenCode": "\nimport torch, math\ntorch.manual_seed(71)\ns=torch.randn(2,3,5,dtype=torch.float64)\nt=torch.randn(2,3,5,dtype=torch.float64)\nmask=torch.tensor([[1,1,0],[0,1,0]])\ntokens=torch.tensor([[2,3,0],[1,0,0]])\nclass FixedModel:\n    def generate(self, problems, max_new_tokens): return tokens,mask\n    def logits(self, problems, actual_tokens, privileged_context=None):\n        assert torch.equal(actual_tokens,tokens)\n        return s if privileged_context is None else t\ntotal=0.\nfor i,j in [(0,0),(0,1),(1,1)]:\n    a=t[i,j].tolist(); b=s[i,j].tolist()\n    p=[math.exp(z-max(a)) for z in a]; p=[z/sum(p) for z in p]\n    q=[math.exp(z-max(b)) for z in b]; q=[z/sum(q) for z in q]\n    total+=sum(x*math.log(x/y) for x,y in zip(p,q))\nassert abs({fn}(FixedModel(),['a','b'],['A','B'],3).item()-total/3)<1e-12\n"
+        },
+        {
+          "name": "Rejects invalid generated and scored shapes",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "Rejects invalid generated and scored shapes: check the stated contract and edge cases.",
+          "hiddenCode": "\nimport torch\nclass BadModel:\n    def __init__(self,mask,teacher_shape=(1,2,3)): self.mask=mask; self.teacher_shape=teacher_shape\n    def generate(self,problems,max_new_tokens): return torch.ones(1,2,dtype=torch.long),self.mask\n    def logits(self,problems,tokens,privileged_context=None):\n        return torch.zeros(self.teacher_shape if privileged_context is not None else (1,2,3))\nfor args in [(BadModel(torch.zeros(1,2)),['q'],['a'],2),(BadModel(torch.ones(2,1)),['q'],['a'],2),(BadModel(torch.ones(1,2),(1,2,4)),['q'],['a'],2),(BadModel(torch.ones(1,2)),[],[],2),(BadModel(torch.ones(1,2)),['q'],['a'],0)]:\n    try: {fn}(*args)\n    except ValueError: pass\n    else: raise AssertionError('expected ValueError')\n"
+        },
+        {
+          "name": "Masked invalid logits have no effect",
+          "visibility": "unshown",
+          "behavior": "rl.masking",
+          "failureMessage": "Masked invalid logits have no effect: check the stated contract and edge cases.",
+          "hiddenCode": "\nimport torch\nclass Model:\n    def __init__(self): self.s=torch.tensor([[[0.,1.],[float('-inf'),float('-inf')]]],requires_grad=True)\n    def generate(self,problems,max_new_tokens): return torch.tensor([[1,0]]),torch.tensor([[1,0]])\n    def logits(self,problems,tokens,privileged_context=None):\n        return self.s if privileged_context is None else torch.tensor([[[1.,0.],[float('-inf'),float('-inf')]]])\nm=Model()\nout={fn}(m,['q'],['a'],2)\nassert torch.isfinite(out)\nout.backward()\nassert torch.isfinite(m.s.grad).all() and torch.all(m.s.grad[0,1]==0)\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which context may the generation call see? Can the teacher choose a different trajectory? Which score branch receives gradients?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Generate once from problem-only context, then reuse those tokens in two score calls on the same model. Pass gold solutions only to the teacher call, detach that branch, and average teacher-weighted full-vocabulary KL over valid positions."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "masked_kd_kl",
+        "opd_sampled_kl_advantage"
+      ],
+      "modelConnections": [
+        "The OPSD author implementation scores student-generated tokens twice with one model: ordinary student context and a privileged gold-solution teacher context."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "The privileged branch supplies dense token-level guidance without a separate teacher checkpoint."
+        ],
+        "cons": [
+          "Two full-vocabulary score passes cost memory and gold-solution context must never leak into generation."
+        ]
+      },
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/siyan-zhao/OPSD",
+          "commit": "ae7d2519e94920c4eb6206c0c26de46d9c50abae",
+          "path": "opsd_trainer.py",
+          "symbol": "OPSDTrainer.generalized_jsd_loss",
+          "license": "Apache-2.0 (source file header)",
+          "adapted": "Full-vocabulary forward KL from a privileged-context teacher to the student.",
+          "simplifications": "A tiny CPU model interface generates student tokens and scores both contexts; no distributed trainer, top-k, or pointwise clipping."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2601.18734",
+          "section": "Section 3: On-policy self-distillation; Section 4.3.5: full-vocabulary objective"
+        }
+      ]
     }
   ]
 }
