@@ -52,6 +52,7 @@ print('Loss:', dpo_loss(chosen, rejected, ref_c, ref_r, beta=0.1).item())""",
         ],
         deep_dive=[
             'Write the DPO loss from the four log-prob inputs. What role does the reference model play?',
+            'Starting from the KL-regularized RLHF objective, derive the optimal policy and show how it turns into the DPO loss. Why does the partition function cancel?',
             'What does beta control, and what happens when it is very large or very small?',
             'How are sequence log-probs computed for chosen and rejected responses, and why mask the prompt?',
         ],

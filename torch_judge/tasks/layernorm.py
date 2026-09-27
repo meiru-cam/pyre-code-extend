@@ -69,6 +69,7 @@ print("Match ref?", torch.allclose(out, ref, atol=1e-4))""",
             'Why do we need the learnable gamma and beta?',
         ],
         deep_dive=[
+            'Why does normalization make optimization easier? What does it do to the scale of activations and gradients, and what did later work say about the internal covariate shift explanation?',
             'Biased or unbiased variance: which does LayerNorm use and why?',
             'Where does eps go, and what happens with a constant input row?',
             'How do you normalize over the last dimension for an input of any rank?',
