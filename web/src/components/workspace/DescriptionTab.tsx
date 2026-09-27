@@ -8,6 +8,12 @@ import { getHintLevels } from '@/lib/hints';
 import type { Problem } from '@/lib/types';
 import { ProblemInformation } from './ProblemInformation';
 import { DesignNoteEditor } from './DesignNoteEditor';
+import { InterviewPanel } from './InterviewPanel';
+import {
+  interviewQuestionsFor,
+  isInterviewUnlocked,
+  type InterviewRecord,
+} from '@/lib/interviewAnswer';
 
 function parseInline(text: string): (string | JSX.Element)[] {
   const parts: (string | JSX.Element)[] = [];
@@ -59,11 +65,17 @@ function renderDescription(text: string) {
 interface DescriptionTabProps {
   problem: Problem;
   implementationStatus?: 'todo' | 'attempted' | 'solved';
+  /** When present, help stays hidden until the learner answers or skips. */
+  interview?: {
+    record: InterviewRecord;
+    onChange: (record: InterviewRecord) => void;
+  };
 }
 
 export function DescriptionTab({
   problem,
   implementationStatus = 'todo',
+  interview,
 }: DescriptionTabProps) {
   const [hintOpen, setHintOpen] = useState(false);
   const [openLevels, setOpenLevels] = useState<Record<number, boolean>>({});
@@ -72,6 +84,7 @@ export function DescriptionTab({
   const description = locale === 'zh' ? problem.descriptionZh : problem.descriptionEn;
   const hint = locale === 'zh' && problem.hintZh ? problem.hintZh : problem.hint;
   const hintLevels = getHintLevels(problem);
+  const helpUnlocked = !interview || isInterviewUnlocked(interview.record);
 
   return (
     <div className="px-7 py-6 space-y-6">
@@ -89,7 +102,15 @@ export function DescriptionTab({
         <div className="space-y-1">{renderDescription(description)}</div>
       )}
 
-      <ProblemInformation problem={problem} />
+      {interview && (
+        <InterviewPanel
+          questions={interviewQuestionsFor(problem)}
+          record={interview.record}
+          onChange={interview.onChange}
+        />
+      )}
+
+      {helpUnlocked && <ProblemInformation problem={problem} />}
 
       <DesignNoteEditor
         problem={problem}
@@ -97,7 +118,7 @@ export function DescriptionTab({
         locale={locale}
       />
 
-      {hintLevels.length > 0 ? (
+      {!helpUnlocked ? null : hintLevels.length > 0 ? (
         <div className="space-y-3">
           {hintLevels.map((level) => {
             const label = level.kind === 'questions' ? 'Guiding questions' : 'Analysis';

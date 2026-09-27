@@ -9,6 +9,10 @@ DIFFICULTIES = frozenset({"Easy", "Medium", "Hard"})
 HINT_KINDS = frozenset({"questions", "analysis"})
 VISIBILITIES = frozenset({"visible", "unshown"})
 
+# Interview questions run in the order an interviewer asks them. Concept and deep-dive
+# answers gate hints, the solution and the editor; tradeoff questions come after coding.
+INTERVIEW_STAGES = ("concept", "deep_dive", "tradeoffs")
+
 DESIGN_NOTE_DIMENSIONS = (
     ("api_boundaries", "API boundaries and class responsibilities"),
     ("state_ownership", "State and ownership"),
@@ -72,6 +76,9 @@ _MATH_MARKUP = re.compile(
 )
 
 
+_INLINE_DOLLAR_MATH = re.compile(r"\$[^$\n]+\$")
+
+
 class TaskValidationError(ValueError):
     def __init__(self, task_id: str, field: str, message: str):
         self.task_id = task_id
@@ -127,6 +134,33 @@ def _validate_hints(task_id: str, hints: Any) -> None:
             )
     if seen_levels != {1, 2}:
         raise TaskValidationError(task_id, "hints", "new-style hints require levels 1 and 2")
+
+
+def _validate_interview_questions(task_id: str, questions: Any) -> None:
+    field = "interview_questions"
+    if not isinstance(questions, list) or not questions:
+        raise TaskValidationError(task_id, field, "must be a non-empty list")
+    stages: list[str] = []
+    for i, item in enumerate(questions):
+        if not isinstance(item, dict) or set(item) != {"stage", "question"}:
+            raise TaskValidationError(task_id, field, f"entry {i} must be {{'stage', 'question'}}")
+        if item["stage"] not in INTERVIEW_STAGES:
+            raise TaskValidationError(
+                task_id, field, f"entry {i}: stage must be one of {list(INTERVIEW_STAGES)}"
+            )
+        if not isinstance(item["question"], str) or not item["question"].strip():
+            raise TaskValidationError(task_id, field, f"entry {i}: question required")
+        _reject_math_markup(task_id, f"{field}[{i}]", item["question"])
+        # Questions are prose, so inline `$...$` is always LaTeX rather than shell or code.
+        if _INLINE_DOLLAR_MATH.search(item["question"]):
+            raise TaskValidationError(
+                task_id, f"{field}[{i}]", "unsupported LaTeX inline math; write T*T or `T^2`"
+            )
+        stages.append(item["stage"])
+    if stages != sorted(stages, key=INTERVIEW_STAGES.index):
+        raise TaskValidationError(task_id, field, "entries must be ordered concept, deep_dive, tradeoffs")
+    if "concept" not in stages or "deep_dive" not in stages:
+        raise TaskValidationError(task_id, field, "needs at least one concept and one deep_dive question")
 
 
 def _validate_test(task_id: str, index: int, test: Any) -> None:
@@ -260,6 +294,9 @@ def validate_task(task_id: str, task: dict, known_ids: set[str] | None = None) -
             raise TaskValidationError(
                 task_id, "pro_con_analysis", "must be {'pros': [str], 'cons': [str]}"
             )
+
+    if "interview_questions" in task:
+        _validate_interview_questions(task_id, task["interview_questions"])
 
     if "model_connections" in task:
         connections = task["model_connections"]

@@ -59,3 +59,65 @@ describe('DescriptionTab hints', () => {
     expect(screen.getByText('Deeper analysis')).toBeTruthy();
   });
 });
+
+describe('DescriptionTab interview gate', () => {
+  afterEach(cleanup);
+
+  const withTradeoffs: Problem = {
+    ...problem,
+    proConAnalysis: { pros: ['Reference pro'], cons: ['Reference con'] },
+  };
+
+  function renderWithGate(status: 'draft' | 'answered' | 'skipped') {
+    const onChange = vi.fn();
+    const record = {
+      status,
+      answers: ['', '', ''],
+      updatedAt: '',
+    };
+    render(React.createElement(DescriptionTab, {
+      problem: withTradeoffs,
+      interview: { record, onChange },
+    }));
+    return onChange;
+  }
+
+  it('hides hints and reference tradeoffs until the learner answers', () => {
+    renderWithGate('draft');
+    expect(screen.getByText('Interview first')).toBeTruthy();
+    expect(screen.queryByText('hint 1 · Guiding questions')).toBeNull();
+    expect(screen.queryByText('Reference pro')).toBeNull();
+    expect((screen.getByText('Lock in answers') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('records a skip explicitly', async () => {
+    const user = userEvent.setup();
+    const onChange = renderWithGate('draft');
+    await user.click(screen.getByText('Skip (recorded)'));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ status: 'skipped' }));
+  });
+
+  it('shows authored questions and holds tradeoffs back until unlock', () => {
+    render(React.createElement(DescriptionTab, {
+      problem: {
+        ...withTradeoffs,
+        interviewQuestions: [
+          { stage: 'concept', question: 'Why divide by T?' },
+          { stage: 'deep_dive', question: 'How do you detach the teacher?' },
+          { stage: 'tradeoffs', question: 'What does teacher forcing miss?' },
+        ],
+      },
+      interview: { record: { status: 'draft', answers: ['', '', ''], updatedAt: '' }, onChange: vi.fn() },
+    }));
+    expect(screen.getByText('Why divide by T?')).toBeTruthy();
+    expect(screen.getByText('How do you detach the teacher?')).toBeTruthy();
+    expect(screen.queryByText('What does teacher forcing miss?')).toBeNull();
+  });
+
+  it('shows hints and reference tradeoffs once unlocked', () => {
+    renderWithGate('answered');
+    expect(screen.getByText('hint 1 · Guiding questions')).toBeTruthy();
+    expect(screen.getByText('Reference pro')).toBeTruthy();
+    expect(screen.getByText('Interview')).toBeTruthy();
+  });
+});

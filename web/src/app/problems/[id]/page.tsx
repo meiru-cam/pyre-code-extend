@@ -20,6 +20,15 @@ import { useTheme } from '@/context/ThemeContext';
 import type { Problem, ProgressMap, SubmissionResult, LearningPath, LearningPathProblemSummary, SubmissionHistory } from '@/lib/types';
 import { loadCodeDraft, saveCodeDraft } from '@/lib/codeDraft';
 import { visibleTestIndices } from '@/lib/hints';
+import {
+  emptyInterviewRecord,
+  interviewQuestionsFor,
+  isInterviewUnlocked,
+  loadInterviewRecord,
+  saveInterviewRecord,
+  type InterviewRecord,
+} from '@/lib/interviewAnswer';
+import { InterviewLockedNotice } from '@/components/workspace/InterviewPanel';
 
 function FlameGlyph() {
   return (
@@ -60,14 +69,21 @@ function WorkspacePageNew() {
   const [progress, setProgress] = useState<ProgressMap>({});
   const [pathData, setPathData] = useState<(Omit<LearningPath, 'problems'> & { problems: LearningPathProblemSummary[] }) | null>(null);
   const [feedbackResult, setFeedbackResult] = useState<SubmissionResult | null>(null);
+  const [interviewRecord, setInterviewRecord] = useState<InterviewRecord | null>(null);
+  const interviewUnlocked = isInterviewUnlocked(interviewRecord);
   const codeReadyRef = useRef(false);
 
   useEffect(() => {
     codeReadyRef.current = false;
+    setInterviewRecord(null);
     fetch(`/api/problems/${id}`)
       .then((r) => r.json())
       .then((data) => {
         setProblem(data);
+        const questions = interviewQuestionsFor(data);
+        setInterviewRecord(
+          loadInterviewRecord(id, data.version ?? 1, questions) ?? emptyInterviewRecord(questions),
+        );
         const cachedCode = loadCodeDraft(id);
         setCurrentCode(cachedCode ?? data.starterCode ?? '');
         codeReadyRef.current = true;
@@ -138,8 +154,13 @@ function WorkspacePageNew() {
     saveCodeDraft(id, currentCode);
   }, [id, currentCode]);
 
+  const handleInterviewChange = (record: InterviewRecord) => {
+    setInterviewRecord(record);
+    if (problem) saveInterviewRecord(id, problem.version ?? 1, record);
+  };
+
   const handleRun = async () => {
-    if (!problem || isRunning) return;
+    if (!problem || isRunning || !interviewUnlocked) return;
     setIsRunning(true);
     setRunResult(null);
     try {
@@ -160,7 +181,7 @@ function WorkspacePageNew() {
   };
 
   const handleSubmit = async () => {
-    if (!problem || isSubmitting) return;
+    if (!problem || isSubmitting || !interviewUnlocked) return;
     setIsSubmitting(true);
     setSubmissionResult(null);
     try {
@@ -201,7 +222,7 @@ function WorkspacePageNew() {
     return () => window.removeEventListener('keydown', handler);
   }, [handleRun, handleSubmit, isRunning, isSubmitting]);
 
-  if (!problem) {
+  if (!problem || !interviewRecord) {
     return (
       <div className="h-screen flex items-center justify-center bg-bg">
         <p className="text-sm text-text-3">{t('loading')}</p>
@@ -239,13 +260,14 @@ function WorkspacePageNew() {
           <DescriptionTab
             problem={problem}
             implementationStatus={progress[id]?.status ?? 'todo'}
+            interview={{ record: interviewRecord, onChange: handleInterviewChange }}
           />
         </Tabs.Content>
         <Tabs.Content value="solution" className="flex-1 overflow-y-auto">
-          <SolutionTab problemId={id} />
+          {interviewUnlocked ? <SolutionTab problemId={id} /> : <InterviewLockedNotice />}
         </Tabs.Content>
         <Tabs.Content value="aiHelp" className="flex-1 overflow-y-auto">
-          <AIHelpTab problem={problem} />
+          {interviewUnlocked ? <AIHelpTab problem={problem} /> : <InterviewLockedNotice />}
         </Tabs.Content>
       </Tabs.Root>
     </div>
@@ -271,15 +293,23 @@ function WorkspacePageNew() {
               <span className="mono text-[12.5px] text-text-2">{id}.py</span>
               <span className="ml-auto mono text-[11.5px] text-text-3 px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-sunken)', border: '1px solid var(--line)' }}>Python</span>
             </div>
-            <div className="flex-1 overflow-hidden">
-              <CodeEditor value={currentCode} onChange={setCurrentCode} onRunShortcut={handleRun} onSubmitShortcut={handleSubmit} />
+            <div className="relative flex-1 overflow-hidden">
+              <CodeEditor value={currentCode} onChange={setCurrentCode} readOnly={!interviewUnlocked} onRunShortcut={handleRun} onSubmitShortcut={handleSubmit} />
+              {!interviewUnlocked && (
+                <div
+                  className="absolute inset-0"
+                  style={{ background: 'color-mix(in oklab, var(--bg) 80%, transparent)', backdropFilter: 'blur(2px)' }}
+                >
+                  <InterviewLockedNotice />
+                </div>
+              )}
             </div>
           </div>
         }
         bottom={
           <div className="flex flex-col h-full">
             <TestPanel tests={problem.tests} functionName={problem.functionName} />
-            <ActionBar onSubmit={handleSubmit} onRun={handleRun} isSubmitting={isSubmitting} isRunning={isRunning} attemptCount={submissionHistory.length} />
+            <ActionBar onSubmit={handleSubmit} onRun={handleRun} isSubmitting={isSubmitting} isRunning={isRunning} disabled={!interviewUnlocked} attemptCount={submissionHistory.length} />
           </div>
         }
         defaultRatio={0.65}

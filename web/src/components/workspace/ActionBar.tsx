@@ -9,12 +9,13 @@ interface ActionBarProps {
   onRun: () => void;
   isSubmitting: boolean;
   isRunning: boolean;
+  disabled?: boolean;
   attemptCount?: number;
 }
 
-export function ActionBar({ onSubmit, onRun, isSubmitting, isRunning, attemptCount }: ActionBarProps) {
+export function ActionBar({ onSubmit, onRun, isSubmitting, isRunning, disabled = false, attemptCount }: ActionBarProps) {
   const { t } = useLocale();
-  const busy = isSubmitting || isRunning;
+  const busy = isSubmitting || isRunning || disabled;
   return (
     <div
       className="px-4 py-2.5 flex items-center gap-3 flex-shrink-0"

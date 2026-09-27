@@ -253,3 +253,44 @@ def test_rl_behavior_categories_are_namespaced():
     assert not any(
         name.startswith("rl.") for name in BEHAVIOR_CATEGORIES - RL_BEHAVIOR_CATEGORIES
     )
+
+
+def _with_interview(questions) -> dict:
+    task = make_new_task()
+    task["interview_questions"] = questions
+    return task
+
+
+def test_interview_questions_accept_ordered_stages():
+    from torch_judge.tasks._interview import interview
+
+    questions = interview(
+        concept=["What is knowledge distillation?"],
+        deep_dive=["How do you stop teacher gradients?"],
+        tradeoffs=["What does teacher forcing miss?"],
+    )
+    validate_task("t", _with_interview(questions))
+
+
+@pytest.mark.parametrize(
+    "questions, message",
+    [
+        ([], "non-empty"),
+        ([{"stage": "warmup", "question": "q"}], "stage must be"),
+        ([{"stage": "concept", "question": "  "}], "question required"),
+        ([{"stage": "concept", "question": "q", "extra": 1}], "must be"),
+        ([{"stage": "concept", "question": "q"}], "deep_dive"),
+        (
+            [{"stage": "deep_dive", "question": "a"}, {"stage": "concept", "question": "b"}],
+            "ordered",
+        ),
+        (
+            [{"stage": "concept", "question": "Why scale by $T^2$?"},
+             {"stage": "deep_dive", "question": "q"}],
+            "LaTeX",
+        ),
+    ],
+)
+def test_interview_questions_reject_bad_shapes(questions, message):
+    with pytest.raises(TaskValidationError, match=message):
+        validate_task("t", _with_interview(questions))

@@ -50,6 +50,13 @@ export interface DesignNoteResponse {
   updatedAt: string;
 }
 
+export type InterviewStage = 'concept' | 'deep_dive' | 'tradeoffs';
+
+export interface InterviewQuestion {
+  stage: InterviewStage;
+  question: string;
+}
+
 export interface Problem {
   id: string;
   title: string;
@@ -66,6 +73,7 @@ export interface Problem {
   advisoryPrerequisites?: string[];
   modelConnections?: string[];
   proConAnalysis?: { pros: string[]; cons: string[] };
+  interviewQuestions?: InterviewQuestion[];
   designNoteRubric?: { field: DesignNoteFieldName; label: string }[];
   sources?: SourceRef[];
 }
