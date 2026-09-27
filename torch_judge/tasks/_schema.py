@@ -60,6 +60,9 @@ BEHAVIOR_CATEGORIES = frozenset({
     "rl.reward_verifiable",
     "rl.rollout_assembly",
     "rl.trajectory",
+    "metrics.averaging",
+    "metrics.ties",
+    "optim.state",
 })
 
 

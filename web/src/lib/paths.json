@@ -139,6 +139,16 @@
       "icon": "Network",
       "problems": ["gcn_layer", "graph_readout", "gat_layer", "gin_layer", "mpnn_layer", "link_prediction", "graphsage_layer", "gae"],
       "prerequisites": []
+    },
+    {
+      "id": "ml-fundamentals",
+      "titleEn": "ML Fundamentals",
+      "titleZh": "ML Fundamentals",
+      "descriptionEn": "Classic machine-learning interview staples: losses, regularization, optimizers and evaluation metrics, each implemented and explained from first principles.",
+      "descriptionZh": "Classic machine-learning interview staples: losses, regularization, optimizers and evaluation metrics, each implemented and explained from first principles.",
+      "icon": "BarChart3",
+      "problems": ["linear_regression", "binary_cross_entropy", "cross_entropy", "focal_loss", "weight_regularization", "dropout", "sgd_momentum", "adam", "precision_recall_f1", "roc_auc"],
+      "prerequisites": []
     }
   ]
 }

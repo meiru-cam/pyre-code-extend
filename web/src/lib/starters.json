@@ -129,5 +129,10 @@
   "masked_kd_kl": "def masked_kd_kl(student_logits, teacher_logits, mask, temperature=1.0):\n    pass",
   "opd_sampled_kl_advantage": "def opd_sampled_kl_advantage(advantages, student_logprobs, teacher_logprobs, mask, beta=1.0):\n    pass",
   "opsd_privileged_context_kl": "def opsd_privileged_context_kl(model, problems, gold_solutions, max_new_tokens):\n    pass",
-  "slime_custom_generate_hook": "async def slime_custom_generate_hook(args, sample, sampling_params):\n    pass"
+  "slime_custom_generate_hook": "async def slime_custom_generate_hook(args, sample, sampling_params):\n    pass",
+  "binary_cross_entropy": "def binary_cross_entropy(logits, targets, pos_weight=None):\n    pass",
+  "weight_regularization": "def regularized_loss(data_loss, named_parameters, l1=0.0, l2=0.0):\n    pass",
+  "sgd_momentum": "class SGDMomentum:\n    def __init__(self, params, lr, momentum=0.0, weight_decay=0.0, nesterov=False):\n        pass\n\n    def step(self):\n        pass\n\n    def zero_grad(self):\n        pass",
+  "precision_recall_f1": "def precision_recall_f1(preds, targets, average=\"macro\"):\n    pass",
+  "roc_auc": "def roc_auc(scores, labels):\n    pass"
 }

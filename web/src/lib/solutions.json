@@ -13,6 +13,15 @@
       }
     ]
   },
+  "binary_cross_entropy": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\nimport torch.nn.functional as F\n\ndef binary_cross_entropy(logits, targets, pos_weight=None):\n    if logits.shape != targets.shape:\n        raise ValueError(f\"shape mismatch: {tuple(logits.shape)} vs {tuple(targets.shape)}\")\n    weight = 1.0 if pos_weight is None else pos_weight\n    per_element = weight * targets * F.softplus(-logits) + (1 - targets) * F.softplus(logits)\n    return per_element.mean()",
+        "role": "solution"
+      }
+    ]
+  },
   "cross_entropy": {
     "cells": [
       {
@@ -256,6 +265,15 @@
         "type": "code",
         "source": "w = torch.empty(256, 512)\nkaiming_init(w)\nprint(f'Mean: {w.mean():.4f} (expect ~0)')\nprint(f'Std:  {w.std():.4f} (expect {math.sqrt(2/512):.4f})')",
         "role": "demo"
+      }
+    ]
+  },
+  "weight_regularization": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def regularized_loss(data_loss, named_parameters, l1=0.0, l2=0.0):\n    if l1 < 0 or l2 < 0:\n        raise ValueError(\"regularization strengths must be non-negative\")\n    loss = data_loss\n    for _name, weight in named_parameters:\n        if weight.ndim < 2:\n            continue\n        loss = loss + l1 * weight.abs().sum() + 0.5 * l2 * (weight * weight).sum()\n    return loss",
+        "role": "solution"
       }
     ]
   },
@@ -801,6 +819,15 @@
       }
     ]
   },
+  "precision_recall_f1": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\n\ndef precision_recall_f1(preds, targets, average=\"macro\"):\n    if average not in (\"micro\", \"macro\", \"weighted\"):\n        raise ValueError(f\"unknown average {average!r}\")\n    if preds.ndim != 1 or targets.ndim != 1 or preds.shape != targets.shape or preds.numel() == 0:\n        raise ValueError(\"preds and targets must be non-empty 1-D tensors of equal length\")\n\n    def divide(a, b):\n        return a / b if b else 0.0\n\n    classes = torch.unique(torch.cat([preds, targets])).tolist()\n    counts = []\n    for c in classes:\n        pred_c, true_c = preds == c, targets == c\n        tp = int((pred_c & true_c).sum())\n        fp = int((pred_c & ~true_c).sum())\n        fn = int((~pred_c & true_c).sum())\n        counts.append((tp, fp, fn, int(true_c.sum())))\n\n    if average == \"micro\":\n        tp, fp, fn = (sum(row[i] for row in counts) for i in range(3))\n        precision, recall, f1 = divide(tp, tp + fp), divide(tp, tp + fn), divide(2 * tp, 2 * tp + fp + fn)\n    else:\n        per_class = [\n            (divide(tp, tp + fp), divide(tp, tp + fn), divide(2 * tp, 2 * tp + fp + fn))\n            for tp, fp, fn, _ in counts\n        ]\n        weights = [1.0] * len(counts) if average == \"macro\" else [row[3] for row in counts]\n        total = sum(weights)\n        precision, recall, f1 = (\n            divide(sum(w * values[i] for w, values in zip(weights, per_class)), total)\n            for i in range(3)\n        )\n    return {\"precision\": float(precision), \"recall\": float(recall), \"f1\": float(f1)}",
+        "role": "solution"
+      }
+    ]
+  },
   "qk_norm": {
     "cells": [
       {
@@ -888,6 +915,15 @@
       }
     ]
   },
+  "roc_auc": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\n\ndef roc_auc(scores, labels):\n    if scores.ndim != 1 or labels.ndim != 1 or scores.shape != labels.shape:\n        raise ValueError(\"scores and labels must be 1-D tensors of equal length\")\n    labels = labels.long()\n    if bool(((labels != 0) & (labels != 1)).any()):\n        raise ValueError(\"labels must be 0 or 1\")\n    if not bool(torch.isfinite(scores).all()):\n        raise ValueError(\"scores must be finite\")\n    n_pos = int(labels.sum())\n    n_neg = labels.numel() - n_pos\n    if n_pos == 0 or n_neg == 0:\n        raise ValueError(\"AUC needs at least one positive and one negative\")\n\n    sorted_scores, order = torch.sort(scores.double())\n    _, counts = torch.unique_consecutive(sorted_scores, return_counts=True)\n    ends = torch.cumsum(counts, 0)\n    average_rank = (ends - counts + 1 + ends).double() / 2\n    ranks = torch.repeat_interleave(average_rank, counts)\n    rank_sum = float(ranks[labels[order] == 1].sum())\n    return (rank_sum - n_pos * (n_pos + 1) / 2) / (n_pos * n_neg)",
+        "role": "solution"
+      }
+    ]
+  },
   "rope": {
     "cells": [
       {
@@ -899,6 +935,15 @@
         "type": "code",
         "source": "q = torch.randn(1, 8, 16)\nk = torch.randn(1, 8, 16)\nqr, kr = apply_rope(q, k)\nprint('Shape preserved:', qr.shape == q.shape)\nprint('Norm preserved:', torch.allclose(q.norm(dim=-1), qr.norm(dim=-1), atol=1e-4))",
         "role": "demo"
+      }
+    ]
+  },
+  "sgd_momentum": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\n\nclass SGDMomentum:\n    def __init__(self, params, lr, momentum=0.0, weight_decay=0.0, nesterov=False):\n        if lr < 0 or momentum < 0 or weight_decay < 0:\n            raise ValueError(\"lr, momentum and weight_decay must be non-negative\")\n        if nesterov and momentum == 0:\n            raise ValueError(\"Nesterov momentum requires momentum > 0\")\n        self.params = list(params)\n        self.lr = lr\n        self.momentum = momentum\n        self.weight_decay = weight_decay\n        self.nesterov = nesterov\n        self.buffers = {}\n\n    @torch.no_grad()\n    def step(self):\n        for index, p in enumerate(self.params):\n            if p.grad is None:\n                continue\n            d = p.grad\n            if self.weight_decay:\n                d = d + self.weight_decay * p\n            if self.momentum:\n                buf = self.buffers.get(index)\n                if buf is None:\n                    buf = d.clone()\n                    self.buffers[index] = buf\n                else:\n                    buf.mul_(self.momentum).add_(d)\n                d = d + self.momentum * buf if self.nesterov else buf\n            p.add_(d, alpha=-self.lr)\n\n    def zero_grad(self):\n        for p in self.params:\n            p.grad = None",
+        "role": "solution"
       }
     ]
   },

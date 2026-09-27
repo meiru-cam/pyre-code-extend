@@ -240,11 +240,15 @@ RL_BEHAVIOR_CATEGORIES = frozenset({
 })
 
 
+ML_FUNDAMENTALS_BEHAVIOR_CATEGORIES = frozenset({"metrics.averaging", "metrics.ties", "optim.state"})
+
+
 def test_behavior_categories_match_spec_count():
-    """The 27 categories of the advanced-curriculum spec, plus the RL path's 8."""
+    """The 27 categories of the advanced-curriculum spec, the RL path's 8, and ML fundamentals' 3."""
     assert RL_BEHAVIOR_CATEGORIES <= BEHAVIOR_CATEGORIES
-    assert len(BEHAVIOR_CATEGORIES - RL_BEHAVIOR_CATEGORIES) == 27
-    assert len(BEHAVIOR_CATEGORIES) == 35
+    assert ML_FUNDAMENTALS_BEHAVIOR_CATEGORIES <= BEHAVIOR_CATEGORIES
+    assert len(BEHAVIOR_CATEGORIES - RL_BEHAVIOR_CATEGORIES - ML_FUNDAMENTALS_BEHAVIOR_CATEGORIES) == 27
+    assert len(BEHAVIOR_CATEGORIES) == 38
 
 
 def test_rl_behavior_categories_are_namespaced():

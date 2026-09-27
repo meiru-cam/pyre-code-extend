@@ -12727,6 +12727,560 @@
           "section": "Section 3: On-policy self-distillation; Section 4.3.5: full-vocabulary objective"
         }
       ]
+    },
+    {
+      "id": "binary_cross_entropy",
+      "title": "Binary Cross-Entropy with Logits",
+      "titleZh": "Binary Cross-Entropy with Logits",
+      "difficulty": "Easy",
+      "functionName": "binary_cross_entropy",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Compute the mean binary cross-entropy loss directly from logits.\n\n**Signature:** `binary_cross_entropy(logits, targets, pos_weight=None) -> Tensor`\n\n**Parameters:**\n- `logits` — float tensor of any shape. Raw scores before the sigmoid.\n- `targets` — float tensor of the same shape. Values in `[0, 1]`; soft labels are allowed.\n- `pos_weight` — `None`, a Python float, or a float tensor that broadcasts against `logits`. It multiplies the positive-class term only.\n\n**Returns:** scalar tensor. With `p = sigmoid(logits)` and `w = pos_weight` (1 when `None`):\n\n    loss = mean( -(w * targets * log(p) + (1 - targets) * log(1 - p)) )\n\n**Constraints:**\n- Work from logits. The result must stay finite for logits as large as 100 in magnitude.\n- Do not call `F.binary_cross_entropy_with_logits`, `F.binary_cross_entropy` or `nn.BCEWithLogitsLoss`.\n- Keep the result differentiable with respect to `logits`.\n- Raise `ValueError` when `logits` and `targets` have different shapes.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why logits.** `sigmoid(100)` rounds to exactly 1.0 in float32, so `log(1 - p)` becomes `log(0)`. Rewriting the loss with `softplus(x) = log(1 + exp(x))` avoids ever forming `p`: `-log(p) = softplus(-x)` and `-log(1 - p) = softplus(x)`.\n\n**Why pos_weight.** With rare positives, weighting the positive term trades precision for recall. A value near `num_negatives / num_positives` roughly balances the two classes' contribution to the gradient.",
+      "descriptionZh": "Compute the mean binary cross-entropy loss directly from logits.\n\n**Signature:** `binary_cross_entropy(logits, targets, pos_weight=None) -> Tensor`\n\n**Parameters:**\n- `logits` — float tensor of any shape. Raw scores before the sigmoid.\n- `targets` — float tensor of the same shape. Values in `[0, 1]`; soft labels are allowed.\n- `pos_weight` — `None`, a Python float, or a float tensor that broadcasts against `logits`. It multiplies the positive-class term only.\n\n**Returns:** scalar tensor. With `p = sigmoid(logits)` and `w = pos_weight` (1 when `None`):\n\n    loss = mean( -(w * targets * log(p) + (1 - targets) * log(1 - p)) )\n\n**Constraints:**\n- Work from logits. The result must stay finite for logits as large as 100 in magnitude.\n- Do not call `F.binary_cross_entropy_with_logits`, `F.binary_cross_entropy` or `nn.BCEWithLogitsLoss`.\n- Keep the result differentiable with respect to `logits`.\n- Raise `ValueError` when `logits` and `targets` have different shapes.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why logits.** `sigmoid(100)` rounds to exactly 1.0 in float32, so `log(1 - p)` becomes `log(0)`. Rewriting the loss with `softplus(x) = log(1 + exp(x))` avoids ever forming `p`: `-log(p) = softplus(-x)` and `-log(1 - p) = softplus(x)`.\n\n**Why pos_weight.** With rare positives, weighting the positive term trades precision for recall. A value near `num_negatives / num_positives` roughly balances the two classes' contribution to the gradient.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Matches the definition on small logits",
+          "code": "\nimport torch, math\nx = torch.tensor([0.0, 2.0, -1.0])\ny = torch.tensor([1.0, 0.0, 1.0])\np = [1 / (1 + math.exp(-v)) for v in x.tolist()]\nwant = -sum(t * math.log(q) + (1 - t) * math.log(1 - q) for q, t in zip(p, y.tolist())) / 3\nout = {fn}(x, y)\nassert out.ndim == 0 and abs(out.item() - want) < 1e-6, (out, want)\n",
+          "behavior": "numerics.stability"
+        },
+        {
+          "name": "Applies pos_weight to the positive term",
+          "code": "\nimport torch, math\nx = torch.tensor([0.5, -0.5])\ny = torch.tensor([1.0, 0.0])\np = [1 / (1 + math.exp(-v)) for v in x.tolist()]\nwant = (-3.0 * math.log(p[0]) - math.log(1 - p[1])) / 2\nout = {fn}(x, y, pos_weight=3.0)\nassert abs(out.item() - want) < 1e-6, (out, want)\n",
+          "behavior": "numerics.stability"
+        },
+        {
+          "name": "Stays finite and exact for extreme logits",
+          "visibility": "unshown",
+          "behavior": "numerics.stability",
+          "failureMessage": "Large-magnitude logits must not overflow; avoid forming sigmoid(x) and then taking its log.",
+          "hiddenCode": "\nimport torch\nx = torch.tensor([100.0, -100.0, 100.0, -100.0])\ny = torch.tensor([0.0, 1.0, 1.0, 0.0])\nout = {fn}(x, y)\nassert torch.isfinite(out), out\nassert abs(out.item() - 50.0) < 1e-4, out\n"
+        },
+        {
+          "name": "Matches a seeded oracle with soft labels and tensor pos_weight",
+          "visibility": "unshown",
+          "behavior": "numerics.stability",
+          "failureMessage": "Soft labels and a broadcast pos_weight must follow the stated formula exactly.",
+          "hiddenCode": "\nimport torch\nfor seed in (3, 17, 29):\n    g = torch.Generator().manual_seed(seed)\n    x = torch.randn(4, 5, generator=g, dtype=torch.float64) * 4\n    y = torch.rand(4, 5, generator=g, dtype=torch.float64)\n    w = torch.rand(5, generator=g, dtype=torch.float64) * 3 + 0.2\n    sp = torch.nn.functional.softplus\n    want = (w * y * sp(-x) + (1 - y) * sp(x)).mean()\n    out = {fn}(x, y, pos_weight=w)\n    assert torch.allclose(out, want, atol=1e-10), (seed, out, want)\n"
+        },
+        {
+          "name": "Gradient equals (sigmoid(x) - y) / N without pos_weight",
+          "visibility": "unshown",
+          "behavior": "gradient.flow",
+          "failureMessage": "The loss must stay differentiable with respect to logits and average over every element.",
+          "hiddenCode": "\nimport torch\nx = torch.tensor([[0.3, -1.2], [2.0, 0.0]], dtype=torch.float64, requires_grad=True)\ny = torch.tensor([[1.0, 0.0], [0.25, 1.0]], dtype=torch.float64)\n{fn}(x, y).backward()\nassert torch.allclose(x.grad, (torch.sigmoid(x.detach()) - y) / 4, atol=1e-10), x.grad\n"
+        },
+        {
+          "name": "Implements the loss without the built-in",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Build the loss from softplus or log-sigmoid rather than calling PyTorch's BCE functions.",
+          "hiddenCode": "\nimport torch\nF = torch.nn.functional\nsaved = (F.binary_cross_entropy_with_logits, F.binary_cross_entropy, torch.nn.BCEWithLogitsLoss)\ndef banned(*args, **kwargs):\n    raise AssertionError(\"built-in BCE called\")\nF.binary_cross_entropy_with_logits = F.binary_cross_entropy = banned\ntorch.nn.BCEWithLogitsLoss = banned\ntry:\n    {fn}(torch.tensor([0.1, -0.2]), torch.tensor([1.0, 0.0]))\nfinally:\n    F.binary_cross_entropy_with_logits, F.binary_cross_entropy, torch.nn.BCEWithLogitsLoss = saved\n"
+        },
+        {
+          "name": "Rejects mismatched shapes",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Logits and targets must have the same shape; raise ValueError instead of broadcasting.",
+          "hiddenCode": "\nimport torch\ntry:\n    {fn}(torch.zeros(3, 1), torch.zeros(3))\nexcept ValueError:\n    pass\nelse:\n    raise AssertionError(\"broadcast targets accepted\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "What is -log(sigmoid(x)) written without a sigmoid? Which of the two log terms does pos_weight scale?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Use -log(p) = softplus(-x) and -log(1 - p) = softplus(x). Per element: w * y * softplus(-x) + (1 - y) * softplus(x). F.softplus is stable for large inputs. Validate shapes first, then take the mean."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "cross_entropy"
+      ],
+      "modelConnections": [
+        "Reward models, classifier heads and multi-label taggers all train with this loss; `pos_weight` is PyTorch's own knob for class imbalance."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Stable at any logit scale and supports soft labels and per-class positive weights."
+        ],
+        "cons": [
+          "Treats labels independently, so it cannot express that classes are mutually exclusive; use softmax cross-entropy for that."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is binary cross-entropy, and when do you use it instead of softmax cross-entropy?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why does a multi-label classifier use one sigmoid per class rather than a softmax over classes?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why does computing sigmoid first and then log fail for large logits? Rewrite the loss in a stable form."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What is the gradient of BCE with respect to the logit, and why is it so simple?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How does pos_weight change the loss and the gradient, and how would you pick its value?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "pos_weight versus resampling versus focal loss for class imbalance: what does each change?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What happens to calibration when you train with pos_weight far from 1?"
+        }
+      ]
+    },
+    {
+      "id": "weight_regularization",
+      "title": "L1 and L2 Weight Regularization",
+      "titleZh": "L1 and L2 Weight Regularization",
+      "difficulty": "Easy",
+      "functionName": "regularized_loss",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Add L1 and L2 penalties on a model's weight matrices to a data loss.\n\n**Signature:** `regularized_loss(data_loss, named_parameters, l1=0.0, l2=0.0) -> Tensor`\n\n**Parameters:**\n- `data_loss` — scalar tensor. The unregularized loss.\n- `named_parameters` — an iterable of `(name, tensor)` pairs, such as `model.named_parameters()`. It may be a one-shot generator.\n- `l1` — non-negative float. Weight of the L1 penalty.\n- `l2` — non-negative float. Weight of the L2 penalty.\n\n**Returns:** scalar tensor:\n\n    loss = data_loss + sum over penalized w of ( l1 * sum(|w|) + 0.5 * l2 * sum(w * w) )\n\n**Constraints:**\n- Penalize only tensors with 2 or more dimensions. Biases and normalization scales, which are 1-D, are not penalized.\n- Sum over elements. Do not average.\n- Keep the penalty differentiable, so each penalized weight receives gradient `l1 * sign(w) + l2 * w`.\n- With `l1 == l2 == 0` the result must equal `data_loss`.\n- Raise `ValueError` when `l1` or `l2` is negative.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why the 0.5.** The gradient of `0.5 * l2 * w * w` is `l2 * w`, which is exactly what an optimizer's `weight_decay=l2` adds for plain SGD. With Adam the two are no longer equivalent, which is why AdamW decouples weight decay from the gradient.\n\n**Why skip 1-D tensors.** Biases shift outputs and normalization scales set the magnitude that normalization just removed; shrinking either toward zero does not reduce model complexity and often hurts.",
+      "descriptionZh": "Add L1 and L2 penalties on a model's weight matrices to a data loss.\n\n**Signature:** `regularized_loss(data_loss, named_parameters, l1=0.0, l2=0.0) -> Tensor`\n\n**Parameters:**\n- `data_loss` — scalar tensor. The unregularized loss.\n- `named_parameters` — an iterable of `(name, tensor)` pairs, such as `model.named_parameters()`. It may be a one-shot generator.\n- `l1` — non-negative float. Weight of the L1 penalty.\n- `l2` — non-negative float. Weight of the L2 penalty.\n\n**Returns:** scalar tensor:\n\n    loss = data_loss + sum over penalized w of ( l1 * sum(|w|) + 0.5 * l2 * sum(w * w) )\n\n**Constraints:**\n- Penalize only tensors with 2 or more dimensions. Biases and normalization scales, which are 1-D, are not penalized.\n- Sum over elements. Do not average.\n- Keep the penalty differentiable, so each penalized weight receives gradient `l1 * sign(w) + l2 * w`.\n- With `l1 == l2 == 0` the result must equal `data_loss`.\n- Raise `ValueError` when `l1` or `l2` is negative.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why the 0.5.** The gradient of `0.5 * l2 * w * w` is `l2 * w`, which is exactly what an optimizer's `weight_decay=l2` adds for plain SGD. With Adam the two are no longer equivalent, which is why AdamW decouples weight decay from the gradient.\n\n**Why skip 1-D tensors.** Biases shift outputs and normalization scales set the magnitude that normalization just removed; shrinking either toward zero does not reduce model complexity and often hurts.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Adds both penalties to the data loss",
+          "code": "\nimport torch\nw = torch.tensor([[1.0, -2.0], [0.5, 0.0]], requires_grad=True)\nb = torch.tensor([3.0, -4.0], requires_grad=True)\nout = {fn}(torch.tensor(1.0), [(\"fc.weight\", w), (\"fc.bias\", b)], l1=0.1, l2=0.2)\nwant = 1.0 + 0.1 * 3.5 + 0.5 * 0.2 * 5.25\nassert abs(out.item() - want) < 1e-6, (out, want)\n",
+          "behavior": "state.invariant"
+        },
+        {
+          "name": "Skips every 1-D parameter",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "Biases and normalization scales are 1-D and must not be penalized.",
+          "hiddenCode": "\nimport torch\nmodel = torch.nn.Sequential(torch.nn.Linear(3, 4), torch.nn.LayerNorm(4), torch.nn.Linear(4, 2))\nwith torch.no_grad():\n    for p in model.parameters():\n        p.fill_(2.0)\nout = {fn}(torch.tensor(0.0), model.named_parameters(), l1=1.0, l2=1.0)\nweights = [p for p in model.parameters() if p.ndim >= 2]\ncount = sum(p.numel() for p in weights)\nwant = 1.0 * 2.0 * count + 0.5 * 1.0 * 4.0 * count\nassert abs(out.item() - want) < 1e-5, (out, want)\n"
+        },
+        {
+          "name": "Gradient is l1 * sign(w) + l2 * w on weights only",
+          "visibility": "unshown",
+          "behavior": "gradient.flow",
+          "failureMessage": "The penalty must stay differentiable and give each weight gradient l1 * sign(w) + l2 * w.",
+          "hiddenCode": "\nimport torch\ng = torch.Generator().manual_seed(5)\nw = torch.randn(3, 4, generator=g, dtype=torch.float64).requires_grad_()\nb = torch.randn(4, generator=g, dtype=torch.float64).requires_grad_()\nout = {fn}(torch.zeros((), dtype=torch.float64), iter([(\"w\", w), (\"b\", b)]), l1=0.3, l2=0.7)\nout.backward()\nassert torch.allclose(w.grad, 0.3 * torch.sign(w.detach()) + 0.7 * w.detach(), atol=1e-12), w.grad\nassert b.grad is None or torch.count_nonzero(b.grad) == 0, b.grad\n"
+        },
+        {
+          "name": "Sums rather than averages over elements",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "The penalty is a sum over elements; averaging makes its strength depend on layer size.",
+          "hiddenCode": "\nimport torch\nsmall = torch.ones(2, 2, requires_grad=True)\nlarge = torch.ones(10, 10, requires_grad=True)\nout = {fn}(torch.tensor(0.0), [(\"a\", small), (\"b\", large)], l1=1.0)\nassert abs(out.item() - 104.0) < 1e-5, out\n"
+        },
+        {
+          "name": "Zero coefficients return the data loss",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "With l1 and l2 both zero the result must equal the data loss.",
+          "hiddenCode": "\nimport torch\nw = torch.randn(3, 3, requires_grad=True)\nloss = torch.tensor(2.5)\nout = {fn}(loss, [(\"w\", w)])\nassert out.item() == 2.5, out\n"
+        },
+        {
+          "name": "Rejects negative coefficients",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Negative regularization strengths are invalid; raise ValueError.",
+          "hiddenCode": "\nimport torch\nfor kwargs in ({\"l1\": -0.1}, {\"l2\": -1.0}):\n    try:\n        {fn}(torch.tensor(0.0), [(\"w\", torch.ones(2, 2))], **kwargs)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"accepted {kwargs}\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which parameters should the penalty skip, and how can you tell them apart by shape? What gradient should the L2 term produce?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Validate l1 and l2, start from data_loss, loop once over named_parameters, skip tensors with ndim < 2, and add l1 * w.abs().sum() + 0.5 * l2 * (w * w).sum(). Do not detach the weights."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "linear_regression"
+      ],
+      "modelConnections": [
+        "Optimizer weight decay in PyTorch and the `no_decay` parameter groups in Hugging Face trainers apply the same rule of skipping biases and norm weights."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "L1 drives weights to exactly zero for sparsity; L2 shrinks all weights smoothly and keeps the problem strongly convex for linear models."
+        ],
+        "cons": [
+          "Penalty strength interacts with the learning rate and optimizer; with Adam an L2 loss term is not the same as decoupled weight decay."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What do L1 and L2 regularization do to the weights, and why does L1 produce exact zeros while L2 does not?"
+        },
+        {
+          "stage": "concept",
+          "question": "How do L1 and L2 relate to Laplace and Gaussian priors in a MAP view?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why is the L2 term usually written with a 0.5 factor, and how does it relate to weight_decay in SGD?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "L1 is not differentiable at zero. What gradient does autograd use there, and how do proximal methods handle it instead?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why exclude biases and normalization scales from the penalty?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why is L2 in the loss not equivalent to weight decay under Adam, and what does AdamW change?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "L1 versus L2 versus elastic net: when would you pick each?"
+        }
+      ]
+    },
+    {
+      "id": "precision_recall_f1",
+      "title": "Precision, Recall and F1",
+      "titleZh": "Precision, Recall and F1",
+      "difficulty": "Medium",
+      "functionName": "precision_recall_f1",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Compute precision, recall and F1 for single-label multiclass predictions.\n\n**Signature:** `precision_recall_f1(preds, targets, average=\"macro\") -> dict`\n\n**Parameters:**\n- `preds` — 1-D integer tensor of predicted class ids.\n- `targets` — 1-D integer tensor of true class ids, same length.\n- `average` — one of `\"micro\"`, `\"macro\"`, `\"weighted\"`.\n\n**Returns:** a dictionary with exactly the keys `precision`, `recall` and `f1`, each a Python float.\n\n**Per class c**, counting over all samples:\n\n    tp = #(pred == c and target == c)\n    fp = #(pred == c and target != c)\n    fn = #(pred != c and target == c)\n    precision_c = tp / (tp + fp)      recall_c = tp / (tp + fn)\n    f1_c = 2 * tp / (2 * tp + fp + fn)\n\nAny ratio whose denominator is 0 is defined as 0.0.\n\n**Averaging.** The classes are those that appear in `preds` or in `targets`.\n- `micro` — sum `tp`, `fp` and `fn` over classes first, then apply the three formulas once.\n- `macro` — unweighted mean of the per-class values. Macro F1 is the mean of `f1_c`, not the F1 of macro precision and macro recall.\n- `weighted` — mean of the per-class values weighted by each class's support, the number of targets equal to `c`.\n\n**Constraints:**\n- Raise `ValueError` for empty inputs, mismatched lengths, tensors that are not 1-D, or an unknown `average`.\n- Do not use scikit-learn.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Which average to report.** Micro averaging counts every sample equally, so frequent classes dominate; for single-label multiclass data micro precision, recall and F1 all equal accuracy. Macro averaging counts every class equally, so it exposes poor performance on rare classes. Weighted averaging sits in between and can hide a failing rare class.\n\n**Why F1 is not the F1 of the averages.** Harmonic means do not commute with arithmetic means. Scikit-learn reports the mean of per-class F1, and this exercise follows it.",
+      "descriptionZh": "Compute precision, recall and F1 for single-label multiclass predictions.\n\n**Signature:** `precision_recall_f1(preds, targets, average=\"macro\") -> dict`\n\n**Parameters:**\n- `preds` — 1-D integer tensor of predicted class ids.\n- `targets` — 1-D integer tensor of true class ids, same length.\n- `average` — one of `\"micro\"`, `\"macro\"`, `\"weighted\"`.\n\n**Returns:** a dictionary with exactly the keys `precision`, `recall` and `f1`, each a Python float.\n\n**Per class c**, counting over all samples:\n\n    tp = #(pred == c and target == c)\n    fp = #(pred == c and target != c)\n    fn = #(pred != c and target == c)\n    precision_c = tp / (tp + fp)      recall_c = tp / (tp + fn)\n    f1_c = 2 * tp / (2 * tp + fp + fn)\n\nAny ratio whose denominator is 0 is defined as 0.0.\n\n**Averaging.** The classes are those that appear in `preds` or in `targets`.\n- `micro` — sum `tp`, `fp` and `fn` over classes first, then apply the three formulas once.\n- `macro` — unweighted mean of the per-class values. Macro F1 is the mean of `f1_c`, not the F1 of macro precision and macro recall.\n- `weighted` — mean of the per-class values weighted by each class's support, the number of targets equal to `c`.\n\n**Constraints:**\n- Raise `ValueError` for empty inputs, mismatched lengths, tensors that are not 1-D, or an unknown `average`.\n- Do not use scikit-learn.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Which average to report.** Micro averaging counts every sample equally, so frequent classes dominate; for single-label multiclass data micro precision, recall and F1 all equal accuracy. Macro averaging counts every class equally, so it exposes poor performance on rare classes. Weighted averaging sits in between and can hide a failing rare class.\n\n**Why F1 is not the F1 of the averages.** Harmonic means do not commute with arithmetic means. Scikit-learn reports the mean of per-class F1, and this exercise follows it.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Macro average on a small example",
+          "code": "\nimport torch\npreds = torch.tensor([0, 1, 1, 2, 2, 2])\ntargets = torch.tensor([0, 1, 2, 2, 2, 0])\nout = {fn}(preds, targets, \"macro\")\nassert set(out) == {\"precision\", \"recall\", \"f1\"}\nwant = {\"precision\": (1 + 0.5 + 2/3) / 3, \"recall\": (0.5 + 1 + 2/3) / 3, \"f1\": (2/3 + 2/3 + 2/3) / 3}\nfor key in want:\n    assert isinstance(out[key], float) and abs(out[key] - want[key]) < 1e-9, (key, out, want)\n",
+          "behavior": "metrics.averaging"
+        },
+        {
+          "name": "Micro average equals accuracy",
+          "code": "\nimport torch\npreds = torch.tensor([0, 1, 1, 2, 2, 2])\ntargets = torch.tensor([0, 1, 2, 2, 2, 0])\nout = {fn}(preds, targets, \"micro\")\nfor key in (\"precision\", \"recall\", \"f1\"):\n    assert abs(out[key] - 4 / 6) < 1e-9, (key, out)\n",
+          "behavior": "metrics.averaging"
+        },
+        {
+          "name": "Matches a seeded oracle for every average",
+          "visibility": "unshown",
+          "behavior": "metrics.averaging",
+          "failureMessage": "Per-class counts, the class set and each averaging rule must follow the stated definitions.",
+          "hiddenCode": "\nimport random, torch\ndef oracle(preds, targets, average):\n    classes = sorted(set(preds) | set(targets))\n    rows = []\n    for c in classes:\n        tp = sum(p == c and t == c for p, t in zip(preds, targets))\n        fp = sum(p == c and t != c for p, t in zip(preds, targets))\n        fn = sum(p != c and t == c for p, t in zip(preds, targets))\n        rows.append((tp, fp, fn, sum(t == c for t in targets)))\n    div = lambda a, b: a / b if b else 0.0\n    if average == \"micro\":\n        tp, fp, fn = (sum(r[i] for r in rows) for i in range(3))\n        return div(tp, tp + fp), div(tp, tp + fn), div(2 * tp, 2 * tp + fp + fn)\n    per = [(div(tp, tp + fp), div(tp, tp + fn), div(2 * tp, 2 * tp + fp + fn)) for tp, fp, fn, _ in rows]\n    weights = [1.0] * len(rows) if average == \"macro\" else [r[3] for r in rows]\n    total = sum(weights)\n    return tuple(div(sum(w * v[i] for w, v in zip(weights, per)), total) for i in range(3))\nfor seed in (1, 8, 42):\n    rng = random.Random(seed)\n    n = rng.randint(20, 60)\n    targets = [rng.choice([0, 1, 1, 2, 5]) for _ in range(n)]\n    preds = [t if rng.random() < 0.6 else rng.choice([0, 1, 2, 3, 5]) for t in targets]\n    for average in (\"micro\", \"macro\", \"weighted\"):\n        out = {fn}(torch.tensor(preds), torch.tensor(targets), average)\n        want = oracle(preds, targets, average)\n        got = (out[\"precision\"], out[\"recall\"], out[\"f1\"])\n        assert all(abs(a - b) < 1e-9 for a, b in zip(got, want)), (seed, average, got, want)\n"
+        },
+        {
+          "name": "Macro F1 is the mean of per-class F1",
+          "visibility": "unshown",
+          "behavior": "metrics.averaging",
+          "failureMessage": "Average the per-class F1 values; do not combine macro precision and macro recall into one F1.",
+          "hiddenCode": "\nimport torch\npreds = torch.tensor([0, 0, 0, 0, 1])\ntargets = torch.tensor([0, 1, 1, 1, 1])\nout = {fn}(preds, targets, \"macro\")\nf1_0 = 2 * 1 / (2 * 1 + 3 + 0)\nf1_1 = 2 * 1 / (2 * 1 + 0 + 3)\nassert abs(out[\"f1\"] - (f1_0 + f1_1) / 2) < 1e-9, out\n"
+        },
+        {
+          "name": "Zero denominators give zero and predicted-only classes count",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "A class that is predicted but absent from targets still takes part in the average, with zero recall defined as 0.0.",
+          "hiddenCode": "\nimport torch\npreds = torch.tensor([0, 2, 2])\ntargets = torch.tensor([0, 1, 1])\nout = {fn}(preds, targets, \"macro\")\nassert abs(out[\"precision\"] - 1 / 3) < 1e-9, out\nassert abs(out[\"recall\"] - 1 / 3) < 1e-9, out\nassert abs(out[\"f1\"] - 1 / 3) < 1e-9, out\nweighted = {fn}(preds, targets, \"weighted\")\nassert abs(weighted[\"recall\"] - 1 / 3) < 1e-9, weighted\n"
+        },
+        {
+          "name": "Rejects invalid inputs",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Empty, misaligned or non-1-D inputs and unknown averages must raise ValueError.",
+          "hiddenCode": "\nimport torch\nbad = [\n    (torch.tensor([], dtype=torch.long), torch.tensor([], dtype=torch.long), \"macro\"),\n    (torch.tensor([0, 1]), torch.tensor([0]), \"macro\"),\n    (torch.tensor([[0, 1]]), torch.tensor([[0, 1]]), \"macro\"),\n    (torch.tensor([0, 1]), torch.tensor([0, 1]), \"samples\"),\n]\nfor args in bad:\n    try:\n        {fn}(*args)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"accepted {args}\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which classes take part in the average? What happens to a class that is predicted but never appears in the targets? Is macro F1 computed from macro precision and recall?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Take classes = unique values of torch.cat([preds, targets]). For each class count tp, fp, fn and support with boolean masks. Write a safe divide that returns 0.0 on a zero denominator. Micro sums the counts; macro and weighted average the per-class ratios."
+        }
+      ],
+      "advisoryPrerequisites": [],
+      "modelConnections": [
+        "Classification benchmarks and reward-model accuracy reports use exactly these averages; scikit-learn's precision_recall_fscore_support is the usual reference."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Precision and recall separate false positives from false negatives, which accuracy hides on imbalanced data."
+        ],
+        "cons": [
+          "F1 ignores true negatives and depends on the decision threshold, so it can rank models differently from threshold-free metrics such as ROC AUC."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Define precision and recall in words. Give an application where each one matters more."
+        },
+        {
+          "stage": "concept",
+          "question": "Why is F1 a harmonic mean rather than an arithmetic mean of precision and recall?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Explain micro, macro and weighted averaging. Why do micro precision, recall and F1 all equal accuracy for single-label multiclass data?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Is macro F1 the F1 of macro precision and macro recall? Construct a case where the two differ."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What should happen when a class is never predicted or never appears in the targets?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "On a heavily imbalanced dataset, which average would you report and why?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "F1 depends on the decision threshold. How would you choose the threshold, and when would you prefer a threshold-free metric?"
+        }
+      ]
+    },
+    {
+      "id": "roc_auc",
+      "title": "ROC AUC",
+      "titleZh": "ROC AUC",
+      "difficulty": "Medium",
+      "functionName": "roc_auc",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Compute the area under the ROC curve for binary scores.\n\n**Signature:** `roc_auc(scores, labels) -> float`\n\n**Parameters:**\n- `scores` — 1-D float tensor. Higher means more likely positive.\n- `labels` — 1-D tensor of the same length with values 0 or 1. Boolean tensors are allowed.\n\n**Returns:** a Python float. It equals the probability that a randomly chosen positive scores higher than a randomly chosen negative, with ties counted as one half:\n\n    auc = ( #(s_pos > s_neg) + 0.5 * #(s_pos == s_neg) ) / (n_pos * n_neg)\n\nwhere the counts run over every pair of one positive and one negative.\n\n**Constraints:**\n- Run in O(n log n) time. Do not build the n_pos by n_neg comparison matrix.\n- Raise `ValueError` when the inputs are not 1-D, have different lengths, contain a label other than 0 or 1, contain a non-finite score, or lack either class.\n- Do not use scikit-learn.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Two views of one number.** Sweeping a threshold from high to low traces the ROC curve of true-positive rate against false-positive rate; the trapezoidal area under it equals the pairwise probability above. The trapezoids are what give tied scores their half credit.\n\n**The rank formula.** Sort all scores, give tied scores the average of their ranks (1-based), and sum the ranks of the positives. Then `auc = (rank_sum_pos - n_pos * (n_pos + 1) / 2) / (n_pos * n_neg)`. This is the Mann-Whitney U statistic divided by the number of pairs.",
+      "descriptionZh": "Compute the area under the ROC curve for binary scores.\n\n**Signature:** `roc_auc(scores, labels) -> float`\n\n**Parameters:**\n- `scores` — 1-D float tensor. Higher means more likely positive.\n- `labels` — 1-D tensor of the same length with values 0 or 1. Boolean tensors are allowed.\n\n**Returns:** a Python float. It equals the probability that a randomly chosen positive scores higher than a randomly chosen negative, with ties counted as one half:\n\n    auc = ( #(s_pos > s_neg) + 0.5 * #(s_pos == s_neg) ) / (n_pos * n_neg)\n\nwhere the counts run over every pair of one positive and one negative.\n\n**Constraints:**\n- Run in O(n log n) time. Do not build the n_pos by n_neg comparison matrix.\n- Raise `ValueError` when the inputs are not 1-D, have different lengths, contain a label other than 0 or 1, contain a non-finite score, or lack either class.\n- Do not use scikit-learn.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Two views of one number.** Sweeping a threshold from high to low traces the ROC curve of true-positive rate against false-positive rate; the trapezoidal area under it equals the pairwise probability above. The trapezoids are what give tied scores their half credit.\n\n**The rank formula.** Sort all scores, give tied scores the average of their ranks (1-based), and sum the ranks of the positives. Then `auc = (rank_sum_pos - n_pos * (n_pos + 1) / 2) / (n_pos * n_neg)`. This is the Mann-Whitney U statistic divided by the number of pairs.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Perfect, reversed and partial rankings",
+          "code": "\nimport torch\nlabels = torch.tensor([0, 0, 1, 1])\nassert abs({fn}(torch.tensor([0.1, 0.2, 0.8, 0.9]), labels) - 1.0) < 1e-12\nassert abs({fn}(torch.tensor([0.9, 0.8, 0.2, 0.1]), labels) - 0.0) < 1e-12\nout = {fn}(torch.tensor([0.1, 0.4, 0.35, 0.8]), labels)\nassert isinstance(out, float) and abs(out - 0.75) < 1e-12, out\n",
+          "behavior": "metrics.ties"
+        },
+        {
+          "name": "Ties between classes count as one half",
+          "code": "\nimport torch\nout = {fn}(torch.tensor([0.5, 0.5, 0.5, 0.5]), torch.tensor([0, 1, 0, 1]))\nassert abs(out - 0.5) < 1e-12, out\nout = {fn}(torch.tensor([0.2, 0.5, 0.5, 0.9]), torch.tensor([0, 0, 1, 1]))\nassert abs(out - (1 + 0.5 + 1 + 1) / 4) < 1e-12, out\n",
+          "behavior": "metrics.ties"
+        },
+        {
+          "name": "Matches a trapezoidal ROC oracle on seeded data with ties",
+          "visibility": "unshown",
+          "behavior": "metrics.ties",
+          "failureMessage": "The result must equal the pairwise probability with half credit for tied positive-negative pairs.",
+          "hiddenCode": "\nimport random, torch\ndef trapezoid(scores, labels):\n    pairs = sorted(zip(scores, labels), key=lambda item: -item[0])\n    n_pos = sum(labels); n_neg = len(labels) - n_pos\n    tp = fp = 0; prev_tpr = prev_fpr = 0.0; area = 0.0; i = 0\n    while i < len(pairs):\n        j = i\n        while j < len(pairs) and pairs[j][0] == pairs[i][0]:\n            tp += pairs[j][1]; fp += 1 - pairs[j][1]; j += 1\n        tpr, fpr = tp / n_pos, fp / n_neg\n        area += (fpr - prev_fpr) * (tpr + prev_tpr) / 2\n        prev_tpr, prev_fpr = tpr, fpr; i = j\n    return area\nfor seed in (2, 13, 71):\n    rng = random.Random(seed)\n    n = rng.randint(30, 80)\n    labels = [rng.random() < 0.3 for _ in range(n)]\n    labels[0], labels[1] = True, False\n    labels = [int(x) for x in labels]\n    scores = [round(rng.gauss(0.8 * y, 1.0), 1) for y in labels]\n    out = {fn}(torch.tensor(scores, dtype=torch.float32), torch.tensor(labels))\n    want = trapezoid(scores, labels)\n    assert abs(out - want) < 1e-9, (seed, out, want)\n"
+        },
+        {
+          "name": "Handles a large input efficiently",
+          "visibility": "unshown",
+          "behavior": "metrics.ties",
+          "failureMessage": "Use a sort-based O(n log n) computation; a pairwise comparison matrix does not fit at this size.",
+          "hiddenCode": "\nimport torch\nn = 100_000\ng = torch.Generator().manual_seed(0)\nlabels = (torch.rand(n, generator=g) < 0.5).long()\nscores = torch.floor((labels.double() + torch.randn(n, generator=g, dtype=torch.float64)) * 4) / 4\norder = torch.argsort(scores, descending=True, stable=True)\ns, y = scores[order], labels[order].double()\nuniq, counts = torch.unique_consecutive(s, return_counts=True)\nends = torch.cumsum(counts, 0) - 1\ntp = torch.cumsum(y, 0)[ends]; fp = torch.cumsum(1 - y, 0)[ends]\ntpr = torch.cat([torch.zeros(1, dtype=torch.float64), tp / tp[-1]])\nfpr = torch.cat([torch.zeros(1, dtype=torch.float64), fp / fp[-1]])\nwant = float(((fpr[1:] - fpr[:-1]) * (tpr[1:] + tpr[:-1]) / 2).sum())\nout = {fn}(scores, labels)\nassert abs(out - want) < 1e-9, (out, want)\n"
+        },
+        {
+          "name": "Accepts boolean labels and is invariant to monotonic rescaling",
+          "visibility": "unshown",
+          "behavior": "metrics.ties",
+          "failureMessage": "AUC depends only on the ordering of scores; boolean labels are valid input.",
+          "hiddenCode": "\nimport torch\ng = torch.Generator().manual_seed(4)\nscores = torch.randn(50, generator=g)\nlabels = torch.rand(50, generator=g) < 0.4\nlabels[0], labels[1] = True, False\na = {fn}(scores, labels)\nb = {fn}(torch.exp(3 * scores) + 7, labels.long())\nassert abs(a - b) < 1e-12, (a, b)\n"
+        },
+        {
+          "name": "Rejects inputs with one class or invalid values",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "AUC is undefined without both classes; invalid labels, shapes or scores must raise ValueError.",
+          "hiddenCode": "\nimport torch\nbad = [\n    (torch.tensor([0.1, 0.2]), torch.tensor([1, 1])),\n    (torch.tensor([0.1, 0.2]), torch.tensor([0, 0])),\n    (torch.tensor([0.1, 0.2, 0.3, 0.4]), torch.tensor([0, 1, 2, 0])),\n    (torch.tensor([0.1, 0.2, 0.3]), torch.tensor([0, 1])),\n    (torch.tensor([[0.1, 0.2]]), torch.tensor([[0, 1]])),\n    (torch.tensor([0.1, float(\"nan\")]), torch.tensor([0, 1])),\n]\nfor scores, labels in bad:\n    try:\n        {fn}(scores, labels)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"accepted {scores} {labels}\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "What does AUC measure as a probability over pairs? How should two equal scores, one positive and one negative, count? How can sorting replace the pairwise comparison?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Validate first. Sort scores, then walk runs of equal scores and assign each run the mean of its 1-based positions. Sum the ranks where the label is 1 and apply (rank_sum - n_pos * (n_pos + 1) / 2) / (n_pos * n_neg). Accumulate in float64."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "precision_recall_f1"
+      ],
+      "modelConnections": [
+        "Reward-model and classifier evaluations report ROC AUC because it is threshold-free and insensitive to class balance."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Threshold-free, invariant to any monotonic rescaling of scores, and unaffected by the positive rate."
+        ],
+        "cons": [
+          "Can look high on heavily imbalanced data where precision is poor; precision-recall AUC is more informative there."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What does the ROC curve plot, and what does the area under it mean as a probability?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why is ROC AUC called threshold-free, and why does it not change when you rescale scores monotonically?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you compute AUC in O(n log n) instead of comparing every positive with every negative?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How should tied scores be handled, and why does the trapezoidal rule give them half credit?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What should the function do when only one class is present, and why?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why can ROC AUC look good on heavily imbalanced data while precision is poor? When would you use PR AUC instead?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "AUC versus log loss versus accuracy for model selection: what does each reward?"
+        }
+      ]
+    },
+    {
+      "id": "sgd_momentum",
+      "title": "SGD with Momentum",
+      "titleZh": "SGD with Momentum",
+      "difficulty": "Medium",
+      "functionName": "SGDMomentum",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Implement stochastic gradient descent with momentum as a small optimizer class.\n\n**Signature:** `SGDMomentum(params, lr, momentum=0.0, weight_decay=0.0, nesterov=False)`\n\n**Methods:**\n- `step()` — update every parameter that has a gradient, in place.\n- `zero_grad()` — clear every parameter's gradient, either to `None` or to zeros.\n\n**Update rule** for each parameter `p` with gradient `g`:\n\n    d = g + weight_decay * p\n    buf = d                         on the first step for p\n    buf = momentum * buf + d        on later steps\n    d = d + momentum * buf          if nesterov, otherwise d = buf\n    p = p - lr * d\n\nWith `momentum == 0` keep no buffer and use `d` directly.\n\n**Constraints:**\n- Match `torch.optim.SGD` with the same arguments and `dampening=0`.\n- Update parameters in place, so a model that holds them sees the new values.\n- Skip parameters whose `.grad` is `None`. Do not create state for them.\n- Keep one momentum buffer per parameter, created on that parameter's first update.\n- Do not use `torch.optim.SGD` or any other `torch.optim` optimizer.\n- Raise `ValueError` for negative `lr`, `momentum` or `weight_decay`, and for `nesterov=True` with `momentum == 0`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why momentum.** The buffer is an exponentially weighted sum of past gradients. Along a direction where gradients agree it grows toward `g / (1 - momentum)`, so progress speeds up; along a direction where gradients alternate in sign they cancel, which damps oscillation in narrow valleys.\n\n**Why the first buffer is the gradient.** Initializing `buf = d` rather than zero avoids a slow first few steps. PyTorch does this; the Sutskever et al. formulation initializes to zero and scales the learning rate differently, so the two are not interchangeable.\n\n**Nesterov.** Adding `momentum * buf` again looks one step ahead along the momentum direction, which corrects overshoot earlier.",
+      "descriptionZh": "Implement stochastic gradient descent with momentum as a small optimizer class.\n\n**Signature:** `SGDMomentum(params, lr, momentum=0.0, weight_decay=0.0, nesterov=False)`\n\n**Methods:**\n- `step()` — update every parameter that has a gradient, in place.\n- `zero_grad()` — clear every parameter's gradient, either to `None` or to zeros.\n\n**Update rule** for each parameter `p` with gradient `g`:\n\n    d = g + weight_decay * p\n    buf = d                         on the first step for p\n    buf = momentum * buf + d        on later steps\n    d = d + momentum * buf          if nesterov, otherwise d = buf\n    p = p - lr * d\n\nWith `momentum == 0` keep no buffer and use `d` directly.\n\n**Constraints:**\n- Match `torch.optim.SGD` with the same arguments and `dampening=0`.\n- Update parameters in place, so a model that holds them sees the new values.\n- Skip parameters whose `.grad` is `None`. Do not create state for them.\n- Keep one momentum buffer per parameter, created on that parameter's first update.\n- Do not use `torch.optim.SGD` or any other `torch.optim` optimizer.\n- Raise `ValueError` for negative `lr`, `momentum` or `weight_decay`, and for `nesterov=True` with `momentum == 0`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why momentum.** The buffer is an exponentially weighted sum of past gradients. Along a direction where gradients agree it grows toward `g / (1 - momentum)`, so progress speeds up; along a direction where gradients alternate in sign they cancel, which damps oscillation in narrow valleys.\n\n**Why the first buffer is the gradient.** Initializing `buf = d` rather than zero avoids a slow first few steps. PyTorch does this; the Sutskever et al. formulation initializes to zero and scales the learning rate differently, so the two are not interchangeable.\n\n**Nesterov.** Adding `momentum * buf` again looks one step ahead along the momentum direction, which corrects overshoot earlier.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "One momentum step matches the rule",
+          "code": "\nimport torch\nw = torch.tensor([1.0, -2.0], requires_grad=True)\nopt = {fn}([w], lr=0.1, momentum=0.9)\nw.grad = torch.tensor([0.5, 1.0])\nopt.step()\nassert torch.allclose(w.detach(), torch.tensor([0.95, -2.1])), w\nw.grad = torch.tensor([0.5, 1.0])\nopt.step()\nassert torch.allclose(w.detach(), torch.tensor([0.855, -2.29])), w\n",
+          "behavior": "optim.state"
+        },
+        {
+          "name": "zero_grad clears gradients",
+          "code": "\nimport torch\nw = torch.randn(3, requires_grad=True)\nopt = {fn}([w], lr=0.1)\n(w ** 2).sum().backward()\nopt.zero_grad()\nassert w.grad is None or torch.count_nonzero(w.grad) == 0\n",
+          "behavior": "optim.state"
+        },
+        {
+          "name": "Matches torch.optim.SGD across variants",
+          "visibility": "unshown",
+          "behavior": "optim.state",
+          "failureMessage": "Several steps must match torch.optim.SGD for plain, momentum, Nesterov and weight-decay settings.",
+          "hiddenCode": "\nimport torch\nconfigs = [\n    dict(lr=0.1),\n    dict(lr=0.05, momentum=0.9),\n    dict(lr=0.05, momentum=0.9, nesterov=True),\n    dict(lr=0.02, momentum=0.8, weight_decay=0.1),\n    dict(lr=0.02, momentum=0.9, weight_decay=0.05, nesterov=True),\n]\nreference_cls = torch.optim.SGD\nfor config in configs:\n    torch.manual_seed(7)\n    a = [torch.randn(4, 3, dtype=torch.float64, requires_grad=True), torch.randn(3, dtype=torch.float64, requires_grad=True)]\n    b = [p.detach().clone().requires_grad_() for p in a]\n    mine = {fn}(a, **config)\n    ref = reference_cls(b, **config)\n    for step in range(6):\n        grads = [torch.randn_like(p) for p in a]\n        for p, g in zip(a, grads):\n            p.grad = g.clone()\n        for p, g in zip(b, grads):\n            p.grad = g.clone()\n        mine.step()\n        ref.step()\n    for p, q in zip(a, b):\n        assert torch.allclose(p.detach(), q.detach(), atol=1e-12), (config, (p - q).abs().max())\n"
+        },
+        {
+          "name": "Updates in place so a module sees new weights",
+          "visibility": "unshown",
+          "behavior": "optim.state",
+          "failureMessage": "Update the existing parameter tensors in place instead of rebinding them.",
+          "hiddenCode": "\nimport torch\nmodel = torch.nn.Linear(2, 1)\nbefore = model.weight.detach().clone()\nopt = {fn}(model.parameters(), lr=0.5, momentum=0.9)\nmodel(torch.ones(1, 2)).sum().backward()\nopt.step()\nassert not torch.equal(model.weight.detach(), before)\nassert model.weight.grad is not None\n"
+        },
+        {
+          "name": "Skips parameters without gradients",
+          "visibility": "unshown",
+          "behavior": "optim.state",
+          "failureMessage": "A parameter with no gradient must stay unchanged and must not start a momentum buffer.",
+          "hiddenCode": "\nimport torch\na = torch.ones(2, dtype=torch.float64, requires_grad=True)\nb = torch.ones(2, dtype=torch.float64, requires_grad=True)\nopt = {fn}([a, b], lr=0.1, momentum=0.9, weight_decay=0.5)\na.grad = torch.ones(2, dtype=torch.float64)\nopt.step()\nassert torch.equal(b.detach(), torch.ones(2, dtype=torch.float64)), b\nb.grad = torch.ones(2, dtype=torch.float64)\nopt.step()\nassert torch.allclose(b.detach(), torch.full((2,), 1 - 0.1 * 1.5, dtype=torch.float64)), b\n"
+        },
+        {
+          "name": "Does not delegate to torch.optim",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Implement the update yourself instead of wrapping a torch.optim optimizer.",
+          "hiddenCode": "\nimport torch\nsaved = torch.optim.SGD\nclass Banned:\n    def __init__(self, *args, **kwargs):\n        raise AssertionError(\"torch.optim.SGD used\")\ntorch.optim.SGD = Banned\ntry:\n    w = torch.zeros(2, requires_grad=True)\n    opt = {fn}([w], lr=0.1, momentum=0.9)\n    w.grad = torch.ones(2)\n    opt.step()\n    assert torch.allclose(w.detach(), torch.full((2,), -0.1)), w\nfinally:\n    torch.optim.SGD = saved\n"
+        },
+        {
+          "name": "Rejects invalid hyperparameters",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Negative lr, momentum or weight decay, and Nesterov without momentum, must raise ValueError.",
+          "hiddenCode": "\nimport torch\nfor kwargs in (dict(lr=-0.1), dict(lr=0.1, momentum=-0.5), dict(lr=0.1, weight_decay=-1.0), dict(lr=0.1, nesterov=True)):\n    try:\n        {fn}([torch.zeros(1, requires_grad=True)], **kwargs)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"accepted {kwargs}\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Where must the buffer live so it survives between step() calls? What is the buffer on the very first step? Why must the update run without autograd tracking?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Store params as a list and a dict from parameter id or index to buffer. In step(), under torch.no_grad(), skip p.grad is None, form d = p.grad + wd * p, create or update the buffer, apply Nesterov if asked, then p.add_(d, alpha=-lr)."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "adam"
+      ],
+      "modelConnections": [
+        "torch.optim.SGD with momentum is still the default optimizer for training ResNets and many vision models."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "One buffer per parameter, half of Adam's optimizer memory, and often better generalization on vision tasks."
+        ],
+        "cons": [
+          "Needs careful learning-rate tuning and scheduling; one global step size handles badly scaled parameters worse than adaptive methods."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What problem does momentum solve for plain SGD? Describe it for a long narrow valley."
+        },
+        {
+          "stage": "concept",
+          "question": "What is the effective step size along a direction with a constant gradient, in terms of momentum?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through the update. Why does PyTorch initialize the buffer to the first gradient rather than zero?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How does Nesterov momentum differ from classical momentum, both in the math and in this implementation?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why must step() run under torch.no_grad() and update parameters in place?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "SGD with momentum versus Adam: memory, tuning effort and generalization?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How do momentum and learning rate interact, and why do schedules sometimes change both?"
+        }
+      ]
     }
   ]
 }
