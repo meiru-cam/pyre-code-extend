@@ -1,5 +1,7 @@
 """LayerNorm implementation task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Implement LayerNorm",
     "title_zh": "实现 LayerNorm",
@@ -61,4 +63,19 @@ out = my_layer_norm(x, gamma, beta)
 ref = torch.nn.functional.layer_norm(x, [8], gamma, beta)
 print("Match ref?", torch.allclose(out, ref, atol=1e-4))""",
 
+    "interview_questions": interview(
+        concept=[
+            'What does LayerNorm normalize over, and why is that suited to transformers?',
+            'Why do we need the learnable gamma and beta?',
+        ],
+        deep_dive=[
+            'Biased or unbiased variance: which does LayerNorm use and why?',
+            'Where does eps go, and what happens with a constant input row?',
+            'How do you normalize over the last dimension for an input of any rank?',
+        ],
+        tradeoffs=[
+            'LayerNorm versus BatchNorm versus RMSNorm: when and why?',
+            'Pre-norm versus post-norm placement: how does it affect training stability?',
+        ],
+    ),
 }

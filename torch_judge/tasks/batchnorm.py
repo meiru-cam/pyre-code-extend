@@ -1,5 +1,7 @@
 """BatchNorm implementation task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Implement BatchNorm",
     "title_zh": "实现 BatchNorm",
@@ -135,4 +137,19 @@ print("Updated running_var:", running_var)
 out_eval = my_batch_norm(x, gamma, beta, running_mean, running_var, training=False)
 print("[Eval] Column means (using running stats):", out_eval.mean(dim=0))""",
 
+    "interview_questions": interview(
+        concept=[
+            'What does BatchNorm do, and what was the original motivation?',
+            'Why does BatchNorm behave differently in training and evaluation?',
+        ],
+        deep_dive=[
+            'How do you update running mean and variance with momentum, and which variance goes into the running estimate?',
+            'What happens with batch size one in training mode?',
+            'Where do gamma and beta apply, and why are they needed?',
+        ],
+        tradeoffs=[
+            'Why is BatchNorm rarely used in transformers?',
+            'How does BatchNorm interact with distributed training and small per-device batches?',
+        ],
+    ),
 }

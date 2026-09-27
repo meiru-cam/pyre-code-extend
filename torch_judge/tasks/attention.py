@@ -1,5 +1,7 @@
 """Softmax Attention task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Softmax Attention",
     "title_zh": "Softmax 注意力",
@@ -86,4 +88,19 @@ V2 = torch.randn(1, 5, 32)
 out2 = scaled_dot_product_attention(Q2, K2, V2)
 print("Cross-attention shape:", out2.shape, "(expected: 1, 3, 32)")""",
 
+    "interview_questions": interview(
+        concept=[
+            'Explain scaled dot-product attention. What do Q, K and V represent?',
+            'Why scale by the square root of the key dimension?',
+        ],
+        deep_dive=[
+            'Walk through the shapes of every intermediate tensor.',
+            'Where does masking go, and why before the softmax?',
+            'What is the time and memory complexity in sequence length?',
+        ],
+        tradeoffs=[
+            'Why is attention quadratic, and what are the main approaches to reduce it?',
+            'Additive attention versus dot-product attention: trade-offs?',
+        ],
+    ),
 }

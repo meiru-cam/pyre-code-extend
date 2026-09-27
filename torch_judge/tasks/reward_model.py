@@ -1,5 +1,7 @@
 """Bradley-Terry Reward Model Loss task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Bradley-Terry Reward Model Loss",
     "title_zh": "Bradley-Terry 奖励模型",
@@ -52,4 +54,19 @@ rejected = -torch.ones(B, D)
 loss_good = reward_model_loss(chosen, rejected, reward_head)
 print(f"Chosen >> rejected  => loss = {loss_good.item():.4f}  (expected small)")""",
 
+    "interview_questions": interview(
+        concept=[
+            'How is an RLHF reward model trained, and what is the Bradley-Terry model?',
+            'Why train on pairwise preferences instead of absolute scores?',
+        ],
+        deep_dive=[
+            'Why use the last-token hidden state, and what goes wrong with padding when picking it?',
+            'Write the loss in terms of the reward difference. Why use logsigmoid rather than log of sigmoid?',
+            'The reward is only defined up to a constant. What does that mean for normalization at RL time?',
+        ],
+        tradeoffs=[
+            'What is reward hacking, and how does the KL penalty in RLHF relate to it?',
+            'Reward model versus rule-based verifiable rewards versus DPO: when would you pick each?',
+        ],
+    ),
 }

@@ -28,6 +28,36 @@
           "name": "Gradient flow",
           "code": "\nimport torch\nlogits = torch.randn(8, 5, requires_grad=True)\ntargets = torch.randint(0, 5, (8,))\n{fn}(logits, targets).backward()\nassert logits.grad is not None, 'logits.grad is None'\n"
         }
+      ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What does cross-entropy measure, and how does it relate to maximum likelihood and KL divergence?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why is cross-entropy preferred over mean squared error for classification?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you compute it stably from raw logits? Where does the log-sum-exp trick come in?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What is the gradient of cross-entropy with respect to the logits, and why is it so simple?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How would you handle ignored labels such as padding with an ignore index?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What do label smoothing and focal loss change about cross-entropy, and when would you use each?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why does cross-entropy push logits toward infinity on separable data, and what keeps that in check?"
+        }
       ]
     },
     {
@@ -118,6 +148,36 @@
           "name": "Gradient flow",
           "code": "\nimport torch\nx = torch.randn(4, 8, requires_grad=True)\n{fn}(x).sum().backward()\nassert x.grad is not None and x.grad.shape == x.shape, 'Gradient issue'\n"
         }
+      ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is GELU, and what is its intuition as a probabilistic gate?"
+        },
+        {
+          "stage": "concept",
+          "question": "Where is GELU used, and why did transformers adopt it?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Write the exact erf form and the tanh approximation. Why does the approximation exist?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How does GELU behave for large negative and large positive inputs?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What is the derivative of GELU, and is it smooth at zero?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "GELU versus ReLU versus SiLU: accuracy and speed trade-offs?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why did LLaMA-style models move to SwiGLU instead of GELU?"
+        }
       ]
     },
     {
@@ -204,6 +264,36 @@
           "name": "Performance",
           "code": "\nimport torch, time\nbig = torch.randn(1024, 1024)\nt0 = time.perf_counter()\nfor _ in range(100):\n    {fn}(big)\nelapsed = time.perf_counter() - t0\nassert elapsed < 5.0, f'Too slow: {elapsed:.2f}s for 100 iterations'\n"
         }
+      ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why do neural networks need nonlinear activations at all?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why did ReLU replace sigmoid and tanh in deep networks?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What is the gradient of ReLU at zero, and what does PyTorch do there?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you implement ReLU without an in-place operation that breaks autograd?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What is the dying ReLU problem, and how does it show up in training?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Compare ReLU with Leaky ReLU, GELU and SiLU."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why do most modern LLMs not use plain ReLU in the MLP?"
+        }
       ]
     },
     {
@@ -233,6 +323,36 @@
         {
           "name": "dim=0 softmax",
           "code": "\nimport torch\ntorch.manual_seed(3)\nx = torch.randn(4, 3)\nout = {fn}(x, dim=0)\nexp_x = (x - x.max(dim=0, keepdim=True).values).exp()\nexpected = exp_x / exp_x.sum(dim=0, keepdim=True)\nassert torch.allclose(out, expected, atol=1e-5), f'dim=0 softmax failed'\nassert torch.allclose(out.sum(dim=0), torch.ones(3), atol=1e-5), 'columns should sum to 1'\n"
+        }
+      ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What does softmax compute, and where is it used?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why is it called soft max, and what does temperature do to it?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why subtract the max before exponentiating? Does it change the result?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What is the Jacobian of softmax?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you handle a row where every entry is negative infinity, for example a fully masked attention row?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Softmax versus sigmoid for multi-label classification?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What are the costs of softmax over a very large vocabulary, and what alternatives exist?"
         }
       ]
     },
@@ -319,6 +439,36 @@
         {
           "name": "Gradient flow w.r.t inputs and affine params",
           "code": "\nimport torch\nx = torch.randn(4, 8, requires_grad=True)\ngamma = torch.ones(8, requires_grad=True)\nbeta = torch.zeros(8, requires_grad=True)\nrunning_mean = torch.zeros(8)\nrunning_var = torch.ones(8)\nout = {fn}(x, gamma, beta, running_mean, running_var, training=True)\nout.sum().backward()\nassert x.grad is not None, 'x.grad is None'\nassert gamma.grad is not None, 'gamma.grad is None'\nassert beta.grad is not None, 'beta.grad is None'\n"
+        }
+      ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What does BatchNorm do, and what was the original motivation?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why does BatchNorm behave differently in training and evaluation?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you update running mean and variance with momentum, and which variance goes into the running estimate?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What happens with batch size one in training mode?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Where do gamma and beta apply, and why are they needed?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why is BatchNorm rarely used in transformers?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How does BatchNorm interact with distributed training and small per-device batches?"
         }
       ]
     },
@@ -452,6 +602,36 @@
           "name": "Numerical correctness",
           "code": "\nimport torch, torch.nn as nn\ntorch.manual_seed(5)\nB, S_q, S_kv, D, num_heads = 2, 4, 6, 32, 4\nattn = {fn}(d_model=D, num_heads=num_heads)\nattn.eval()\nx_q  = torch.randn(B, S_q,  D)\nx_kv = torch.randn(B, S_kv, D)\nwith torch.no_grad():\n    out = attn(x_q, x_kv)\n    d_k = D // num_heads\n    # Project using module weights\n    Q = x_q  @ attn.W_q.weight.T + attn.W_q.bias   # (B, S_q,  D)\n    K = x_kv @ attn.W_k.weight.T + attn.W_k.bias   # (B, S_kv, D)\n    V = x_kv @ attn.W_v.weight.T + attn.W_v.bias   # (B, S_kv, D)\n    # Split heads: (B, H, S, d_k)\n    Q = Q.view(B, S_q,  num_heads, d_k).transpose(1, 2)\n    K = K.view(B, S_kv, num_heads, d_k).transpose(1, 2)\n    V = V.view(B, S_kv, num_heads, d_k).transpose(1, 2)\n    scores  = Q @ K.transpose(-2, -1) / (d_k ** 0.5)\n    weights = torch.softmax(scores, dim=-1)\n    ctx     = (weights @ V).transpose(1, 2).contiguous().view(B, S_q, D)\n    expected = ctx @ attn.W_o.weight.T + attn.W_o.bias\nassert torch.allclose(out, expected, atol=1e-5), f'Numerical mismatch: max diff {(out - expected).abs().max()}'\n"
         }
+      ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is cross-attention, and where is it used?"
+        },
+        {
+          "stage": "concept",
+          "question": "Which sequence provides Q and which provides K and V?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do shapes work when the query and key sequences have different lengths?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why is there no causal mask here?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How would you add a padding mask for the encoder side?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Cross-attention versus concatenating the two sequences into one self-attention?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How can you cache the K and V of cross-attention at inference time?"
+        }
       ]
     },
     {
@@ -478,6 +658,36 @@
           "name": "Gradient flow",
           "code": "\nimport torch\nx = torch.randn(2, 8, requires_grad=True)\ngamma = torch.ones(8, requires_grad=True)\nbeta = torch.zeros(8, requires_grad=True)\nout = {fn}(x, gamma, beta)\nout.sum().backward()\nassert x.grad is not None, 'x.grad is None'\nassert gamma.grad is not None, 'gamma.grad is None'\n"
         }
+      ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What does LayerNorm normalize over, and why is that suited to transformers?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why do we need the learnable gamma and beta?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Biased or unbiased variance: which does LayerNorm use and why?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Where does eps go, and what happens with a constant input row?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you normalize over the last dimension for an input of any rank?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "LayerNorm versus BatchNorm versus RMSNorm: when and why?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Pre-norm versus post-norm placement: how does it affect training stability?"
+        }
       ]
     },
     {
@@ -503,6 +713,36 @@
         {
           "name": "Gradient flow",
           "code": "\nimport torch\nlayer = {fn}(8, 4)\nx = torch.randn(2, 8)\ny = layer.forward(x)\ny.sum().backward()\nassert layer.weight.grad is not None, 'weight.grad is None'\nassert layer.bias.grad is not None, 'bias.grad is None'\n"
+        }
+      ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What does a linear layer compute, and why is the weight stored as out by in?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why does initialization matter for a linear layer?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What is Kaiming initialization, and what variance does it target?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you support inputs with arbitrary leading dimensions?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why register weight and bias as nn.Parameter rather than plain tensors?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Xavier versus Kaiming: which activation goes with which?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why do many LLMs drop biases from linear layers?"
         }
       ]
     },
@@ -610,6 +850,36 @@
           "name": "Gradient flow",
           "code": "\nimport torch\nmlp = {fn}(d_model=32, d_ff=64)\nx = torch.randn(2, 4, 32, requires_grad=True)\nmlp(x).sum().backward()\nassert x.grad is not None, 'x.grad is None'\nn_total = sum(1 for p in mlp.parameters())\nn_grad = sum(1 for p in mlp.parameters() if p.grad is not None)\nassert n_grad == n_total, f'Only {n_grad}/{n_total} params got gradients'\n"
         }
+      ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What role does the feed-forward block play in a transformer?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why does the MLP hold most of the parameters in a transformer?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Name the three projections in a SwiGLU MLP and their shapes."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why is bias usually omitted?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How would you choose d_ff for a given parameter budget?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Dense MLP versus mixture-of-experts: what changes in compute and memory?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What does interpretability work say about what MLP layers store?"
+        }
       ]
     },
     {
@@ -643,6 +913,36 @@
         {
           "name": "Gradient flow",
           "code": "\nimport torch\nx = torch.randn(2, 8, requires_grad=True)\nweight = torch.ones(8, requires_grad=True)\nout = {fn}(x, weight)\nout.sum().backward()\nassert x.grad is not None, 'x.grad is None'\nassert weight.grad is not None, 'weight.grad is None'\n"
+        }
+      ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is RMSNorm, and how does it differ from LayerNorm?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why do modern LLMs use RMSNorm?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Write the formula. Why is there no mean subtraction and no bias?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Where do you compute in float32 when the input is bfloat16, and why?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Where does eps go, inside or outside the square root?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What does dropping mean-centering cost in expressiveness, and what does it save?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How do QK-norm and other placements of RMSNorm help training stability?"
         }
       ]
     },
@@ -742,6 +1042,36 @@
           "name": "Cross-attention (seq_q != seq_k)",
           "code": "\nimport torch\nQ = torch.randn(1, 3, 16)\nK = torch.randn(1, 5, 16)\nV = torch.randn(1, 5, 32)\nout = {fn}(Q, K, V)\nassert out.shape == (1, 3, 32), f'Cross-attention shape: {out.shape}'\n"
         }
+      ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Explain scaled dot-product attention. What do Q, K and V represent?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why scale by the square root of the key dimension?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through the shapes of every intermediate tensor."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Where does masking go, and why before the softmax?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What is the time and memory complexity in sequence length?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why is attention quadratic, and what are the main approaches to reduce it?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Additive attention versus dot-product attention: trade-offs?"
+        }
       ]
     },
     {
@@ -814,6 +1144,36 @@
           "name": "Numerical correctness",
           "code": "\nimport torch\ntorch.manual_seed(42)\nB, S, D = 2, 6, 8\nQ = torch.randn(B, S, D)\nK = torch.randn(B, S, D)\nV = torch.randn(B, S, D)\nout = {fn}(Q, K, V)\n# Reference computation\nd_k = Q.shape[-1]\nscale = d_k ** -0.5\nscores = Q @ K.transpose(-2, -1) * scale\nmask = torch.triu(torch.ones(S, S, dtype=torch.bool), diagonal=1)\nscores = scores.masked_fill(mask, float('-inf'))\nattn = torch.softmax(scores, dim=-1)\nexpected = attn @ V\nassert torch.allclose(out, expected, atol=1e-5), f'Numerical mismatch: max diff {(out - expected).abs().max()}'\n"
         }
+      ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why do autoregressive models need a causal mask?"
+        },
+        {
+          "stage": "concept",
+          "question": "How does causal masking relate to teacher forcing during training?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you build the mask, and why fill with negative infinity rather than zero?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why must masking happen before the softmax?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What does the first row of the attention matrix look like?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How does causal attention enable KV caching at inference?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Causal versus bidirectional attention: what does each do better?"
+        }
       ]
     },
     {
@@ -848,6 +1208,36 @@
           "name": "Beta scaling",
           "code": "\nimport torch\ntorch.manual_seed(0)\nc, r, rc, rr = torch.randn(4), torch.randn(4), torch.randn(4), torch.randn(4)\nl1 = {fn}(c, r, rc, rr, beta=0.1)\nl2 = {fn}(c, r, rc, rr, beta=1.0)\nassert not torch.allclose(l1, l2), 'Different beta should give different loss'\n"
         }
+      ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is DPO, and how does it remove the need for an explicit reward model and RL loop?"
+        },
+        {
+          "stage": "concept",
+          "question": "What is the implicit reward in DPO?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Write the DPO loss from the four log-prob inputs. What role does the reference model play?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What does beta control, and what happens when it is very large or very small?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How are sequence log-probs computed for chosen and rejected responses, and why mask the prompt?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "DPO has been observed to lower the likelihood of both chosen and rejected responses. Why, and what fixes exist?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Offline DPO versus online RL such as PPO or GRPO: what does each do better?"
+        }
       ]
     },
     {
@@ -877,6 +1267,36 @@
         {
           "name": "Gradient flow",
           "code": "\nimport torch\nQ = torch.randn(1, 8, 4, requires_grad=True)\nK = torch.randn(1, 8, 4, requires_grad=True)\nV = torch.randn(1, 8, 4, requires_grad=True)\n{fn}(Q, K, V, block_size=4).sum().backward()\nassert Q.grad is not None, 'Q.grad is None'\n"
+        }
+      ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What problem does FlashAttention solve, compute or memory traffic?"
+        },
+        {
+          "stage": "concept",
+          "question": "What is the online softmax trick?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through how running max and running sum are updated across blocks."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you rescale the accumulated output when the running max changes?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why is the result exactly equal to standard attention, not an approximation?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What does FlashAttention do for the backward pass, and what does it recompute?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "When would FlashAttention not help much?"
         }
       ]
     },
@@ -911,6 +1331,36 @@
         {
           "name": "Gradient flow to all parameters",
           "code": "\nimport torch\ntorch.manual_seed(0)\nblock = {fn}(d_model=32, num_heads=4)\nx = torch.randn(1, 4, 32, requires_grad=True)\nblock(x).sum().backward()\nassert x.grad is not None, 'x.grad is None'\nn_total = sum(1 for p in block.parameters())\nn_grad = sum(1 for p in block.parameters() if p.grad is not None)\nassert n_grad == n_total, f'Only {n_grad}/{n_total} params got gradients'\n"
+        }
+      ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Walk through a GPT-2 block from input to output."
+        },
+        {
+          "stage": "concept",
+          "question": "Why use residual connections?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Pre-norm versus post-norm: which does GPT-2 use, and why does it matter for deep stacks?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Where is the causal mask applied, and how do you build it?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What are the parameter counts of the attention and MLP parts for a given d_model?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What changed from GPT-2 blocks to LLaMA blocks, and why?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why do very deep transformers need special initialization or residual scaling?"
         }
       ]
     },
@@ -950,6 +1400,36 @@
           "name": "Gradient flow",
           "code": "\nimport torch\ntorch.manual_seed(0)\ngqa = {fn}(d_model=16, num_heads=4, num_kv_heads=2)\nx = torch.randn(1, 4, 16, requires_grad=True)\ngqa.forward(x).sum().backward()\nassert x.grad is not None, 'x.grad is None'\nassert gqa.W_q.weight.grad is not None and gqa.W_k.weight.grad is not None, 'Missing weight gradients'\n"
         }
+      ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is grouped-query attention, and why was it introduced?"
+        },
+        {
+          "stage": "concept",
+          "question": "How does it sit between multi-head and multi-query attention?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you expand KV heads to match query heads, and how does repeat_interleave differ from repeat?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What must divide what for the shapes to work?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How much does GQA shrink the KV cache?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What quality does GQA lose compared with full multi-head attention?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How would you convert a multi-head checkpoint to GQA?"
+        }
       ]
     },
     {
@@ -979,6 +1459,36 @@
         {
           "name": "Group-wise normalization",
           "code": "\nimport torch\nlogps = torch.zeros(4, requires_grad=True)\nrewards = torch.tensor([0.0, 1.0, 10.0, 11.0])\ngroup_ids = torch.tensor([0, 0, 1, 1])\nloss = {fn}(logps, rewards, group_ids)\nloss.backward()\n# Since each group has rewards [0,1] and [10,11], the normalized advantages\n# should be identical across groups, leading to identical gradients per position.\nassert torch.allclose(logps.grad[:2], logps.grad[2:]), 'Groups should be treated independently but symmetrically'\n"
+        }
+      ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "How does GRPO compute advantages without a critic?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why group completions by prompt?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you compute per-group mean and std when groups are given by group_ids rather than contiguous blocks?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What happens to a group of size one or with identical rewards?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why detach the advantages before multiplying by log-probs?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What does this sequence-level loss leave out compared with a full GRPO objective with clipping and KL?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "When would you prefer GRPO over PPO, and when not?"
         }
       ]
     },
@@ -1082,6 +1592,36 @@
           "name": "Numerical correctness",
           "code": "\nimport torch\ntorch.manual_seed(7)\nB, S, D = 1, 4, 8\nQ = torch.randn(B, S, D)\nK = torch.randn(B, S, D)\nV = torch.randn(B, S, D)\nout = {fn}(Q, K, V)\n# Reference: phi(x) = elu(x) + 1, elu(x) = x if x>0 else exp(x)-1\ndef elu_plus_1(x):\n    return torch.where(x > 0, x + 1, x.exp())\nphi_Q = elu_plus_1(Q)\nphi_K = elu_plus_1(K)\nKV = phi_K.transpose(-2, -1) @ V          # (B, D, D_v)\nZ = phi_K.sum(dim=1, keepdim=True)        # (B, 1, D)\nnum = phi_Q @ KV                           # (B, S, D_v)\nden = phi_Q @ Z.transpose(-2, -1)         # (B, S, 1)\nexpected = num / (den + 1e-6)\nassert torch.allclose(out, expected, atol=1e-5), f'Numerical mismatch: max diff {(out - expected).abs().max()}'\n"
         }
+      ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is linear attention, and how does it avoid the quadratic cost?"
+        },
+        {
+          "stage": "concept",
+          "question": "What role does the feature map phi play?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Show how reordering the matrix products changes the complexity."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why must phi produce non-negative features, and why the normalizer?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How would you make linear attention causal with a running sum?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why does linear attention usually underperform softmax attention in quality?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How do modern state-space and linear RNN models relate to linear attention?"
+        }
       ]
     },
     {
@@ -1123,6 +1663,36 @@
         {
           "name": "Different heads give different outputs",
           "code": "\nimport torch\ntorch.manual_seed(42)\nD, H = 16, 4\nd_k = D // H\nmha = {fn}(d_model=D, num_heads=H)\nx = torch.randn(1, 4, D)\nq = mha.W_q(x).view(1, 4, H, d_k).transpose(1, 2)\nassert not torch.allclose(q[:, 0], q[:, 1], atol=1e-3), 'Heads produce identical queries'\n"
+        }
+      ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why use multiple heads instead of one large attention?"
+        },
+        {
+          "stage": "concept",
+          "question": "What does the output projection do?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through the reshape and transpose from (B, S, d_model) to per-head tensors and back."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why must d_model be divisible by num_heads?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How does parameter count compare with single-head attention of the same d_model?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Do heads really specialize? What does head pruning suggest?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "MHA versus MQA versus GQA: inference cost and quality trade-offs?"
         }
       ]
     },
@@ -1184,6 +1754,36 @@
           "name": "Gradient flows to new_logps only",
           "code": "\nimport torch\nnew_logps = torch.randn(8, requires_grad=True)\nold_logps = torch.randn(8, requires_grad=True)\nadvantages = torch.randn(8, requires_grad=True)\nloss = {fn}(new_logps, old_logps, advantages)\nloss.backward()\nassert new_logps.grad is not None, 'Gradients should flow through new_logps'\nassert old_logps.grad is None, 'Gradients should not flow through old_logps (treat as constant baseline)'\nassert advantages.grad is None, 'Gradients should not flow through advantages (treat as constant advantages)'\n"
         }
+      ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What problem does PPO solve compared with vanilla policy gradient?"
+        },
+        {
+          "stage": "concept",
+          "question": "Explain the clipped surrogate objective in plain words."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why compute the ratio as exp(new_logps - old_logps)?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through the four cases of positive or negative advantage with ratio above or below the clip range."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why are old_logps and advantages constants, and what bug appears if they are not?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "PPO clipping versus a KL penalty on the policy update: what are the trade-offs?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What hyperparameters matter most in PPO for LLMs, and what signs of instability do you watch?"
+        }
       ]
     },
     {
@@ -1218,6 +1818,36 @@
           "name": "Numerical correctness",
           "code": "\nimport torch\ntorch.manual_seed(0)\nB, S, D = 1, 2, 4\nq = torch.randn(B, S, D)\nk = torch.randn(B, S, D)\nq_rot, k_rot = {fn}(q, k)\n# Reference: for each position p and pair i, angle = p / 10000^(2i/D)\npos = torch.arange(S).float()\nfreqs = 1.0 / (10000.0 ** (torch.arange(0, D, 2).float() / D))\nangles = pos.unsqueeze(1) * freqs.unsqueeze(0)  # (S, D//2)\ncos_a = torch.cos(angles)\nsin_a = torch.sin(angles)\ndef rotate_ref(x):\n    x_e = x[..., 0::2]\n    x_o = x[..., 1::2]\n    r_e = x_e * cos_a - x_o * sin_a\n    r_o = x_e * sin_a + x_o * cos_a\n    return torch.stack([r_e, r_o], dim=-1).flatten(-2)\nexpected_q = rotate_ref(q)\nexpected_k = rotate_ref(k)\nassert torch.allclose(q_rot, expected_q, atol=1e-5), f'Q rotation mismatch: max diff {(q_rot - expected_q).abs().max()}'\nassert torch.allclose(k_rot, expected_k, atol=1e-5), f'K rotation mismatch: max diff {(k_rot - expected_k).abs().max()}'\n"
         }
+      ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is RoPE, and why does rotating Q and K encode relative position?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why is RoPE applied to Q and K but not V?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through pairing dimensions and applying the rotation. How are the frequencies defined?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Interleaved pairs versus half-split pairs: why do implementations differ, and what breaks if you mix them?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you apply RoPE with a KV cache when new tokens start at an offset?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why does RoPE degrade beyond the training context length?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "RoPE versus ALiBi: extrapolation and efficiency trade-offs?"
+        }
       ]
     },
     {
@@ -1251,6 +1881,36 @@
         {
           "name": "Gradient flow",
           "code": "\nimport torch\nQ = torch.randn(2, 4, 8, requires_grad=True)\nK = torch.randn(2, 4, 8, requires_grad=True)\nV = torch.randn(2, 4, 8, requires_grad=True)\n{fn}(Q, K, V, window_size=1).sum().backward()\nassert Q.grad is not None, 'Q.grad is None'\n"
+        }
+      ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is sliding-window attention, and why use it?"
+        },
+        {
+          "stage": "concept",
+          "question": "How can stacking layers extend the effective receptive field?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you build the band mask?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Does this exercise's window include both past and future, and how would you make it causal?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What is the complexity with and without a specialized kernel?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What long-range dependencies does a sliding window miss, and how do hybrid models fix that?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How does a sliding window change KV cache size at inference?"
         }
       ]
     },
@@ -1312,6 +1972,36 @@
           "name": "Values in [-1, 1]",
           "code": "\nimport torch\npe = {fn}(100, 64)\nassert pe.min() >= -1.0 - 1e-5 and pe.max() <= 1.0 + 1e-5, 'PE values must be in [-1, 1]'\n"
         }
+      ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why do transformers need positional information at all?"
+        },
+        {
+          "stage": "concept",
+          "question": "How does the sinusoidal encoding work, and what is the intuition for multiple frequencies?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Write out the formula. Which dimensions get sin and which get cos?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why can a fixed linear transformation map the encoding at position p to position p plus k?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you compute it without a Python loop?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Sinusoidal versus learned absolute positions versus RoPE: trade-offs?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why do absolute encodings extrapolate poorly to longer sequences?"
+        }
       ]
     },
     {
@@ -1372,6 +2062,36 @@
           "name": "Gradient flows through gate",
           "code": "\nimport torch\nB, d, d_ff = 2, 8, 16\nx = torch.randn(B, d, requires_grad=True)\nW1 = torch.randn(d, d_ff, requires_grad=True)\nW2 = torch.randn(d_ff, d, requires_grad=True)\nWg = torch.randn(d, d_ff, requires_grad=True)\nout = {fn}(x, W1, W2, Wg)\nout.sum().backward()\nassert x.grad is not None, 'No gradient for x'\nassert Wg.grad is not None, 'No gradient for Wgate'\n"
         }
+      ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is a gated linear unit, and what does SwiGLU add?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why do LLaMA and PaLM use SwiGLU in the feed-forward block?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Write SwiGLU in terms of x, W1, Wgate and W2. Which projection gets the Swish?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why is d_ff often set to about 8/3 of d_model with SwiGLU instead of 4 times?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What are the parameter and FLOP counts compared with a standard two-matrix MLP?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What does gating buy you empirically, and is there a good theoretical explanation?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What does SwiGLU cost at inference time?"
+        }
       ]
     },
     {
@@ -1401,6 +2121,36 @@
         {
           "name": "ALiBi slopes and bias numerical correctness",
           "code": "\nimport torch\ntorch.manual_seed(11)\nB, S, D, H = 1, 5, 8, 4\nQ = torch.randn(B, S, D)\nK = torch.randn(B, S, D)\nV = torch.randn(B, S, D)\nout = {fn}(Q, K, V, H)\n# Reference: slopes m_h = 1/2^(8h/H) for h=1..H\nd_h = D // H\nh_idx = torch.arange(1, H + 1, dtype=torch.float32)\nslopes = 1.0 / (2.0 ** (8.0 * h_idx / H))          # (H,)\npos = torch.arange(S).float()\ndist = (pos.unsqueeze(0) - pos.unsqueeze(1)).abs()   # (S, S)\nbias = -slopes.view(H, 1, 1) * dist.unsqueeze(0)    # (1, H, S, S)\nQh = Q.view(B, S, H, d_h).transpose(1, 2)\nKh = K.view(B, S, H, d_h).transpose(1, 2)\nVh = V.view(B, S, H, d_h).transpose(1, 2)\nscores = (Qh @ Kh.transpose(-2, -1)) / (d_h ** 0.5) + bias\nattn = torch.softmax(scores, dim=-1)\nexpected = (attn @ Vh).transpose(1, 2).reshape(B, S, D)\nassert torch.allclose(out, expected, atol=1e-5), f'ALiBi numerical mismatch: max diff {(out - expected).abs().max()}'\n"
+        }
+      ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is ALiBi, and how does it replace positional embeddings?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why does ALiBi extrapolate to longer sequences?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How are head slopes computed, and why geometric?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you build the bias matrix and combine it with the causal mask?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Where exactly is the bias added?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What does ALiBi's linear recency bias cost on tasks that need long-range attention?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why did most recent LLMs pick RoPE over ALiBi?"
         }
       ]
     },
@@ -1435,6 +2185,36 @@
         {
           "name": "NTK base formula correctness",
           "code": "\nimport torch\ntorch.manual_seed(0)\nB, S, D = 1, 4, 8\nscale = 4.0\nq = torch.randn(B, S, D)\nk = torch.randn(B, S, D)\nq_rot, k_rot = {fn}(q, k, scale)\n# Reference with exact NTK base\nnew_base = 10000.0 * (scale ** (D / (D - 2)))\npos = torch.arange(S).float().unsqueeze(1)\ndim = torch.arange(0, D, 2).float()\nfreqs = 1.0 / (new_base ** (dim / D))\nangles = pos * freqs\ncos_a, sin_a = torch.cos(angles), torch.sin(angles)\ndef rotate(x):\n    x1, x2 = x[..., 0::2], x[..., 1::2]\n    return torch.stack([x1*cos_a - x2*sin_a, x1*sin_a + x2*cos_a], dim=-1).flatten(-2)\nassert torch.allclose(q_rot, rotate(q), atol=1e-5), 'NTK base formula mismatch'\n"
+        }
+      ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why does plain RoPE fail beyond the training context?"
+        },
+        {
+          "stage": "concept",
+          "question": "What does NTK-aware scaling do differently from linear position interpolation?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How is the base adjusted from the scale factor and head dimension?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why are high-frequency dimensions preserved and low-frequency ones stretched?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What stays unchanged when scale equals one?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "NTK scaling versus YaRN versus fine-tuning on long data: trade-offs?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What quality regressions do you see on short contexts after scaling?"
         }
       ]
     },
@@ -2012,6 +2792,36 @@
           "name": "Pure exploitation with c_puct=0",
           "code": "\nimport torch\nvalues = torch.tensor([0.2, 0.9, 0.5, 0.1])\nvisits = torch.tensor([1.0, 1.0, 1.0, 1.0])\nidx, _, _ = {fn}(values, visits, parent_visits=4, c_puct=0.0)\nassert idx == 1, f'With c_puct=0, should select highest-value node (1), got {idx}'\n"
         }
+      ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is Monte Carlo Tree Search, and what are its four phases?"
+        },
+        {
+          "stage": "concept",
+          "question": "How has MCTS been used with LLMs for reasoning?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Explain the UCB or PUCT selection score. What do the exploitation and exploration terms each do?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you handle unvisited children in selection?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What gets updated during backpropagation, and how?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What does c_puct trade off?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why is MCTS expensive for LLM reasoning, and what cheaper alternatives are used, such as best-of-N or beam search?"
+        }
       ]
     },
     {
@@ -2045,6 +2855,36 @@
         {
           "name": "Larger margin -> lower loss",
           "code": "\nimport torch\ntorch.manual_seed(4)\nB, D = 8, 16\nhead = torch.ones(D, 1) / D\nbase = torch.zeros(B, D)\n# small margin\nchosen_small = base + 0.5\nrejected_small = base - 0.5\nloss_small = {fn}(chosen_small, rejected_small, head)\n# large margin\nchosen_large = base + 5.0\nrejected_large = base - 5.0\nloss_large = {fn}(chosen_large, rejected_large, head)\nassert loss_large.item() < loss_small.item(), 'Larger margin should yield lower loss'\n"
+        }
+      ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "How is an RLHF reward model trained, and what is the Bradley-Terry model?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why train on pairwise preferences instead of absolute scores?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why use the last-token hidden state, and what goes wrong with padding when picking it?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Write the loss in terms of the reward difference. Why use logsigmoid rather than log of sigmoid?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "The reward is only defined up to a constant. What does that mean for normalization at RL time?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What is reward hacking, and how does the KL penalty in RLHF relate to it?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Reward model versus rule-based verifiable rewards versus DPO: when would you pick each?"
         }
       ]
     },

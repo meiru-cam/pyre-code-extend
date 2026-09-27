@@ -1,5 +1,7 @@
 """Causal Self-Attention task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Causal Self-Attention",
     "title_zh": "因果自注意力",
@@ -96,4 +98,19 @@ V = torch.randn(1, 4, 8)
 out = causal_attention(Q, K, V)
 print("Pos 0 == V[0]?", torch.allclose(out[:, 0], V[:, 0], atol=1e-5))""",
 
+    "interview_questions": interview(
+        concept=[
+            'Why do autoregressive models need a causal mask?',
+            'How does causal masking relate to teacher forcing during training?',
+        ],
+        deep_dive=[
+            'How do you build the mask, and why fill with negative infinity rather than zero?',
+            'Why must masking happen before the softmax?',
+            'What does the first row of the attention matrix look like?',
+        ],
+        tradeoffs=[
+            'How does causal attention enable KV caching at inference?',
+            'Causal versus bidirectional attention: what does each do better?',
+        ],
+    ),
 }

@@ -1,5 +1,7 @@
 """GELU Activation task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "GELU Activation",
     "title_zh": "GELU 激活函数",
@@ -33,4 +35,19 @@ TASK = {
 print('Output:', my_gelu(x))
 print('Ref:   ', torch.nn.functional.gelu(x))""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is GELU, and what is its intuition as a probabilistic gate?',
+            'Where is GELU used, and why did transformers adopt it?',
+        ],
+        deep_dive=[
+            'Write the exact erf form and the tanh approximation. Why does the approximation exist?',
+            'How does GELU behave for large negative and large positive inputs?',
+            'What is the derivative of GELU, and is it smooth at zero?',
+        ],
+        tradeoffs=[
+            'GELU versus ReLU versus SiLU: accuracy and speed trade-offs?',
+            'Why did LLaMA-style models move to SwiGLU instead of GELU?',
+        ],
+    ),
 }

@@ -1,5 +1,7 @@
 """DPO (Direct Preference Optimization) Loss task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "DPO (Direct Preference Optimization) Loss",
     "title_zh": "DPO 损失",
@@ -43,4 +45,19 @@ ref_c = torch.tensor([-1.0, -1.0])
 ref_r = torch.tensor([-1.0, -1.0])
 print('Loss:', dpo_loss(chosen, rejected, ref_c, ref_r, beta=0.1).item())""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is DPO, and how does it remove the need for an explicit reward model and RL loop?',
+            'What is the implicit reward in DPO?',
+        ],
+        deep_dive=[
+            'Write the DPO loss from the four log-prob inputs. What role does the reference model play?',
+            'What does beta control, and what happens when it is very large or very small?',
+            'How are sequence log-probs computed for chosen and rejected responses, and why mask the prompt?',
+        ],
+        tradeoffs=[
+            'DPO has been observed to lower the likelihood of both chosen and rejected responses. Why, and what fixes exist?',
+            'Offline DPO versus online RL such as PPO or GRPO: what does each do better?',
+        ],
+    ),
 }

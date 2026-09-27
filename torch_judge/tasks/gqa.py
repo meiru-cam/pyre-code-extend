@@ -1,5 +1,7 @@
 """Grouped Query Attention task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Grouped Query Attention",
     "title_zh": "分组查询注意力（GQA）",
@@ -102,4 +104,19 @@ assert gqa.W_q.weight.grad is not None and gqa.W_k.weight.grad is not None, 'Mis
     "demo": """gqa = GroupQueryAttention(32, 8, 2)
 print('Output:', gqa.forward(torch.randn(1, 4, 32)).shape)""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is grouped-query attention, and why was it introduced?',
+            'How does it sit between multi-head and multi-query attention?',
+        ],
+        deep_dive=[
+            'How do you expand KV heads to match query heads, and how does repeat_interleave differ from repeat?',
+            'What must divide what for the shapes to work?',
+            'How much does GQA shrink the KV cache?',
+        ],
+        tradeoffs=[
+            'What quality does GQA lose compared with full multi-head attention?',
+            'How would you convert a multi-head checkpoint to GQA?',
+        ],
+    ),
 }

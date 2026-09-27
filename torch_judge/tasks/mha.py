@@ -1,5 +1,7 @@
 """Multi-Head Attention task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Multi-Head Attention",
     "title_zh": "多头注意力",
@@ -147,4 +149,19 @@ V = torch.randn(1, 7, 32)
 out2 = mha.forward(Q, K, V)
 print("Cross-attn shape:", out2.shape)""",
 
+    "interview_questions": interview(
+        concept=[
+            'Why use multiple heads instead of one large attention?',
+            'What does the output projection do?',
+        ],
+        deep_dive=[
+            'Walk through the reshape and transpose from (B, S, d_model) to per-head tensors and back.',
+            'Why must d_model be divisible by num_heads?',
+            'How does parameter count compare with single-head attention of the same d_model?',
+        ],
+        tradeoffs=[
+            'Do heads really specialize? What does head pruning suggest?',
+            'MHA versus MQA versus GQA: inference cost and quality trade-offs?',
+        ],
+    ),
 }

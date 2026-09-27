@@ -1,5 +1,7 @@
 """Sliding Window Attention task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Sliding Window Attention",
     "title_zh": "滑动窗口注意力",
@@ -86,4 +88,19 @@ assert Q.grad is not None, 'Q.grad is None'
     "demo": """Q=torch.randn(1,6,8); K=torch.randn(1,6,8); V=torch.randn(1,6,8)
 print('window=0==V?', torch.allclose(sliding_window_attention(Q,K,V,0), V, atol=1e-5))""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is sliding-window attention, and why use it?',
+            'How can stacking layers extend the effective receptive field?',
+        ],
+        deep_dive=[
+            'How do you build the band mask?',
+            "Does this exercise's window include both past and future, and how would you make it causal?",
+            'What is the complexity with and without a specialized kernel?',
+        ],
+        tradeoffs=[
+            'What long-range dependencies does a sliding window miss, and how do hybrid models fix that?',
+            'How does a sliding window change KV cache size at inference?',
+        ],
+    ),
 }

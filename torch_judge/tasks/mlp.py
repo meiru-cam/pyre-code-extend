@@ -1,5 +1,7 @@
 """SwiGLU MLP task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "SwiGLU MLP",
     "title_zh": "SwiGLU MLP",
@@ -88,4 +90,19 @@ x = torch.randn(2, 8, 64)
 print('Output:', mlp(x).shape)
 print('Params:', sum(p.numel() for p in mlp.parameters()))""",
 
+    "interview_questions": interview(
+        concept=[
+            'What role does the feed-forward block play in a transformer?',
+            'Why does the MLP hold most of the parameters in a transformer?',
+        ],
+        deep_dive=[
+            'Name the three projections in a SwiGLU MLP and their shapes.',
+            'Why is bias usually omitted?',
+            'How would you choose d_ff for a given parameter budget?',
+        ],
+        tradeoffs=[
+            'Dense MLP versus mixture-of-experts: what changes in compute and memory?',
+            'What does interpretability work say about what MLP layers store?',
+        ],
+    ),
 }

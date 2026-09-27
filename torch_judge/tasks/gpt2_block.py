@@ -1,5 +1,7 @@
 """GPT-2 Transformer Block task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "GPT-2 Transformer Block",
     "title_zh": "GPT-2 Transformer Block",
@@ -115,4 +117,19 @@ class GPT2Block(nn.Module):
 print('Output:', block(torch.randn(2, 8, 64)).shape)
 print('Params:', sum(p.numel() for p in block.parameters()))""",
 
+    "interview_questions": interview(
+        concept=[
+            'Walk through a GPT-2 block from input to output.',
+            'Why use residual connections?',
+        ],
+        deep_dive=[
+            'Pre-norm versus post-norm: which does GPT-2 use, and why does it matter for deep stacks?',
+            'Where is the causal mask applied, and how do you build it?',
+            'What are the parameter counts of the attention and MLP parts for a given d_model?',
+        ],
+        tradeoffs=[
+            'What changed from GPT-2 blocks to LLaMA blocks, and why?',
+            'Why do very deep transformers need special initialization or residual scaling?',
+        ],
+    ),
 }

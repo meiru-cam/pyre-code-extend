@@ -1,5 +1,7 @@
 """Simple Linear Layer task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Simple Linear Layer",
     "title_zh": "简单线性层",
@@ -60,4 +62,19 @@ print("b shape:", layer.bias.shape)
 x = torch.randn(2, 8)
 print("Output shape:", layer.forward(x).shape)""",
 
+    "interview_questions": interview(
+        concept=[
+            'What does a linear layer compute, and why is the weight stored as out by in?',
+            'Why does initialization matter for a linear layer?',
+        ],
+        deep_dive=[
+            'What is Kaiming initialization, and what variance does it target?',
+            'How do you support inputs with arbitrary leading dimensions?',
+            'Why register weight and bias as nn.Parameter rather than plain tensors?',
+        ],
+        tradeoffs=[
+            'Xavier versus Kaiming: which activation goes with which?',
+            'Why do many LLMs drop biases from linear layers?',
+        ],
+    ),
 }

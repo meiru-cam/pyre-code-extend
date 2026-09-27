@@ -1,5 +1,7 @@
 """PPO (Proximal Policy Optimization) clipped loss task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "PPO (Proximal Policy Optimization) Clipped Loss",
     "title_zh": "PPO 损失",
@@ -78,4 +80,19 @@ old_logps = torch.tensor([0.0, -0.1, -0.5, -0.5])
 advantages = torch.tensor([1.0, -1.0, 0.5, -0.5])
 print('Loss:', ppo_loss(new_logps, old_logps, advantages, clip_ratio=0.2))""",
 
+    "interview_questions": interview(
+        concept=[
+            'What problem does PPO solve compared with vanilla policy gradient?',
+            'Explain the clipped surrogate objective in plain words.',
+        ],
+        deep_dive=[
+            'Why compute the ratio as exp(new_logps - old_logps)?',
+            'Walk through the four cases of positive or negative advantage with ratio above or below the clip range.',
+            'Why are old_logps and advantages constants, and what bug appears if they are not?',
+        ],
+        tradeoffs=[
+            'PPO clipping versus a KL penalty on the policy update: what are the trade-offs?',
+            'What hyperparameters matter most in PPO for LLMs, and what signs of instability do you watch?',
+        ],
+    ),
 }

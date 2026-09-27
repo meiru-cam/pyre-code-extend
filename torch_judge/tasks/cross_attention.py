@@ -1,5 +1,7 @@
 """Multi-Head Cross-Attention task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Multi-Head Cross-Attention",
     "title_zh": "多头交叉注意力",
@@ -80,4 +82,19 @@ x_q = torch.randn(2, 6, 64)
 x_kv = torch.randn(2, 10, 64)
 print('Output:', attn(x_q, x_kv).shape)""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is cross-attention, and where is it used?',
+            'Which sequence provides Q and which provides K and V?',
+        ],
+        deep_dive=[
+            'How do shapes work when the query and key sequences have different lengths?',
+            'Why is there no causal mask here?',
+            'How would you add a padding mask for the encoder side?',
+        ],
+        tradeoffs=[
+            'Cross-attention versus concatenating the two sequences into one self-attention?',
+            'How can you cache the K and V of cross-attention at inference time?',
+        ],
+    ),
 }

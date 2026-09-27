@@ -1,5 +1,7 @@
 """Flash Attention (Tiled) task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Flash Attention (Tiled)",
     "title_zh": "Flash Attention（分块）",
@@ -68,4 +70,19 @@ ref = torch.bmm(torch.softmax(scores, dim=-1), V)
 print('Shape:', out.shape)
 print('Max diff:', (out - ref).abs().max().item())""",
 
+    "interview_questions": interview(
+        concept=[
+            'What problem does FlashAttention solve, compute or memory traffic?',
+            'What is the online softmax trick?',
+        ],
+        deep_dive=[
+            'Walk through how running max and running sum are updated across blocks.',
+            'How do you rescale the accumulated output when the running max changes?',
+            'Why is the result exactly equal to standard attention, not an approximation?',
+        ],
+        tradeoffs=[
+            'What does FlashAttention do for the backward pass, and what does it recompute?',
+            'When would FlashAttention not help much?',
+        ],
+    ),
 }

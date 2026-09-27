@@ -1,5 +1,7 @@
 """GRPO (Group Relative Policy Optimization) Loss task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "GRPO (Group Relative Policy Optimization) Loss",
     "title_zh": "GRPO 损失",
@@ -108,4 +110,19 @@ rewards = torch.tensor([1.0, 0.8, 0.2, 0.0])
 group_ids = torch.tensor([0, 0, 1, 1])
 print('Loss:', grpo_loss(logps, rewards, group_ids).item())""",
 
+    "interview_questions": interview(
+        concept=[
+            'How does GRPO compute advantages without a critic?',
+            'Why group completions by prompt?',
+        ],
+        deep_dive=[
+            'How do you compute per-group mean and std when groups are given by group_ids rather than contiguous blocks?',
+            'What happens to a group of size one or with identical rewards?',
+            'Why detach the advantages before multiplying by log-probs?',
+        ],
+        tradeoffs=[
+            'What does this sequence-level loss leave out compared with a full GRPO objective with clipping and KL?',
+            'When would you prefer GRPO over PPO, and when not?',
+        ],
+    ),
 }
