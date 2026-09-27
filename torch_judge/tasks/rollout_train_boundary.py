@@ -1,5 +1,7 @@
 """Convert completed rollouts into a token-masked RL training batch."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Rollout to Train Boundary",
     "difficulty": "Hard",
@@ -131,4 +133,19 @@ assert out["input_ids"] == [7, 99]
             output["advantages"].append(total_reward if trainable else 0.0)
     return output
 ''',
+    "interview_questions": interview(
+        concept=[
+            'What has to happen at the boundary between rollout workers and the trainer?',
+            'Why broadcast the trajectory return to every token?',
+        ],
+        deep_dive=[
+            'Why zero advantages and loss mask on non-policy tokens?',
+            'Why keep episode ids after concatenation?',
+            'Why not normalize advantages across episodes at this boundary?',
+        ],
+        tradeoffs=[
+            'What does summing per-step rewards into one return lose compared with per-step credit assignment?',
+            'Where should advantage normalization live, and why?',
+        ],
+    ),
 }

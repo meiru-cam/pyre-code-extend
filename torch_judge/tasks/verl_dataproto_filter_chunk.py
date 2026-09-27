@@ -1,5 +1,7 @@
 """Filter and shard a verl-style DataProto while preserving aligned metadata."""
 
+from ._interview import interview
+
 TASK = {
     "title": "VERL DataProto Filter and Chunk",
     "difficulty": "Hard",
@@ -108,4 +110,19 @@ for mask,chunks in [([[False],[False]],1), ([[True],[False],[True]],3), ([[True]
         raise ValueError("selected rows cannot form equal chunks")
     return data.select_idxs(indices).chunk(chunks)
 ''',
+    "interview_questions": interview(
+        concept=[
+            "What is VERL's DataProto, and why carry tensors, non-tensor fields and meta info together?",
+            'Why filter out rows with an empty response mask before training?',
+        ],
+        deep_dive=[
+            'Why use select_idxs rather than rebuilding a tensor-only batch?',
+            'Chunking requires the row count to divide evenly. What are your options when it does not?',
+            'How do you keep the original order across filtering and chunking, and why does order matter?',
+        ],
+        tradeoffs=[
+            'Filtering changes the effective batch size between steps. How does that affect optimization?',
+            'What would you log at this boundary to debug a data-parallel RL run?',
+        ],
+    ),
 }

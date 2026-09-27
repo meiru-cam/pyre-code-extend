@@ -1,5 +1,7 @@
 """Per-token log-probabilities — the gradient carrier of every RL post-training loss."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Per-Token Log-Probabilities",
     "difficulty": "Easy",
@@ -239,4 +241,19 @@ def per_token_logprobs(logits, input_ids):
     log_probs = torch.log_softmax(logits, dim=-1)
     return torch.gather(log_probs, dim=-1, index=input_ids.unsqueeze(-1)).squeeze(-1)
 ''',
+    "interview_questions": interview(
+        concept=[
+            'Why does every policy-gradient loss for LLMs start from per-token log-probabilities rather than sequence probabilities?',
+            'What is the difference between the logits at position t and the token at position t in a causal LM, and where does the usual off-by-one shift happen?',
+        ],
+        deep_dive=[
+            'Why use log_softmax instead of softmax followed by log? What breaks numerically with large logits?',
+            "How do you gather the realized token's log-prob with torch.gather, and what shapes must index have?",
+            'Full vocabulary logits for a long batch are huge. How do you compute these log-probs without materializing everything at once?',
+        ],
+        tradeoffs=[
+            'Summing per-token log-probs gives a sequence log-prob. What goes wrong if you use that sum directly in a loss for long versus short responses?',
+            'Where do per-token log-probs computed by the inference engine and by the trainer disagree, and why does that matter for RL?',
+        ],
+    ),
 }

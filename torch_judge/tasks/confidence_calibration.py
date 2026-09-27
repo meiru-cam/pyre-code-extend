@@ -1,5 +1,6 @@
 """Measure confidence quality for binary verifiable outcomes."""
 
+from ._interview import interview
 from ._rl_extension import TORCHMETRICS, case, paper, task
 
 TASK = task(
@@ -62,4 +63,19 @@ def confidence_calibration(confidences, correct, bins=10):
     model_connections=["TorchMetrics' calibration-error implementation bins confidences and compares confidence with empirical correctness; this task adds binary Brier score and accuracy."],
     pros=["ECE and Brier expose overconfidence that accuracy alone hides."],
     cons=["ECE depends on bin count and these binary scores need a defensible correctness label."],
+    interview_questions=interview(
+        concept=[
+            'What is calibration, and why does it matter for RL-trained reasoning models?',
+            'How do accuracy, Brier score and ECE differ?',
+        ],
+        deep_dive=[
+            'How do you assign confidences to equal-width bins, including the boundaries at 0 and 1?',
+            "Why weight each bin's gap by its count?",
+            'How do empty bins affect ECE?',
+        ],
+        tradeoffs=[
+            'Why is ECE sensitive to the number of bins, and what alternatives exist?',
+            'RL with correctness rewards often makes models overconfident. How would you fix that?',
+        ],
+    ),
 )

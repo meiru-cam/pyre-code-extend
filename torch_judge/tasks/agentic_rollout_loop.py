@@ -1,5 +1,7 @@
 """Multi-turn agentic rollout — assembling a tool-using episode into an RL trajectory."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Agentic Rollout Loop",
     "difficulty": "Hard",
@@ -385,4 +387,19 @@ else:
         "reward": float(reward_fn(messages)),
     }
 ''',
+    "interview_questions": interview(
+        concept=[
+            'What is an agentic rollout, and how does it differ from single-turn RL generation?',
+            'Which messages in the trajectory come from the policy and which from the environment?',
+        ],
+        deep_dive=[
+            'How do you execute tool calls and append their results before the next model call?',
+            'What happens when max_turns is reached before the model stops calling tools?',
+            'How do you handle an unknown tool name or a tool that raises?',
+        ],
+        tradeoffs=[
+            'Trajectory-level reward versus per-turn reward: what is the credit-assignment problem here?',
+            'Why do multi-turn rollouts make batching and GPU utilization hard?',
+        ],
+    ),
 }

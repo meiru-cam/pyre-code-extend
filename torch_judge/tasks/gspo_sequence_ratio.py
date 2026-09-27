@@ -1,5 +1,7 @@
 """GSPO sequence ratio — importance weighting at the sequence level, not the token level."""
 
+from ._interview import interview
+
 TASK = {
     "title": "GSPO Sequence-Level Importance Ratio",
     "difficulty": "Medium",
@@ -271,4 +273,19 @@ def gspo_sequence_ratio(logprobs, old_logprobs, mask):
     mean_log_ratio = log_ratio.sum(dim=-1) / count.clamp(min=1.0)
     return torch.exp(mean_log_ratio)
 ''',
+    "interview_questions": interview(
+        concept=[
+            "What is GSPO, and why does it replace PPO's per-token importance ratio with a sequence-level one?",
+            'Why length-normalize the sequence log-ratio?',
+        ],
+        deep_dive=[
+            'Why aggregate the log-ratio first and exponentiate once, rather than averaging per-token ratios?',
+            'How do you handle a sequence whose mask is entirely False?',
+            'What does this ratio look like for a sequence of length 1 versus 1000 with the same per-token drift?',
+        ],
+        tradeoffs=[
+            'Why is sequence-level importance weighting said to stabilize MoE RL training?',
+            'What information is lost by collapsing per-token ratios into one number per sequence?',
+        ],
+    ),
 }

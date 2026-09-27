@@ -68,8 +68,8 @@ def case(name, code, behavior="rl.masking", *, unshown=False):
 
 
 def task(title, difficulty, function_name, description, prerequisites, hints, sources, tests, solution,
-         *, model_connections, pros, cons):
-    return {
+         *, model_connections, pros, cons, interview_questions=None):
+    result = {
         "title": title, "difficulty": difficulty, "version": 1,
         "function_name": function_name, "description_en": description,
         "advisory_prerequisites": prerequisites,
@@ -81,3 +81,6 @@ def task(title, difficulty, function_name, description, prerequisites, hints, so
         "pro_con_analysis": {"pros": pros, "cons": cons},
         "sources": sources, "tests": tests, "solution": solution,
     }
+    if interview_questions is not None:
+        result["interview_questions"] = interview_questions
+    return result

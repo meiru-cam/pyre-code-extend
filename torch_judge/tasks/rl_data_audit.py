@@ -1,5 +1,6 @@
 """Audit the row-level integrity of an offline RL dataset."""
 
+from ._interview import interview
 from ._rl_extension import DATASETS, case, code_source, task
 
 TASK = task(
@@ -64,4 +65,19 @@ def rl_data_audit(train, eval_rows):
     model_connections=["Hugging Face Datasets' DatasetDict.unique yields unique IDs per split; this task additionally counts duplicates and intersects the train/eval ID sets."],
     pros=["Exact-ID checks quickly expose duplicate rows and train/eval leakage before RL training."],
     cons=["Paraphrases or semantically identical prompts with different IDs are not detected."],
+    interview_questions=interview(
+        concept=[
+            'What integrity problems in an offline RL or SFT dataset would you check before training?',
+            'Why does train and eval ID overlap matter?',
+        ],
+        deep_dive=[
+            'How do you report missing fields, duplicates and leakage without mutating input rows?',
+            'Why ignore empty IDs in duplicate and leakage checks?',
+            'What data structures keep this linear in the number of rows?',
+        ],
+        tradeoffs=[
+            'ID-based leakage detection misses paraphrases. What would you add to catch near-duplicates?',
+            'What is the cost of false positives in a leakage check?',
+        ],
+    ),
 )

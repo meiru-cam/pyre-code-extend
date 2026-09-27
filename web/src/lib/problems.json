@@ -4838,6 +4838,36 @@
           "Per-token output invites the mistake of averaging over padding, because the function itself cannot know which positions are real."
         ]
       },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why does every policy-gradient loss for LLMs start from per-token log-probabilities rather than sequence probabilities?"
+        },
+        {
+          "stage": "concept",
+          "question": "What is the difference between the logits at position t and the token at position t in a causal LM, and where does the usual off-by-one shift happen?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why use log_softmax instead of softmax followed by log? What breaks numerically with large logits?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you gather the realized token's log-prob with torch.gather, and what shapes must index have?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Full vocabulary logits for a long batch are huge. How do you compute these log-probs without materializing everything at once?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Summing per-token log-probs gives a sequence log-prob. What goes wrong if you use that sum directly in a loss for long versus short responses?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Where do per-token log-probs computed by the inference engine and by the trainer disagree, and why does that matter for RL?"
+        }
+      ],
       "sources": [
         {
           "kind": "code",
@@ -4962,6 +4992,36 @@
           "For very ragged batches the mask is mostly False, which is a signal to sort by length rather than something the mask can fix."
         ]
       },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "In RL post-training, which tokens should receive loss and which should not? Why exclude the prompt?"
+        },
+        {
+          "stage": "concept",
+          "question": "What goes wrong in training if padding tokens leak into the policy loss?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Build the mask for a right-padded batch without a Python loop. What broadcasting do you use?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How would the mask change for left-padded batches, which many inference engines return?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What are the edge cases: an empty generation, a row that fills max_len exactly, prompt length zero?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Multi-turn agent rollouts interleave tool output with model tokens. How does a single prompt/response mask break down there?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Where else does the same mask get reused downstream, and what bug appears if the mask and logits are misaligned by one position?"
+        }
+      ],
       "sources": [
         {
           "kind": "code",
@@ -5086,6 +5146,36 @@
           "A scalar advantage per response gives every token in that response the same credit, so it cannot localize which step of a long reasoning chain was good."
         ]
       },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What problem does GRPO's group-relative advantage solve compared with PPO's learned value baseline?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why standardize rewards within each prompt's group instead of across the whole batch?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What happens to the advantage when every completion in a group gets the same reward, and why is eps needed?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you reshape a flat group-major reward vector to compute per-group mean and std without a Python loop?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Population or sample standard deviation: which one, and does it change the gradient direction?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Dividing by the group std has been criticized, for example in Dr. GRPO. What bias does it introduce across easy and hard prompts?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What does GRPO cost you in sampling compared with PPO with a critic, and when is that trade worth it?"
+        }
+      ],
       "sources": [
         {
           "kind": "code",
@@ -5217,6 +5307,36 @@
           "A per-token KL penalty constrains local token choice, which is a blunt proxy for constraining the behaviour of the whole response."
         ]
       },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why do RLHF and GRPO add a KL penalty to a frozen reference model at all?"
+        },
+        {
+          "stage": "concept",
+          "question": "What are the k1, k2 and k3 KL estimators, and why is k3 popular?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why must the log-ratio be reference minus policy for k3? What quantity do you get if you flip it?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Show that exp(r) - r - 1 is never negative. Why is that useful for a per-token penalty?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Should the KL term be detached? Which parameters should receive its gradient?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "KL as a reward penalty versus KL as a separate loss term: how do the gradients differ?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What happens to k3 when the policy puts much less mass than the reference on a sampled token, and is clamping a good fix?"
+        }
+      ],
       "sources": [
         {
           "kind": "code",
@@ -5338,6 +5458,36 @@
           "Discrete tiers mean a large population of samples share an identical reward, which shrinks the effective group variance that GRPO's advantage depends on."
         ]
       },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is RLVR, and why do reasoning models get a separate format reward in addition to a correctness reward?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why give partial credit instead of a strict 0 or 1 for format?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through how you check that each tag appears exactly once and in order. Why not a single regex?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why require the completion to end with the EOS token before checking anything else?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What edge cases would you test: nested tags, tags inside the answer text, whitespace-only answers?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How can a model reward-hack a format reward, and how do you keep the format term from dominating correctness?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Rule-based verifiable rewards versus a learned reward model: what do you gain and what do you lose?"
+        }
+      ],
       "sources": [
         {
           "kind": "code",
@@ -5471,6 +5621,36 @@
           "The KL penalty is one more coefficient to tune, and its correct value depends on the reward scale that the group normalization has already changed."
         ]
       },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Walk me through the GRPO objective end to end: which pieces come from the policy, the reference and the reward?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why is there no value network in GRPO, and what replaces it?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you broadcast a per-sequence advantage onto per-token log-probs?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What denominator do you use for the loss, and how does the choice change the gradient scale per token?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What is the role of beta, and what happens to training when it is too large or zero?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Sequence-level versus token-level loss aggregation in GRPO: which is used by DAPO and why?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What instability does GRPO show on long reasoning traces, and how do GSPO or DAPO address it?"
+        }
+      ],
       "sources": [
         {
           "kind": "code",
@@ -5604,6 +5784,36 @@
           "It needs old_logprobs stored for every token of every rollout, which GRPO's on-policy form avoids entirely."
         ]
       },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why does PPO clip the importance ratio? What is the trust-region intuition?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why is the objective the minimum of the clipped and unclipped terms rather than just the clipped one?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Compute the ratio in log space. Why exp(logprobs - old_logprobs) rather than dividing probabilities?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What is dual-clip, and which case does it bound: positive or negative advantages?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "old_logprobs and advantages are constants. What bug appears if one of them carries gradient?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How do the number of PPO epochs and minibatches per rollout interact with clip_eps?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What metric would you log to tell whether clipping is actually active, and what value worries you?"
+        }
+      ],
       "sources": [
         {
           "kind": "code",
@@ -5728,6 +5938,36 @@
           "It is a second loss with its own coefficient and its own clip constant, all of which GRPO avoids by having no critic at all."
         ]
       },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What does the critic predict in PPO for LLMs, and at which positions?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why clip the value update around old_values?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why take the maximum of clipped and unclipped squared errors instead of the minimum?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you mask and average the value loss, and why the 0.5 factor?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What happens if returns are not detached?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Value clipping has been reported to hurt in some settings. When would you turn it off?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why have GRPO-style methods dropped the critic entirely, and what do they lose?"
+        }
+      ],
       "sources": [
         {
           "kind": "code",
@@ -5859,6 +6099,36 @@
           "Two more constants to tune, and their right values interact with the reward scale and the episode length."
         ]
       },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is Generalized Advantage Estimation, and what do gamma and lambda control?"
+        },
+        {
+          "stage": "concept",
+          "question": "What are the two extremes lambda = 0 and lambda = 1?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through the backward recursion for delta and A. Why is values of shape T + 1?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do dones enter both the TD residual and the recursion, and why must they cut both?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why run the loop backwards over time but vectorized over the batch?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "For an LLM with one reward at the final token, what does GAE with lambda = 1 reduce to?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How does critic quality affect GAE, and why is a bad critic worse than no critic?"
+        }
+      ],
       "sources": [
         {
           "kind": "code",
@@ -5983,6 +6253,36 @@
           "A prompt that is currently hopeless may become learnable later, and dropping it every step means the policy never gets the chance."
         ]
       },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is DAPO's dynamic sampling, and why do groups with identical rewards contribute no learning signal?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why must keep or drop decisions apply to whole groups?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you compute the per-group spread and broadcast the decision back to each response?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What does tol protect against with continuous rewards?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "After filtering, the batch may be smaller than planned. What does the training loop do about that?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Dynamic sampling costs extra generation. When is that worth it and when is it wasteful?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How does the fraction of degenerate groups change as training progresses, and what does it tell you?"
+        }
+      ],
       "sources": [
         {
           "kind": "code",
@@ -6108,6 +6408,36 @@
           "The whole sequence's weight collapses to one number, so per-token diagnostics such as a clip fraction lose their meaning."
         ]
       },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is GSPO, and why does it replace PPO's per-token importance ratio with a sequence-level one?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why length-normalize the sequence log-ratio?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why aggregate the log-ratio first and exponentiate once, rather than averaging per-token ratios?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you handle a sequence whose mask is entirely False?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What does this ratio look like for a sequence of length 1 versus 1000 with the same per-token drift?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why is sequence-level importance weighting said to stabilize MoE RL training?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What information is lost by collapsing per-token ratios into one number per sequence?"
+        }
+      ],
       "sources": [
         {
           "kind": "code",
@@ -6240,6 +6570,36 @@
           "Materializing a full token-advantage matrix is redundant when every row carries one repeated scalar, but it keeps the losses uniform."
         ]
       },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What does a trainer need from a rollout batch, and why is assembling it a common source of silent bugs?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why broadcast one scalar advantage per response onto every generated token?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you pad rows with different prompt and generation lengths and build the matching mask?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What should happen for a response that generated no tokens?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Which tensors need which dtypes, and why does it matter for the loss?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Padding every row to the batch max wastes compute. What alternatives exist, such as sequence packing, and what do they complicate?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Where would you add assertions in the pipeline to catch misaligned masks early?"
+        }
+      ],
       "sources": [
         {
           "kind": "code",
@@ -6371,6 +6731,36 @@
           "The advantage is a difference of two noisy estimates, roughly doubling the variance relative to a single value."
         ]
       },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What problem with learned critics does VinePPO address?"
+        },
+        {
+          "stage": "concept",
+          "question": "How does Monte Carlo rollout from intermediate states give value estimates?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why average across the K continuations of one state and never across states?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why does the last state use the trajectory's final reward as its next value?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How does K trade estimation variance against compute?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "VinePPO needs extra generation per step. When does that beat training a critic?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What does VinePPO require from the environment or the inference engine that a critic does not?"
+        }
+      ],
       "sources": [
         {
           "kind": "code",
@@ -6498,6 +6888,36 @@
           "The metrics are diagnostics only; a descending loss with healthy KL still says nothing about whether the reward is going up."
         ]
       },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Walk me through one GRPO step from batch to optimizer update."
+        },
+        {
+          "stage": "concept",
+          "question": "Which model is frozen, which receives gradients, and how do you guarantee it?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Where do you shift logits and input_ids to get per-token log-probs, and how do you avoid an off-by-one?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why compute reference log-probs under torch.no_grad, and what memory does that save?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why must the returned metrics be detached, and what leaks if they are not?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "This step does one update per rollout. What changes if you run several PPO epochs on the same batch?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How would you scale this step to a model that does not fit on one GPU?"
+        }
+      ],
       "sources": [
         {
           "kind": "code",
@@ -6624,6 +7044,36 @@
           "Turn-level granularity cannot express a partially correct turn, which is what per-step estimators exist to fix."
         ]
       },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is an agentic rollout, and how does it differ from single-turn RL generation?"
+        },
+        {
+          "stage": "concept",
+          "question": "Which messages in the trajectory come from the policy and which from the environment?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you execute tool calls and append their results before the next model call?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What happens when max_turns is reached before the model stops calling tools?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you handle an unknown tool name or a tool that raises?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Trajectory-level reward versus per-turn reward: what is the credit-assignment problem here?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why do multi-turn rollouts make batching and GPU utilization hard?"
+        }
+      ],
       "sources": [
         {
           "kind": "code",
@@ -7192,6 +7642,36 @@
           "The retained prefix may end inside a tool response or assistant turn; production systems often add turn-aware stopping before this final safety cap."
         ]
       },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why do multi-turn agent rollouts get truncated at a training window, and what goes wrong if you ignore it?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why do tool-output tokens get a False response mask?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you truncate ids, mask and rollout log-probs consistently?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How does the overlong penalty change the reward, and when should it apply?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why keep rollout-time log-probs at all, and what are they used for later?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Truncation penalty versus dropping truncated samples: what does each bias?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How does truncation interact with importance ratios when inference and training disagree?"
+        }
+      ],
       "sources": [
         {
           "kind": "code",
@@ -7296,6 +7776,36 @@
         "VERL's AgentLoopOutput carries response ids, a response mask, and reward after tools or environments finish.",
         "Slime's custom generate hook is the analogous place to call an environment before converting the sample for training."
       ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What does an environment adapter do between a Gym-style env and an LLM RL trainer?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why must environment observations be excluded from the response mask?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you align token ids, mask and rewards across steps?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do terminated, truncated and max_steps interact in the stop condition?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How is the return computed and what happens to rewards after termination?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Token-level versus step-level rewards in agent RL: what does each make easier?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What goes wrong if the tokenizer re-encodes decoded text instead of keeping the policy's token ids?"
+        }
+      ],
       "sources": [
         {
           "kind": "code",
@@ -7374,6 +7884,36 @@
       "modelConnections": [
         "A rollout evaluator runs the same environment boundary as an agent loop, but omits reward-to-advantage and optimizer steps.",
         "The loop is the small, framework-independent core that VERL or Slime can parallelize across workers."
+      ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What should an RL evaluation loop measure, and why is it separate from training metrics?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why seed each episode with seed plus episode index?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you handle terminated versus truncated, and why stop on either?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why call the policy exactly once per environment step?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Which metrics are averaged per episode and which per step?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Deterministic versus sampled actions during evaluation: which do you report and why?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How many episodes do you need before a success-rate difference is meaningful?"
+        }
       ],
       "sources": [
         {
@@ -7454,6 +7994,36 @@
         "Slime's fully-async rollout keeps background trajectories in flight and returns completed samples to a data buffer.",
         "VERL's agent workers also schedule independent AgentLoop coroutines; the exercise isolates the same backpressure and timeout boundary."
       ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why run agent rollouts asynchronously, and what is the bottleneck in synchronous rollout?"
+        },
+        {
+          "stage": "concept",
+          "question": "What does bounded concurrency protect?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you bound concurrency with asyncio, for example a semaphore?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you apply a per-call timeout without cancelling siblings?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you return results in input order when they finish out of order?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Timeouts turn slow samples into failures. What bias does that add to training data?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Async rollouts versus batched synchronous generation: what are the throughput and reproducibility trade-offs?"
+        }
+      ],
       "sources": [
         {
           "kind": "code",
@@ -7533,6 +8103,36 @@
       "modelConnections": [
         "VERL's DataProto is the batch boundary between agent rollout workers and PPO/GRPO training workers.",
         "Slime's Data Buffer performs the same handoff while allowing rollout and training to run asynchronously."
+      ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What has to happen at the boundary between rollout workers and the trainer?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why broadcast the trajectory return to every token?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why zero advantages and loss mask on non-policy tokens?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why keep episode ids after concatenation?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why not normalize advantages across episodes at this boundary?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What does summing per-step rewards into one return lose compared with per-step credit assignment?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Where should advantage normalization live, and why?"
+        }
       ],
       "sources": [
         {
@@ -7628,6 +8228,36 @@
         "Slime's fully_async_rollout keeps a background worker warm and redirects completed groups through its Data Buffer instead of waiting for the slowest group.",
         "The training callback stands in for an actor/critic update; the exercise deliberately leaves weight synchronization and staleness to a separate question."
       ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is fully asynchronous RL, and how does it differ from synchronous on-policy training?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why train as soon as a batch is ready instead of waiting for all rollouts?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you keep at most max_concurrency producers in flight while also calling train_fn?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you preserve original order within each emitted batch?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What happens to timeouts and failures, and how do you train the final partial batch?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Async training makes data off-policy. How stale can samples be, and how do you correct for it?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How do long-tail slow rollouts bias the training distribution toward short responses?"
+        }
+      ],
       "sources": [
         {
           "kind": "code",
@@ -7705,6 +8335,36 @@
       "modelConnections": [
         "This is the return target used by the classical Monte Carlo REINFORCE estimator.",
         "VERL's REINFORCE loss consumes an advantage tensor; subtracting a baseline from these returns supplies that advantage."
+      ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is the reward-to-go in REINFORCE, and why use it instead of the full episode return for every action?"
+        },
+        {
+          "stage": "concept",
+          "question": "What does the discount factor gamma trade off?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you compute discounted returns in one backward pass, and where does the running sum reset?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "A flat rollout contains several episodes. How do dones change the recursion, and is the terminal reward included?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What should happen for the final unfinished episode, and why is that a biased estimate?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Monte Carlo returns versus bootstrapped TD targets: what is the bias and variance trade?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "For LLM RL with a single terminal reward, is gamma below 1 useful? What does it do to long responses?"
+        }
       ],
       "sources": [
         {
@@ -7789,6 +8449,36 @@
       "modelConnections": [
         "VERL's compute_policy_loss_reinforce uses log probabilities directly rather than PPO importance ratios.",
         "The previous exercise computes Monte Carlo returns; a separately trained critic can supply the baseline."
+      ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Derive the REINFORCE policy gradient in words: why is log-prob times return an unbiased gradient estimate?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why does subtracting a baseline reduce variance without adding bias?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why must returns and the baseline be detached in the actor loss? What happens if the baseline receives gradient here?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Masked mean over valid tokens: how do you make masked positions contribute neither value nor gradient?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What input validation matters here and why raise instead of returning NaN?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Token-mean versus sequence-mean normalization: how does each weight long and short responses?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "REINFORCE versus PPO: what does PPO add, and when is plain REINFORCE with a good baseline enough?"
+        }
       ],
       "sources": [
         {
@@ -7888,6 +8578,36 @@
         "VERL's compute_policy_loss_vanilla reads separate clip_ratio_low and clip_ratio_high configuration values.",
         "DAPO uses Clip-Higher alongside dynamic sampling, token-level loss aggregation and overlong reward shaping."
       ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is Clip-Higher in DAPO, and why use an asymmetric clip range?"
+        },
+        {
+          "stage": "concept",
+          "question": "How does clip-higher relate to entropy collapse?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through which tokens hit the upper bound and which hit the lower bound for positive and negative advantages."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why detach both old log-probs and advantages?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you reduce the per-token objective to a scalar, and why only over valid tokens?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What risk does a larger upper clip bound bring, and how would you choose clip_high?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Compare clip-higher with adding an entropy bonus to prevent collapse."
+        }
+      ],
       "sources": [
         {
           "kind": "code",
@@ -7972,6 +8692,36 @@
         "Slime train.py updates rollout weights after a training round; its distributed updater pauses and resumes generation during synchronization.",
         "Slime fully_async_rollout.py requeues ABORTED groups through the Data Buffer.",
         "VERL also separates rollout weights from trainer weights, so a trajectory's generating version matters when training is asynchronous."
+      ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why do inference engine weights lag behind trainer weights in RL systems?"
+        },
+        {
+          "stage": "concept",
+          "question": "What is staleness, and why cap it?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you route complete, aborted and failed samples, and why do stale samples go to retry rather than dropped?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "When is it safe to sync weights to the serving engine, and why wait for in-flight requests?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What should happen if lag is negative?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Strict on-policy versus bounded staleness: what do you gain in throughput and lose in correctness?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Besides dropping stale samples, how can importance weighting correct for staleness?"
+        }
       ],
       "sources": [
         {
@@ -8070,6 +8820,36 @@
         "VERL's DataProto.select_idxs filters tensor and non-tensor data by the same sample indices.",
         "VERL's DataProto.chunk splits the selected batch into equal worker shards while preserving meta_info."
       ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is VERL's DataProto, and why carry tensors, non-tensor fields and meta info together?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why filter out rows with an empty response mask before training?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why use select_idxs rather than rebuilding a tensor-only batch?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Chunking requires the row count to divide evenly. What are your options when it does not?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you keep the original order across filtering and chunking, and why does order matter?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Filtering changes the effective batch size between steps. How does that affect optimization?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What would you log at this boundary to debug a data-parallel RL run?"
+        }
+      ],
       "sources": [
         {
           "kind": "code",
@@ -8141,6 +8921,36 @@
       "modelConnections": [
         "Slime calls a per-sample async custom generate function from its default sglang_rollout outer loop.",
         "Sample.response_length and Sample.loss_mask refer to response positions, while Sample.tokens includes the prompt."
+      ],
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is Slime, and why does it expose a custom generate hook?"
+        },
+        {
+          "stage": "concept",
+          "question": "How do finish reasons map to sample statuses?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Which sample fields must you update after generation, and why build a new tokens list rather than mutating?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What should the loss mask look like for the generated tokens?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How should an aborted generation be recorded so the trainer does not use it?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why should truncated samples usually still be trained on, and how are they treated differently from completed ones?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What are the risks of letting user code run inside the rollout path?"
+        }
       ],
       "sources": [
         {
@@ -8223,6 +9033,36 @@
           "ECE depends on bin count and these binary scores need a defensible correctness label."
         ]
       },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is calibration, and why does it matter for RL-trained reasoning models?"
+        },
+        {
+          "stage": "concept",
+          "question": "How do accuracy, Brier score and ECE differ?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you assign confidences to equal-width bins, including the boundaries at 0 and 1?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why weight each bin's gap by its count?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do empty bins affect ECE?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why is ECE sensitive to the number of bins, and what alternatives exist?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "RL with correctness rewards often makes models overconfident. How would you fix that?"
+        }
+      ],
       "sources": [
         {
           "kind": "code",
@@ -8312,6 +9152,40 @@
           "Teacher-forced tokens need not match the student's rollout distribution and full logits cost memory."
         ]
       },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "When training a small model or compressing an LLM, which distillation methods have you used?"
+        },
+        {
+          "stage": "concept",
+          "question": "For sequence- or token-level knowledge distillation, how do forward KL and reverse KL differ, and what behavior does each encourage in the student?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why divide the logits by a temperature T when computing the KD loss, and why multiply the loss by T*T at the end?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What goes wrong if padding or masked positions contribute to the loss or the gradient? How do you handle the mask and numerical stability in code?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Should gradients flow back into the teacher? How do you cut them in PyTorch?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "If every position in the batch is masked, or T <= 0, what should the loss function do and why?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Temperature KD is teacher-forced distillation. What are its limits for autoregressive generation, for example exposure bias or distribution shift?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Compared with plain cross-entropy SFT on teacher outputs, what does matching the full teacher distribution buy you, and what does it cost?"
+        }
+      ],
       "sources": [
         {
           "kind": "code",
@@ -8396,6 +9270,36 @@
           "Token-weighted batch perplexity differs from the mean of per-sequence perplexities reported by some trainers."
         ]
       },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What does perplexity measure, and why compute it only on response tokens?"
+        },
+        {
+          "stage": "concept",
+          "question": "How does perplexity relate to cross-entropy?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Token-weighted across the batch versus mean of per-sequence perplexities: how do they differ numerically?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why exponentiate the mean negative log-prob instead of averaging per-token probabilities?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What should happen with an all-zero mask?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why is perplexity a poor proxy for RL-trained model quality?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How can two models with the same perplexity differ in downstream accuracy?"
+        }
+      ],
       "sources": [
         {
           "kind": "code",
@@ -8472,6 +9376,36 @@
           "Paraphrases or semantically identical prompts with different IDs are not detected."
         ]
       },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What integrity problems in an offline RL or SFT dataset would you check before training?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why does train and eval ID overlap matter?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you report missing fields, duplicates and leakage without mutating input rows?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why ignore empty IDs in duplicate and leakage checks?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What data structures keep this linear in the number of rows?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "ID-based leakage detection misses paraphrases. What would you add to catch near-duplicates?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What is the cost of false positives in a leakage check?"
+        }
+      ],
       "sources": [
         {
           "kind": "code",
@@ -8543,6 +9477,36 @@
           "The chosen seed and embedding quality can dominate the selected subset; cosine diversity is not gradient diversity."
         ]
       },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why select diverse training data, and what does embedding diversity capture?"
+        },
+        {
+          "stage": "concept",
+          "question": "What is farthest-first traversal?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you maintain each row's distance to its nearest selected row efficiently?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why cosine distance rather than Euclidean for embeddings?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do tie-breaking and the seed index affect determinism?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Diverse in embedding space does not mean useful for training. What else would you consider?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Farthest-first tends to pick outliers. How do you protect against selecting noise?"
+        }
+      ],
       "sources": [
         {
           "kind": "code",
@@ -8619,6 +9583,36 @@
           "Per-example gradients are costly to obtain, and pairwise cosine alone does not predict final training benefit."
         ]
       },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What does the cosine similarity between per-example gradients tell you?"
+        },
+        {
+          "stage": "concept",
+          "question": "What do negative cosines mean for multi-task or multi-objective training?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you compute pairwise cosines for N gradients in one matrix operation?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you count unordered off-diagonal pairs without double counting?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why reject zero gradients?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How expensive are per-example gradients for large models, and what approximations exist?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Gradient conflict methods such as PCGrad project gradients. When would you use them?"
+        }
+      ],
       "sources": [
         {
           "kind": "code",
@@ -8703,6 +9697,36 @@
           "A single sampled token gives a noisier teacher signal than a full-vocabulary divergence."
         ]
       },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is on-policy distillation, and how does it differ from teacher-forced KD?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why evaluate the teacher on student-generated tokens?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why is student minus teacher log-prob a sampled reverse-KL estimate?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why must the shaped advantage be detached?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do masked positions stay exactly zero?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Sampled-token reverse KL versus full-vocabulary KL: variance and compute trade-offs?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How do you choose beta against the task reward?"
+        }
+      ],
       "sources": [
         {
           "kind": "code",
@@ -8794,6 +9818,36 @@
           "Two full-vocabulary score passes cost memory and gold-solution context must never leak into generation."
         ]
       },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is on-policy self-distillation with privileged context?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why must the student generate without seeing the gold solution?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why call the same model twice on the same generated tokens, once with privileged context?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Which call should receive gradients, and why?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you apply the mask and average the KL across valid tokens?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What leaks if privileged context reaches generation?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How does self-distillation compare with using a separate larger teacher?"
+        }
+      ],
       "sources": [
         {
           "kind": "code",

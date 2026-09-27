@@ -1,5 +1,7 @@
 """The k3 KL estimator — the low-variance, non-negative KL penalty used by GRPO."""
 
+from ._interview import interview
+
 TASK = {
     "title": "k3 KL Penalty",
     "difficulty": "Medium",
@@ -255,4 +257,19 @@ def k3_kl_penalty(logprobs, ref_logprobs):
     log_ratio = ref_logprobs - logprobs
     return torch.exp(log_ratio) - log_ratio - 1.0
 ''',
+    "interview_questions": interview(
+        concept=[
+            'Why do RLHF and GRPO add a KL penalty to a frozen reference model at all?',
+            'What are the k1, k2 and k3 KL estimators, and why is k3 popular?',
+        ],
+        deep_dive=[
+            'Why must the log-ratio be reference minus policy for k3? What quantity do you get if you flip it?',
+            'Show that exp(r) - r - 1 is never negative. Why is that useful for a per-token penalty?',
+            'Should the KL term be detached? Which parameters should receive its gradient?',
+        ],
+        tradeoffs=[
+            'KL as a reward penalty versus KL as a separate loss term: how do the gradients differ?',
+            'What happens to k3 when the policy puts much less mass than the reference on a sampled token, and is clamping a good fix?',
+        ],
+    ),
 }

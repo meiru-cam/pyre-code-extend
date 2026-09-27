@@ -1,5 +1,7 @@
 """Group-relative advantage — the critic-free advantage estimate at the heart of GRPO."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Group-Relative Advantage",
     "difficulty": "Medium",
@@ -249,4 +251,19 @@ def group_relative_advantage(rewards, group_size, eps=1e-4):
     std = grouped.std(dim=-1, unbiased=False, keepdim=True)
     return ((grouped - mean) / (std + eps)).reshape(-1)
 ''',
+    "interview_questions": interview(
+        concept=[
+            "What problem does GRPO's group-relative advantage solve compared with PPO's learned value baseline?",
+            "Why standardize rewards within each prompt's group instead of across the whole batch?",
+        ],
+        deep_dive=[
+            'What happens to the advantage when every completion in a group gets the same reward, and why is eps needed?',
+            'How do you reshape a flat group-major reward vector to compute per-group mean and std without a Python loop?',
+            'Population or sample standard deviation: which one, and does it change the gradient direction?',
+        ],
+        tradeoffs=[
+            'Dividing by the group std has been criticized, for example in Dr. GRPO. What bias does it introduce across easy and hard prompts?',
+            'What does GRPO cost you in sampling compared with PPO with a critic, and when is that trade worth it?',
+        ],
+    ),
 }

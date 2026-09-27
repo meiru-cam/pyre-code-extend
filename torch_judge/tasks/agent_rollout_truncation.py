@@ -1,5 +1,7 @@
 """Agent rollout truncation — preserve aligned trajectory metadata at the context boundary."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Agent Rollout Truncation",
     "difficulty": "Hard",
@@ -340,4 +342,19 @@ for ids, mask, logs, limit, penalty in cases:
         "truncated": truncated,
     }
 ''',
+    "interview_questions": interview(
+        concept=[
+            'Why do multi-turn agent rollouts get truncated at a training window, and what goes wrong if you ignore it?',
+            'Why do tool-output tokens get a False response mask?',
+        ],
+        deep_dive=[
+            'How do you truncate ids, mask and rollout log-probs consistently?',
+            'How does the overlong penalty change the reward, and when should it apply?',
+            'Why keep rollout-time log-probs at all, and what are they used for later?',
+        ],
+        tradeoffs=[
+            'Truncation penalty versus dropping truncated samples: what does each bias?',
+            'How does truncation interact with importance ratios when inference and training disagree?',
+        ],
+    ),
 }

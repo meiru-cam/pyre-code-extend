@@ -1,5 +1,7 @@
 """RLVR format reward — a deterministic, verifiable reward over response structure."""
 
+from ._interview import interview
+
 TASK = {
     "title": "RLVR Format Reward",
     "difficulty": "Medium",
@@ -237,4 +239,19 @@ def rlvr_format_reward(completion, eos_token):
         return 0.5
     return 1.0
 ''',
+    "interview_questions": interview(
+        concept=[
+            'What is RLVR, and why do reasoning models get a separate format reward in addition to a correctness reward?',
+            'Why give partial credit instead of a strict 0 or 1 for format?',
+        ],
+        deep_dive=[
+            'Walk through how you check that each tag appears exactly once and in order. Why not a single regex?',
+            'Why require the completion to end with the EOS token before checking anything else?',
+            'What edge cases would you test: nested tags, tags inside the answer text, whitespace-only answers?',
+        ],
+        tradeoffs=[
+            'How can a model reward-hack a format reward, and how do you keep the format term from dominating correctness?',
+            'Rule-based verifiable rewards versus a learned reward model: what do you gain and what do you lose?',
+        ],
+    ),
 }

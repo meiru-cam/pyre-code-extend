@@ -1,5 +1,7 @@
 """Connect a toy environment to an agent rollout and build token-aligned data."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Agent Environment Adapter",
     "difficulty": "Medium",
@@ -143,4 +145,19 @@ else: raise AssertionError("max_steps must be positive")
         "truncated": bool(truncated),
     }
 ''',
+    "interview_questions": interview(
+        concept=[
+            'What does an environment adapter do between a Gym-style env and an LLM RL trainer?',
+            'Why must environment observations be excluded from the response mask?',
+        ],
+        deep_dive=[
+            'How do you align token ids, mask and rewards across steps?',
+            'How do terminated, truncated and max_steps interact in the stop condition?',
+            'How is the return computed and what happens to rewards after termination?',
+        ],
+        tradeoffs=[
+            'Token-level versus step-level rewards in agent RL: what does each make easier?',
+            "What goes wrong if the tokenizer re-encodes decoded text instead of keeping the policy's token ids?",
+        ],
+    ),
 }

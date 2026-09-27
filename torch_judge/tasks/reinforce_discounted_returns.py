@@ -1,5 +1,7 @@
 """Monte Carlo reward-to-go targets for REINFORCE."""
 
+from ._interview import interview
+
 TASK = {
     "title": "REINFORCE Discounted Returns",
     "difficulty": "Medium",
@@ -98,4 +100,19 @@ for r,d,g in [(torch.empty(0),torch.empty(0,dtype=torch.bool),1.),
         out[index] = carry
     return out
 ''',
+    "interview_questions": interview(
+        concept=[
+            'What is the reward-to-go in REINFORCE, and why use it instead of the full episode return for every action?',
+            'What does the discount factor gamma trade off?',
+        ],
+        deep_dive=[
+            'How do you compute discounted returns in one backward pass, and where does the running sum reset?',
+            'A flat rollout contains several episodes. How do dones change the recursion, and is the terminal reward included?',
+            'What should happen for the final unfinished episode, and why is that a biased estimate?',
+        ],
+        tradeoffs=[
+            'Monte Carlo returns versus bootstrapped TD targets: what is the bias and variance trade?',
+            'For LLM RL with a single terminal reward, is gamma below 1 useful? What does it do to long responses?',
+        ],
+    ),
 }

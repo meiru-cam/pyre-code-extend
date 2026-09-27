@@ -1,5 +1,7 @@
 """PPO value loss — the clipped critic objective, and the one place max is correct."""
 
+from ._interview import interview
+
 TASK = {
     "title": "PPO Clipped Value Loss",
     "difficulty": "Medium",
@@ -288,4 +290,19 @@ def ppo_value_loss(values, old_values, returns, mask, clip_eps=0.2):
     per_token = 0.5 * torch.max(unclipped_error, clipped_error)
     return (per_token * keep).sum() / denominator
 ''',
+    "interview_questions": interview(
+        concept=[
+            'What does the critic predict in PPO for LLMs, and at which positions?',
+            'Why clip the value update around old_values?',
+        ],
+        deep_dive=[
+            'Why take the maximum of clipped and unclipped squared errors instead of the minimum?',
+            'How do you mask and average the value loss, and why the 0.5 factor?',
+            'What happens if returns are not detached?',
+        ],
+        tradeoffs=[
+            'Value clipping has been reported to hurt in some settings. When would you turn it off?',
+            'Why have GRPO-style methods dropped the critic entirely, and what do they lose?',
+        ],
+    ),
 }

@@ -1,5 +1,6 @@
 """Full-vocabulary OPSD teacher-to-student KL on student trajectories."""
 
+from ._interview import interview
 from ._rl_extension import OPSD, case, paper, task
 
 TASK = task(
@@ -117,4 +118,19 @@ def opsd_privileged_context_kl(model, problems, gold_solutions, max_new_tokens):
     model_connections=["The OPSD author implementation scores student-generated tokens twice with one model: ordinary student context and a privileged gold-solution teacher context."],
     pros=["The privileged branch supplies dense token-level guidance without a separate teacher checkpoint."],
     cons=["Two full-vocabulary score passes cost memory and gold-solution context must never leak into generation."],
+    interview_questions=interview(
+        concept=[
+            'What is on-policy self-distillation with privileged context?',
+            'Why must the student generate without seeing the gold solution?',
+        ],
+        deep_dive=[
+            'Why call the same model twice on the same generated tokens, once with privileged context?',
+            'Which call should receive gradients, and why?',
+            'How do you apply the mask and average the KL across valid tokens?',
+        ],
+        tradeoffs=[
+            'What leaks if privileged context reaches generation?',
+            'How does self-distillation compare with using a separate larger teacher?',
+        ],
+    ),
 )

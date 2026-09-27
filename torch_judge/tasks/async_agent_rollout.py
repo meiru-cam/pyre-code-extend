@@ -1,5 +1,7 @@
 """Schedule asynchronous rollouts with bounded concurrency and per-sample timeouts."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Async Agent Rollout Scheduler",
     "difficulty": "Hard",
@@ -132,4 +134,19 @@ for kwargs in ({"max_concurrency": 0, "timeout": 1}, {"max_concurrency": 1, "tim
 
     return await run_all()
 ''',
+    "interview_questions": interview(
+        concept=[
+            'Why run agent rollouts asynchronously, and what is the bottleneck in synchronous rollout?',
+            'What does bounded concurrency protect?',
+        ],
+        deep_dive=[
+            'How do you bound concurrency with asyncio, for example a semaphore?',
+            'How do you apply a per-call timeout without cancelling siblings?',
+            'How do you return results in input order when they finish out of order?',
+        ],
+        tradeoffs=[
+            'Timeouts turn slow samples into failures. What bias does that add to training data?',
+            'Async rollouts versus batched synchronous generation: what are the throughput and reproducibility trade-offs?',
+        ],
+    ),
 }

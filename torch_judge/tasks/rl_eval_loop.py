@@ -1,5 +1,7 @@
 """Evaluate a policy in an episodic environment without updating it."""
 
+from ._interview import interview
+
 TASK = {
     "title": "RL Evaluation Loop",
     "difficulty": "Medium",
@@ -152,4 +154,19 @@ for bad in (0, -1):
         "episodes": episodes,
     }
 ''',
+    "interview_questions": interview(
+        concept=[
+            'What should an RL evaluation loop measure, and why is it separate from training metrics?',
+            'Why seed each episode with seed plus episode index?',
+        ],
+        deep_dive=[
+            'How do you handle terminated versus truncated, and why stop on either?',
+            'Why call the policy exactly once per environment step?',
+            'Which metrics are averaged per episode and which per step?',
+        ],
+        tradeoffs=[
+            'Deterministic versus sampled actions during evaluation: which do you report and why?',
+            'How many episodes do you need before a success-rate difference is meaningful?',
+        ],
+    ),
 }

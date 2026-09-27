@@ -1,5 +1,7 @@
 """GRPO token loss — where advantages, the KL penalty, the mask and the denominator meet."""
 
+from ._interview import interview
+
 TASK = {
     "title": "GRPO Token Loss",
     "difficulty": "Hard",
@@ -326,4 +328,19 @@ def grpo_token_loss(logprobs, ref_logprobs, advantages, mask, beta=0.04):
     objective = advantages.unsqueeze(-1) * logprobs - beta * kl
     return -(objective * keep).sum() / denominator
 ''',
+    "interview_questions": interview(
+        concept=[
+            'Walk me through the GRPO objective end to end: which pieces come from the policy, the reference and the reward?',
+            'Why is there no value network in GRPO, and what replaces it?',
+        ],
+        deep_dive=[
+            'How do you broadcast a per-sequence advantage onto per-token log-probs?',
+            'What denominator do you use for the loss, and how does the choice change the gradient scale per token?',
+            'What is the role of beta, and what happens to training when it is too large or zero?',
+        ],
+        tradeoffs=[
+            'Sequence-level versus token-level loss aggregation in GRPO: which is used by DAPO and why?',
+            'What instability does GRPO show on long reasoning traces, and how do GSPO or DAPO address it?',
+        ],
+    ),
 }
