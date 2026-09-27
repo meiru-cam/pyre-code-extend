@@ -95,6 +95,7 @@ print("Cross-attention shape:", out2.shape, "(expected: 1, 3, 32)")""",
         ],
         deep_dive=[
             'Walk through the shapes of every intermediate tensor.',
+            'Assuming q and k have independent unit-variance entries, what is the variance of q·k? What happens to the softmax and its gradients if you skip the 1/sqrt(d_k) scaling?',
             'Where does masking go, and why before the softmax?',
             'What is the time and memory complexity in sequence length?',
         ],

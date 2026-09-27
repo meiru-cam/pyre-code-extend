@@ -1058,6 +1058,10 @@
         },
         {
           "stage": "deep_dive",
+          "question": "Assuming q and k have independent unit-variance entries, what is the variance of q·k? What happens to the softmax and its gradients if you skip the 1/sqrt(d_k) scaling?"
+        },
+        {
+          "stage": "deep_dive",
           "question": "Where does masking go, and why before the softmax?"
         },
         {
