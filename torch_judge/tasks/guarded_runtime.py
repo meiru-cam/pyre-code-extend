@@ -3,6 +3,8 @@
 from torch_judge.tasks._schema import build_design_note_rubric
 
 
+from ._interview import interview
+
 TASK = {
     "title": "Provenance-Aware Guarded Agent Runtime",
     "difficulty": "Hard",
@@ -476,4 +478,19 @@ def guarded_runtime(runtime, policy_engine, approval_gate, redactor, audit_sink,
                 audit_records=records)
         return GuardedResult("failed", failure=failure, audit_records=records)''',
     "demo": "# See the visible deterministic fixture in the exercise tests.\n",
+    "interview_questions": interview(
+        concept=[
+            'What layers does a guarded agent runtime combine?',
+            'Why does provenance of input matter?',
+        ],
+        deep_dive=[
+            'In what order do policy, approval, redaction and audit run, and why?',
+            'How do you prevent untrusted content from triggering privileged actions?',
+            'What does the audit record contain?',
+        ],
+        tradeoffs=[
+            'Defense in depth versus a single policy layer?',
+            'How do you test a guardrail stack offline?',
+        ],
+    ),
 }

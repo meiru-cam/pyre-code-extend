@@ -1,5 +1,7 @@
 """Implement Dropout task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Implement Dropout",
     "title_zh": "实现 Dropout",
@@ -44,4 +46,19 @@ print('Train:', d(x))
 d.eval()
 print('Eval: ', d(x))""",
 
+    "interview_questions": interview(
+        concept=[
+            'What does dropout do, and why does it regularize?',
+            'Why scale surviving activations by 1 over 1 minus p?',
+        ],
+        deep_dive=[
+            'How do you implement train and eval modes?',
+            'What happens at p equal to 0 and p equal to 1?',
+            'How is the mask sampled, and is it shared across the batch?',
+        ],
+        tradeoffs=[
+            'Why do most large LLM pretraining runs use little or no dropout?',
+            'Dropout versus weight decay versus data augmentation?',
+        ],
+    ),
 }

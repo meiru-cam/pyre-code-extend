@@ -1,5 +1,7 @@
 """Configurable GQA/QK-norm/local-global attention capstone."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Build a Configurable Frontier Attention Block",
     "difficulty": "Hard",
@@ -342,4 +344,19 @@ block = FrontierAttentionBlock(32, 8, 2, layer_index=0, window_size=4, global_ev
 x = torch.randn(2, 16, 32)
 print(block(x).shape)
 print('KV projection width:', block.k_proj.out_features, 'vs Q:', block.q_proj.out_features)""",
+    "interview_questions": interview(
+        concept=[
+            'What design choices of recent LLM attention does this block combine?',
+            'Why mix local and global attention layers?',
+        ],
+        deep_dive=[
+            'How do you decide per layer whether attention is local or global?',
+            'Where do QK normalization and RoPE go relative to each other?',
+            'How do grouped KV heads expand to query heads?',
+        ],
+        tradeoffs=[
+            'How does local and global mixing change KV cache size and long-context quality?',
+            'What does QK-norm fix, and what does it cost?',
+        ],
+    ),
 }

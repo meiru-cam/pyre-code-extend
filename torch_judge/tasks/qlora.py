@@ -1,5 +1,7 @@
 """QLoRA (Quantized Low-Rank Adaptation) task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "QLoRA",
     "title_zh": "QLoRA",
@@ -67,4 +69,19 @@ y_ref = x @ W_ref.T  # full-precision baseline (no LoRA delta)
 print("Output shape:", y_qlora.shape)          # (8, 32)
 print("Max abs error vs fp32:", (y_qlora - y_ref).abs().max().item())""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is QLoRA, and how does it combine quantization with LoRA?',
+            'Why can the base model stay quantized during fine-tuning?',
+        ],
+        deep_dive=[
+            'How do you dequantize the base weight in the forward pass?',
+            'Which tensors receive gradients?',
+            'How is the per-row scale computed?',
+        ],
+        tradeoffs=[
+            'What precision does real QLoRA use, such as NF4 and double quantization, and why?',
+            'What quality do you lose compared with LoRA on a full-precision base?',
+        ],
+    ),
 }

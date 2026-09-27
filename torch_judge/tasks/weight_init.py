@@ -1,5 +1,7 @@
 """Kaiming Initialization task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Kaiming Initialization",
     "title_zh": "Kaiming 初始化",
@@ -38,4 +40,19 @@ kaiming_init(w)
 print(f'Mean: {w.mean():.4f} (expect ~0)')
 print(f'Std:  {w.std():.4f} (expect {math.sqrt(2/512):.4f})')""",
 
+    "interview_questions": interview(
+        concept=[
+            'Why does weight initialization matter for deep networks?',
+            'What does Kaiming initialization preserve?',
+        ],
+        deep_dive=[
+            'Derive the variance for ReLU networks from fan-in.',
+            'Fan-in versus fan-out mode: when each?',
+            'How do you compute fan-in for a convolution weight?',
+        ],
+        tradeoffs=[
+            'Kaiming versus Xavier?',
+            'How do modern LLMs initialize, and why scale residual projections by depth?',
+        ],
+    ),
 }

@@ -1,5 +1,7 @@
 """DDIM Sampling Step task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "DDIM Sampling Step",
     "title_zh": "DDIM 采样步骤",
@@ -105,4 +107,19 @@ for step in range(T, 0, -1):
 
 print(f"\nFinal x vs clean: {x_t.tolist()}  vs  {x_clean.tolist()}")""",
 
+    "interview_questions": interview(
+        concept=[
+            'How does DDIM differ from DDPM sampling?',
+            'Why can DDIM skip timesteps?',
+        ],
+        deep_dive=[
+            'Walk through predicting x0 from the noise prediction, then stepping to the previous timestep.',
+            'What does setting eta to zero mean?',
+            'Which alpha-bar values do you need, and how do you index them?',
+        ],
+        tradeoffs=[
+            'Fewer DDIM steps versus quality: where does it break down?',
+            'DDIM versus flow-matching samplers or distilled one-step models?',
+        ],
+    ),
 }

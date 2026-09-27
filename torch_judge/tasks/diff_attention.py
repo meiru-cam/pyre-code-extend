@@ -1,5 +1,7 @@
 """Differential Attention task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Differential Attention",
     "title_zh": "差分注意力",
@@ -104,4 +106,19 @@ diff_one = diff_attention(Q_same, K_same, V, lambda_val=1.0)
 print("lambda=1 with identical halves gives zero:", torch.allclose(diff_one, torch.zeros_like(diff_one), atol=1e-6))
 print("Output shape:", diff_zero.shape)  # (2, 4, 6)""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is Differential Attention, and what problem does it target?',
+            'Why subtract two softmax attention maps?',
+        ],
+        deep_dive=[
+            'How do you split Q and K into two halves and combine the maps with lambda?',
+            'How is lambda parameterized and initialized?',
+            'What normalization follows the subtraction, and why?',
+        ],
+        tradeoffs=[
+            'What does differential attention cost in compute and parameters?',
+            'How would you evaluate whether it actually reduces attention noise?',
+        ],
+    ),
 }

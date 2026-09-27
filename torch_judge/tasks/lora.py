@@ -1,5 +1,7 @@
 """LoRA (Low-Rank Adaptation) task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "LoRA (Low-Rank Adaptation)",
     "title_zh": "LoRA（低秩适配）",
@@ -50,4 +52,19 @@ trainable = sum(p.numel() for p in layer.parameters() if p.requires_grad)
 total = sum(p.numel() for p in layer.parameters())
 print(f'Trainable: {trainable}/{total} ({100*trainable/total:.1f}%)')""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is LoRA, and why does low-rank adaptation work?',
+            'What are A and B, and which one is initialized to zero?',
+        ],
+        deep_dive=[
+            'What does alpha over rank scaling do?',
+            'How do you freeze the base weight and train only the adapters?',
+            'How do you merge LoRA weights for inference?',
+        ],
+        tradeoffs=[
+            'LoRA versus full fine-tuning: where does LoRA fall short?',
+            'How do you choose rank and which layers to adapt?',
+        ],
+    ),
 }

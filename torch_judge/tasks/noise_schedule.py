@@ -1,5 +1,7 @@
 """Diffusion Noise Schedules task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Diffusion Noise Schedules",
     "title_zh": "扩散噪声调度",
@@ -124,4 +126,19 @@ for label, idx in zip(labels, checkpoints):
     row = f"{label:>6}" + "".join(f"{results[s][idx].item():>{col_w}.4f}" for s in schedules)
     print(row)""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is a noise schedule in diffusion, and what does alpha-bar represent?',
+            'How does the schedule relate to the signal-to-noise ratio?',
+        ],
+        deep_dive=[
+            'Implement linear, cosine and another schedule. How do betas become alpha-bar?',
+            'Why clip betas in the cosine schedule?',
+            'What should alpha-bar look like at the first and last timestep?',
+        ],
+        tradeoffs=[
+            'Why did the cosine schedule improve over linear for small images?',
+            'How does the schedule interact with image resolution?',
+        ],
+    ),
 }

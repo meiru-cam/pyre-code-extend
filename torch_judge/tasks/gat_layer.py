@@ -1,5 +1,7 @@
 """GAT Layer (Graph Attention) task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "GAT Layer (Graph Attention)",
     "title_zh": "GAT 层（图注意力）",
@@ -125,4 +127,19 @@ assert not torch.allclose(out1, out2, atol=1e-6), 'Different negative_slope shou
     e = e.masked_fill(A == 0, float('-inf'))
     alpha = torch.softmax(e, dim=-1)
     return alpha @ H''',
+    "interview_questions": interview(
+        concept=[
+            'What is a graph attention network?',
+            'How does GAT differ from GCN?',
+        ],
+        deep_dive=[
+            'How do you compute attention logits for each edge?',
+            'How do you mask non-edges before the softmax?',
+            'Why LeakyReLU in the attention score?',
+        ],
+        tradeoffs=[
+            'Multi-head GAT: why and how?',
+            'What is the cost of GAT on dense versus sparse graphs?',
+        ],
+    ),
 }

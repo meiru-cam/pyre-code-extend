@@ -1,5 +1,7 @@
 """Label Smoothing Loss task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Label Smoothing Loss",
     "title_zh": "标签平滑损失",
@@ -99,4 +101,19 @@ print(f"Standard CE loss (eps=0.0):    {loss_ce.item():.4f}")
 loss_no_smooth = label_smoothing(logits, targets, smoothing=0.0)
 print(f"Label smoothing loss (eps=0.0): {loss_no_smooth.item():.4f}  (matches CE: {torch.allclose(loss_no_smooth, loss_ce)})")""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is label smoothing, and why use it?',
+            'How does it change the target distribution?',
+        ],
+        deep_dive=[
+            'Write the smoothed loss as a mix of cross-entropy and a uniform term.',
+            'Does the smoothing mass go to all classes or only the wrong ones? How does it change the formula?',
+            'How do you compute it stably from logits?',
+        ],
+        tradeoffs=[
+            'How does label smoothing affect calibration and knowledge distillation?',
+            'When should you avoid label smoothing?',
+        ],
+    ),
 }

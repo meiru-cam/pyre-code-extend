@@ -1,5 +1,7 @@
 """Byte-Pair Encoding (BPE) task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Byte-Pair Encoding (BPE)",
     "title_zh": "字节对编码（BPE）",
@@ -87,4 +89,19 @@ bpe.train(['low', 'low', 'low', 'lower', 'newest', 'widest'], num_merges=10)
 print('Merges:', bpe.merges)
 print('Encode:', bpe.encode('low lower newest'))""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is byte-pair encoding, and why subword tokenization at all?',
+            'Why do modern LLMs use byte-level BPE?',
+        ],
+        deep_dive=[
+            'Walk through training: counting pairs, merging, and updating the corpus.',
+            'How is encoding a new string done with the learned merges, and why does merge order matter?',
+            'How do you break ties between equally frequent pairs deterministically?',
+        ],
+        tradeoffs=[
+            'How does vocabulary size trade sequence length against embedding size?',
+            'What problems do tokenizers cause for arithmetic, code or multilingual text?',
+        ],
+    ),
 }

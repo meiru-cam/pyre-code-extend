@@ -2,6 +2,8 @@
 
 from torch_judge.tasks._schema import build_design_note_rubric
 
+from ._interview import interview
+
 TASK = {
     "title": "Tool-Call DAG Scheduler",
     "difficulty": "Hard",
@@ -388,4 +390,19 @@ assert out['skipped'] == ['c'] and out['results'] == {}, out
     skipped = [call["id"] for call in calls if status[call["id"]] == "skipped"]
     return {"results": results, "errors": errors, "skipped": skipped, "rounds": rounds}
 ''',
+    "interview_questions": interview(
+        concept=[
+            'Why run dependent tool calls as a DAG?',
+            'What is a round?',
+        ],
+        deep_dive=[
+            'How do you find calls whose dependencies are satisfied?',
+            'How do you enforce max_parallel?',
+            'How do you detect cycles and missing dependencies?',
+        ],
+        tradeoffs=[
+            'What happens downstream when one call fails?',
+            'Parallel rounds versus a fully async scheduler?',
+        ],
+    ),
 }

@@ -1,5 +1,7 @@
 """INT8 Quantized Linear task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "INT8 Quantized Linear",
     "title_zh": "INT8 量化线性层",
@@ -52,4 +54,19 @@ print('Output:', q(torch.randn(2, 4)).shape)
 print('Weight dtype:', q.weight_int8.dtype)
 print('Compression: float32 -> int8 = 4x')""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is weight quantization, and why INT8?',
+            'Why per-channel scales rather than per-tensor?',
+        ],
+        deep_dive=[
+            'How do you compute the scale and round to int8?',
+            'Symmetric versus asymmetric quantization?',
+            'How do you dequantize in the forward pass?',
+        ],
+        tradeoffs=[
+            'Why are outliers a problem for INT8 in LLMs, and what do LLM.int8 or SmoothQuant do?',
+            'Weight-only versus weight-and-activation quantization?',
+        ],
+    ),
 }

@@ -1,5 +1,7 @@
 """Linear Regression Three Ways task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Linear Regression",
     "title_zh": "线性回归",
@@ -158,4 +160,19 @@ for name, method in [("Closed-form", model.closed_form),
     print(f"{name:13s}  w={w.tolist()}  b={b.item():.4f}")
 print(f"{'True':13s}  w={true_w.tolist()}  b=3.0000")""",
 
+    "interview_questions": interview(
+        concept=[
+            'What assumptions does linear regression make?',
+            'How does least squares relate to maximum likelihood with Gaussian noise?',
+        ],
+        deep_dive=[
+            'Derive the normal equation.',
+            'Why is solving a linear system preferable to computing an explicit inverse?',
+            'How does gradient descent converge here, and what learning rate is safe?',
+        ],
+        tradeoffs=[
+            'Closed form versus gradient descent for large data?',
+            'What do ridge and lasso regularization change?',
+        ],
+    ),
 }

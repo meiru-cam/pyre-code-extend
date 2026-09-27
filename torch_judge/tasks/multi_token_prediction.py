@@ -1,5 +1,7 @@
 """Multi-Token Prediction Loss task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Multi-Token Prediction Loss",
     "title_zh": "多 Token 预测",
@@ -122,4 +124,19 @@ targets_3 = torch.randint(0, V, (B, S, 3))
 loss_3 = multi_token_prediction_loss(hidden, heads_3, targets_3)
 print(f"MTP loss (N=3):  {loss_3.item():.6f}")""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is multi-token prediction?',
+            'Why might predicting several future tokens help training?',
+        ],
+        deep_dive=[
+            'How are the N heads and their targets aligned?',
+            'How do you handle positions near the end where future tokens do not exist?',
+            'How is the loss averaged across heads?',
+        ],
+        tradeoffs=[
+            'How can MTP heads be used for speculative decoding?',
+            'Where has MTP helped, and where has it not?',
+        ],
+    ),
 }

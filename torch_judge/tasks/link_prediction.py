@@ -1,5 +1,7 @@
 """Link Prediction task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Link Prediction",
     "title_zh": "链接预测",
@@ -140,4 +142,19 @@ assert torch.allclose(scores_fwd, scores_rev, atol=1e-5), f'score(i,j) should eq
     Z = A_norm @ H @ W2
     scores = torch.sigmoid((Z[edges[:,0]] * Z[edges[:,1]]).sum(dim=1))
     return scores''',
+    "interview_questions": interview(
+        concept=[
+            'What is link prediction, and where is it used?',
+            'How does a GNN encoder help?',
+        ],
+        deep_dive=[
+            'How do you score an edge from two node embeddings?',
+            'How are negative edges sampled for training?',
+            'How do you avoid leaking test edges into the message-passing graph?',
+        ],
+        tradeoffs=[
+            'Inner-product decoder versus MLP decoder?',
+            'What metrics do you report, such as AUC or Hits at K?',
+        ],
+    ),
 }

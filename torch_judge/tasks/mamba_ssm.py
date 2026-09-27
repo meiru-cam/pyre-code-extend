@@ -1,5 +1,7 @@
 """Mamba Selective State Space Model step task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Mamba SSM Step",
     "title_zh": "Mamba SSM 步骤",
@@ -72,4 +74,19 @@ dA_manual = torch.exp(delta[0, 0] * A[0])
 dA_check  = torch.exp(delta[0:1, 0:1] * A[0:1])[0, 0]
 print("dA formula check (should be ~0):", (dA_manual - dA_check).abs().max().item())""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is a state space model, and what does Mamba make selective?',
+            'Why does selectivity matter compared with fixed SSMs?',
+        ],
+        deep_dive=[
+            'Walk through discretization with delta.',
+            'What are the shapes of the hidden state and the per-step update?',
+            'How does training use a parallel scan instead of this recurrence?',
+        ],
+        tradeoffs=[
+            'Mamba versus attention: long-context efficiency and recall trade-offs?',
+            'Why are hybrid SSM and attention models popular?',
+        ],
+    ),
 }

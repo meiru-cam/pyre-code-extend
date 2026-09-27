@@ -1,5 +1,7 @@
 """Cosine LR Scheduler with Warmup task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Cosine LR Scheduler with Warmup",
     "title_zh": "余弦学习率调度（含预热）",
@@ -41,4 +43,19 @@ TASK = {
     "demo": """lrs = [cosine_lr_schedule(i, 100, 10, 0.001) for i in range(101)]
 print(f'Start: {lrs[0]:.6f}, Warmup end: {lrs[10]:.6f}, Mid: {lrs[55]:.6f}, End: {lrs[100]:.6f}')""",
 
+    "interview_questions": interview(
+        concept=[
+            'Why use learning-rate warmup for transformers?',
+            'What does cosine decay do compared with step or linear decay?',
+        ],
+        deep_dive=[
+            'Write the schedule piecewise for warmup, decay, and after total steps.',
+            'What should the learning rate be at step zero and at the end of warmup?',
+            'How do you add a minimum learning rate floor?',
+        ],
+        tradeoffs=[
+            'Cosine versus warmup-stable-decay schedules: why have recent LLM runs moved to WSD?',
+            'How does the schedule interact with the total token budget if you extend training?',
+        ],
+    ),
 }

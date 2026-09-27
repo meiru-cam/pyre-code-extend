@@ -1,5 +1,7 @@
 """Depthwise Separable Convolution task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Depthwise Separable Convolution",
     "title_zh": "深度可分离卷积",
@@ -108,4 +110,19 @@ dw_ch1 = (patches[:, 1:2] * dw_weight[1:2, 0].view(1, 1, 1, 1, kH, kW)).sum(dim=
 print("DW ch0 and ch1 are independent (cross-correlation ~0):",
       (dw_ch0 * dw_ch1).mean().abs().item() < 1.0)""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is depthwise separable convolution?',
+            'Why did MobileNet use it?',
+        ],
+        deep_dive=[
+            'How do you implement the depthwise step using groups equal to channels?',
+            'Compute the parameter and FLOP savings versus a standard convolution.',
+            'What does the pointwise 1x1 convolution do?',
+        ],
+        tradeoffs=[
+            'What accuracy does the factorization cost?',
+            'Why are depthwise convolutions often memory-bound on GPUs?',
+        ],
+    ),
 }

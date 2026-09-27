@@ -1,5 +1,7 @@
 """Noisy top-k routing for exploration during MoE training."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Noisy Top-k Routing",
     "difficulty": "Medium",
@@ -129,4 +131,19 @@ for t in range(logits.shape[0]):
     "demo": r"""logits=torch.randn(4,8); noise=torch.randn(4,8)
 idx,w=noisy_topk_route(logits,noise,0.5,2)
 print(idx.shape, w.sum(-1))""",
+    "interview_questions": interview(
+        concept=[
+            'What is noisy top-k gating, and why add noise to routing?',
+            'Where did it originate?',
+        ],
+        deep_dive=[
+            'Where is the noise added, and how is it scaled?',
+            'How do you compute weights only over the selected experts?',
+            'Why pass noise in as an argument rather than sampling inside?',
+        ],
+        tradeoffs=[
+            'Noise for exploration versus a load-balancing loss?',
+            'Should noise be on at inference?',
+        ],
+    ),
 }

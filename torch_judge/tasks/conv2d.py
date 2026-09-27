@@ -1,5 +1,7 @@
 """2D Convolution task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "2D Convolution",
     "title_zh": "二维卷积",
@@ -51,4 +53,19 @@ w = torch.randn(16, 3, 3, 3)
 print('Output:', my_conv2d(x, w).shape)
 print('Match:', torch.allclose(my_conv2d(x, w), F.conv2d(x, w), atol=1e-4))""",
 
+    "interview_questions": interview(
+        concept=[
+            'What does a 2D convolution compute, and what inductive biases does it carry?',
+            'How do stride and padding change the output size?',
+        ],
+        deep_dive=[
+            'Derive the output height and width formula.',
+            'How would you implement convolution with unfold and a matrix multiply?',
+            'How do weight shapes relate to input and output channels?',
+        ],
+        tradeoffs=[
+            'Convolution versus attention for vision: what does each assume?',
+            'Why do dilated and depthwise convolutions exist?',
+        ],
+    ),
 }

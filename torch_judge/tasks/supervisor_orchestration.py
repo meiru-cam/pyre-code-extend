@@ -2,6 +2,8 @@
 
 from torch_judge.tasks._schema import build_design_note_rubric
 
+from ._interview import interview
+
 TASK = {
     "title": "Resumable Supervisor-Worker Orchestration",
     "difficulty": "Hard",
@@ -327,4 +329,19 @@ else: raise AssertionError('worker exhaustion must escape')
 request={'run_id':'demo','correlation_id':'demo-c','tasks':[{'task_id':'research','capability':'search','payload':{'q':'agents'},'deadline':None,'idempotency_key':None}]}
 result=supervisor_orchestration(request,[ScriptedWorker('researcher',{'search'},[{'summary':'done'}])],RoundRobinScheduler(),InMemoryBus(),{'max_concurrency':1,'max_attempts':2,'max_queue':4},InMemoryCheckpointStore(),TraceRecorder())
 print(result.status,result.results)""",
+    "interview_questions": interview(
+        concept=[
+            'What is supervisor-worker orchestration for agents?',
+            'How are tasks routed by capability?',
+        ],
+        deep_dive=[
+            'How do you schedule independent tasks and collect results?',
+            'How do you checkpoint and resume after a worker failure?',
+            'How do limits and the message bus interact?',
+        ],
+        tradeoffs=[
+            'Supervisor pattern versus a single agent with tools?',
+            'What failure modes appear with many workers?',
+        ],
+    ),
 }

@@ -2,6 +2,8 @@
 
 from torch_judge.tasks._schema import build_design_note_rubric
 
+from ._interview import interview
+
 TASK = {
     "title": "Context Compaction",
     "difficulty": "Hard",
@@ -417,4 +419,19 @@ assert out2['tokens'] == 2, out2
         "tokens": pinned_tokens + summary_tokens + used,
     }
 ''',
+    "interview_questions": interview(
+        concept=[
+            'Why does an agent need context compaction?',
+            'What must never be dropped?',
+        ],
+        deep_dive=[
+            'How do you choose which messages to summarize?',
+            'How do you keep tool call and tool result pairs intact?',
+            'How do you enforce both the total and the summary budget?',
+        ],
+        tradeoffs=[
+            'Summarization versus truncation versus retrieval?',
+            'How can compaction lose information that matters later?',
+        ],
+    ),
 }

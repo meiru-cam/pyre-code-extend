@@ -1,5 +1,7 @@
 """Focal Loss task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Focal Loss",
     "title_zh": "Focal Loss",
@@ -63,4 +65,19 @@ fl_g2 = focal_loss(logits, targets, alpha=0.25, gamma=2.0)
 fl_g5 = focal_loss(logits, targets, alpha=0.25, gamma=5.0)
 print(f"Focal gamma=2: {fl_g2:.4f}  |  gamma=5: {fl_g5:.4f}  (higher gamma -> lower loss)")""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is focal loss, and what problem does it solve?',
+            'What do alpha and gamma control?',
+        ],
+        deep_dive=[
+            'Write focal loss in terms of p_t.',
+            'How do you compute it stably from logits?',
+            'What does gamma equal to zero reduce to?',
+        ],
+        tradeoffs=[
+            'Focal loss versus class reweighting versus resampling?',
+            'Why can focal loss hurt calibration?',
+        ],
+    ),
 }

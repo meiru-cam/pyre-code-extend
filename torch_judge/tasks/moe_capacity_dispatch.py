@@ -1,5 +1,7 @@
 """Capacity-aware sparse expert dispatch and gather."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Capacity-aware MoE Dispatch",
     "difficulty": "Hard",
@@ -178,4 +180,19 @@ indices=torch.tensor([[0,1],[0,2],[1,2],[0,1],[2,0]])
 weights=torch.full((5,2),.5)
 output,stats=moe_capacity_dispatch(x,indices,weights,experts,capacity=2)
 print(output.shape,stats)""",
+    "interview_questions": interview(
+        concept=[
+            'What is expert capacity, and why cap it?',
+            'What happens to tokens that exceed capacity?',
+        ],
+        deep_dive=[
+            'How do you assign capacity slots in a deterministic order?',
+            'How do dropped tokens flow through the residual?',
+            'What stats would you report for dispatch health?',
+        ],
+        tradeoffs=[
+            'Capacity factor versus dropless MoE: trade-offs?',
+            'How does token dropping interact with evaluation and inference?',
+        ],
+    ),
 }

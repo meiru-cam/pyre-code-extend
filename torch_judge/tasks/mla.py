@@ -1,5 +1,7 @@
 """Multi-Head Latent Attention (MLA) task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Multi-Head Latent Attention (MLA)",
     "title_zh": "多头潜在注意力（MLA）",
@@ -153,4 +155,19 @@ print(f"Full K shape:         {K_full.shape}")  # (2, 6, 32) <-- expanded
 out = mla_attention(X, W_dkv, W_uk, W_uv, W_q, num_heads)
 print(f"Output shape:         {out.shape}")     # (2, 6, 32)""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is Multi-Head Latent Attention, and what does it compress?',
+            'How much KV cache does it save?',
+        ],
+        deep_dive=[
+            'Walk through down-projecting to the latent and up-projecting K and V.',
+            'Why does RoPE need a separate decoupled part in MLA?',
+            'How can the up-projection be absorbed into the query or output weights at inference?',
+        ],
+        tradeoffs=[
+            'MLA versus GQA: quality and memory trade-offs?',
+            'What does MLA cost in compute during decode?',
+        ],
+    ),
 }

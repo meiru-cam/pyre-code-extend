@@ -1,5 +1,7 @@
 """MoE Load Balancing Loss task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "MoE Load Balancing Loss",
     "title_zh": "MoE 负载均衡损失",
@@ -81,4 +83,19 @@ loss_grad = moe_load_balance_loss(logits_grad, num_experts)
 loss_grad.backward()
 print(f"Gradient exists: {logits_grad.grad is not None}")""",
 
+    "interview_questions": interview(
+        concept=[
+            'Why do MoE models need a load-balancing loss?',
+            'What is routing collapse?',
+        ],
+        deep_dive=[
+            'Write the Switch-style auxiliary loss from token fractions and router probabilities.',
+            'Why multiply the fraction by the mean probability instead of using either alone?',
+            'Which term carries gradient?',
+        ],
+        tradeoffs=[
+            'How do you choose the loss weight, and what happens if it is too large?',
+            'What do auxiliary-loss-free methods such as bias-based balancing do instead?',
+        ],
+    ),
 }

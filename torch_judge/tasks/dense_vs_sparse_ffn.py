@@ -1,5 +1,7 @@
 """Dense FFN versus sparse expert execution — the sparsity primitive."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Dense FFN versus Sparse Experts",
     "difficulty": "Medium",
@@ -165,4 +167,19 @@ x=torch.randn(5,4)
 indices=torch.tensor([[0,1],[0,2],[1,2],[0,1],[2,0]])
 weights=torch.full((5,2),.5)
 print(sparse_ffn_forward(x,indices,weights,experts).shape)""",
+    "interview_questions": interview(
+        concept=[
+            'How does a sparse expert forward differ from one dense feed-forward network?',
+            'What does active parameter count mean?',
+        ],
+        deep_dive=[
+            'How do you group tokens by expert, run each expert once, and scatter results back?',
+            'How do you weight and sum outputs when a token picks several experts?',
+            'What if an expert receives no tokens?',
+        ],
+        tradeoffs=[
+            'Why are sparse layers harder to run efficiently on GPUs than dense ones?',
+            'When does a dense model beat an MoE at the same budget?',
+        ],
+    ),
 }

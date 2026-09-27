@@ -1,5 +1,7 @@
 """GIN Layer (Graph Isomorphism Network) task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "GIN Layer (Graph Isomorphism Network)",
     "title_zh": "GIN 层（图同构网络）",
@@ -131,4 +133,19 @@ for F_in, F_hid, F_out in [(2, 4, 1), (8, 16, 8), (3, 6, 2)]:
     h = (1 + eps) * X + agg
     h = torch.relu(h @ W1 + b1)
     return h @ W2 + b2''',
+    "interview_questions": interview(
+        concept=[
+            'What is GIN, and why is it as expressive as the Weisfeiler-Lehman test?',
+            'Why sum aggregation instead of mean or max?',
+        ],
+        deep_dive=[
+            'How do you implement the (1 + eps) self term and the MLP?',
+            'Is eps learned or fixed, and what is the difference?',
+            'What are the shapes of each step?',
+        ],
+        tradeoffs=[
+            'What graphs can GIN still not distinguish?',
+            'What does the expressivity gain cost in training stability?',
+        ],
+    ),
 }

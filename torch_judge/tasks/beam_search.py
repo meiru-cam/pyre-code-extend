@@ -1,5 +1,7 @@
 """Beam Search Decoding task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Beam Search Decoding",
     "title_zh": "束搜索解码",
@@ -54,4 +56,19 @@ TASK = {
 seq = beam_search(simple_fn, start_token=0, max_len=5, beam_width=2, eos_token=4)
 print('Sequence:', seq)""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is beam search, and how does it differ from greedy decoding?',
+            'Why is beam search common in translation but less common for open-ended chat?',
+        ],
+        deep_dive=[
+            'How do you expand and prune beams at each step, and what do you keep per beam?',
+            'How do you handle beams that finish with an end token early?',
+            'Why use log-probabilities, and what is length normalization for?',
+        ],
+        tradeoffs=[
+            'Beam search versus sampling: quality, diversity and repetition trade-offs?',
+            'How does beam width affect compute and output quality, and why can larger beams hurt?',
+        ],
+    ),
 }

@@ -3,6 +3,8 @@
 from torch_judge.tasks._schema import build_design_note_rubric
 
 
+from ._interview import interview
+
 TASK = {
     "title": "Capability-Bound Human Approval Gate",
     "difficulty": "Hard",
@@ -243,4 +245,19 @@ class ApprovalGate:
         }
         return token''',
     "demo": "from torch_judge.harness.agents import VirtualClock\ngate=ApprovalGate(set(),VirtualClock())",
+    "interview_questions": interview(
+        concept=[
+            'What is a human approval gate in an agent system, and when is it required?',
+            'What does the TTL protect against?',
+        ],
+        deep_dive=[
+            'How do you classify an action as allowed, needing approval, or denied?',
+            'How do you bind an approval to the exact action so it cannot be reused for another?',
+            'How do you handle an expired approval?',
+        ],
+        tradeoffs=[
+            'How do you balance safety against approval fatigue?',
+            'What should be logged for audit?',
+        ],
+    ),
 }

@@ -1,5 +1,7 @@
 """GCN Layer (Graph Convolution) task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "GCN Layer (Graph Convolution)",
     "title_zh": "GCN 层（图卷积）",
@@ -117,4 +119,19 @@ assert (out >= 0).all(), 'Output has negative values'
     D_inv_sqrt = torch.diag(D_vec.pow(-0.5))
     A_norm = D_inv_sqrt @ A_tilde @ D_inv_sqrt
     return torch.relu(A_norm @ X @ W)""",
+    "interview_questions": interview(
+        concept=[
+            'What does a GCN layer compute?',
+            'Why symmetric normalization?',
+        ],
+        deep_dive=[
+            'Walk through adding self-loops and computing the degree matrix.',
+            'What happens to isolated nodes?',
+            'Why multiply by W before or after aggregation?',
+        ],
+        tradeoffs=[
+            'What is oversmoothing in deep GCNs?',
+            'Spectral versus spatial views of GCN?',
+        ],
+    ),
 }

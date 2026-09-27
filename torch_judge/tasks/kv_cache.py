@@ -1,5 +1,7 @@
 """KV Cache Attention task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "KV Cache Attention",
     "title_zh": "KV Cache 注意力",
@@ -137,4 +139,19 @@ print('Full shape:', full_out.shape)
 print('Match:', torch.allclose(full_out, inc_out, atol=1e-5))
 print('Final cache K shape:', cache[0].shape)""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is a KV cache, and why does it speed up autoregressive decoding?',
+            'What does it cost in memory?',
+        ],
+        deep_dive=[
+            'How do you append new keys and values each step?',
+            'How do you handle the causal mask during prefill versus decode?',
+            'Compute KV cache size for a given model and sequence length.',
+        ],
+        tradeoffs=[
+            'How do MQA, GQA and MLA reduce KV cache size?',
+            'Why does batch size at inference get limited by the KV cache?',
+        ],
+    ),
 }

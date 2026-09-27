@@ -1,5 +1,7 @@
 """FSDP Training Step task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "FSDP Training Step",
     "title_zh": "FSDP 训练步骤",
@@ -117,4 +119,19 @@ ref_result = full_param - 0.01 * grad_fn(full_param)
 print("FSDP result shape:", fsdp_result.shape)  # expect (32,)
 print("Max diff vs SGD reference:", (fsdp_result - ref_result).abs().max().item())  # expect ~0""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is FSDP, and how does it differ from data parallelism?',
+            'What does ZeRO stage 3 shard?',
+        ],
+        deep_dive=[
+            'Walk through all-gather before forward and reduce-scatter after backward.',
+            'Why is the gradient divided by the number of workers?',
+            'How does each worker update only its shard?',
+        ],
+        tradeoffs=[
+            'What does FSDP cost in communication compared with DDP?',
+            'FSDP versus tensor parallelism versus pipeline parallelism: when each?',
+        ],
+    ),
 }
