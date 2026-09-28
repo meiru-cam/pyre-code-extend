@@ -1,0 +1,29 @@
+{
+  "bpe": {
+    "What is byte-pair encoding, and why subword tokenization at all?": "Start from characters or bytes and repeatedly merge the most frequent pair. Subwords balance vocabulary size against sequence length and handle unseen words.",
+    "Why do modern LLMs use byte-level BPE?": "Any text can be encoded with no unknown tokens: every byte has a base token.",
+    "Walk through training: counting pairs, merging, and updating the corpus.": "Count adjacent pairs, merge the most frequent one everywhere into a new token, and repeat until the vocabulary is the target size.",
+    "How is encoding a new string done with the learned merges, and why does merge order matter?": "Apply the learned merges in the order they were learned. A different order gives a different tokenization.",
+    "How do you break ties between equally frequent pairs deterministically?": "Pick the lexicographically smallest pair, or the first seen. Any deterministic rule works if it is documented.",
+    "How does vocabulary size trade sequence length against embedding size?": "A bigger vocabulary gives shorter sequences but a larger embedding table and softmax, and rarer tokens.",
+    "What problems do tokenizers cause for arithmetic, code or multilingual text?": "Numbers split inconsistently, whitespace and indentation in code, and non-English text using many more tokens."
+  },
+  "contrastive_loss": {
+    "What is InfoNCE, and how does it relate to CLIP and SimCLR?": "Pull matched pairs together and push others apart with a softmax over similarities. CLIP pairs images with text; SimCLR pairs augmented views.",
+    "Why do in-batch negatives work?": "The other items in the batch are cheap, mostly unrelated examples, so they serve as negatives.",
+    "How do you build the similarity matrix and the targets for a batch?": "Normalize the embeddings, compute sim = a @ b.T / temperature. The targets are arange(B) (the diagonal).",
+    "Why normalize embeddings, and what does the temperature do?": "Normalizing gives cosine similarity. Temperature scales the logits: lower is sharper, focusing on hard negatives.",
+    "What makes the CLIP loss symmetric?": "Average the image-to-text and text-to-image cross-entropies.",
+    "How does batch size affect contrastive learning, and how do you scale it across GPUs?": "Larger batches give more negatives and better representations. Across GPUs, all-gather the embeddings.",
+    "What goes wrong with false negatives in the batch?": "Semantically matching items get pushed apart as negatives. Mention soft targets or deduplication."
+  },
+  "mamba_ssm": {
+    "What is a state space model, and what does Mamba make selective?": "A linear recurrence over a hidden state. Mamba makes the parameters (delta, B, C) depend on the input.",
+    "Why does selectivity matter compared with fixed SSMs?": "Fixed SSMs process every token the same way. Selectivity lets the model choose what to remember or ignore.",
+    "Walk through discretization with delta.": "A_bar = exp(delta * A); B_bar is approximately delta * B. delta controls how much each step moves the state.",
+    "What are the shapes of the hidden state and the per-step update?": "The state is (batch, d_inner, d_state). Each step updates it with A_bar * h + B_bar * x.",
+    "How does training use a parallel scan instead of this recurrence?": "The recurrence is associative, so a parallel prefix scan computes all steps in O(log T) depth.",
+    "Mamba versus attention: long-context efficiency and recall trade-offs?": "Mamba is linear-time with a constant-size state. Attention recalls exact tokens but costs quadratic time.",
+    "Why are hybrid SSM and attention models popular?": "They combine cheap long context from SSM layers with the exact recall of a few attention layers."
+  }
+}

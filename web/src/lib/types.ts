@@ -55,6 +55,8 @@ export type InterviewStage = 'concept' | 'deep_dive' | 'tradeoffs';
 export interface InterviewQuestion {
   stage: InterviewStage;
   question: string;
+  /** A nudge toward what to cover, revealed on demand; never the answer itself. */
+  hint?: string;
 }
 
 export interface Problem {

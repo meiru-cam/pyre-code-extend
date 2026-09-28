@@ -1,0 +1,56 @@
+{
+  "tool_registry": {
+    "What does a tool registry own in an agent system?": "Tool names, schemas, handlers and validation. It is the single source of truth for what tools exist and how to call them.",
+    "Why keep it provider-neutral?": "Different providers (OpenAI, Anthropic) have different tool-call formats. A neutral core with adapters avoids lock-in.",
+    "How do you validate arguments against the schema?": "Check required fields, types and enums, and reject unknown fields if strict. Use JSON Schema or a small validator.",
+    "How do you handle duplicate names and unknown tools?": "Reject a duplicate registration loudly. For an unknown name, return a structured error the model can read, not a crash.",
+    "How do you report invocation errors?": "As a structured error result (type, message) returned to the agent, keeping the loop alive.",
+    "Strict schema validation versus lenient coercion?": "Strict catches bugs and injection early but rejects near-misses. Coercion is friendlier but can hide mistakes.",
+    "How do you version tools without breaking agents?": "Version the names or schemas, keep the old versions for a while, and make changes additive."
+  },
+  "budgeted_agent_loop": {
+    "What limits should an agent loop enforce?": "Maximum steps, tokens, wall time, retries and cost. Every loop needs a guaranteed stop.",
+    "Why must the loop be deterministic for testing?": "Tests need repeatable outcomes. Inject the clock, randomness and model responses.",
+    "How do you separate retryable from permanent errors?": "Classify by exception type or status code: timeouts and rate limits are retryable; validation or permission errors are permanent.",
+    "How do you enforce token, step and time budgets together?": "Check every budget before each step and stop at the first one exceeded, recording which one.",
+    "What goes in the trace?": "Each step's action, result, error, tokens used, timing and the stop reason.",
+    "Retry with backoff versus failing fast?": "Backoff recovers from transient failures but adds latency and cost. Fail fast for permanent errors or tight budgets.",
+    "What happens to partial tool side effects when the budget runs out?": "They may be half-applied. You need idempotent tools, compensation, or at least a record of what ran."
+  },
+  "supervisor_orchestration": {
+    "What is supervisor-worker orchestration for agents?": "A supervisor splits a goal into tasks and routes them to specialized workers, then collects and combines the results.",
+    "How are tasks routed by capability?": "Match each task's required capability to the workers that declare it, with deterministic tie-breaking.",
+    "How do you schedule independent tasks and collect results?": "Run tasks with no dependencies concurrently, gather the results, and feed dependent tasks when their inputs are ready.",
+    "How do you checkpoint and resume after a worker failure?": "Persist the state of completed tasks. On resume, skip them and rerun only the unfinished ones.",
+    "How do limits and the message bus interact?": "Limits (concurrency, rounds, budget) bound how many messages flow. The bus records the messages for tracing and replay.",
+    "Supervisor pattern versus a single agent with tools?": "A supervisor adds modularity and parallelism but also coordination overhead and error propagation. One agent is simpler to debug.",
+    "What failure modes appear with many workers?": "Duplicated work, conflicting outputs, cascading failures, cost blowups and context loss between agents."
+  },
+  "context_compaction": {
+    "Why does an agent need context compaction?": "The context window is finite, and long histories raise cost and latency. Compaction keeps the useful parts within the budget.",
+    "What must never be dropped?": "The system prompt, the current task, recent messages and unresolved tool call and result pairs.",
+    "How do you choose which messages to summarize?": "The oldest middle messages that are no longer active, keeping the head and the recent tail verbatim.",
+    "How do you keep tool call and tool result pairs intact?": "Treat a call and its result as one unit: never keep one without the other.",
+    "How do you enforce both the total and the summary budget?": "Check the summary against its own cap and the total against the budget, and truncate the summary if needed.",
+    "Summarization versus truncation versus retrieval?": "A summary keeps meaning but is lossy. Truncation is cheap but blind. Retrieval keeps everything but needs a search step.",
+    "How can compaction lose information that matters later?": "Exact values (ids, numbers, file paths) or constraints stated early can get summarized away. Tag must-keep facts."
+  },
+  "tool_call_dag": {
+    "Why run dependent tool calls as a DAG?": "Some calls need others' outputs. A DAG runs independent calls in parallel and dependent ones in order.",
+    "What is a round?": "A set of calls whose dependencies are all completed, run together before the next set.",
+    "How do you find calls whose dependencies are satisfied?": "Track remaining dependency counts or check that every dependency is done. Topological order, as in Kahn's algorithm.",
+    "How do you enforce max_parallel?": "Take at most max_parallel ready calls per round, in a deterministic order such as by id, and defer the rest.",
+    "How do you detect cycles and missing dependencies?": "Check that every dependency names a known call. If nothing is ready but calls remain, there is a cycle.",
+    "What happens downstream when one call fails?": "Mark calls that depend on it (transitively) as skipped or failed. Do not run them.",
+    "Parallel rounds versus a fully async scheduler?": "Rounds wait for the slowest call. A fully async scheduler starts each call as soon as its inputs are ready."
+  },
+  "tool_call_stream_parser": {
+    "Why parse tool calls from a stream instead of waiting for the full response?": "Lower latency: show text and start tool execution earlier. Also enables UI streaming of the arguments.",
+    "What makes streaming parsing hard?": "Tags and JSON can be split anywhere across chunks, and you must not emit text that later turns out to be a tag.",
+    "How do you handle a tag split across chunks?": "Hold back any suffix that could be a prefix of the opening tag until the next chunk resolves it.",
+    "How do you buffer text versus tool-call JSON?": "Stream text outside tool tags immediately (minus a possible partial tag). Buffer everything inside the tags until the closing tag, then parse.",
+    "What do you do with malformed JSON?": "Emit an error event with the raw text rather than crashing or dropping it silently.",
+    "Latency versus correctness when emitting partial text?": "Emitting sooner lowers latency but risks showing text that is later reinterpreted. Hold back only what could be a tag.",
+    "Structured tool-call APIs versus tag parsing?": "Structured APIs give reliable JSON with no parsing. Tag parsing works with any text model but is fragile."
+  }
+}

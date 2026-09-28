@@ -1,0 +1,74 @@
+{
+  "gcn_layer": {
+    "What does a GCN layer compute?": "Each node averages its neighbors' features (including itself) with degree normalization, then applies a linear map and an activation.",
+    "Why symmetric normalization?": "D^-1/2 A D^-1/2 keeps feature scale stable and weights each edge by both endpoint degrees, so high-degree nodes do not dominate.",
+    "Walk through adding self-loops and computing the degree matrix.": "A_hat = A + I; D_hat is the diagonal of A_hat's row sums; the normalized matrix is D^-1/2 A_hat D^-1/2.",
+    "What happens to isolated nodes?": "With self-loops their degree is 1, so they keep their own features. Without self-loops you would divide by zero.",
+    "Why multiply by W before or after aggregation?": "Both orders are mathematically equal (associativity). Multiply by W first when it reduces the feature dimension, to save compute.",
+    "What is oversmoothing in deep GCNs?": "Repeated averaging makes node features converge to the same value, so deep GCNs lose discrimination.",
+    "Spectral versus spatial views of GCN?": "Spectral: a first-order approximation of graph Fourier filters. Spatial: neighbor averaging. Both give the same formula."
+  },
+  "graph_readout": {
+    "What is a graph readout, and when do you need one?": "It combines node embeddings into one graph embedding for graph-level tasks such as molecule property prediction.",
+    "Why must readout be permutation invariant?": "Node order is arbitrary, and the same graph must give the same output.",
+    "How do you pool nodes per graph using the batch vector?": "Use the batch vector (node to graph id) to group nodes, then reduce each group.",
+    "How do you implement mean pooling with scatter or index_add?": "index_add the features into (num_graphs, D) and divide by counts from bincount(batch, minlength=num_graphs).",
+    "How do you handle a graph with zero nodes?": "Its count is 0. Avoid dividing by zero: clamp the count or return zeros.",
+    "Sum versus mean versus max readout: expressivity trade-offs?": "Sum keeps counts (most expressive, as in GIN), mean normalizes for size, and max captures salient features but loses multiplicity.",
+    "When would you use attention-based pooling?": "When some nodes matter more, such as functional groups, learned weights help. It costs extra parameters."
+  },
+  "gat_layer": {
+    "What is a graph attention network?": "Message passing where each neighbor's weight is a learned attention score instead of a fixed normalization.",
+    "How does GAT differ from GCN?": "GCN weights are fixed by degree. GAT learns data-dependent weights per edge.",
+    "How do you compute attention logits for each edge?": "e_ij = LeakyReLU(a^T [W h_i || W h_j]). Split a into two halves so the scores are sums of per-node terms.",
+    "How do you mask non-edges before the softmax?": "Set e_ij = -inf where there is no edge before the softmax over j, including the self-loop if intended.",
+    "Why LeakyReLU in the attention score?": "Without it, the scores are a monotone function of the summed terms, which limits the attention. LeakyReLU keeps a gradient for negative scores.",
+    "Multi-head GAT: why and how?": "Several heads stabilize learning and capture different relations. Concatenate them in hidden layers and average them in the output layer.",
+    "What is the cost of GAT on dense versus sparse graphs?": "Dense graphs cost O(N^2). Sparse edge-list implementations cost O(E), which is much cheaper."
+  },
+  "gin_layer": {
+    "What is GIN, and why is it as expressive as the Weisfeiler-Lehman test?": "Sum aggregation plus an MLP is injective on multisets, which matches the WL test's power to distinguish graphs.",
+    "Why sum aggregation instead of mean or max?": "Mean and max lose information about neighbor counts. Sum keeps multiplicity.",
+    "How do you implement the (1 + eps) self term and the MLP?": "h' = MLP((1 + eps) * h + sum of neighbor features). Compute the sum with A @ h or scatter.",
+    "Is eps learned or fixed, and what is the difference?": "Learned eps can adapt the weight of self versus neighbors. Fixed (often 0) is simpler. The theory holds for either.",
+    "What are the shapes of each step?": "(N, D) node features, A @ h is (N, D), the combination is (N, D), and the MLP gives (N, D').",
+    "What graphs can GIN still not distinguish?": "Graphs that 1-WL cannot tell apart, for example some regular graphs, two triangles versus a hexagon.",
+    "What does the expressivity gain cost in training stability?": "Sums grow with degree, so activations can be large. Use normalization inside the MLP."
+  },
+  "mpnn_layer": {
+    "What is a message passing neural network?": "Nodes send messages along edges, aggregate them, and update their states.",
+    "How do edge features enter the message?": "Concatenate or combine the edge feature with the sender (and receiver) features in the message function.",
+    "How do you compute messages per edge and aggregate per node?": "For each edge compute m = f(h_src, h_dst, e), then index_add the messages into their destination nodes.",
+    "What does the update function combine?": "The node's previous state and its aggregated message, through an MLP or GRU.",
+    "How do you vectorize over edges?": "Gather node features with the source and destination indices (E, D), compute all messages at once, and scatter-add.",
+    "Sum versus mean aggregation for messages?": "Sum keeps degree information but grows with degree. Mean is scale-stable but loses the count.",
+    "How does MPNN relate to GCN, GAT and GIN as special cases?": "GCN: fixed normalized messages. GAT: attention-weighted messages. GIN: sum with an MLP. Each is a choice of message and update function."
+  },
+  "link_prediction": {
+    "What is link prediction, and where is it used?": "Predict whether an edge exists between two nodes. Recommendations, knowledge graph completion, drug interactions.",
+    "How does a GNN encoder help?": "It embeds nodes using their neighborhoods, so structurally similar or connected nodes get similar vectors.",
+    "How do you score an edge from two node embeddings?": "A dot product of the two embeddings, or an MLP on their concatenation, then a sigmoid.",
+    "How are negative edges sampled for training?": "Random node pairs that are not edges (sometimes degree-weighted), typically one or more per positive edge.",
+    "How do you avoid leaking test edges into the message-passing graph?": "Remove validation and test edges from the graph used for message passing. Otherwise the encoder sees the answers.",
+    "Inner-product decoder versus MLP decoder?": "Inner product is cheap and symmetric but limited. An MLP is more expressive and can model direction, but costs more.",
+    "What metrics do you report, such as AUC or Hits at K?": "AUC for balanced evaluation, and Hits@K or MRR for ranking among many candidates."
+  },
+  "graphsage_layer": {
+    "What is GraphSAGE, and why was it designed for inductive learning?": "It learns aggregation functions instead of per-node embeddings, so it can embed nodes not seen in training.",
+    "Why concatenate self features with aggregated neighbors?": "It keeps the node's own identity separate from its neighborhood summary, instead of averaging them together.",
+    "How do you compute the mean of neighbor features?": "Sum the neighbor features (A @ h or scatter) and divide by the degree, guarding degree 0.",
+    "What does neighbor sampling with k do?": "It caps the neighbors used per node to k samples, bounding compute on large graphs.",
+    "Why L2 normalize the output?": "It keeps embedding scales comparable, which helps downstream similarity and stability.",
+    "Sampling versus full-batch aggregation: bias and variance?": "Sampling is cheaper and scales but gives noisy (higher-variance) aggregates. Full batch is exact but memory-heavy.",
+    "GraphSAGE versus GCN on unseen nodes?": "GraphSAGE generalizes to new nodes (inductive). Plain GCN is usually trained transductively on a fixed graph."
+  },
+  "gae": {
+    "What is a graph autoencoder?": "An encoder (a GNN) maps nodes to embeddings and a decoder reconstructs the graph structure from them.",
+    "Why reconstruct the adjacency matrix?": "It is the natural self-supervised target that forces embeddings to encode connectivity.",
+    "How does the two-layer GCN encoder produce embeddings?": "Z = A_norm ReLU(A_norm X W1) W2: two rounds of normalized aggregation.",
+    "What does the inner-product decoder compute, and why a sigmoid?": "sigmoid(Z Z^T) gives the probability of an edge between each pair. The sigmoid maps scores to (0, 1).",
+    "How do you normalize the adjacency with self-loops?": "D^-1/2 (A + I) D^-1/2, with D computed from A + I so every node has degree at least 1.",
+    "What is the class imbalance problem in adjacency reconstruction, and how do you handle it?": "Almost all node pairs are non-edges, so the loss is dominated by negatives. Weight the positives or sample negatives.",
+    "GAE versus variational GAE?": "VGAE learns a Gaussian per node and adds a KL term, giving a generative model with smoother embeddings, at the cost of more complexity and variance."
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "diff_attention": {
+    "What is Differential Attention, and what problem does it target?": "It computes attention as the difference of two softmax maps to cancel attention noise on irrelevant context. It targets long-context retrieval and hallucination.",
+    "Why subtract two softmax attention maps?": "Like a differential amplifier: noise common to both maps cancels, while the signal survives.",
+    "How do you split Q and K into two halves and combine the maps with lambda?": "Split Q and K into two halves along the head dimension, compute two softmax maps, subtract lambda times the second, and multiply by V.",
+    "How is lambda parameterized and initialized?": "Reparameterized as exp(q1 . k1) - exp(q2 . k2) + lambda_init, with lambda_init depending on layer depth.",
+    "What normalization follows the subtraction, and why?": "Per-head GroupNorm or RMSNorm, then scale by (1 - lambda_init). The difference changes the statistics of each head.",
+    "What does differential attention cost in compute and parameters?": "Two softmax maps per head at the same total head width, plus a few lambda parameters. Kernels need adapting.",
+    "How would you evaluate whether it actually reduces attention noise?": "Check attention mass on the relevant span, needle-in-a-haystack accuracy and hallucination benchmarks against a matched baseline."
+  },
+  "mla": {
+    "What is Multi-Head Latent Attention, and what does it compress?": "It compresses keys and values into a shared low-rank latent vector per token, and caches only that latent.",
+    "How much KV cache does it save?": "The cache per token is the latent plus a small RoPE key, much smaller than full per-head K and V. DeepSeek-V2 reports about 93% savings.",
+    "Walk through down-projecting to the latent and up-projecting K and V.": "c = x W_down (dim d_c), then K = c W_uk and V = c W_uv per head. Queries can also be compressed.",
+    "Why does RoPE need a separate decoupled part in MLA?": "RoPE is position-dependent, so it cannot be absorbed into a fixed up-projection. A separate small rotated key part carries position.",
+    "How can the up-projection be absorbed into the query or output weights at inference?": "q . (c W_uk) = (q W_uk^T) . c, so fold W_uk into the query side and W_uv into the output projection, and attend over latents directly.",
+    "MLA versus GQA: quality and memory trade-offs?": "MLA saves more cache than GQA with similar or better quality, but it is more complex. GQA is simple and widely supported by kernels.",
+    "What does MLA cost in compute during decode?": "More matmul work per token to project into latent space. Decode is usually memory-bound, so trading compute for bandwidth pays."
+  },
+  "moe": {
+    "What is a mixture-of-experts layer, and why does it decouple parameters from compute?": "Many expert FFNs, and each token uses only k of them. Parameters grow with the expert count while per-token FLOPs stay fixed.",
+    "What does the router do?": "It scores experts for each token and picks the top-k with mixing weights.",
+    "How do you select top-k experts per token and normalize their weights?": "Softmax over router logits, topk, then renormalize the selected weights (or take the softmax over only the selected logits).",
+    "How do you dispatch tokens to experts without a per-token Python loop?": "Sort or group token indices by expert, gather, run each expert on its batch, and scatter back with index_add.",
+    "How do you combine expert outputs back into token order?": "Multiply each expert's output by the token's routing weight and index_add into the output at the original positions.",
+    "What makes MoE training unstable?": "Router collapse, load imbalance, large router logits and bf16 rounding. Mention z-loss and balancing losses.",
+    "MoE versus a dense model with the same active compute: memory and serving trade-offs?": "MoE has lower compute per quality but needs memory for all experts, plus all-to-all communication and batching complexity."
+  },
+  "moe_load_balance": {
+    "Why do MoE models need a load-balancing loss?": "Without pressure, the router sends most tokens to a few experts, wasting capacity and overloading devices.",
+    "What is routing collapse?": "A few experts win early, get more gradient, get better, and win more: a rich-get-richer loop.",
+    "Write the Switch-style auxiliary loss from token fractions and router probabilities.": "loss = alpha * E * sum over experts of f_i * P_i. f_i is the fraction of tokens routed to expert i; P_i is the mean router probability for it.",
+    "Why multiply the fraction by the mean probability instead of using either alone?": "f is non-differentiable (from the argmax). P is differentiable but alone could be gamed. The product is minimized by a uniform distribution.",
+    "Which term carries gradient?": "Only P_i. f_i comes from the hard top-k selection and is treated as a constant.",
+    "How do you choose the loss weight, and what happens if it is too large?": "Sweep it small, around 1e-2. Too large forces uniform routing and hurts quality because experts cannot specialize.",
+    "What do auxiliary-loss-free methods such as bias-based balancing do instead?": "Add a per-expert bias to the routing scores used for selection only, nudging it up or down according to load (DeepSeek-V3), with no gradient interference."
+  },
+  "multi_token_prediction": {
+    "What is multi-token prediction?": "From each position, predict not only the next token but also the tokens 2, 3, ..., N ahead with extra heads.",
+    "Why might predicting several future tokens help training?": "Denser training signal per position and pressure to plan ahead. Reported gains show up on code and at larger scales.",
+    "How are the N heads and their targets aligned?": "Head k at position t predicts token t + k. Shift the targets by k for each head.",
+    "How do you handle positions near the end where future tokens do not exist?": "Mask positions where t + k runs past the end, or drop the last k positions for head k.",
+    "How is the loss averaged across heads?": "Average each head's loss over its valid positions, then average (or weight) across heads.",
+    "How can MTP heads be used for speculative decoding?": "Extra heads propose future tokens and the main model verifies them, as self-speculative drafting.",
+    "Where has MTP helped, and where has it not?": "It helped larger code models (Meta) and DeepSeek-V3's training. Small models and some NLP benchmarks see little or negative change."
+  }
+}

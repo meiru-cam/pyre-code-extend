@@ -1,0 +1,47 @@
+{
+  "conv2d": {
+    "What does a 2D convolution compute, and what inductive biases does it carry?": "Each output is a weighted sum over a local window and all input channels, with the weights shared across positions. Biases: locality and translation equivariance.",
+    "How do stride and padding change the output size?": "Stride skips positions and shrinks the output. Padding adds borders so edge pixels are covered and the size can be kept.",
+    "Derive the output height and width formula.": "out = floor((H + 2p - k) / s) + 1. Count how many window starts fit.",
+    "How would you implement convolution with unfold and a matrix multiply?": "unfold turns each patch into a column, (B, C*k*k, L). Matmul with the (C_out, C*k*k) weight, then reshape to (B, C_out, H_out, W_out).",
+    "How do weight shapes relate to input and output channels?": "The weight is (C_out, C_in, kH, kW): each output channel has one filter spanning all input channels.",
+    "Convolution versus attention for vision: what does each assume?": "Convolutions assume locality and translation invariance, which is data-efficient. Attention is global and learns relations, but needs more data.",
+    "Why do dilated and depthwise convolutions exist?": "Dilation widens the receptive field without more parameters. Depthwise cuts compute by separating spatial and channel mixing."
+  },
+  "max_pool2d": {
+    "What does max pooling do, and why use it?": "It takes the maximum in each window, downsampling and adding small translation invariance.",
+    "What happens when stride equals kernel size?": "The windows tile the input without overlap.",
+    "Derive the output size.": "Same as convolution: floor((H + 2p - k) / s) + 1.",
+    "How does the gradient flow through max pooling?": "The gradient goes only to the argmax element of each window. Everything else gets zero.",
+    "How would you implement it with unfold?": "Unfold the patches, take the max over the patch dimension, then reshape.",
+    "Max versus average pooling versus strided convolution?": "Max keeps the strongest activation, average smooths, and a strided convolution learns the downsampling.",
+    "Why do vision transformers not use pooling layers?": "Patch embedding already downsamples, and attention mixes globally. Hierarchical ViTs such as Swin use patch merging instead."
+  },
+  "depthwise_conv": {
+    "What is depthwise separable convolution?": "A per-channel spatial convolution (depthwise) followed by a 1x1 convolution that mixes channels (pointwise).",
+    "Why did MobileNet use it?": "It cuts parameters and FLOPs by about the kernel area, for phones.",
+    "How do you implement the depthwise step using groups equal to channels?": "Use conv2d with groups=C_in, so each channel gets its own k x k filter.",
+    "Compute the parameter and FLOP savings versus a standard convolution.": "The standard cost is C_in * C_out * k^2. Separable is C_in * k^2 + C_in * C_out. Take the ratio.",
+    "What does the pointwise 1x1 convolution do?": "It mixes information across channels at each position, which the depthwise step never does.",
+    "What accuracy does the factorization cost?": "A little accuracy at equal width, usually recovered by making the network wider or deeper.",
+    "Why are depthwise convolutions often memory-bound on GPUs?": "Few FLOPs per byte loaded, so bandwidth, not compute, limits the speed."
+  },
+  "vit_patch": {
+    "What is patch embedding in ViT?": "Cut the image into P x P patches, flatten each and project it linearly to d_model, so each patch becomes a token.",
+    "Why is a strided convolution equivalent to patchify plus linear?": "A conv with kernel = stride = P applies the same linear map to each non-overlapping patch.",
+    "Compute the number of patches and the output shape.": "N = (H/P) * (W/P); output (B, N, d_model) after flattening the spatial grid.",
+    "Where do the class token and position embeddings go?": "Prepend the class token to the patch sequence, then add position embeddings to all N + 1 tokens.",
+    "What if the image size is not divisible by the patch size?": "Pad, resize or crop. Otherwise the leftover border pixels are dropped by the strided conv.",
+    "How does patch size trade sequence length against detail?": "Smaller patches mean more tokens: finer detail, quadratic attention cost.",
+    "How do you handle images of different resolution at inference?": "Interpolate the position embeddings to the new grid size (bicubic), or use relative or rotary positions."
+  },
+  "vit_block": {
+    "How does a ViT block differ from a GPT-2 block?": "The structure is the same pre-norm attention plus MLP. Compare the mask, the input tokens (patches plus a class token) and the GELU MLP.",
+    "Why no causal mask?": "Every patch of an image is available at once, and nothing is generated left to right.",
+    "Walk through pre-norm attention and MLP with residuals.": "x = x + attn(ln1(x)); x = x + mlp(ln2(x)). Say which parts keep the token count and width unchanged.",
+    "What MLP expansion ratio and activation are used?": "4x expansion with GELU, as in the original ViT.",
+    "How do shapes flow from tokens in to tokens out?": "(B, N + 1, D) in and (B, N + 1, D) out. Attention scores are (B, H, N + 1, N + 1).",
+    "Why do ViTs need more data than CNNs?": "No locality or translation-equivariance bias, so these must be learned from data. Mention DeiT's augmentation and distillation.",
+    "What changed in later ViT variants, such as layer scale or register tokens?": "LayerScale scales the residual branches for depth. Registers absorb the high-norm artifact tokens. Also mention QK-norm and better position schemes."
+  }
+}

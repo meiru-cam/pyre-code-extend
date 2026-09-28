@@ -1,0 +1,74 @@
+{
+  "pi_agent_loop": {
+    "Describe the basic agent loop. What makes it stop?": "Call the model, run its tool calls, append the results, and repeat. It stops when the model returns no tool calls, errors, is aborted or hits a limit.",
+    "What is the difference between a steering message and a follow-up message, and why treat them differently?": "Steering redirects the current run immediately. A follow-up is queued until the agent would otherwise stop.",
+    "Walk through when each queue is polled. What happens if the user steers while tools are running?": "Steering is checked after each tool batch and before the next model call. Follow-ups are checked only when the run would end.",
+    "Why are tool calls in a response that hit the output token limit not executed?": "The response was cut off, so the tool call may be incomplete or wrong. Running it could do damage.",
+    "Why turn tool exceptions into error results instead of raising, and why stop immediately on an errored or aborted model response?": "A tool error is information the model can act on. A model error means there is no valid response to continue from.",
+    "Injecting steering mid-run versus cancelling and restarting the turn: context coherence, latency and wasted work?": "Injecting keeps the work done so far and reacts quickly but can confuse the context. Restarting is clean but wastes work.",
+    "Sequential versus parallel tool execution inside one step: speed, ordering of results, and conflicts between tools?": "Parallel is faster, but you must keep results in call order and avoid tools that conflict, such as edits to the same file."
+  },
+  "pi_parallel_tool_batch": {
+    "Why do agent harnesses run a model's tool calls in parallel, and what must stay deterministic when they do?": "Several independent calls such as file reads finish faster together. Result order and hook order must stay deterministic.",
+    "What kinds of tools must never run concurrently with others?": "Tools with side effects on shared state: writes to the same file, shell commands, anything needing sequential semantics.",
+    "Why run every before_tool_call hook before any tool starts? What race would appear otherwise?": "Hooks can block or modify calls. If some tools started first, a later hook's decision would come too late.",
+    "How do you return results in call order when calls finish in a different order?": "Store each result at its call's index, then emit in index order.",
+    "Where is the abort flag checked, and what result does each skipped or aborted call get?": "Before each call starts and after it finishes. Skipped calls get an aborted error result, so every call still has one result.",
+    "Unbounded parallelism versus a bounded pool versus fully sequential execution: latency, rate limits and resource contention?": "Unbounded is fastest until rate limits or resource contention hit. A pool bounds them. Sequential is safest and slowest.",
+    "Declaring sequential per tool versus detecting conflicts from arguments (same file, same process): precision and complexity?": "Declaring per tool is simple and coarse. Detecting conflicts from arguments is precise but complex and can miss hidden conflicts."
+  },
+  "pi_streaming_json": {
+    "Why would an agent UI parse tool-call arguments before the model finishes streaming them?": "To show progress (the file being edited, the command) and start UI work before the call finishes.",
+    "Which partial values are safe to show, and which must be dropped? Give an example of each.": "Complete keys and values are safe. Partial numbers (12 of 123), true or false half-written, and dangling escapes must be dropped.",
+    "Walk through parsing '{\"path\": \"src/ma' and '{\"force\": tr'. How does your parser report that it ran out of input inside a value?": "The path gives a partial string \"src/ma\", which is safe to show. For \"tr\", a literal is unfinished, so drop the key. The parser reports running out inside a value.",
+    "What does the repair pass fix, and why are raw newlines and escapes like \\d so common in model output?": "Raw newlines inside strings and invalid escapes. Models write JSON like prose or code (a regex's \\d).",
+    "Why try the unrepaired text before the repaired text in the partial step?": "If the raw text already parses, repair could only change its meaning. Use repair as a fallback.",
+    "Repairing malformed tool arguments versus rejecting them and asking the model to retry: robustness versus executing something the model did not mean?": "Repair is robust but may execute something slightly different from what was intended. Rejecting is safer but costs a retry round trip.",
+    "Constrained decoding (grammar-guided JSON) versus post-hoc repair: latency, provider support and failure modes?": "Constrained decoding guarantees valid JSON but needs provider support and can add latency. Repair works anywhere but can guess wrong."
+  },
+  "pi_transform_messages": {
+    "What has to change in a conversation history when you switch from one LLM provider to another mid-session?": "Message formats, tool-call id formats, reasoning blocks and provider-specific fields must be converted or dropped.",
+    "Why can reasoning blocks from one model not simply be replayed to another?": "Reasoning may be encrypted or signed for one provider, and another model cannot verify or use it.",
+    "Walk through how tool-call ids are normalized and how the matching tool results follow them. Why must the mapping be built while scanning in order?": "Map each old id to a valid new one as you go. The results that follow must use the same mapping, so build it in order.",
+    "When is a tool call orphaned, and what does the repair insert? Why are system messages held back while calls are pending?": "A call with no result before the next user or assistant message. Insert a synthetic error result. Holding system messages back keeps the call and its result adjacent.",
+    "Why skip errored or aborted assistant messages entirely instead of repairing them?": "They may contain partial or invalid tool calls. Repairing could invent content. Dropping them is safer.",
+    "Converting foreign reasoning to text versus dropping it: context quality, token cost and the risk of the new model imitating another model's style?": "Converting keeps useful context but costs tokens and may copy another model's style. Dropping loses context.",
+    "Repairing malformed histories silently versus failing loudly: when does each help or hurt debugging?": "Silent repair keeps sessions working but hides bugs. Failing loudly finds them fast but breaks users."
+  },
+  "pi_multi_edit": {
+    "Why do coding agents edit files by string replacement instead of line numbers or full rewrites?": "Line numbers shift after every edit and full rewrites cost tokens and risk accidental changes. String replacement is anchored to content.",
+    "Why must old_text be unique, and what should the tool tell the model when it is not?": "An ambiguous match could edit the wrong place. Report how many matches were found and ask for more context.",
+    "Walk through exact-then-fuzzy matching. Which differences does the normalization forgive, and why is fuzzy mode decided once for the whole call?": "Try exact matching first. If any edit fails, normalize (line endings, trailing whitespace, quotes) for all edits. One mode per call keeps the edits consistent.",
+    "Why match all edits against the original content, and why apply replacements from the end of the file backwards?": "Edits are defined against the file the model saw. Applying from the end keeps earlier offsets valid.",
+    "In fuzzy mode, how do you write back only the touched lines? What would go wrong if you wrote back the normalized file?": "Replace only the lines covered by each match in the original text. Writing the normalized file would silently change untouched lines.",
+    "String replacement versus unified diffs versus whole-file rewrites as the edit format for an LLM: token cost, failure modes and model accuracy?": "Replacement is cheap and precise but needs unique anchors. Diffs are compact but models get the line counts wrong. Rewrites are simple but expensive.",
+    "How far would you take fuzzy matching (indentation, whitespace inside lines, edit distance) before the risk of editing the wrong place outweighs the benefit?": "Stop at whitespace and quote normalization. Edit distance risks changing a similar but wrong location."
+  },
+  "pi_file_mutation_queue": {
+    "Why do parallel tool calls in a coding agent need a per-file lock, and what goes wrong without one?": "Two edits to one file can interleave read-modify-write, so one edit is lost.",
+    "Why key the queue by the resolved real path rather than the path string the model sent?": "Different strings (relative paths, symlinks) can refer to the same file. Resolving gives one key per file.",
+    "Walk through how each caller waits for the previous one and signals the next. Why does the key get deleted only if you are still the tail?": "Chain each caller on the previous one's completion. Delete the key only if no newer caller has queued behind you.",
+    "What happens in asyncio if a caller is cancelled while waiting, and how do you hand its turn on safely?": "The cancelled waiter must still pass its turn to the next caller, or the chain deadlocks. Use try/finally.",
+    "Why must a failing edit still release the key?": "Otherwise the next caller waits forever. Release in finally.",
+    "A per-file queue versus one global lock versus optimistic concurrency that re-reads and retries on conflict: throughput and correctness?": "Per-file allows parallel work on different files. A global lock is simple but serial. Optimistic retries are fast but complex.",
+    "Should read operations also go through the queue? What anomalies can a model observe if they do not?": "Without it, a read can see a half-applied or older version while a write is pending."
+  },
+  "pi_truncate_output": {
+    "Why must a coding agent truncate tool output before it reaches the model, and why cap both lines and bytes?": "Huge outputs blow the context and cost. Lines bound the height; bytes bound one very long line.",
+    "Why truncate file reads from the head but command output from the tail?": "For a file, the start usually matters (headers, definitions). For a command, the end has the errors and results.",
+    "Walk through the head loop: what does each kept line cost, and how do you decide whether lines or bytes caused the truncation?": "Each line costs its bytes plus a newline. Stop when the next line would exceed either limit, and record which limit stopped you.",
+    "How do you cut a UTF-8 string to at most N bytes from the end without producing an invalid character?": "Cut at a byte offset, then move forward past any continuation bytes (10xxxxxx) so you start on a character boundary.",
+    "What should the tool tell the model after truncating so it can read the rest?": "How much was shown and how to get the rest, for example an offset or line number to continue from.",
+    "Byte limits versus token limits for tool output: accuracy, speed and tokenizer dependence?": "Bytes are fast and deterministic but approximate the token cost. Tokens are exact but tokenizer-specific and slower.",
+    "Truncating with a note versus spilling the full output to a file the model can grep: context cost and model behavior?": "A note is cheap but loses the rest. Spilling to a file keeps everything searchable but the model must remember to look."
+  },
+  "pi_compaction_cut_point": {
+    "What is context compaction in a coding agent, and why keep the most recent messages verbatim instead of summarizing everything?": "Summarize old history to fit the window. Recent messages carry details the model needs exactly.",
+    "Why can the kept range never start at a tool result?": "A result must follow its call. Starting at a result would keep it without its call.",
+    "Walk through choosing the cut: accumulating from the end, the budget crossing, and picking the cut point at or after it. What happens when one trailing tool result exceeds the budget?": "Add tokens from the end until the budget is reached, then move to the next valid cut point. A huge trailing result pushes the cut to its call.",
+    "What is a split turn, and what extra summary does it need so the kept messages still make sense?": "The cut falls inside a turn, so the kept part lacks the user request that started it. Summarize that request separately.",
+    "Why pull adjacent metadata entries into the kept range?": "They describe the kept messages (model change, labels). Separating them loses that context.",
+    "Estimated tokens (chars / 4) versus the provider's reported usage for deciding when and where to compact: accuracy, cost and staleness?": "Estimates are cheap and available immediately but inaccurate. Reported usage is exact but only known after a call.",
+    "Cut-and-summarize compaction versus pruning tool outputs versus retrieval over the full log: what does each lose?": "Compaction loses detail. Pruning loses tool output but keeps structure. Retrieval keeps everything but needs search to find it."
+  }
+}

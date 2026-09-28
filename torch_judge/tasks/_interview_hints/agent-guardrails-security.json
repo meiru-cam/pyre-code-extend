@@ -1,0 +1,29 @@
+{
+  "policy_engine": {
+    "What is a policy engine in an agent system?": "It decides whether each agent action is allowed, denied or modified, based on composable rules.",
+    "How do allow, deny and transform decisions combine?": "Any deny wins; transforms modify the action in order; allow only if no policy denies.",
+    "How do you order policies and resolve conflicts, for example deny wins?": "Evaluate in a fixed order, record every decision, and let deny override allow.",
+    "How do transforms chain?": "Each transform receives the output of the previous one, in a deterministic order.",
+    "What happens when a policy raises?": "Treat an exception as a deny (fail closed) and log it.",
+    "Fail open versus fail closed?": "Fail open keeps things running when the policy system breaks. Fail closed is safer for dangerous actions.",
+    "Rule-based policies versus model-based classifiers?": "Rules are predictable and auditable but brittle. Classifiers generalize but are probabilistic and can be attacked."
+  },
+  "approval_gate": {
+    "What is a human approval gate in an agent system, and when is it required?": "A human must approve risky actions (payments, deletions, external messages) before they run.",
+    "What does the TTL protect against?": "An approval given long ago should not authorize the action now, since the context may have changed or the approval was stale or stolen.",
+    "How do you classify an action as allowed, needing approval, or denied?": "Map the action type and parameters to a risk tier with explicit rules, and default to needing approval or deny.",
+    "How do you bind an approval to the exact action so it cannot be reused for another?": "Hash or key the approval on the exact action (tool plus canonical arguments) and check the match at execution time.",
+    "How do you handle an expired approval?": "Treat it as missing: deny or ask again. Never run.",
+    "How do you balance safety against approval fatigue?": "Tier by risk, batch similar requests, and use scoped time-limited grants. Too many prompts get approved without reading.",
+    "What should be logged for audit?": "Who approved what exact action, when, with what context, and the outcome."
+  },
+  "guarded_runtime": {
+    "What layers does a guarded agent runtime combine?": "Policy checks, human approval, redaction of secrets or PII, provenance tracking and audit logging.",
+    "Why does provenance of input matter?": "Instructions from untrusted sources (web pages, tool output) should not get the same authority as the user. This is prompt-injection defense.",
+    "In what order do policy, approval, redaction and audit run, and why?": "Usually provenance and policy first, then approval, then execution, then redaction of outputs, with audit throughout. Say why each order matters.",
+    "How do you prevent untrusted content from triggering privileged actions?": "Tag data with its source and refuse privileged actions whose trigger comes from untrusted content.",
+    "What does the audit record contain?": "The action, arguments (redacted), provenance, decisions from each layer, the approver and the outcome.",
+    "Defense in depth versus a single policy layer?": "Several layers catch what one misses, at the cost of complexity and latency.",
+    "How do you test a guardrail stack offline?": "Replay recorded traces and adversarial scenarios with fixed tool responses, and assert the decisions."
+  }
+}

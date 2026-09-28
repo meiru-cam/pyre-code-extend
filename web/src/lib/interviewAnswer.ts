@@ -20,14 +20,17 @@ export const FALLBACK_INTERVIEW_QUESTIONS: readonly InterviewQuestion[] = [
   {
     stage: 'concept',
     question: 'What is this, what problem does it solve, and where is it used?',
+    hint: 'Name the input and output, the failure of the simpler approach it fixes, and one model or system that uses it.',
   },
   {
     stage: 'deep_dive',
     question: 'How would you implement it? Walk through the steps, tensor shapes, and edge cases.',
+    hint: 'Go step by step from input to output, writing the shape after each step, then name one edge case such as empty input or masking.',
   },
   {
     stage: 'tradeoffs',
     question: 'What does it buy you, what does it cost, and what would you compare it against?',
+    hint: 'Pick one alternative and compare on quality, compute or memory, and implementation complexity.',
   },
 ];
 

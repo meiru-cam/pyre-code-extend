@@ -145,8 +145,8 @@ def _validate_interview_questions(task_id: str, questions: Any) -> None:
         raise TaskValidationError(task_id, field, "must be a non-empty list")
     stages: list[str] = []
     for i, item in enumerate(questions):
-        if not isinstance(item, dict) or set(item) != {"stage", "question"}:
-            raise TaskValidationError(task_id, field, f"entry {i} must be {{'stage', 'question'}}")
+        if not isinstance(item, dict) or not {"stage", "question"} <= set(item) <= {"stage", "question", "hint"}:
+            raise TaskValidationError(task_id, field, f"entry {i} must be {{'stage', 'question'}} plus an optional 'hint'")
         if item["stage"] not in INTERVIEW_STAGES:
             raise TaskValidationError(
                 task_id, field, f"entry {i}: stage must be one of {list(INTERVIEW_STAGES)}"
@@ -159,6 +159,12 @@ def _validate_interview_questions(task_id: str, questions: Any) -> None:
             raise TaskValidationError(
                 task_id, f"{field}[{i}]", "unsupported LaTeX inline math; write T*T or `T^2`"
             )
+        if "hint" in item:
+            if not isinstance(item["hint"], str) or not item["hint"].strip():
+                raise TaskValidationError(task_id, f"{field}[{i}]", "hint must be a non-empty string")
+            _reject_math_markup(task_id, f"{field}[{i}].hint", item["hint"])
+            if _INLINE_DOLLAR_MATH.search(item["hint"]):
+                raise TaskValidationError(task_id, f"{field}[{i}].hint", "unsupported LaTeX inline math")
         stages.append(item["stage"])
     if stages != sorted(stages, key=INTERVIEW_STAGES.index):
         raise TaskValidationError(task_id, field, "entries must be ordered concept, deep_dive, tradeoffs")

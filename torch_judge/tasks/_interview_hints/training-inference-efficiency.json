@@ -1,0 +1,56 @@
+{
+  "activation_checkpointing": {
+    "What is activation checkpointing, and what does it trade?": "Store only some activations and recompute the others during backward. It trades extra compute for less memory.",
+    "Which activations dominate memory in transformer training?": "Per-layer attention and MLP intermediates, which scale with batch times sequence times hidden size (and heads times sequence squared without FlashAttention).",
+    "How does torch.utils.checkpoint recompute the forward during backward?": "The forward runs without saving intermediates. In backward, the segment's forward is rerun from its saved inputs to rebuild the graph, then backpropagated.",
+    "What goes wrong with randomness such as dropout during recomputation, and how is RNG state handled?": "Dropout masks would differ in the recomputation, giving wrong gradients. PyTorch saves and restores the RNG state for the recompute.",
+    "How do you choose which layers or segments to checkpoint?": "Checkpoint the layers with the most memory per unit of recompute, often each transformer block, or sqrt(N) segments.",
+    "Roughly how much extra compute does full checkpointing cost, and when is selective checkpointing better?": "About one extra forward pass (about 33% more compute). Selective checkpointing recomputes only cheap but large ops such as attention softmax.",
+    "Checkpointing versus offloading activations to CPU: when would you pick each?": "Offloading avoids recompute but needs PCIe bandwidth to overlap. It is good when compute is the bottleneck and the transfer can be hidden."
+  },
+  "packed_sequence_mask": {
+    "What is sequence packing, and why does it speed up SFT and pretraining?": "Concatenate several short documents into one fixed-length row instead of padding each one. There is less wasted compute.",
+    "What goes wrong if you pack documents but keep a plain causal mask and continuous position ids?": "Tokens attend across document boundaries and positions continue across documents, so the model learns false context.",
+    "Build the block-diagonal causal mask from the document lengths. What must a padding row contain, and why?": "Allowed when both tokens are in the same document and j <= i. Padding rows must attend to at least one position, such as themselves, to avoid NaN.",
+    "What is cu_seqlens, and how do FlashAttention varlen kernels use it instead of a dense mask?": "Cumulative document boundaries [0, l1, l1+l2, ...]. Varlen kernels use them to run attention per segment with no dense mask.",
+    "With RoPE, why must position ids restart at each document boundary?": "Each document should see positions starting at 0, as in training without packing. Otherwise RoPE encodes offsets that are wrong.",
+    "Packing changes how many tokens each document contributes to a batch. How does that interact with per-sequence versus per-token loss averaging?": "Per-token averaging treats packed and unpacked data the same. Per-sequence averaging must count documents, not rows.",
+    "Greedy bin packing versus sorting by length versus truncation: effects on throughput, padding and data distribution?": "Greedy packing minimizes padding but mixes lengths. Sorting creates length-biased batches. Truncation discards data."
+  },
+  "chunked_cross_entropy": {
+    "Why can the LM-head logits be the largest single tensor in LLM training? Estimate their size for a 128k vocabulary and 16k tokens.": "It is tokens times vocab: 16k * 128k * 4 bytes is about 8 GB in fp32 (plus the same again for the gradient).",
+    "What does chunking the cross-entropy save, and why does chunking alone not save memory under autograd?": "Only one chunk of logits exists at a time. But autograd saves each chunk's logits or probabilities for backward, so the total is the same.",
+    "Walk through which tensors autograd saves with and without checkpointing each chunk.": "Without checkpointing, every chunk's softmax output is saved. With it, only the hidden states are saved and the logits are recomputed per chunk.",
+    "How do you keep the mean correct when chunks contain different numbers of ignored tokens?": "Sum the per-chunk losses and divide by the total number of non-ignored tokens, not by the chunk count.",
+    "Write the gradient of cross-entropy with respect to the logits. How does a fused kernel use it to avoid recomputing the logits?": "softmax - onehot. A fused kernel computes the gradient for a chunk right away and writes grad_hidden and grad_W, never storing the logits.",
+    "Chunk-and-recompute versus a fused linear cross-entropy kernel versus vocabulary parallelism: memory, speed and complexity?": "Chunking is simple but recomputes. A fused kernel is fastest but custom. Vocabulary parallelism shards the vocabulary across GPUs and needs communication.",
+    "How do you choose the chunk size, and what happens at the extremes?": "Balance the peak memory of one chunk against per-chunk overhead. Tiny chunks mean kernel-launch overhead; one chunk means no savings."
+  },
+  "lora": {
+    "What is LoRA, and why does low-rank adaptation work?": "Freeze W and learn a low-rank update B A. Fine-tuning updates have low intrinsic rank, so few parameters capture them.",
+    "What are A and B, and which one is initialized to zero?": "A (r x in) is random, B (out x r) is zero, so B A = 0 at the start and the model begins exactly as the base.",
+    "What does alpha over rank scaling do?": "It scales the update by alpha / r, so changing r does not require retuning the learning rate much.",
+    "How do you freeze the base weight and train only the adapters?": "requires_grad False on the base weights, and only pass the adapter parameters to the optimizer.",
+    "How do you merge LoRA weights for inference?": "W' = W + (alpha / r) B A. Merged once, there is no extra latency.",
+    "LoRA versus full fine-tuning: where does LoRA fall short?": "Large domain shifts or new capabilities. Low rank can underfit, and it learns less but also forgets less.",
+    "How do you choose rank and which layers to adapt?": "Start small (8 to 16) and apply it to all linear layers, including the MLP. Increase the rank if the task is hard."
+  },
+  "qlora": {
+    "What is QLoRA, and how does it combine quantization with LoRA?": "Keep the base weights quantized to 4 bits and train LoRA adapters in higher precision on top.",
+    "Why can the base model stay quantized during fine-tuning?": "The base is frozen: it only needs a forward and backward through its values, never an update.",
+    "How do you dequantize the base weight in the forward pass?": "Compute w approximately as q * scale (per row or block) on the fly into bf16, then run the matmul.",
+    "Which tensors receive gradients?": "Only the LoRA A and B matrices. Gradients flow through the dequantized base to the input but the base weights get none.",
+    "How is the per-row scale computed?": "The max absolute value of the row divided by the largest quantized level.",
+    "What precision does real QLoRA use, such as NF4 and double quantization, and why?": "NF4 levels match normally distributed weights, and double quantization also compresses the scales. Paged optimizers handle memory spikes.",
+    "What quality do you lose compared with LoRA on a full-precision base?": "Usually close to LoRA on a bf16 base, with a small loss from quantization error, bigger at very low bits."
+  },
+  "paged_attention": {
+    "What is PagedAttention, and what problem does it solve in serving?": "It manages the KV cache in fixed-size blocks like OS virtual memory, removing fragmentation and over-reservation.",
+    "How does a block table work?": "Each sequence has a list mapping its logical block index to a physical block id in a shared pool.",
+    "How do you map a logical token position to a physical page and offset?": "page = pos // block_size; offset = pos % block_size; physical = block_table[page].",
+    "How do you gather keys and values for attention?": "Look up each position's physical block and offset, gather from the pools into contiguous K and V (or have the kernel read directly), then attend.",
+    "What happens with the last partially filled page?": "Only the first (length mod block_size) slots are valid. Mask or slice the rest.",
+    "What does paging enable, such as prefix sharing and copy on write?": "Several sequences can point to the same prefix blocks, and copy on write handles divergence. This enables beam search and parallel sampling cheaply.",
+    "What does the extra indirection cost?": "Extra lookups and non-contiguous memory reads, plus kernel complexity. Block size trades waste against lookup overhead."
+  }
+}

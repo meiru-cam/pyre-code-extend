@@ -1,0 +1,112 @@
+{
+  "relu": {
+    "Why do neural networks need nonlinear activations at all?": "Compose two linear layers with no activation in between. What single layer is that equivalent to?",
+    "Why did ReLU replace sigmoid and tanh in deep networks?": "Look at the derivative of sigmoid far from zero, then multiply many such factors through depth. ReLU's derivative is exactly 1 on half its range.",
+    "What is the gradient of ReLU at zero, and what does PyTorch do there?": "The true derivative is undefined at 0. Pick a subgradient; PyTorch returns 0 there. Say why the choice rarely matters in practice.",
+    "How do you implement ReLU without an in-place operation that breaks autograd?": "An in-place op overwrites a tensor autograd saved for backward. Use x.clamp(min=0) or torch.where, which return new tensors.",
+    "What is the dying ReLU problem, and how does it show up in training?": "If a unit's pre-activation is negative for every input, its gradient is always 0. Think of large learning rates or big negative biases, and how you would measure dead units.",
+    "Compare ReLU with Leaky ReLU, GELU and SiLU.": "Cover three axes: gradient for negative inputs, smoothness at 0, and cost. Leaky keeps a small slope; GELU and SiLU are smooth and non-monotonic near 0.",
+    "Why do most modern LLMs not use plain ReLU in the MLP?": "Think about the gated MLP. Which activation sits inside SwiGLU, and what did the ablations in the GLU-variants paper find?"
+  },
+  "gelu": {
+    "What is GELU, and what is its intuition as a probabilistic gate?": "GELU is x times the probability that a standard normal falls below x. Contrast a hard gate (ReLU) with a soft gate that depends on how large x is.",
+    "Where is GELU used, and why did transformers adopt it?": "Name BERT and GPT-2. Mention the smooth curve and the small negative dip, and that it trained slightly better than ReLU in their experiments.",
+    "Write the exact erf form and the tanh approximation. Why does the approximation exist?": "Exact: 0.5 x (1 + erf(x / sqrt 2)). The tanh form uses sqrt(2/pi) and a 0.044715 x^3 term. erf used to be slow or missing on some hardware.",
+    "How does GELU behave for large negative and large positive inputs?": "Take the limits of the Gaussian CDF: near 0 for large negative x and near 1 for large positive x. So GELU approaches 0 and x.",
+    "What is the derivative of GELU, and is it smooth at zero?": "Use the product rule: Phi(x) + x phi(x). Both parts are smooth everywhere, unlike ReLU's kink.",
+    "GELU versus ReLU versus SiLU: accuracy and speed trade-offs?": "Compare the final loss reported in papers against cost per element: erf or tanh versus a max. Mention that fused kernels shrink the speed gap.",
+    "Why did LLaMA-style models move to SwiGLU instead of GELU?": "SwiGLU adds a multiplicative gate. Recall the GLU-variants results and how LLaMA adjusted d_ff to keep the parameter count equal."
+  },
+  "swiglu": {
+    "What is a gated linear unit, and what does SwiGLU add?": "A GLU multiplies one projection by a gate computed from another projection. SwiGLU uses Swish (SiLU) as the gate's activation.",
+    "Why do LLaMA and PaLM use SwiGLU in the feed-forward block?": "Recall the lower perplexity at equal compute in Shazeer's GLU-variants paper, adopted by PaLM and then LLaMA.",
+    "Write SwiGLU in terms of x, W1, Wgate and W2. Which projection gets the Swish?": "Write (SiLU(x Wgate) * (x W1)) W2. The Swish applies to the gate projection only.",
+    "Why is d_ff often set to about 8/3 of d_model with SwiGLU instead of 4 times?": "There are three matrices instead of two. Solve 3 * d_model * d_ff = 2 * d_model * 4 d_model for d_ff.",
+    "What are the parameter and FLOP counts compared with a standard two-matrix MLP?": "Count the weight matrices and multiply-adds per token for each design, then compare them at the same d_ff and again at matched parameters.",
+    "What does gating buy you empirically, and is there a good theoretical explanation?": "Empirically it gives lower loss at equal FLOPs. Theory is thin: Shazeer attributed it to \"divine benevolence\". Mention multiplicative interactions.",
+    "What does SwiGLU cost at inference time?": "Three matmuls, a larger activation footprint and memory traffic per token. Mention that the gate and up projections are often fused into one matmul."
+  },
+  "layernorm": {
+    "What does LayerNorm normalize over, and why is that suited to transformers?": "It normalizes over the feature dimension of each token independently. Why does that suit variable-length sequences and small batches?",
+    "Why do we need the learnable gamma and beta?": "Normalizing forces mean 0 and variance 1. Gamma and beta let the layer recover any scale and shift, including undoing the normalization.",
+    "Why does normalization make optimization easier? What does it do to the scale of activations and gradients, and what did later work say about the internal covariate shift explanation?": "It keeps activation scale stable across layers, which smooths the loss landscape. Santurkar et al. argued smoothness, not covariate shift, explains the benefit.",
+    "Biased or unbiased variance: which does LayerNorm use and why?": "It uses the biased (population) variance, dividing by N. It describes the current vector rather than estimating a population.",
+    "Where does eps go, and what happens with a constant input row?": "eps goes inside the square root, added to the variance. A constant row has variance 0, so the output becomes beta.",
+    "How do you normalize over the last dimension for an input of any rank?": "Reduce over dim=-1 with keepdim=True so broadcasting works for any number of leading dimensions.",
+    "LayerNorm versus BatchNorm versus RMSNorm: when and why?": "Compare which axis each normalizes over and whether it depends on the batch. RMSNorm drops the mean and is cheaper.",
+    "Pre-norm versus post-norm placement: how does it affect training stability?": "Post-norm puts LayerNorm after the residual add, which makes gradients near the input small without warmup. Pre-norm keeps a clean residual path."
+  },
+  "batchnorm": {
+    "What does BatchNorm do, and what was the original motivation?": "It normalizes each feature over the batch (and spatial positions). Original motivation: reducing internal covariate shift so higher learning rates work.",
+    "Why does BatchNorm behave differently in training and evaluation?": "Batch statistics are unavailable or noisy at inference, so eval mode uses running averages collected during training.",
+    "How do you update running mean and variance with momentum, and which variance goes into the running estimate?": "running = (1 - momentum) * running + momentum * batch_stat. The running variance uses the unbiased estimate, while the normalization uses the biased one.",
+    "What happens with batch size one in training mode?": "With one sample per feature the variance is zero, so the output collapses to beta. PyTorch raises an error for a single value per channel.",
+    "Where do gamma and beta apply, and why are they needed?": "After normalization, per channel. They restore representational power, for example letting the network undo the normalization.",
+    "Why is BatchNorm rarely used in transformers?": "Think about variable sequence lengths, padding and small or streaming batches. Batch statistics also leak information across examples in autoregressive models.",
+    "How does BatchNorm interact with distributed training and small per-device batches?": "Per-device statistics become noisy with small per-device batches. SyncBatchNorm fixes that at the cost of communication."
+  },
+  "rmsnorm": {
+    "What is RMSNorm, and how does it differ from LayerNorm?": "It divides by the root mean square of the features, with no mean subtraction and usually no bias. Compare its formula with LayerNorm's.",
+    "Why do modern LLMs use RMSNorm?": "It is cheaper (one reduction) and works as well empirically. Name LLaMA, T5 and Mistral.",
+    "Write the formula. Why is there no mean subtraction and no bias?": "x / sqrt(mean(x^2) + eps) * weight. Re-centering was found unnecessary; the paper argues the rescaling does the work.",
+    "Where do you compute in float32 when the input is bfloat16, and why?": "Upcast before the square and the mean, then cast back. Squaring small bfloat16 values loses precision and the sum can round badly.",
+    "Where does eps go, inside or outside the square root?": "Inside, added to the mean of squares before the square root, which avoids dividing by zero. Mention implementations that differ.",
+    "What does dropping mean-centering cost in expressiveness, and what does it save?": "It can no longer shift the mean, but the next linear layer can absorb a bias. It saves one reduction and memory bandwidth.",
+    "How do QK-norm and other placements of RMSNorm help training stability?": "QK-norm bounds the attention logits and prevents them from blowing up. Mention extra norms around attention or the MLP output in large training runs."
+  },
+  "linear": {
+    "What does a linear layer compute, and why is the weight stored as out by in?": "y = x W^T + b. Storing W as (out, in) makes each output unit a row, and PyTorch computes x @ W.T.",
+    "Why does initialization matter for a linear layer?": "Bad scale makes activations explode or vanish with depth. Symmetric initialization makes every unit learn the same thing.",
+    "What is Kaiming initialization, and what variance does it target?": "The weights are drawn with variance 2 / fan_in so that ReLU layers keep activation variance constant. Derive where the 2 comes from.",
+    "How do you support inputs with arbitrary leading dimensions?": "Use x @ W.T, which broadcasts over leading dimensions, or reshape to 2D and back.",
+    "Why register weight and bias as nn.Parameter rather than plain tensors?": "Parameters are registered with the module, so they appear in parameters(), move with .to(), are saved in state_dict and are seen by optimizers.",
+    "Xavier versus Kaiming: which activation goes with which?": "Xavier balances fan_in and fan_out for tanh or sigmoid. Kaiming accounts for ReLU zeroing half its inputs.",
+    "Why do many LLMs drop biases from linear layers?": "The following norm removes their effect, they add memory and communication, and some reports show better stability without them."
+  },
+  "softmax": {
+    "What does softmax compute, and where is it used?": "It maps a vector of scores to probabilities: exponentiate and normalize. Name classification outputs, attention and sampling.",
+    "Why is it called soft max, and what does temperature do to it?": "It is a smooth, differentiable version of argmax. Temperature divides the logits: high flattens, low sharpens toward one-hot.",
+    "Why subtract the max before exponentiating? Does it change the result?": "exp overflows for large inputs. Subtracting a constant cancels in the ratio, so the result is identical and the largest exponent is exp(0).",
+    "What is the Jacobian of softmax?": "The derivative of s_i with respect to x_j is s_i (delta_ij - s_j). Write it as diag(s) - s s^T and say what it looks like when s is one-hot.",
+    "How do you handle a row where every entry is negative infinity, for example a fully masked attention row?": "All exps are 0, so you get 0/0 = NaN. Decide on a convention (all zeros) and guard against it, or make sure no row is fully masked.",
+    "Softmax versus sigmoid for multi-label classification?": "Softmax makes classes compete, which fits exactly one label. Multi-label needs independent sigmoids.",
+    "What are the costs of softmax over a very large vocabulary, and what alternatives exist?": "Normalization touches every vocabulary entry: compute, memory and logits bandwidth. Mention sampled softmax, hierarchical softmax and chunked or fused cross-entropy."
+  },
+  "attention": {
+    "Explain scaled dot-product attention. What do Q, K and V represent?": "softmax(Q K^T / sqrt(d_k)) V. Queries ask, keys advertise, values carry the content that gets mixed.",
+    "Why scale by the square root of the key dimension?": "Dot products grow with dimension. Unscaled logits push the softmax into saturation, where gradients vanish.",
+    "Walk through the shapes of every intermediate tensor.": "Q (B, S, d_k), K (B, T, d_k), scores (B, S, T), weights (B, S, T), V (B, T, d_v), output (B, S, d_v).",
+    "Assuming q and k have independent unit-variance entries, what is the variance of q·k? What happens to the softmax and its gradients if you skip the 1/sqrt(d_k) scaling?": "A sum of d_k products of independent unit-variance terms has variance d_k. Large logits give a near one-hot softmax and tiny gradients.",
+    "Where does masking go, and why before the softmax?": "Add -inf to the logits before the softmax so masked positions get exactly zero weight and the rest still sum to one.",
+    "What is the time and memory complexity in sequence length?": "O(S^2 d) time and O(S^2) memory for the score matrix. FlashAttention avoids storing it but not the compute.",
+    "Why is attention quadratic, and what are the main approaches to reduce it?": "Every query scores every key. Sparse, sliding-window, low-rank or linear attention, and IO-aware exact kernels.",
+    "Additive attention versus dot-product attention: trade-offs?": "Additive uses a small MLP to score and is more flexible but slower. Dot-product runs as one big matmul on GPUs."
+  },
+  "mha": {
+    "Why use multiple heads instead of one large attention?": "Each head attends in its own subspace, so the model can capture several relations at once. Mention the rank limit of a single softmax.",
+    "What does the output projection do?": "It mixes the concatenated head outputs back into d_model so information can combine across heads.",
+    "Walk through the reshape and transpose from (B, S, d_model) to per-head tensors and back.": "(B, S, d_model) -> view (B, S, H, d_head) -> transpose (B, H, S, d_head), attend, then transpose back, make it contiguous and reshape.",
+    "Why must d_model be divisible by num_heads?": "Each head gets d_model / H dimensions, so the split must be exact to reshape without padding.",
+    "How does parameter count compare with single-head attention of the same d_model?": "The Q, K, V and output projections are all d_model x d_model regardless of H, so the parameter count is the same.",
+    "Do heads really specialize? What does head pruning suggest?": "Michel et al. pruned most heads with little loss, suggesting redundancy, while a few heads specialize, such as induction or positional heads.",
+    "MHA versus MQA versus GQA: inference cost and quality trade-offs?": "Compare KV-cache size: MQA shares one K/V head, GQA shares per group. Memory and bandwidth versus quality."
+  },
+  "mlp": {
+    "What role does the feed-forward block play in a transformer?": "It is the per-token nonlinear transform. Attention mixes across tokens; the MLP processes each token's features.",
+    "Why does the MLP hold most of the parameters in a transformer?": "Two or three d_model x d_ff matrices with d_ff about 4x d_model add up to about twice the attention parameters.",
+    "Name the three projections in a SwiGLU MLP and their shapes.": "Gate and up are (d_model, d_ff), down is (d_ff, d_model). Say which pair gets multiplied together.",
+    "Why is bias usually omitted?": "Norms make biases largely redundant, and removing them saves memory with no quality loss. Mention stability reports.",
+    "How would you choose d_ff for a given parameter budget?": "Count 3 * d_model * d_ff parameters, then round d_ff to a hardware-friendly multiple such as 256.",
+    "Dense MLP versus mixture-of-experts: what changes in compute and memory?": "MoE multiplies parameters while activated compute per token stays near one expert. Mention routing overhead, all-to-all and memory.",
+    "What does interpretability work say about what MLP layers store?": "MLPs are described as key-value memories storing factual associations. Mention ROME-style editing and superposition."
+  },
+  "gpt2_block": {
+    "Walk through a GPT-2 block from input to output.": "x + attn(ln1(x)) then x + mlp(ln2(x)). Name the causal self-attention and the GELU MLP.",
+    "Why use residual connections?": "Identity paths let gradients flow through depth and let each block learn a small update. Mention the vanishing-gradient motivation.",
+    "Pre-norm versus post-norm: which does GPT-2 use, and why does it matter for deep stacks?": "GPT-2 moved the LayerNorm before each sublayer (pre-norm) and added a final norm. Pre-norm trains deep stacks without careful warmup.",
+    "Where is the causal mask applied, and how do you build it?": "In the scores before softmax. Build it with torch.triu(ones, diagonal=1) and set those positions to -inf.",
+    "What are the parameter counts of the attention and MLP parts for a given d_model?": "Attention has 4 d^2 weights; a 4x MLP has 8 d^2. Add the biases and norms.",
+    "What changed from GPT-2 blocks to LLaMA blocks, and why?": "RMSNorm, RoPE, SwiGLU and no biases. Say what each change buys.",
+    "Why do very deep transformers need special initialization or residual scaling?": "Residual variance grows with depth. GPT-2 scaled residual projections by 1/sqrt(N). Mention DeepNet and similar schemes."
+  }
+}

@@ -1,6 +1,6 @@
 'use client';
 
-import { Lock, MessageSquareQuote } from 'lucide-react';
+import { Lightbulb, Lock, MessageSquareQuote } from 'lucide-react';
 
 import { Button } from '@/components/ui/Button';
 import {
@@ -50,8 +50,20 @@ export function InterviewPanel({ questions, record, onChange }: InterviewPanelPr
               const answer = record.answers[index] ?? '';
               const short = !unlocked && missing.includes(index) && answer.length > 0;
               return (
-                <label key={index} className="block space-y-1.5">
+                <div key={index} className="space-y-1.5">
                   <span className="block text-sm leading-relaxed text-text">{question.question}</span>
+                  {question.hint && (
+                    <details className="group text-[13px] leading-relaxed text-text-2">
+                      <summary className="inline-flex cursor-pointer select-none items-center gap-1 text-accent">
+                        <Lightbulb className="h-3.5 w-3.5" />
+                        <span className="group-open:hidden">Show hint</span>
+                        <span className="hidden group-open:inline">Hide hint</span>
+                      </summary>
+                      <p className="mt-1 rounded-md px-2.5 py-1.5" style={{ background: 'var(--bg-sunken)' }}>
+                        {question.hint}
+                      </p>
+                    </details>
+                  )}
                   <textarea
                     aria-label={question.question}
                     value={answer}
@@ -66,7 +78,7 @@ export function InterviewPanel({ questions, record, onChange }: InterviewPanelPr
                       At least {MIN_ANSWER_LENGTH} characters.
                     </span>
                   )}
-                </label>
+                </div>
               );
             })}
           </div>
@@ -110,7 +122,7 @@ export function InterviewPanel({ questions, record, onChange }: InterviewPanelPr
         <h2 className="text-sm font-semibold text-text">Interview first</h2>
       </div>
       <p className="text-[13px] leading-relaxed text-text-2">
-        Answer the opening and deep-dive questions out loud or in writing. Hints, reference pros and cons, the solution, AI help and the editor unlock after that.
+        Answer the opening and deep-dive questions out loud or in writing; each question has a hint if you are stuck. Coding hints, reference pros and cons, the solution, AI help and the editor unlock after that.
       </p>
       {questionsView}
       <div className="flex items-center gap-2">

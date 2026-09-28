@@ -1,0 +1,57 @@
+{
+  "reward_model": {
+    "How is an RLHF reward model trained, and what is the Bradley-Terry model?": "A scalar head on an LM is trained on pairs: P(chosen beats rejected) = sigmoid(r_chosen - r_rejected).",
+    "Why train on pairwise preferences instead of absolute scores?": "People compare more consistently than they score, and absolute scales differ between annotators.",
+    "Why use the last-token hidden state, and what goes wrong with padding when picking it?": "With causal attention, the last token has seen the whole response. With right padding, the last position is a pad, so index the last real token.",
+    "Write the loss in terms of the reward difference. Why use logsigmoid rather than log of sigmoid?": "loss = -logsigmoid(r_c - r_r). logsigmoid is computed stably, while log(sigmoid(x)) underflows to log(0) for very negative x.",
+    "The reward is only defined up to a constant. What does that mean for normalization at RL time?": "Adding a constant to every reward changes nothing. Normalize or whiten rewards before RL, or subtract a baseline.",
+    "What is reward hacking, and how does the KL penalty in RLHF relate to it?": "The policy exploits reward model errors instead of improving. The KL penalty keeps it near the reference, where the RM is accurate.",
+    "Reward model versus rule-based verifiable rewards versus DPO: when would you pick each?": "Use an RM for subjective preferences, verifiable rewards for math and code, and DPO for simple offline training on preference pairs."
+  },
+  "dpo_loss": {
+    "What is DPO, and how does it remove the need for an explicit reward model and RL loop?": "It rewrites the RLHF objective so the optimal policy is a closed-form function of the reward. You then fit the policy directly on preference pairs with a classification loss.",
+    "What is the implicit reward in DPO?": "beta * log(pi(y|x) / pi_ref(y|x)), the scaled log-ratio to the reference.",
+    "Write the DPO loss from the four log-prob inputs. What role does the reference model play?": "-logsigmoid(beta * ((pi_c - ref_c) - (pi_r - ref_r))) using sequence log-probs. The reference anchors the implicit reward.",
+    "Starting from the KL-regularized RLHF objective, derive the optimal policy and show how it turns into the DPO loss. Why does the partition function cancel?": "The optimum is pi* proportional to pi_ref * exp(r / beta). Solve for r and plug it into Bradley-Terry: the log-partition term is the same for both responses and cancels.",
+    "What does beta control, and what happens when it is very large or very small?": "beta is the KL strength. Large keeps the policy near the reference; small lets it chase the preferences and overfit.",
+    "How are sequence log-probs computed for chosen and rejected responses, and why mask the prompt?": "Sum the token log-probs over the response only. The prompt is shared and would cancel, but padding and prompt tokens must be masked.",
+    "DPO has been observed to lower the likelihood of both chosen and rejected responses. Why, and what fixes exist?": "The loss only cares about the margin, so both log-probs can drop together. Fixes include adding an SFT or NLL term on chosen (RPO), or methods like DPOP.",
+    "Offline DPO versus online RL such as PPO or GRPO: what does each do better?": "DPO is simple and stable but limited to fixed data. Online RL explores new responses and gets fresh feedback, at higher cost."
+  },
+  "simpo_ipo_loss": {
+    "What problem with DPO does SimPO address, and what does it use instead of the reference log-ratio?": "DPO's reward is not length-normalized and needs a reference model. SimPO uses the average log-prob per token as the reward, plus a margin.",
+    "What problem with DPO does IPO address, and why does a finite target help?": "DPO can push the preference probability toward 1 and the margin toward infinity on deterministic labels. IPO regresses the margin to a finite target.",
+    "Write both losses. Why does SimPO divide by the response length, and what does gamma do?": "SimPO: -logsigmoid(beta * (avg_c - avg_r) - gamma). IPO: (margin - 1/(2 beta))^2. Averaging removes the bias toward longer responses; gamma demands a minimum gap.",
+    "Derive the IPO gradient with respect to the chosen log-probability. What happens once the gap reaches 1 / (2 * beta)?": "The gradient is 2 * (margin - 1/(2 beta)) times the derivative of the margin. It becomes zero at the target, so the gap stops growing.",
+    "Why can -log(sigmoid(x)) overflow, and what stable form avoids it?": "For very negative x, exp(-x) overflows. Use softplus(-x) or F.logsigmoid, which handle both signs.",
+    "Without a reference model, what stops SimPO from drifting far from the SFT model? How would you detect drift?": "Nothing explicit: only the margin and the length normalization. Track KL to the SFT model, the chosen log-probs and output length.",
+    "DPO, IPO and SimPO on noisy human labels versus clean verifiable labels: which would you pick for each?": "With noisy labels, IPO's bounded target avoids overfitting. With clean verifiable labels, DPO or SimPO can push harder. Consider the reference model's cost."
+  },
+  "grpo_loss": {
+    "How does GRPO compute advantages without a critic?": "Sample a group of completions per prompt and use each reward minus the group mean (divided by the group std) as its advantage.",
+    "Why group completions by prompt?": "The baseline must come from the same prompt. Comparing across prompts would reward easy prompts rather than good answers.",
+    "How do you compute per-group mean and std when groups are given by group_ids rather than contiguous blocks?": "Use scatter_add or index_add with group_ids to get per-group sums and counts, compute mean and std, then gather back per sample.",
+    "What happens to a group of size one or with identical rewards?": "The std is zero, so the advantage is 0/0. Use eps or define the advantage as 0: those groups give no learning signal.",
+    "Why detach the advantages before multiplying by log-probs?": "Advantages are a fixed weight from the rewards. Gradients should flow only through the log-probs; otherwise the loss optimizes the reward normalization.",
+    "What does this sequence-level loss leave out compared with a full GRPO objective with clipping and KL?": "The ratio to the old policy with clipping for off-policy steps, a KL penalty to the reference, and token-level averaging.",
+    "When would you prefer GRPO over PPO, and when not?": "GRPO avoids a critic, saving memory, and suits verifiable rewards with many samples. PPO is better for dense or per-step rewards and long horizons."
+  },
+  "ppo_loss": {
+    "What problem does PPO solve compared with vanilla policy gradient?": "Vanilla policy gradient can take destructive steps and can only use each batch once. PPO allows several epochs while limiting how far the policy moves.",
+    "Explain the clipped surrogate objective in plain words.": "Take the smaller of the ratio times the advantage and the clipped ratio times the advantage, so pushing further than the clip range brings no extra reward.",
+    "Why compute the ratio as exp(new_logps - old_logps)?": "Log-probs are stable to subtract. A ratio of tiny probabilities would underflow.",
+    "Walk through the four cases of positive or negative advantage with ratio above or below the clip range.": "A > 0 with ratio > 1 + eps: clipped, no gradient. A > 0 with ratio < 1 - eps: unclipped. Mirror both for A < 0.",
+    "Why are old_logps and advantages constants, and what bug appears if they are not?": "They are data from the rollout. If gradients flow through them, the ratio's gradient is wrong and the advantage becomes something to optimize.",
+    "PPO clipping versus a KL penalty on the policy update: what are the trade-offs?": "Clipping is simple but only approximates a trust region. An adaptive KL penalty is smoother but needs a target KL and coefficient tuning.",
+    "What hyperparameters matter most in PPO for LLMs, and what signs of instability do you watch?": "Learning rate, clip range, KL coefficient, batch size and epochs. Watch KL spikes, the clip fraction, entropy collapse and reward hacking."
+  },
+  "mcts_search": {
+    "What is Monte Carlo Tree Search, and what are its four phases?": "It builds a search tree with random or learned playouts. Selection, expansion, simulation (or evaluation) and backpropagation.",
+    "How has MCTS been used with LLMs for reasoning?": "Nodes are reasoning steps, a value model or verifier scores them, and the search finds better chains or creates training data (AlphaZero-style).",
+    "Explain the UCB or PUCT selection score. What do the exploitation and exploration terms each do?": "PUCT = Q + c * P * sqrt(N_parent) / (1 + N_child). Q exploits known value; the second term explores children with high prior and few visits.",
+    "How do you handle unvisited children in selection?": "With UCB their score is infinite, so they are picked first. With PUCT the prior term drives the choice.",
+    "What gets updated during backpropagation, and how?": "Walk back from the leaf, incrementing visit counts and adding the value to each node's total (or updating the running mean).",
+    "What does c_puct trade off?": "Exploration versus exploitation: high c spreads visits widely, low c commits to the current best.",
+    "Why is MCTS expensive for LLM reasoning, and what cheaper alternatives are used, such as best-of-N or beam search?": "Every node needs LLM generation and evaluation, so costs grow fast. Best-of-N with a verifier and beam search are simpler and parallelize better."
+  }
+}

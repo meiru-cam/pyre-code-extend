@@ -1,0 +1,92 @@
+{
+  "sinusoidal_pe": {
+    "Why do transformers need positional information at all?": "Attention is permutation-equivariant. Without positions, \"dog bites man\" and \"man bites dog\" look the same.",
+    "How does the sinusoidal encoding work, and what is the intuition for multiple frequencies?": "Each pair of dimensions is a sinusoid at a different frequency, like the hands of a clock or binary digits, from fast to slow.",
+    "Write out the formula. Which dimensions get sin and which get cos?": "PE(p, 2i) = sin(p / 10000^(2i/d)) and PE(p, 2i+1) = cos(same). Even dims get sin, odd dims get cos.",
+    "Why can a fixed linear transformation map the encoding at position p to position p plus k?": "For each frequency the pair (sin, cos) at p + k is a rotation of the pair at p, and the rotation depends only on k.",
+    "How do you compute it without a Python loop?": "Build positions (S, 1) and frequencies (1, d/2), multiply, then fill the even and odd columns with sin and cos.",
+    "Sinusoidal versus learned absolute positions versus RoPE: trade-offs?": "Compare parameters, extrapolation and whether relative position appears directly in the attention score.",
+    "Why do absolute encodings extrapolate poorly to longer sequences?": "The model never saw those positions during training. Learned tables have no entries for them, and the sinusoid combinations are unseen."
+  },
+  "rope": {
+    "What is RoPE, and why does rotating Q and K encode relative position?": "It rotates Q and K pairs by a position-dependent angle. The dot product of two rotated vectors depends only on the angle difference.",
+    "Why is RoPE applied to Q and K but not V?": "Position only has to affect which keys match which queries. V carries content that should be mixed as-is.",
+    "Walk through pairing dimensions and applying the rotation. How are the frequencies defined?": "Pair dimensions (2i, 2i+1) or the two halves. theta_i = base^(-2i/d). Rotate each pair by position times theta_i.",
+    "Interleaved pairs versus half-split pairs: why do implementations differ, and what breaks if you mix them?": "Interleaved (original paper, GPT-J) versus half-split (GPT-NeoX, LLaMA). Loading weights with the wrong convention scrambles positions.",
+    "How do you apply RoPE with a KV cache when new tokens start at an offset?": "Rotate new tokens at their absolute positions (offset plus index) and cache the rotated keys.",
+    "Why does RoPE degrade beyond the training context length?": "Low-frequency dims never completed a full rotation during training, so longer positions produce unseen angles.",
+    "RoPE versus ALiBi: extrapolation and efficiency trade-offs?": "ALiBi adds a linear distance bias and extrapolates somewhat but penalizes long range. RoPE is more expressive and works with FlashAttention."
+  },
+  "alibi": {
+    "What is ALiBi, and how does it replace positional embeddings?": "It adds a per-head bias to the attention logits proportional to query-key distance, with no position embeddings at all.",
+    "Why does ALiBi extrapolate to longer sequences?": "The bias is a simple function of distance that keeps working past the training length, since it only makes far tokens less likely.",
+    "How are head slopes computed, and why geometric?": "Slopes 2^(-8/n), 2^(-16/n) and so on. A geometric range gives heads from local to near-global focus.",
+    "How do you build the bias matrix and combine it with the causal mask?": "bias = -slope * (i - j) for j <= i. Add it to the logits together with -inf for future positions.",
+    "Where exactly is the bias added?": "On the pre-softmax logits after the QK^T scaling, per head.",
+    "What does ALiBi's linear recency bias cost on tasks that need long-range attention?": "Far tokens are always penalized, which hurts retrieval of distant facts. Mention needle-in-a-haystack results.",
+    "Why did most recent LLMs pick RoPE over ALiBi?": "RoPE fits well into existing kernels and gives better quality at the training length. Long context was then solved by RoPE scaling methods."
+  },
+  "ntk_rope": {
+    "Why does plain RoPE fail beyond the training context?": "Positions past training produce rotation angles the model never saw, especially in the low-frequency dimensions.",
+    "What does NTK-aware scaling do differently from linear position interpolation?": "Linear interpolation squeezes all positions, losing high-frequency resolution. NTK changes the base so high frequencies stay nearly intact.",
+    "How is the base adjusted from the scale factor and head dimension?": "base' = base * s^(d / (d - 2)). Derive it by requiring the lowest frequency to be interpolated by s.",
+    "Why are high-frequency dimensions preserved and low-frequency ones stretched?": "High frequencies encode local order, which the model relies on. Low frequencies encode long range and need stretching to cover new lengths.",
+    "What stays unchanged when scale equals one?": "With s = 1 the base is unchanged, so the output equals plain RoPE.",
+    "NTK scaling versus YaRN versus fine-tuning on long data: trade-offs?": "NTK needs no training but is imperfect. YaRN adds per-band ramps and an attention temperature. Fine-tuning is best but costs compute and data.",
+    "What quality regressions do you see on short contexts after scaling?": "Changed frequencies slightly shift short-range behavior. Look for perplexity increases at the original length. Dynamic NTK avoids scaling short inputs."
+  },
+  "causal_attention": {
+    "Why do autoregressive models need a causal mask?": "At generation time, token t cannot see t+1. If training lets it peek, what does the model learn, and what happens at inference?",
+    "How does causal masking relate to teacher forcing during training?": "Teacher forcing feeds the ground-truth prefix for every position in one pass. The mask is what makes that one pass equal to S separate next-token predictions.",
+    "How do you build the mask, and why fill with negative infinity rather than zero?": "Use an upper-triangular boolean mask above the diagonal. A zero logit still gets exp(0) = 1 weight; -inf gets exactly 0.",
+    "Why must masking happen before the softmax?": "After softmax, zeroing weights leaves rows that no longer sum to 1. Masking the logits first renormalizes over the allowed positions.",
+    "What does the first row of the attention matrix look like?": "Token 0 can only see itself, so its row is a one-hot on column 0.",
+    "How does causal attention enable KV caching at inference?": "Past tokens never see future ones, so their keys and values never change. You can compute them once and reuse them.",
+    "Causal versus bidirectional attention: what does each do better?": "Bidirectional gives richer representations for understanding tasks (BERT). Causal enables generation and caching. Mention prefix-LM hybrids."
+  },
+  "cross_attention": {
+    "What is cross-attention, and where is it used?": "Queries come from one sequence, keys and values from another. Name encoder-decoder translation, Whisper and text-to-image diffusion.",
+    "Which sequence provides Q and which provides K and V?": "The decoder (the one being generated) provides Q; the encoder output or conditioning provides K and V.",
+    "How do shapes work when the query and key sequences have different lengths?": "Q is (B, S_q, d) and K, V are (B, S_kv, d), so the scores are (B, S_q, S_kv) and the output has the query's length.",
+    "Why is there no causal mask here?": "The encoder output is fully known before decoding starts, so there is no future to hide.",
+    "How would you add a padding mask for the encoder side?": "Build a (B, S_kv) mask for padded encoder positions, broadcast it over heads and queries, and fill with -inf before the softmax.",
+    "Cross-attention versus concatenating the two sequences into one self-attention?": "Concatenation costs (S_q + S_kv)^2 and mixes both ways. Cross-attention costs S_q * S_kv and keeps the roles separate.",
+    "How can you cache the K and V of cross-attention at inference time?": "The encoder output does not change during decoding, so compute its K and V once and reuse them at every step."
+  },
+  "gqa": {
+    "What is grouped-query attention, and why was it introduced?": "Several query heads share one K/V head. It was introduced to shrink the KV cache and memory bandwidth at decode time.",
+    "How does it sit between multi-head and multi-query attention?": "MHA has as many KV heads as query heads; MQA has one. GQA uses G groups in between.",
+    "How do you expand KV heads to match query heads, and how does repeat_interleave differ from repeat?": "repeat_interleave copies each KV head adjacently (k0 k0 k1 k1), matching contiguous query groups; repeat tiles the heads (k0 k1 k0 k1). Use the one that matches the grouping.",
+    "What must divide what for the shapes to work?": "The number of query heads must be divisible by the number of KV heads.",
+    "How much does GQA shrink the KV cache?": "The cache shrinks by n_heads / n_kv_heads, for example 8x for 64 query heads and 8 KV heads.",
+    "What quality does GQA lose compared with full multi-head attention?": "It shows a small quality drop versus MHA and less than MQA. Cite the GQA paper's uptraining results.",
+    "How would you convert a multi-head checkpoint to GQA?": "Mean-pool the K and V projection weights within each group, then uptrain for a small fraction of the original compute."
+  },
+  "sliding_window": {
+    "What is sliding-window attention, and why use it?": "Each token attends only to the last w tokens. Cost becomes linear in length, and so does cache memory.",
+    "How can stacking layers extend the effective receptive field?": "Information hops w tokens per layer, so L layers see about L * w tokens. Think of receptive fields in CNNs.",
+    "How do you build the band mask?": "Allowed when |i - j| <= w (plus j <= i for causal). Build it from broadcast index differences.",
+    "Does this exercise's window include both past and future, and how would you make it causal?": "Check whether j - i can be positive in this exercise. For causal, add the j <= i condition.",
+    "What is the complexity with and without a specialized kernel?": "Dense with a mask is still O(S^2). A banded or blocked kernel gets O(S * w).",
+    "What long-range dependencies does a sliding window miss, and how do hybrid models fix that?": "Facts farther back than the effective receptive field. Hybrids interleave some global attention layers (Gemma, Mistral variants).",
+    "How does a sliding window change KV cache size at inference?": "The cache only needs the last w entries, as a rolling buffer, instead of growing with length."
+  },
+  "linear_attention": {
+    "What is linear attention, and how does it avoid the quadratic cost?": "It replaces softmax with a kernel feature map so attention factorizes. Computing phi(K)^T V first costs O(S d^2).",
+    "What role does the feature map phi play?": "phi maps queries and keys to non-negative features whose dot product approximates a similarity. It stands in for exp.",
+    "Show how reordering the matrix products changes the complexity.": "(phi(Q) phi(K)^T) V is S x S; phi(Q) (phi(K)^T V) is d x d. Matrix multiplication is associative.",
+    "Why must phi produce non-negative features, and why the normalizer?": "Non-negative features keep the weights positive like softmax's. The normalizer phi(Q) times the sum of phi(K) makes the weights sum to 1.",
+    "How would you make linear attention causal with a running sum?": "Keep a running state S_t = S_{t-1} + phi(k_t) v_t^T and a running normalizer z_t. It becomes an RNN.",
+    "Why does linear attention usually underperform softmax attention in quality?": "The fixed-size state cannot store sharp, precise lookups; softmax can focus on a single key. Associative recall suffers.",
+    "How do modern state-space and linear RNN models relate to linear attention?": "Mamba, RetNet and GLA are linear attention with decay or gating on the state. Say what gating adds."
+  },
+  "flash_attention": {
+    "What problem does FlashAttention solve, compute or memory traffic?": "Memory traffic: the S x S matrix is written to and read from HBM. FlashAttention tiles the work in SRAM.",
+    "What is the online softmax trick?": "Compute softmax block by block, keeping a running max and running sum, and rescale earlier partial results when the max grows.",
+    "Walk through how running max and running sum are updated across blocks.": "For each new block: m_new = max(m, block max); l_new = l * exp(m - m_new) + sum of exp(scores - m_new).",
+    "How do you rescale the accumulated output when the running max changes?": "Multiply the accumulated output by exp(m_old - m_new) (and the ratio of normalizers) before adding the new block's contribution.",
+    "Why is the result exactly equal to standard attention, not an approximation?": "Rescaling makes every term end up with the same reference max, so the algebra matches softmax exactly, up to floating-point rounding.",
+    "What does FlashAttention do for the backward pass, and what does it recompute?": "It stores only the output and the log-sum-exp, and recomputes the attention blocks in backward instead of saving the matrix.",
+    "When would FlashAttention not help much?": "Very short sequences, tiny head dims, or when compute-bound. Also hardware without enough SRAM or unusual masks."
+  }
+}

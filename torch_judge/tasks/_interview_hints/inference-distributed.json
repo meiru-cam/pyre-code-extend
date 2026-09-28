@@ -1,0 +1,83 @@
+{
+  "kv_cache": {
+    "What is a KV cache, and why does it speed up autoregressive decoding?": "Each decode step would recompute K and V for all previous tokens. Caching them makes each new step cost O(context).",
+    "What does it cost in memory?": "2 * layers * kv_heads * head_dim * seq_len * batch * bytes per element.",
+    "How do you append new keys and values each step?": "Compute K and V for the new token and concatenate along the sequence dimension, or write into a preallocated buffer.",
+    "How do you handle the causal mask during prefill versus decode?": "Prefill needs the full causal mask. A single decode token can attend to everything cached, so no mask is needed.",
+    "Compute KV cache size for a given model and sequence length.": "Plug numbers into 2 * L * n_kv * d_head * S * bytes: for example LLaMA-2 7B at 4k tokens in fp16 is about 2 GB per sequence.",
+    "How do MQA, GQA and MLA reduce KV cache size?": "MQA and GQA reduce the number of KV heads. MLA caches a small latent vector and reconstructs K and V.",
+    "Why does batch size at inference get limited by the KV cache?": "GPU memory minus weights, divided by per-sequence KV size, caps the batch."
+  },
+  "int8_quantization": {
+    "What is weight quantization, and why INT8?": "Store weights in 8 bits with a scale to cut memory and bandwidth by about 4x versus fp32 (2x versus fp16).",
+    "Why per-channel scales rather than per-tensor?": "Different output channels have different ranges. One scale for all wastes precision on small channels.",
+    "How do you compute the scale and round to int8?": "scale = max(|w|) / 127 per row; q = round(w / scale), clamped to [-127, 127].",
+    "Symmetric versus asymmetric quantization?": "Symmetric uses zero point 0 and suits zero-centered weights. Asymmetric adds a zero point for skewed ranges such as post-ReLU activations.",
+    "How do you dequantize in the forward pass?": "Compute w approximately as q * scale, then run the matmul, or fold the scale into the output.",
+    "Why are outliers a problem for INT8 in LLMs, and what do LLM.int8 or SmoothQuant do?": "A few activation channels are huge, so one scale crushes the rest. LLM.int8 keeps outliers in fp16; SmoothQuant moves scale from activations to weights.",
+    "Weight-only versus weight-and-activation quantization?": "Weight-only saves memory and helps memory-bound decoding. W8A8 also speeds up compute but must handle activation outliers."
+  },
+  "topk_sampling": {
+    "What are top-k and top-p sampling?": "Top-k keeps the k most likely tokens; top-p keeps the smallest set whose probabilities add up to p. Both renormalize and sample.",
+    "What does temperature do before filtering?": "Dividing logits by T sharpens (T < 1) or flattens (T > 1) the distribution, which changes which tokens pass a top-p cutoff.",
+    "How do you implement top-p with a sorted cumulative sum?": "Sort probabilities descending, take the cumsum, mask tokens whose cumsum before them already exceeds p, then scatter the mask back.",
+    "How do you make sure at least one token survives?": "Always keep the top token, for example by shifting the mask one position right or forcing index 0 to stay.",
+    "In which order do temperature, top-k and top-p apply?": "Usually temperature first, then top-k, then top-p. Say what changes if top-p runs on untempered probabilities.",
+    "Top-p versus min-p versus typical sampling?": "Top-p uses a fixed probability mass. Min-p keeps tokens above a fraction of the top probability, adapting to confidence. Typical sampling targets expected information content.",
+    "How do sampling settings affect RL rollouts and evaluation?": "Rollouts need diversity for exploration, and the training logprobs must match the sampling distribution. Evaluation often uses greedy or fixed settings with pass@k."
+  },
+  "logits_processors": {
+    "What do temperature, top-k and top-p each do to the next-token distribution?": "Temperature rescales all logits; top-k keeps a fixed count; top-p keeps the smallest set covering p of the mass.",
+    "Why does the repetition penalty divide positive logits but multiply negative ones?": "The goal is always to make the token less likely. Dividing a negative logit would make it larger, so negatives are multiplied instead.",
+    "Walk through implementing top-p on a batch. Is the token that crosses the threshold kept, and how do you map the mask back from sorted order?": "Sort descending, cumulative sum, remove tokens where the cumsum excluding themselves is already above p (so the crossing token stays), then scatter back with the sort indices.",
+    "Why does the order of temperature and top-p matter? Give a concrete example.": "Temperature changes the shape before the cutoff. Example: logits [2, 1, 0] with p = 0.8 keep a different number of tokens at T = 0.5 than at T = 2.",
+    "How should top-k treat ties, and what does torch.topk do with them?": "Ties at the k-th value: either keep all tied tokens or break by index. torch.topk makes no stable guarantee, so the spec must say.",
+    "Top-p versus top-k versus min-p for creative writing and for code: which would you use and why?": "Creative writing wants moderate p or min-p for diversity. Code wants low temperature or a small k because one wrong token breaks it.",
+    "Repetition penalty versus frequency and presence penalties: what does each punish, and when do they hurt quality?": "Repetition penalty scales logits of any seen token once. Frequency penalty grows with count; presence penalty is a flat one-time subtraction. They can suppress needed repeats such as names or code."
+  },
+  "beam_search": {
+    "What is beam search, and how does it differ from greedy decoding?": "Keep the B best partial sequences by total log-probability at each step, instead of only the single best token as greedy does.",
+    "Why is beam search common in translation but less common for open-ended chat?": "Translation has one mostly-correct answer where likelihood tracks quality. Chat wants diverse, natural text, and beams give bland, repetitive output.",
+    "How do you expand and prune beams at each step, and what do you keep per beam?": "Expand each beam by all tokens, score cumulative log-prob, keep the top B overall. Store tokens, score and finished flag per beam.",
+    "How do you handle beams that finish with an end token early?": "Move finished beams to a completed list and keep searching with the rest until enough finish or max length is reached.",
+    "Why use log-probabilities, and what is length normalization for?": "Summing logs avoids underflow from multiplying probabilities. Longer sequences accumulate more negative log-probs, so normalizing avoids preferring short outputs.",
+    "Beam search versus sampling: quality, diversity and repetition trade-offs?": "Beam finds higher-likelihood text, but high likelihood is often dull and repetitive. Sampling is more diverse but noisier.",
+    "How does beam width affect compute and output quality, and why can larger beams hurt?": "Compute grows linearly with width. Wider beams find higher-likelihood outputs that can be worse (the beam search curse), such as empty or short translations."
+  },
+  "speculative_decoding": {
+    "What is speculative decoding, and why does it speed up inference?": "A cheap draft proposes several tokens and the big model verifies them in one forward pass, turning serial decode steps into one parallel step.",
+    "Why is the output distribution unchanged?": "The accept-reject rule with residual resampling is a form of rejection sampling that reproduces the target distribution exactly.",
+    "Walk through the accept rule min(1, p over q).": "Accept a draft token x with probability min(1, p(x) / q(x)). If the target likes it at least as much, always accept.",
+    "How do you sample the correction token on rejection?": "Sample from the normalized max(0, p - q), the probability mass the draft underweighted.",
+    "What happens when all draft tokens are accepted?": "You get one bonus token sampled from the target at the next position, since its distribution was already computed.",
+    "What determines the speedup, and when does it vanish?": "The acceptance rate and the draft's cost relative to the target. It vanishes with a poorly matched draft or a compute-bound large batch.",
+    "Draft model versus self-speculation methods such as Medusa or EAGLE?": "A separate draft needs a matching tokenizer and its own memory. Medusa and EAGLE add heads on the target model, avoiding a second model but needing training."
+  },
+  "tensor_parallel": {
+    "What is tensor parallelism in Megatron-style MLPs?": "Split each weight matrix across GPUs so every GPU computes part of every layer, which cuts per-GPU memory and compute.",
+    "Why column-parallel first and row-parallel second?": "Column-split the first matrix so each GPU holds complete hidden units and can apply the nonlinearity locally. Row-split the second so partial outputs just need summing.",
+    "Where do the all-reduce operations happen in forward and backward?": "Forward: one all-reduce after the row-parallel layer. Backward: one all-reduce of the input gradient before the column-parallel layer.",
+    "Why no communication between the two linear layers?": "Each GPU's slice of hidden units feeds directly into its matching rows of the second matrix. Nothing needs to be exchanged.",
+    "How do you split biases correctly?": "The first layer's bias is split with its columns. The second layer's bias is added once after the all-reduce, not on every rank.",
+    "Why is tensor parallelism usually kept within a node?": "It needs an all-reduce in every layer, which demands NVLink bandwidth. Crossing nodes over the network is too slow.",
+    "Tensor versus pipeline versus data parallelism: how do you combine them?": "TP within a node, pipeline across nodes for depth, data parallel on the outside. Mention 3D parallelism and the memory and bandwidth each needs."
+  },
+  "fsdp_step": {
+    "What is FSDP, and how does it differ from data parallelism?": "It shards parameters, gradients and optimizer state across data-parallel workers instead of replicating them, and gathers parameters only when needed.",
+    "What does ZeRO stage 3 shard?": "All three: parameters, gradients and optimizer states.",
+    "Walk through all-gather before forward and reduce-scatter after backward.": "Before a layer runs, all-gather its full parameters, then free them. After backward, reduce-scatter the gradients so each worker keeps the sum for its shard.",
+    "Why is the gradient divided by the number of workers?": "It averages the per-worker gradients so the result equals the gradient of the global mean loss.",
+    "How does each worker update only its shard?": "Each worker runs the optimizer only on the parameter slice and optimizer state it owns.",
+    "What does FSDP cost in communication compared with DDP?": "About 1.5x DDP's communication volume (all-gather forward and backward plus reduce-scatter), in exchange for much less memory.",
+    "FSDP versus tensor parallelism versus pipeline parallelism: when each?": "FSDP when memory is the problem and the interconnect is good. TP for huge layers within a node. PP for very deep models across slow links."
+  },
+  "ring_attention": {
+    "What is ring attention, and why is it needed for long contexts?": "It splits a long sequence across devices and passes K and V blocks around a ring, so no device holds the full attention.",
+    "How does it parallelize across the sequence?": "Each device owns a chunk of queries and computes attention against every K/V block as the blocks rotate past.",
+    "How do K and V chunks rotate around the ring?": "At each step, send your current K/V block to the next device and receive one from the previous. After N steps every device has seen all blocks.",
+    "How does online softmax combine partial results exactly?": "Keep a running max, sum and output per query and rescale as each block arrives, as in FlashAttention.",
+    "How do you handle causal masking across chunks?": "Blocks entirely in the future are skipped, the diagonal block gets a triangular mask, and past blocks need no mask. Note the load imbalance.",
+    "How does communication overlap with compute?": "Send the next block while computing on the current one. It hides communication when block compute takes longer than the transfer.",
+    "Ring attention versus other sequence parallelism approaches such as Ulysses?": "Ulysses uses all-to-all to switch from sequence sharding to head sharding. Its communication is lower, but parallelism is capped by the number of heads."
+  }
+}

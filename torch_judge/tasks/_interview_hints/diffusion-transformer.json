@@ -1,0 +1,38 @@
+{
+  "noise_schedule": {
+    "What is a noise schedule in diffusion, and what does alpha-bar represent?": "The schedule sets how much noise is added at each step. alpha-bar_t is the fraction of the signal's variance left at step t.",
+    "How does the schedule relate to the signal-to-noise ratio?": "SNR(t) = alpha-bar / (1 - alpha-bar). The schedule is the path SNR follows from high to low.",
+    "Implement linear, cosine and another schedule. How do betas become alpha-bar?": "Linear: evenly spaced betas. Cosine: define alpha-bar with a cos^2 curve directly. alpha-bar_t is the cumulative product of (1 - beta).",
+    "Why clip betas in the cosine schedule?": "Near the end of the cosine curve the implied betas approach 1, which gives singular steps. Clip them (for example at 0.999).",
+    "What should alpha-bar look like at the first and last timestep?": "Close to 1 at the first step (almost clean) and close to 0 at the last (almost pure noise).",
+    "Why did the cosine schedule improve over linear for small images?": "The linear schedule destroys low-resolution images too early, wasting many steps on pure noise. Cosine spreads the SNR decrease more evenly.",
+    "How does the schedule interact with image resolution?": "High-resolution images keep more signal at the same noise level because of pixel redundancy. Shift the schedule toward more noise (SNR shift)."
+  },
+  "ddim_step": {
+    "How does DDIM differ from DDPM sampling?": "DDIM uses a non-Markovian process with the same marginals, so sampling can be deterministic with the same trained model.",
+    "Why can DDIM skip timesteps?": "Its update only needs alpha-bar at two times, so you can jump between any pair of timesteps.",
+    "Walk through predicting x0 from the noise prediction, then stepping to the previous timestep.": "x0_hat = (x_t - sqrt(1 - ab_t) * eps) / sqrt(ab_t). Then x_prev = sqrt(ab_prev) * x0_hat + sqrt(1 - ab_prev - sigma^2) * eps + sigma * z.",
+    "What does setting eta to zero mean?": "sigma = 0: no fresh noise, a deterministic mapping from noise to image.",
+    "Which alpha-bar values do you need, and how do you index them?": "alpha-bar at the current t and at the previous t in your skipped sequence. Use alpha-bar = 1 when the previous step is before the start.",
+    "Fewer DDIM steps versus quality: where does it break down?": "At about 10 to 20 steps and below, discretization error grows and images get blurry or lose detail.",
+    "DDIM versus flow-matching samplers or distilled one-step models?": "Flow-matching ODE solvers follow straighter paths. Distilled models reach 1 to 4 steps but need extra training and may lose diversity."
+  },
+  "flow_matching": {
+    "What is flow matching, and how does it differ from diffusion training?": "Learn a velocity field that moves noise to data along a chosen path, with a plain regression target and no noise schedule or score.",
+    "What is the target velocity for the straight-line path?": "For x_t = (1 - t) x0 + t x1 the velocity is the constant x1 - x0. Check which endpoint is noise in this exercise.",
+    "How do you sample t and build the interpolated point?": "Sample t uniformly (or logit-normal) per example and mix noise and data with t.",
+    "Write the loss. Which direction does the velocity point, noise to data or data to noise?": "MSE between the predicted velocity and (target - source). The direction depends on whether t = 0 is noise or data.",
+    "How do you sample at inference from the learned velocity?": "Integrate dx/dt = v(x, t) from the noise end to the data end with Euler or a higher-order ODE solver.",
+    "Why do straight paths allow fewer sampling steps?": "Straight paths have low curvature, so a coarse solver makes small errors. Rectified flow straightens further.",
+    "How do timestep sampling distributions such as logit-normal affect quality?": "Uniform t wastes samples on easy ends. Logit-normal (as in SD3) focuses on the middle, where the task is hardest."
+  },
+  "adaln_zero": {
+    "What is adaLN-Zero in DiT, and how does it inject the timestep and class condition?": "The condition embedding (timestep plus class) regresses per-channel shift, scale and gate values that modulate each block's norms and residual branches.",
+    "Why initialize the modulation so that each block starts as the identity?": "The deep network starts as the identity, which stabilizes early training. Each block learns gradually how much to contribute.",
+    "Which parameters does the conditioning projection regress, and where does each apply in the block?": "Shift and scale for the norms before attention and before the MLP, and a gate on each residual branch. Six vectors per block.",
+    "Why zero-initialize the final projection rather than the whole block?": "Zeroing only the modulation output gives gates of 0, which makes the block the identity while its internal layers still start with normal random weights.",
+    "How do the shapes broadcast from a per-sample condition to every token?": "The condition is (B, D) and is unsqueezed to (B, 1, D) so it broadcasts across all N tokens.",
+    "adaLN versus cross-attention conditioning versus in-context tokens: trade-offs?": "adaLN is cheap and suits a global condition. Cross-attention handles token sequences such as text. In-context tokens are simplest but cost sequence length.",
+    "What does zero initialization buy for very deep diffusion transformers?": "Stable training at large depth without warmup tricks, and each block starts as the identity. It was DiT's best-performing variant."
+  }
+}

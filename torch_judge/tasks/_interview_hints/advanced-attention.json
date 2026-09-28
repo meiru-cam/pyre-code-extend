@@ -1,0 +1,29 @@
+{
+  "qk_norm": {
+    "What is QK-norm, and why was it introduced?": "Normalize the queries and keys (per head) before the dot product. It keeps attention logits bounded in large-scale training.",
+    "What instability does it address?": "Attention logits grow without bound, the softmax collapses to one-hot and the loss diverges. This was reported for ViT-22B and large LMs.",
+    "Why normalize per head over the head dimension?": "Each head's query and key vectors are what get dotted. Normalizing over head_dim bounds their norms.",
+    "Where does it go relative to RoPE?": "Before RoPE: normalize the raw projections, then rotate. RoPE preserves norms either way.",
+    "Is there a learnable scale, and why?": "Usually yes (RMSNorm weight), because unit-norm vectors would cap logits too low and the model needs to learn a temperature.",
+    "QK-norm versus logit soft-capping?": "QK-norm fixes the cause (growing Q and K norms). Soft-capping (Gemma) squashes logits with tanh and bounds the symptom.",
+    "What does QK-norm change about the effective temperature of attention?": "Logits become bounded by the learned scale times cosine similarity, so the scale acts as a learned inverse temperature."
+  },
+  "hybrid_attention_schedule": {
+    "Why do some models alternate local and global attention layers?": "Local layers are cheap and have a bounded cache. A few global layers keep long-range access. Name Gemma 2 and 3, and Mistral-style designs.",
+    "What is global_every?": "Every global_every-th layer is global; the rest are local. Check whether the index is 0-based and which layers count.",
+    "How do you build the causal local mask for a given window?": "Allowed when j <= i and i - j < window. Build it from broadcast index differences.",
+    "How do you decide whether a layer is global from its index?": "Use (layer_index + 1) % global_every == 0 or a similar rule. Match the exercise's convention.",
+    "What does each position see in a local layer at the start of the sequence?": "Early positions have fewer than window predecessors, so they see everything before them, the same as global.",
+    "How much KV cache does a hybrid schedule save?": "Local layers cache only window tokens, so the total shrinks by about the fraction of local layers times (1 - window / length).",
+    "What long-range tasks suffer from mostly local layers?": "Retrieval of facts far in the past and multi-hop reasoning across distant parts, when too few global layers exist."
+  },
+  "frontier_attention_block": {
+    "What design choices of recent LLM attention does this block combine?": "GQA, RoPE, QK-norm, a sliding window on some layers, pre-norm and no biases. Name one model family per choice.",
+    "Why mix local and global attention layers?": "Local layers cut compute and cache; global layers preserve long-range access.",
+    "How do you decide per layer whether attention is local or global?": "Use the layer index against the configured schedule, for example every n-th layer global.",
+    "Where do QK normalization and RoPE go relative to each other?": "Normalize first, then rotate. RoPE preserves norms, so the order mainly affects which values get the learned scale.",
+    "How do grouped KV heads expand to query heads?": "repeat_interleave the KV heads by n_heads / n_kv_heads along the head dimension.",
+    "How does local and global mixing change KV cache size and long-context quality?": "The cache shrinks with more local layers. Long-context quality depends on keeping enough global layers.",
+    "What does QK-norm fix, and what does it cost?": "It prevents attention logit growth and training divergence. The cost is an extra norm per head and some expressivity, since the temperature is bounded."
+  }
+}

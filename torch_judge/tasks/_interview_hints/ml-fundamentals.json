@@ -1,0 +1,92 @@
+{
+  "linear_regression": {
+    "What assumptions does linear regression make?": "A linear relationship, independent errors with constant variance (homoscedastic), no perfect collinearity, and Gaussian errors for inference.",
+    "How does least squares relate to maximum likelihood with Gaussian noise?": "With Gaussian noise the log-likelihood is minus the sum of squared errors, scaled, plus a constant, so maximizing it is least squares.",
+    "Derive the normal equation.": "Set the gradient of ||Xw - y||^2 to zero: X^T X w = X^T y.",
+    "Why is solving a linear system preferable to computing an explicit inverse?": "An explicit inverse is slower and less accurate. solve or lstsq (via QR or Cholesky) is more stable when X^T X is ill-conditioned.",
+    "How does gradient descent converge here, and what learning rate is safe?": "The loss is a convex quadratic. It converges for lr < 2 / (largest eigenvalue of the Hessian); the condition number sets the speed.",
+    "Closed form versus gradient descent for large data?": "Closed form costs O(n d^2 + d^3) and needs all data in memory. Gradient descent streams through data and scales to large n and d.",
+    "What do ridge and lasso regularization change?": "Ridge (L2) shrinks the weights and stabilizes the solution. Lasso (L1) drives some weights to exactly zero, selecting features."
+  },
+  "binary_cross_entropy": {
+    "What is binary cross-entropy, and when do you use it instead of softmax cross-entropy?": "The log loss for yes/no targets. Use it when each output is an independent binary decision rather than one choice among classes.",
+    "Why does a multi-label classifier use one sigmoid per class rather than a softmax over classes?": "The labels are not mutually exclusive: an image can be both \"cat\" and \"outdoor\". Softmax forces the classes to compete.",
+    "Why does computing sigmoid first and then log fail for large logits? Rewrite the loss in a stable form.": "sigmoid saturates to exactly 0 or 1, and log(0) = -inf. Use max(z, 0) - z*y + log(1 + exp(-|z|)).",
+    "What is the gradient of BCE with respect to the logit, and why is it so simple?": "sigmoid(z) - y: the derivative of the log-sigmoid cancels the sigmoid's derivative.",
+    "How does pos_weight change the loss and the gradient, and how would you pick its value?": "It multiplies the positive term by w, which scales positive-example gradients up. Start from the negative-to-positive ratio.",
+    "pos_weight versus resampling versus focal loss for class imbalance: what does each change?": "pos_weight reweights the loss, resampling changes the data seen, and focal loss downweights easy examples. Each shifts the effective prior differently.",
+    "What happens to calibration when you train with pos_weight far from 1?": "The model's probabilities shift toward positives and become overconfident. Recalibrate, or adjust the threshold."
+  },
+  "focal_loss": {
+    "What is focal loss, and what problem does it solve?": "Cross-entropy multiplied by (1 - p_t)^gamma. It solves easy negatives overwhelming the loss in dense detection (RetinaNet).",
+    "What do alpha and gamma control?": "alpha balances positive and negative classes. gamma sets how strongly easy, confident examples are downweighted.",
+    "Write focal loss in terms of p_t.": "FL = -alpha_t (1 - p_t)^gamma log(p_t), where p_t is the probability of the true class.",
+    "How do you compute it stably from logits?": "Get log p_t from the BCE-with-logits form, and p_t = exp(-bce). Do not compute sigmoid then log.",
+    "What does gamma equal to zero reduce to?": "It reduces to alpha-weighted cross-entropy.",
+    "Focal loss versus class reweighting versus resampling?": "Focal loss adapts per example by difficulty. Reweighting is a fixed per-class factor. Resampling changes the data seen.",
+    "Why can focal loss hurt calibration?": "Downweighting confident predictions pushes probabilities toward the middle, so raw outputs become miscalibrated."
+  },
+  "weight_regularization": {
+    "What do L1 and L2 regularization do to the weights, and why does L1 produce exact zeros while L2 does not?": "Both shrink weights. L1's constant-magnitude gradient pushes small weights all the way to 0; L2's gradient shrinks as the weight shrinks.",
+    "How do L1 and L2 relate to Laplace and Gaussian priors in a MAP view?": "The L2 penalty is the negative log of a Gaussian prior and L1 of a Laplace prior. MAP means loss plus penalty.",
+    "Why is the L2 term usually written with a 0.5 factor, and how does it relate to weight_decay in SGD?": "The derivative of 0.5 * lambda * w^2 is lambda * w, which is exactly SGD's weight_decay term.",
+    "L1 is not differentiable at zero. What gradient does autograd use there, and how do proximal methods handle it instead?": "Autograd uses sign(0) = 0 as the subgradient. Proximal methods apply soft-thresholding after the step, which gives exact zeros.",
+    "Why exclude biases and normalization scales from the penalty?": "They do not cause overfitting through magnitude, and shrinking them hurts. Normalization gains need freedom to scale.",
+    "Why is L2 in the loss not equivalent to weight decay under Adam, and what does AdamW change?": "Adam divides the L2 gradient by sqrt(v), so decay is uneven across parameters. AdamW applies decay directly to the weights.",
+    "L1 versus L2 versus elastic net: when would you pick each?": "L1 for sparsity and feature selection, L2 for general shrinkage, and elastic net when features are correlated."
+  },
+  "dropout": {
+    "What does dropout do, and why does it regularize?": "It zeroes activations at random during training, so the network cannot rely on specific units. This acts like an ensemble of subnetworks.",
+    "Why scale surviving activations by 1 over 1 minus p?": "It keeps the expected activation equal in training and evaluation, so no rescaling is needed at test time (inverted dropout).",
+    "How do you implement train and eval modes?": "Training: mask = rand < 1 - p; out = x * mask / (1 - p). Eval: return x unchanged.",
+    "What happens at p equal to 0 and p equal to 1?": "p = 0 is the identity. p = 1 zeroes everything and divides by zero, so handle it explicitly.",
+    "How is the mask sampled, and is it shared across the batch?": "Draw an independent Bernoulli per element of the input shape, not shared across the batch unless you are doing spatial dropout.",
+    "Why do most large LLM pretraining runs use little or no dropout?": "With huge data and one epoch there is little overfitting, and dropout slows convergence.",
+    "Dropout versus weight decay versus data augmentation?": "Dropout adds noise to activations, weight decay constrains weights, and augmentation increases data diversity. They fit different regimes."
+  },
+  "sgd_momentum": {
+    "What problem does momentum solve for plain SGD? Describe it for a long narrow valley.": "SGD zigzags across the steep walls and crawls along the flat floor. Momentum averages out the zigzag and speeds up along the valley.",
+    "What is the effective step size along a direction with a constant gradient, in terms of momentum?": "With velocity v = mu * v + g, a constant gradient reaches v = g / (1 - mu), so the effective step is lr / (1 - mu).",
+    "Walk through the update. Why does PyTorch initialize the buffer to the first gradient rather than zero?": "buf = mu * buf + g, then p -= lr * buf. Starting from the first gradient avoids a weak first step.",
+    "How does Nesterov momentum differ from classical momentum, both in the math and in this implementation?": "Nesterov uses the look-ahead gradient. PyTorch applies it as g + mu * buf in the update.",
+    "Why must step() run under torch.no_grad() and update parameters in place?": "The update must not be recorded by autograd, and in-place changes keep the same Parameter objects the model and optimizer reference.",
+    "SGD with momentum versus Adam: memory, tuning effort and generalization?": "SGD needs one buffer versus Adam's two and generalizes well in vision, but needs more tuning. Adam is robust on transformers.",
+    "How do momentum and learning rate interact, and why do schedules sometimes change both?": "Effective lr is about lr / (1 - mu), so changing one changes the step. Some schedules lower momentum when the learning rate is high."
+  },
+  "muon_newton_schulz": {
+    "What does Muon do differently from Adam, and what is the ideal update it approximates?": "It orthogonalizes the momentum matrix: it replaces the update with the nearest semi-orthogonal matrix (U V^T from the SVD).",
+    "Why would equalizing the singular values of an update help training?": "Gradient updates are dominated by a few directions. Equal singular values boost rare directions and keep the step scale controlled.",
+    "Walk through the Newton-Schulz iteration. Why normalize by the Frobenius norm first, and why transpose tall matrices?": "Normalizing puts all singular values at or below 1, where the polynomial works. For tall matrices, transpose so the Gram matrix is the small one.",
+    "What happens to one singular value under the quintic polynomial, and why do the tuned coefficients not converge exactly to 1?": "Each iteration maps sigma to a*sigma + b*sigma^3 + c*sigma^5. The coefficients push small values up quickly, trading exact convergence for speed, and settle roughly between 0.7 and 1.2.",
+    "Why is Muon applied only to hidden 2-D weights, and what optimizes embeddings, the LM head and norm gains?": "Orthogonalizing is meaningful for weight matrices. Embeddings, the head, norms and biases use AdamW.",
+    "Muon versus AdamW: memory, compute per step and behaviour under distributed sharding?": "One momentum buffer versus two, with extra matmuls per step. Under sharding the full matrix must be gathered to orthogonalize it.",
+    "Newton-Schulz versus an exact SVD or polar decomposition: speed, numerical precision and bfloat16 stability?": "SVD is exact but slow on GPU and unstable in bf16. Newton-Schulz uses only matmuls, is fast and works in bf16."
+  },
+  "manual_backprop_mlp": {
+    "What is backpropagation, and why is it much cheaper than computing each gradient separately?": "The chain rule applied from the output backwards, reusing intermediate gradients, so all gradients cost about one extra forward pass.",
+    "Derive the gradient of softmax cross-entropy with respect to the logits.": "Differentiate log-softmax: dL/dz = softmax(z) - onehot(y), divided by the batch size if the loss is a mean.",
+    "Walk through the backward pass of y = x @ W.T + b. Why is dW an outer product summed over the batch?": "dx = dy @ W, dW = dy^T @ x, db = dy.sum(0). Each example contributes an outer product of its dy and x.",
+    "What does the ReLU do to the gradient, what is a dead ReLU, and how does the derivative convention at 0 matter?": "It passes the gradient where the input was > 0 and zeroes it elsewhere. A dead unit's gradient is always 0. Pick the convention at exactly 0 to match autograd.",
+    "How would you verify hand-written gradients with a finite-difference check, and why use float64 for it?": "Perturb each parameter by +/- h, compute (L+ - L-) / 2h, and compare with a relative error. float64 keeps rounding error below the finite-difference error.",
+    "Reverse-mode versus forward-mode automatic differentiation: when is each cheaper?": "Reverse mode costs one backward per output, so it is cheap for scalar losses. Forward mode costs one pass per input, so it is cheap when inputs are few.",
+    "Which intermediate activations must be stored for this backward pass, and how does activation checkpointing trade compute for that memory?": "The input, the pre-activation (or ReLU mask), the hidden activation and the logits or probabilities. Checkpointing stores fewer of them and recomputes."
+  },
+  "precision_recall_f1": {
+    "Define precision and recall in words. Give an application where each one matters more.": "Precision: of the predicted positives, how many are right. Recall: of the actual positives, how many are found. Spam filtering versus cancer screening.",
+    "Why is F1 a harmonic mean rather than an arithmetic mean of precision and recall?": "The harmonic mean is low if either is low, so a model cannot score well by maximizing only one.",
+    "Explain micro, macro and weighted averaging. Why do micro precision, recall and F1 all equal accuracy for single-label multiclass data?": "Micro pools counts, macro averages per class, weighted averages by support. In single-label multiclass every false positive is someone else's false negative.",
+    "Is macro F1 the F1 of macro precision and macro recall? Construct a case where the two differ.": "No. Example: class A with P = 1, R = 0.1 and class B with P = 0.1, R = 1 give different results from each formula.",
+    "What should happen when a class is never predicted or never appears in the targets?": "Precision or recall has a zero denominator. Define it as 0 (with a warning) and say which average it affects.",
+    "On a heavily imbalanced dataset, which average would you report and why?": "Macro F1 or per-class numbers, since micro is dominated by the majority class. Also report per-class results.",
+    "F1 depends on the decision threshold. How would you choose the threshold, and when would you prefer a threshold-free metric?": "Sweep the threshold on validation data to maximize F1 or meet a cost constraint. Use PR AUC or ROC AUC when no threshold is fixed."
+  },
+  "roc_auc": {
+    "What does the ROC curve plot, and what does the area under it mean as a probability?": "The true positive rate against the false positive rate over all thresholds. AUC is the probability that a random positive scores above a random negative.",
+    "Why is ROC AUC called threshold-free, and why does it not change when you rescale scores monotonically?": "It depends only on the ranking of scores, so any monotone transform leaves it unchanged.",
+    "How do you compute AUC in O(n log n) instead of comparing every positive with every negative?": "Sort by score, then use ranks: AUC = (sum of positive ranks - n_pos (n_pos + 1)/2) / (n_pos * n_neg).",
+    "How should tied scores be handled, and why does the trapezoidal rule give them half credit?": "Tied pairs count as half a win. Use average ranks for ties, which matches the trapezoidal rule.",
+    "What should the function do when only one class is present, and why?": "It is undefined, since TPR or FPR has a zero denominator. Raise an error (as sklearn does) rather than returning a number.",
+    "Why can ROC AUC look good on heavily imbalanced data while precision is poor? When would you use PR AUC instead?": "The FPR is divided by a huge number of negatives, so many false positives barely move it. PR AUC exposes low precision.",
+    "AUC versus log loss versus accuracy for model selection: what does each reward?": "AUC rewards ranking, log loss rewards calibrated probabilities, and accuracy rewards decisions at one threshold."
+  }
+}
