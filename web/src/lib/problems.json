@@ -15705,14 +15705,14 @@
     },
     {
       "id": "dsh_tool_pipeline",
-      "title": "Guarded Tool Execution Pipeline",
-      "titleZh": "Guarded Tool Execution Pipeline",
+      "title": "Tool Pipeline Capstone",
+      "titleZh": "Tool Pipeline Capstone",
       "difficulty": "Hard",
       "functionName": "ToolRuntime",
       "hint": "",
       "hintZh": "",
-      "descriptionEn": "Implement the pipeline every tool call in DeepSeek Harness goes through, from the model's request to the single result the model sees.\n\n**Signature:** `ToolRuntime(tools, approve=None)` with attributes `pre_execute`, `guards`, `around`, `post_execute`, `observers` (lists you may append to) and method `execute(call) -> dict`.\n\n**Parameters:**\n- `tools` — dict from tool name to a function `body(arguments) -> list` of content blocks. It may raise.\n- `approve` — optional function `approve(call, reason) -> \"allowed-once\" | \"rejected\" | \"cancelled\"`; `None` means no approval channel.\n- `call` — dict with `name` and `arguments`.\n\n**Results.** Every result is a dict. Success: `{\"is_error\": False, \"content\": blocks}`. An *error result for message `m` with code `c`* is `{\"is_error\": True, \"content\": [{\"type\": \"text\", \"text\": f\"Error: {m}\"}], \"error\": {\"message\": m, \"code\": c}}`, where `c` may be `None`. A raised exception `e` gives the error result for `str(e)` with code `None`. A result may also carry `additional_contexts`, a list, which is present only when non-empty.\n\n**Stages, in order:**\n- **Pre-execute.** Run `pre_execute` as middleware: each is `f(call, next)` and `next()` continues to the next one; after the last, `next()` returns `{\"kind\": \"allow\"}`. The decision is `allow`, `deny` with `reason`, `cancel`, or `ask` with optional `reason`.\n- **Ask.** Resolve `ask` to `allow` or `deny`. With no approval channel: deny with the ask's `reason`, or `f'tool \"{name}\" requires approval (not yet supported)'` when it has none. Otherwise call `approve(call, reason)` once: `\"allowed-once\"` allows, `\"rejected\"` denies with `f'the user rejected tool \"{name}\"'`, `\"cancelled\"` denies with `f'approval for tool \"{name}\" was cancelled'`.\n- **Cancel** becomes the error result for `\"tool call aborted before dispatch\"` with code `\"ABORTED_BEFORE_DISPATCH\"`.\n- **Guards.** Only when the decision is `allow`: call each `guard(call)` in order; the first one that returns a string denies with that reason.\n- **Deny** becomes the error result for the reason with code `None`.\n- **Dispatch.** Only when allowed: run `around` as middleware, each `f(call, next)`; after the last, `next()` runs the tool body. The body step returns the success result, or the error result for `f'unknown tool \"{name}\"'` with code `\"UNKNOWN_TOOL\"` if the name is not in `tools`, or the exception's error result if the body raises.\n- **Post-execute.** The cancel, deny and dispatch results all go through `post_execute` middleware, each `f(call, result, next)`; after the last, `next()` returns `{\"kind\": \"accept\"}`. `accept` keeps the result, replaces its `content` if the decision has `content`, and sets `additional_contexts` to the result's contexts followed by the decision's. `block` produces `{\"is_error\": True, \"content\": feedback, \"error\": {\"message\": text, \"code\": None}}` where `text` joins the `text` of the feedback's text blocks with newlines, and `additional_contexts` holds only the decision's contexts.\n- **Pipeline failures.** If a `pre_execute`, guard, `approve`, `around` or `post_execute` function raises, stop right there: the result is that exception's error result, and later stages, including post-execute, are skipped.\n- **Observers.** Call every `observers` function with `(call, result)` on the final result. An observer that raises is ignored and does not stop the others. Return the final result.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**One result per call.** Model APIs require exactly one result per tool call, so every failure, including a crash in a policy plugin, is converted into an error result instead of propagating.\n\n**Why guards are separate.** Pre-execute listeners are extensible middleware, so one listener can override another. Guards run after all of them and can only deny, never allow, so a security rule cannot be undone by a later plugin.\n\n**Why denials still reach post-execute.** Post-execute listeners see denied calls too; the repeat-call reminder counts them, because a model hammering a denied call is a loop.\n\n**Why observers are contained.** A logging or telemetry observer must never change or break the result the model receives.",
-      "descriptionZh": "Implement the pipeline every tool call in DeepSeek Harness goes through, from the model's request to the single result the model sees.\n\n**Signature:** `ToolRuntime(tools, approve=None)` with attributes `pre_execute`, `guards`, `around`, `post_execute`, `observers` (lists you may append to) and method `execute(call) -> dict`.\n\n**Parameters:**\n- `tools` — dict from tool name to a function `body(arguments) -> list` of content blocks. It may raise.\n- `approve` — optional function `approve(call, reason) -> \"allowed-once\" | \"rejected\" | \"cancelled\"`; `None` means no approval channel.\n- `call` — dict with `name` and `arguments`.\n\n**Results.** Every result is a dict. Success: `{\"is_error\": False, \"content\": blocks}`. An *error result for message `m` with code `c`* is `{\"is_error\": True, \"content\": [{\"type\": \"text\", \"text\": f\"Error: {m}\"}], \"error\": {\"message\": m, \"code\": c}}`, where `c` may be `None`. A raised exception `e` gives the error result for `str(e)` with code `None`. A result may also carry `additional_contexts`, a list, which is present only when non-empty.\n\n**Stages, in order:**\n- **Pre-execute.** Run `pre_execute` as middleware: each is `f(call, next)` and `next()` continues to the next one; after the last, `next()` returns `{\"kind\": \"allow\"}`. The decision is `allow`, `deny` with `reason`, `cancel`, or `ask` with optional `reason`.\n- **Ask.** Resolve `ask` to `allow` or `deny`. With no approval channel: deny with the ask's `reason`, or `f'tool \"{name}\" requires approval (not yet supported)'` when it has none. Otherwise call `approve(call, reason)` once: `\"allowed-once\"` allows, `\"rejected\"` denies with `f'the user rejected tool \"{name}\"'`, `\"cancelled\"` denies with `f'approval for tool \"{name}\" was cancelled'`.\n- **Cancel** becomes the error result for `\"tool call aborted before dispatch\"` with code `\"ABORTED_BEFORE_DISPATCH\"`.\n- **Guards.** Only when the decision is `allow`: call each `guard(call)` in order; the first one that returns a string denies with that reason.\n- **Deny** becomes the error result for the reason with code `None`.\n- **Dispatch.** Only when allowed: run `around` as middleware, each `f(call, next)`; after the last, `next()` runs the tool body. The body step returns the success result, or the error result for `f'unknown tool \"{name}\"'` with code `\"UNKNOWN_TOOL\"` if the name is not in `tools`, or the exception's error result if the body raises.\n- **Post-execute.** The cancel, deny and dispatch results all go through `post_execute` middleware, each `f(call, result, next)`; after the last, `next()` returns `{\"kind\": \"accept\"}`. `accept` keeps the result, replaces its `content` if the decision has `content`, and sets `additional_contexts` to the result's contexts followed by the decision's. `block` produces `{\"is_error\": True, \"content\": feedback, \"error\": {\"message\": text, \"code\": None}}` where `text` joins the `text` of the feedback's text blocks with newlines, and `additional_contexts` holds only the decision's contexts.\n- **Pipeline failures.** If a `pre_execute`, guard, `approve`, `around` or `post_execute` function raises, stop right there: the result is that exception's error result, and later stages, including post-execute, are skipped.\n- **Observers.** Call every `observers` function with `(call, result)` on the final result. An observer that raises is ignored and does not stop the others. Return the final result.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**One result per call.** Model APIs require exactly one result per tool call, so every failure, including a crash in a policy plugin, is converted into an error result instead of propagating.\n\n**Why guards are separate.** Pre-execute listeners are extensible middleware, so one listener can override another. Guards run after all of them and can only deny, never allow, so a security rule cannot be undone by a later plugin.\n\n**Why denials still reach post-execute.** Post-execute listeners see denied calls too; the repeat-call reminder counts them, because a model hammering a denied call is a loop.\n\n**Why observers are contained.** A logging or telemetry observer must never change or break the result the model receives.",
+      "descriptionEn": "Capstone: implement the whole pipeline every tool call in DeepSeek Harness goes through, from the model's request to the single result the model sees. It combines Tool Call Admission and Tool Dispatch and Result Policy, and adds failure containment and observers.\n\n**Signature:** `ToolRuntime(tools, approve=None)` with attributes `pre_execute`, `guards`, `around`, `post_execute`, `observers` (lists you may append to) and method `execute(call) -> dict`.\n\n**Parameters:**\n- `tools` — dict from tool name to a function `body(arguments) -> list` of content blocks. It may raise.\n- `approve` — optional function `approve(call, reason) -> \"allowed-once\" | \"rejected\" | \"cancelled\"`; `None` means no approval channel.\n- `call` — dict with `name` and `arguments`.\n\n**Results.** Every result is a dict. Success: `{\"is_error\": False, \"content\": blocks}`. An *error result for message `m` with code `c`* is `{\"is_error\": True, \"content\": [{\"type\": \"text\", \"text\": f\"Error: {m}\"}], \"error\": {\"message\": m, \"code\": c}}`, where `c` may be `None`. A raised exception `e` gives the error result for `str(e)` with code `None`. A result may also carry `additional_contexts`, a list, which is present only when non-empty.\n\n**Stages, in order:**\n- **Pre-execute.** Run `pre_execute` as middleware: each is `f(call, next)` and `next()` continues to the next one; after the last, `next()` returns `{\"kind\": \"allow\"}`. The decision is `allow`, `deny` with `reason`, `cancel`, or `ask` with optional `reason`.\n- **Ask.** Resolve `ask` to `allow` or `deny`. With no approval channel: deny with the ask's `reason`, or `f'tool \"{name}\" requires approval (not yet supported)'` when it has none. Otherwise call `approve(call, reason)` once: `\"allowed-once\"` allows, `\"rejected\"` denies with `f'the user rejected tool \"{name}\"'`, `\"cancelled\"` denies with `f'approval for tool \"{name}\" was cancelled'`.\n- **Cancel** becomes the error result for `\"tool call aborted before dispatch\"` with code `\"ABORTED_BEFORE_DISPATCH\"`.\n- **Guards.** Only when the decision is `allow`: call each `guard(call)` in order; the first one that returns a string denies with that reason.\n- **Deny** becomes the error result for the reason with code `None`.\n- **Dispatch.** Only when allowed: run `around` as middleware, each `f(call, next)`; after the last, `next()` runs the tool body. The body step returns the success result, or the error result for `f'unknown tool \"{name}\"'` with code `\"UNKNOWN_TOOL\"` if the name is not in `tools`, or the exception's error result if the body raises.\n- **Post-execute.** The cancel, deny and dispatch results all go through `post_execute` middleware, each `f(call, result, next)`; after the last, `next()` returns `{\"kind\": \"accept\"}`. `accept` keeps the result, replaces its `content` if the decision has `content`, and sets `additional_contexts` to the result's contexts followed by the decision's. `block` produces `{\"is_error\": True, \"content\": feedback, \"error\": {\"message\": text, \"code\": None}}` where `text` joins the `text` of the feedback's text blocks with newlines, and `additional_contexts` holds only the decision's contexts.\n- **Pipeline failures.** If a `pre_execute`, guard, `approve`, `around` or `post_execute` function raises, stop right there: the result is that exception's error result, and later stages, including post-execute, are skipped.\n- **Observers.** Call every `observers` function with `(call, result)` on the final result. An observer that raises is ignored and does not stop the others. Return the final result.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**One result per call.** Model APIs require exactly one result per tool call, so every failure, including a crash in a policy plugin, is converted into an error result instead of propagating.\n\n**Why guards are separate.** Pre-execute listeners are extensible middleware, so one listener can override another. Guards run after all of them and can only deny, never allow, so a security rule cannot be undone by a later plugin.\n\n**Why denials still reach post-execute.** Post-execute listeners see denied calls too; the repeat-call reminder counts them, because a model hammering a denied call is a loop.\n\n**Why observers are contained.** A logging or telemetry observer must never change or break the result the model receives.",
+      "descriptionZh": "Capstone: implement the whole pipeline every tool call in DeepSeek Harness goes through, from the model's request to the single result the model sees. It combines Tool Call Admission and Tool Dispatch and Result Policy, and adds failure containment and observers.\n\n**Signature:** `ToolRuntime(tools, approve=None)` with attributes `pre_execute`, `guards`, `around`, `post_execute`, `observers` (lists you may append to) and method `execute(call) -> dict`.\n\n**Parameters:**\n- `tools` — dict from tool name to a function `body(arguments) -> list` of content blocks. It may raise.\n- `approve` — optional function `approve(call, reason) -> \"allowed-once\" | \"rejected\" | \"cancelled\"`; `None` means no approval channel.\n- `call` — dict with `name` and `arguments`.\n\n**Results.** Every result is a dict. Success: `{\"is_error\": False, \"content\": blocks}`. An *error result for message `m` with code `c`* is `{\"is_error\": True, \"content\": [{\"type\": \"text\", \"text\": f\"Error: {m}\"}], \"error\": {\"message\": m, \"code\": c}}`, where `c` may be `None`. A raised exception `e` gives the error result for `str(e)` with code `None`. A result may also carry `additional_contexts`, a list, which is present only when non-empty.\n\n**Stages, in order:**\n- **Pre-execute.** Run `pre_execute` as middleware: each is `f(call, next)` and `next()` continues to the next one; after the last, `next()` returns `{\"kind\": \"allow\"}`. The decision is `allow`, `deny` with `reason`, `cancel`, or `ask` with optional `reason`.\n- **Ask.** Resolve `ask` to `allow` or `deny`. With no approval channel: deny with the ask's `reason`, or `f'tool \"{name}\" requires approval (not yet supported)'` when it has none. Otherwise call `approve(call, reason)` once: `\"allowed-once\"` allows, `\"rejected\"` denies with `f'the user rejected tool \"{name}\"'`, `\"cancelled\"` denies with `f'approval for tool \"{name}\" was cancelled'`.\n- **Cancel** becomes the error result for `\"tool call aborted before dispatch\"` with code `\"ABORTED_BEFORE_DISPATCH\"`.\n- **Guards.** Only when the decision is `allow`: call each `guard(call)` in order; the first one that returns a string denies with that reason.\n- **Deny** becomes the error result for the reason with code `None`.\n- **Dispatch.** Only when allowed: run `around` as middleware, each `f(call, next)`; after the last, `next()` runs the tool body. The body step returns the success result, or the error result for `f'unknown tool \"{name}\"'` with code `\"UNKNOWN_TOOL\"` if the name is not in `tools`, or the exception's error result if the body raises.\n- **Post-execute.** The cancel, deny and dispatch results all go through `post_execute` middleware, each `f(call, result, next)`; after the last, `next()` returns `{\"kind\": \"accept\"}`. `accept` keeps the result, replaces its `content` if the decision has `content`, and sets `additional_contexts` to the result's contexts followed by the decision's. `block` produces `{\"is_error\": True, \"content\": feedback, \"error\": {\"message\": text, \"code\": None}}` where `text` joins the `text` of the feedback's text blocks with newlines, and `additional_contexts` holds only the decision's contexts.\n- **Pipeline failures.** If a `pre_execute`, guard, `approve`, `around` or `post_execute` function raises, stop right there: the result is that exception's error result, and later stages, including post-execute, are skipped.\n- **Observers.** Call every `observers` function with `(call, result)` on the final result. An observer that raises is ignored and does not stop the others. Return the final result.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**One result per call.** Model APIs require exactly one result per tool call, so every failure, including a crash in a policy plugin, is converted into an error result instead of propagating.\n\n**Why guards are separate.** Pre-execute listeners are extensible middleware, so one listener can override another. Guards run after all of them and can only deny, never allow, so a security rule cannot be undone by a later plugin.\n\n**Why denials still reach post-execute.** Post-execute listeners see denied calls too; the repeat-call reminder counts them, because a model hammering a denied call is a loop.\n\n**Why observers are contained.** A logging or telemetry observer must never change or break the result the model receives.",
       "version": 1,
       "tests": [
         {
@@ -15760,8 +15760,8 @@
         }
       ],
       "advisoryPrerequisites": [
-        "dsh_event_bus",
-        "approval_gate"
+        "dsh_tool_admission",
+        "dsh_tool_dispatch"
       ],
       "modelConnections": [
         "DeepSeek Harness's ToolRuntime.execute runs tools/pre-execute, approval, monotonic guards, tools/execute, tools/post-execute and tools/result exactly in this order.",
@@ -16042,6 +16042,218 @@
           "license": "MIT",
           "adapted": "The parse, repair, partial, partial-of-repaired fallback order and the repair rules for control characters and invalid escapes.",
           "simplifications": "The partial-json dependency is replaced by an explicitly specified partial parser."
+        }
+      ]
+    },
+    {
+      "id": "dsh_tool_admission",
+      "title": "Tool Call Admission",
+      "titleZh": "Tool Call Admission",
+      "difficulty": "Medium",
+      "functionName": "admit",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Before DeepSeek Harness runs a tool, it decides whether the call is allowed. Implement that decision.\n\n**Signature:** `admit(call, pre_execute, guards, approve=None) -> dict`\n\n**Parameters:**\n- `call` — dict with `name` and `arguments`.\n- `pre_execute` — list of middleware functions `f(call, next)`. Calling `next()` runs the next function in the list; after the last one, `next()` returns `{\"kind\": \"allow\"}`. A function may return a decision without calling `next()`.\n- `guards` — list of functions `guard(call) -> str | None`.\n- `approve` — optional function `approve(call, reason) -> \"allowed-once\" | \"rejected\" | \"cancelled\"`; `None` means there is no approval channel.\n\n**Decisions** are `{\"kind\": \"allow\"}`, `{\"kind\": \"deny\", \"reason\": str}`, `{\"kind\": \"cancel\"}` and `{\"kind\": \"ask\", \"reason\"?: str}`. `admit` never returns `ask`.\n\n**Steps:**\n- **Policy.** Run the `pre_execute` chain and take its decision.\n- **Ask.** If the decision is `ask`, resolve it. With no approval channel, deny with the ask's `reason`, or with `f'tool \"{name}\" requires approval (not yet supported)'` if it has none. Otherwise call `approve(call, reason)` exactly once, where `reason` is the ask's reason or None: `\"allowed-once\"` allows; `\"rejected\"` denies with `f'the user rejected tool \"{name}\"'`; `\"cancelled\"` denies with `f'approval for tool \"{name}\" was cancelled'`.\n- **Guards.** Only if the decision is now `allow`: call each guard in order; the first one that returns a string turns the decision into a deny with that reason, and later guards are not called.\n- Return the decision. `deny` and `cancel` decisions from the policy step are returned as they are. Exceptions from any function propagate to the caller.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why middleware for policy.** Hooks, permission modes and sandbox rules are plugins. Each can decide, delegate, or wrap the decision of the ones after it.\n\n**Why guards are separate and deny-only.** Middleware can override each other, so a security rule written as middleware could be undone by a plugin registered in front of it. Guards run after every middleware and can only deny, so no ordering of plugins can turn a guard's denial back into an allow.\n\n**Why deny without a channel.** A headless run has nobody to ask. Failing closed is the only safe default for a call that required approval.",
+      "descriptionZh": "Before DeepSeek Harness runs a tool, it decides whether the call is allowed. Implement that decision.\n\n**Signature:** `admit(call, pre_execute, guards, approve=None) -> dict`\n\n**Parameters:**\n- `call` — dict with `name` and `arguments`.\n- `pre_execute` — list of middleware functions `f(call, next)`. Calling `next()` runs the next function in the list; after the last one, `next()` returns `{\"kind\": \"allow\"}`. A function may return a decision without calling `next()`.\n- `guards` — list of functions `guard(call) -> str | None`.\n- `approve` — optional function `approve(call, reason) -> \"allowed-once\" | \"rejected\" | \"cancelled\"`; `None` means there is no approval channel.\n\n**Decisions** are `{\"kind\": \"allow\"}`, `{\"kind\": \"deny\", \"reason\": str}`, `{\"kind\": \"cancel\"}` and `{\"kind\": \"ask\", \"reason\"?: str}`. `admit` never returns `ask`.\n\n**Steps:**\n- **Policy.** Run the `pre_execute` chain and take its decision.\n- **Ask.** If the decision is `ask`, resolve it. With no approval channel, deny with the ask's `reason`, or with `f'tool \"{name}\" requires approval (not yet supported)'` if it has none. Otherwise call `approve(call, reason)` exactly once, where `reason` is the ask's reason or None: `\"allowed-once\"` allows; `\"rejected\"` denies with `f'the user rejected tool \"{name}\"'`; `\"cancelled\"` denies with `f'approval for tool \"{name}\" was cancelled'`.\n- **Guards.** Only if the decision is now `allow`: call each guard in order; the first one that returns a string turns the decision into a deny with that reason, and later guards are not called.\n- Return the decision. `deny` and `cancel` decisions from the policy step are returned as they are. Exceptions from any function propagate to the caller.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why middleware for policy.** Hooks, permission modes and sandbox rules are plugins. Each can decide, delegate, or wrap the decision of the ones after it.\n\n**Why guards are separate and deny-only.** Middleware can override each other, so a security rule written as middleware could be undone by a plugin registered in front of it. Guards run after every middleware and can only deny, so no ordering of plugins can turn a guard's denial back into an allow.\n\n**Why deny without a channel.** A headless run has nobody to ask. Failing closed is the only safe default for a call that required approval.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Guards deny after policy allows",
+          "code": "\ncall = {\"name\": \"rm\", \"arguments\": {\"path\": \"/\"}}\nassert {fn}(call, [], []) == {\"kind\": \"allow\"}\nout = {fn}(call, [lambda c, next: next()], [lambda c: None, lambda c: \"rm is forbidden\"])\nassert out == {\"kind\": \"deny\", \"reason\": \"rm is forbidden\"}, out\nout = {fn}(call, [lambda c, next: {\"kind\": \"deny\", \"reason\": \"policy\"}], [lambda c: \"guard\"])\nassert out == {\"kind\": \"deny\", \"reason\": \"policy\"}, out\n",
+          "behavior": "security.permission"
+        },
+        {
+          "name": "Ask resolution covers every approval outcome",
+          "visibility": "unshown",
+          "behavior": "security.permission",
+          "failureMessage": "Resolve ask through approve exactly once with the stated wording, deny without a channel, and still apply guards after approval.",
+          "hiddenCode": "\ncall = {\"name\": \"pay\", \"arguments\": {}}\ndef run(outcome, reason=None, guards=()):\n    asked = []\n    ask = {\"kind\": \"ask\"} if reason is None else {\"kind\": \"ask\", \"reason\": reason}\n    approve = None if outcome is None else (lambda c, r: asked.append(r) or outcome)\n    return {fn}(call, [lambda c, next: ask], list(guards), approve), asked\nout, asked = run(\"allowed-once\", \"costs money\")\nassert out == {\"kind\": \"allow\"} and asked == [\"costs money\"], (out, asked)\nout, asked = run(\"allowed-once\")\nassert asked == [None], asked\nassert run(\"rejected\")[0] == {\"kind\": \"deny\", \"reason\": 'the user rejected tool \"pay\"'}\nassert run(\"cancelled\")[0] == {\"kind\": \"deny\", \"reason\": 'approval for tool \"pay\" was cancelled'}\nassert run(None)[0] == {\"kind\": \"deny\", \"reason\": 'tool \"pay\" requires approval (not yet supported)'}\nassert run(None, \"needs a human\")[0] == {\"kind\": \"deny\", \"reason\": \"needs a human\"}\nassert run(\"allowed-once\", guards=[lambda c: \"over budget\"])[0] == {\"kind\": \"deny\", \"reason\": \"over budget\"}\n"
+        },
+        {
+          "name": "Seeded middleware chains match an oracle",
+          "visibility": "unshown",
+          "behavior": "events.ordering",
+          "failureMessage": "Run middleware in order with an allow default, let a middleware short-circuit, pass cancel and deny through untouched, and run guards only after an allow until the first denial.",
+          "hiddenCode": "\nimport random\nfor seed in (13, 47, 82):\n    rng = random.Random(seed)\n    for trial in range(200):\n        trace = []\n        pre, plan = [], []\n        for i in range(rng.randint(0, 4)):\n            kind = rng.choice([\"pass\", \"pass\", \"allow\", \"deny\", \"cancel\", \"wrap\"])\n            plan.append(kind)\n            if kind == \"pass\":\n                pre.append(lambda c, n, i=i: trace.append((\"pre\", i)) or n())\n            elif kind == \"allow\":\n                pre.append(lambda c, n, i=i: trace.append((\"pre\", i)) or {\"kind\": \"allow\"})\n            elif kind == \"deny\":\n                pre.append(lambda c, n, i=i: trace.append((\"pre\", i)) or {\"kind\": \"deny\", \"reason\": f\"d{i}\"})\n            elif kind == \"cancel\":\n                pre.append(lambda c, n, i=i: trace.append((\"pre\", i)) or {\"kind\": \"cancel\"})\n            else:\n                pre.append(lambda c, n, i=i: trace.append((\"pre\", i)) or ({\"kind\": \"deny\", \"reason\": f\"w{i}\"} if n()[\"kind\"] == \"allow\" else {\"kind\": \"allow\"}))\n        results = [rng.choice([None, None, f\"g{j}\"]) for j in range(rng.randint(0, 3))]\n        guards = [lambda c, j=j, r=r: trace.append((\"guard\", j)) or r for j, r in enumerate(results)]\n        got = {fn}({\"name\": \"t\", \"arguments\": {}}, pre, guards)\n        def decide(i):\n            if i == len(plan):\n                return {\"kind\": \"allow\"}, []\n            kind = plan[i]\n            if kind == \"pass\":\n                d, t = decide(i + 1); return d, [(\"pre\", i)] + t\n            if kind == \"allow\":\n                return {\"kind\": \"allow\"}, [(\"pre\", i)]\n            if kind == \"deny\":\n                return {\"kind\": \"deny\", \"reason\": f\"d{i}\"}, [(\"pre\", i)]\n            if kind == \"cancel\":\n                return {\"kind\": \"cancel\"}, [(\"pre\", i)]\n            d, t = decide(i + 1)\n            return ({\"kind\": \"deny\", \"reason\": f\"w{i}\"} if d[\"kind\"] == \"allow\" else {\"kind\": \"allow\"}), [(\"pre\", i)] + t\n        want, want_trace = decide(0)\n        if want[\"kind\"] == \"allow\":\n            for j, r in enumerate(results):\n                want_trace.append((\"guard\", j))\n                if r is not None:\n                    want = {\"kind\": \"deny\", \"reason\": r}; break\n        assert got == want and trace == want_trace, (seed, trial, plan, results, got, want, trace)\n"
+        },
+        {
+          "name": "Exceptions propagate",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "admit must not swallow exceptions from middleware, approval or guards.",
+          "hiddenCode": "\ndef boom(*args):\n    raise KeyError(\"x\")\ncall = {\"name\": \"t\", \"arguments\": {}}\nfor args in (([boom], []), ([], [boom]), ([lambda c, n: {\"kind\": \"ask\"}], [], boom)):\n    try:\n        {fn}(call, *args)\n    except KeyError:\n        pass\n    else:\n        raise AssertionError(\"an exception was swallowed\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "How do you build next() for a list of middleware? After an ask is approved, do the guards still run? What reason goes to approve() when the ask has none?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Copy the middleware list into a queue and define next() that pops the head and calls it with (call, next), or returns {'kind': 'allow'} when empty. Resolve ask with a small if-chain on the approval outcome. Then, only for allow, loop over guards and return the first denial."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "dsh_event_bus",
+        "approval_gate"
+      ],
+      "modelConnections": [
+        "DeepSeek Harness's ToolRuntime.prepareExecution runs the tools/pre-execute waterfall, resolves ask through the approval service, then applies registered monotonic guards.",
+        "Claude Code's permission modes and PreToolUse hooks make the same allow, deny or ask decision before a tool runs."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Extensible policy with a hard floor: plugins compose freely, while guards give security rules that no plugin order can bypass."
+        ],
+        "cons": [
+          "Two policy mechanisms to learn, and asking the user per call adds friction that users often answer without reading."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "How does an agent harness decide whether a tool call may run? What are allow, deny, ask and cancel?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why must a call that needs approval be denied when there is no one to ask?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through how next() chains the policy middleware. What does a middleware that never calls next() do to the ones after it?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why do guards run after all middleware, only after an allow, and only with the power to deny? What attack or bug does that prevent?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "After the user approves a call, should guards still be able to deny it? Why?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Approval per call versus per session versus allow-lists: user friction, safety and prompt-injection risk?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Policy as code (middleware) versus policy as data (rules in config): flexibility, auditability and review cost?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/deepseek-ai/deepseek-harness",
+          "commit": "21638c56315ae6a2b552d6091945d3144c9af32e",
+          "path": "packages/core/tools/src/index.ts",
+          "symbol": "ToolRuntime.prepareExecution, serviceAsk and ToolLayer.guardReason",
+          "license": "MIT",
+          "adapted": "Pre-execute waterfall with an allow default, ask resolution wording, fail-closed without an approval channel, and deny-only guards after an allow.",
+          "simplifications": "Synchronous; no scopes, caller cancellation, display reasons or the unavailable approval outcome."
+        }
+      ]
+    },
+    {
+      "id": "dsh_tool_dispatch",
+      "title": "Tool Dispatch and Result Policy",
+      "titleZh": "Tool Dispatch and Result Policy",
+      "difficulty": "Medium",
+      "functionName": "settle_tool_call",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Once a tool call has been admitted or refused, DeepSeek Harness produces exactly one result for it. Implement that second half of the pipeline.\n\n**Signature:** `settle_tool_call(call, decision, tools, around, post_execute) -> dict`\n\n**Parameters:**\n- `call` — dict with `name` and `arguments`.\n- `decision` — `{\"kind\": \"allow\"}`, `{\"kind\": \"deny\", \"reason\": str}` or `{\"kind\": \"cancel\"}`.\n- `tools` — dict from tool name to `body(arguments) -> list` of content blocks. It may raise.\n- `around` — list of middleware `f(call, next)` wrapped around the tool body.\n- `post_execute` — list of middleware `f(call, result, next)`; after the last one, `next()` returns `{\"kind\": \"accept\"}`.\n\n**Results.** Success is `{\"is_error\": False, \"content\": blocks}`. The *error result for message `m` with code `c`* is `{\"is_error\": True, \"content\": [{\"type\": \"text\", \"text\": f\"Error: {m}\"}], \"error\": {\"message\": m, \"code\": c}}`; `c` may be None.\n\n**Step 1 — candidate result.**\n- `cancel`: the error result for `\"tool call aborted before dispatch\"` with code `\"ABORTED_BEFORE_DISPATCH\"`.\n- `deny`: the error result for its reason, code None. The tool does not run.\n- `allow`: run the `around` chain; after the last middleware, `next()` runs the body step, which returns the success result, or the error result for `f'unknown tool \"{name}\"'` with code `\"UNKNOWN_TOOL\"` when the name is not in `tools`, or the error result for `str(e)` with code None when the body raises `e`.\n\n**Step 2 — post-execute.** Run the `post_execute` chain on the candidate, whatever produced it.\n- `{\"kind\": \"accept\", \"content\"?, \"additional_contexts\"?}` keeps the candidate, replaces its `content` if the decision has `content`, and sets `additional_contexts` to the candidate's contexts followed by the decision's.\n- `{\"kind\": \"block\", \"feedback\": blocks, \"additional_contexts\"?}` returns `{\"is_error\": True, \"content\": feedback, \"error\": {\"message\": text, \"code\": None}}`, where `text` joins the `text` of the feedback's text blocks with newlines, plus only the decision's contexts.\n- `additional_contexts` appears in a result only when it is non-empty.\n\nExceptions from `around` or `post_execute` functions propagate; only the tool body's exceptions become results.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why refused calls still get a result.** Model APIs require a result for every tool call, so a denial or cancellation is reported as an error result the model can read and react to.\n\n**Why refusals go through post-execute.** Post-execute policies see every attempt. The repeat-call reminder counts denied calls there, since a model hammering a denied call is a loop.\n\n**Why around-middleware.** Timeouts, retries and metrics wrap the body without the tool knowing; the next exercise builds the timeout wrapper on this seam.\n\n**Why block keeps only its own contexts.** A blocked result replaces what the tool produced, so context the tool attached no longer applies.",
+      "descriptionZh": "Once a tool call has been admitted or refused, DeepSeek Harness produces exactly one result for it. Implement that second half of the pipeline.\n\n**Signature:** `settle_tool_call(call, decision, tools, around, post_execute) -> dict`\n\n**Parameters:**\n- `call` — dict with `name` and `arguments`.\n- `decision` — `{\"kind\": \"allow\"}`, `{\"kind\": \"deny\", \"reason\": str}` or `{\"kind\": \"cancel\"}`.\n- `tools` — dict from tool name to `body(arguments) -> list` of content blocks. It may raise.\n- `around` — list of middleware `f(call, next)` wrapped around the tool body.\n- `post_execute` — list of middleware `f(call, result, next)`; after the last one, `next()` returns `{\"kind\": \"accept\"}`.\n\n**Results.** Success is `{\"is_error\": False, \"content\": blocks}`. The *error result for message `m` with code `c`* is `{\"is_error\": True, \"content\": [{\"type\": \"text\", \"text\": f\"Error: {m}\"}], \"error\": {\"message\": m, \"code\": c}}`; `c` may be None.\n\n**Step 1 — candidate result.**\n- `cancel`: the error result for `\"tool call aborted before dispatch\"` with code `\"ABORTED_BEFORE_DISPATCH\"`.\n- `deny`: the error result for its reason, code None. The tool does not run.\n- `allow`: run the `around` chain; after the last middleware, `next()` runs the body step, which returns the success result, or the error result for `f'unknown tool \"{name}\"'` with code `\"UNKNOWN_TOOL\"` when the name is not in `tools`, or the error result for `str(e)` with code None when the body raises `e`.\n\n**Step 2 — post-execute.** Run the `post_execute` chain on the candidate, whatever produced it.\n- `{\"kind\": \"accept\", \"content\"?, \"additional_contexts\"?}` keeps the candidate, replaces its `content` if the decision has `content`, and sets `additional_contexts` to the candidate's contexts followed by the decision's.\n- `{\"kind\": \"block\", \"feedback\": blocks, \"additional_contexts\"?}` returns `{\"is_error\": True, \"content\": feedback, \"error\": {\"message\": text, \"code\": None}}`, where `text` joins the `text` of the feedback's text blocks with newlines, plus only the decision's contexts.\n- `additional_contexts` appears in a result only when it is non-empty.\n\nExceptions from `around` or `post_execute` functions propagate; only the tool body's exceptions become results.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why refused calls still get a result.** Model APIs require a result for every tool call, so a denial or cancellation is reported as an error result the model can read and react to.\n\n**Why refusals go through post-execute.** Post-execute policies see every attempt. The repeat-call reminder counts denied calls there, since a model hammering a denied call is a loop.\n\n**Why around-middleware.** Timeouts, retries and metrics wrap the body without the tool knowing; the next exercise builds the timeout wrapper on this seam.\n\n**Why block keeps only its own contexts.** A blocked result replaces what the tool produced, so context the tool attached no longer applies.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Allowed call runs and post-execute adds context",
+          "code": "\ntools = {\"read\": lambda args: [{\"type\": \"text\", \"text\": \"file:\" + args[\"path\"]}]}\npost = [lambda call, result, next: {**next(), \"additional_contexts\": [\"note\"]}]\nout = {fn}({\"name\": \"read\", \"arguments\": {\"path\": \"a.py\"}}, {\"kind\": \"allow\"}, tools, [], post)\nassert out == {\"is_error\": False, \"content\": [{\"type\": \"text\", \"text\": \"file:a.py\"}], \"additional_contexts\": [\"note\"]}, out\nout = {fn}({\"name\": \"read\", \"arguments\": {\"path\": \"a.py\"}}, {\"kind\": \"deny\", \"reason\": \"no\"}, tools, [], [])\nassert out == {\"is_error\": True, \"content\": [{\"type\": \"text\", \"text\": \"Error: no\"}], \"error\": {\"message\": \"no\", \"code\": None}}, out\n",
+          "behavior": "protocol.validation"
+        },
+        {
+          "name": "Seeded settlements match an oracle",
+          "visibility": "unshown",
+          "behavior": "protocol.validation",
+          "failureMessage": "Build the candidate from the decision, catch only body errors, and apply accept or block exactly as stated.",
+          "hiddenCode": "\nimport random\ndef err(m, c=None):\n    return {\"is_error\": True, \"content\": [{\"type\": \"text\", \"text\": f\"Error: {m}\"}], \"error\": {\"message\": m, \"code\": c}}\nfor seed in (8, 44, 91):\n    rng = random.Random(seed)\n    for trial in range(150):\n        name = rng.choice([\"ok\", \"bad\", \"ghost\"])\n        decision = rng.choice([{\"kind\": \"allow\"}, {\"kind\": \"allow\"}, {\"kind\": \"deny\", \"reason\": \"nope\"}, {\"kind\": \"cancel\"}])\n        ran = []\n        tools = {\"ok\": lambda a: ran.append(1) or [{\"type\": \"text\", \"text\": \"ok\"}],\n                 \"bad\": lambda a: ran.append(1) or (_ for _ in ()).throw(ValueError(\"tool broke\"))}\n        around_kind = rng.choice([\"none\", \"pass\", \"ctx\"])\n        around = [] if around_kind == \"none\" else [(lambda c, n: n()) if around_kind == \"pass\" else (lambda c, n: {**n(), \"additional_contexts\": [\"t\"]})]\n        post_kind = rng.choice([\"none\", \"accept\", \"content\", \"block\"])\n        post = {\"none\": [], \"accept\": [lambda c, r, n: n()],\n                \"content\": [lambda c, r, n: {\"kind\": \"accept\", \"content\": [{\"type\": \"text\", \"text\": \"new\"}], \"additional_contexts\": [\"p\"]}],\n                \"block\": [lambda c, r, n: {\"kind\": \"block\", \"feedback\": [{\"type\": \"text\", \"text\": \"a\"}, {\"type\": \"image\"}, {\"type\": \"text\", \"text\": \"b\"}], \"additional_contexts\": [\"q\"]}]}[post_kind]\n        got = {fn}({\"name\": name, \"arguments\": {}}, decision, tools, around, post)\n        if decision[\"kind\"] == \"cancel\":\n            cand = err(\"tool call aborted before dispatch\", \"ABORTED_BEFORE_DISPATCH\")\n        elif decision[\"kind\"] == \"deny\":\n            cand = err(\"nope\")\n        else:\n            cand = {\"ok\": {\"is_error\": False, \"content\": [{\"type\": \"text\", \"text\": \"ok\"}]}, \"bad\": err(\"tool broke\"),\n                    \"ghost\": err('unknown tool \"ghost\"', \"UNKNOWN_TOOL\")}[name]\n            if around_kind == \"ctx\":\n                cand = {**cand, \"additional_contexts\": [\"t\"]}\n        if post_kind == \"block\":\n            want = {\"is_error\": True, \"content\": [{\"type\": \"text\", \"text\": \"a\"}, {\"type\": \"image\"}, {\"type\": \"text\", \"text\": \"b\"}], \"error\": {\"message\": \"a\\nb\", \"code\": None}, \"additional_contexts\": [\"q\"]}\n        elif post_kind == \"content\":\n            want = {**cand, \"content\": [{\"type\": \"text\", \"text\": \"new\"}], \"additional_contexts\": cand.get(\"additional_contexts\", []) + [\"p\"]}\n        else:\n            want = cand\n        assert got == want, (seed, trial, name, decision, around_kind, post_kind, got, want)\n        assert ran == ([1] if decision[\"kind\"] == \"allow\" and name != \"ghost\" else []), (decision, name, ran)\n"
+        },
+        {
+          "name": "Middleware order and propagation",
+          "visibility": "unshown",
+          "behavior": "events.ordering",
+          "failureMessage": "Run around and post-execute middleware in order around the body, and let their exceptions propagate.",
+          "hiddenCode": "\ntrace = []\ntools = {\"t\": lambda a: trace.append(\"body\") or []}\naround = [lambda c, n: trace.append(\"a1\") or n(), lambda c, n: trace.append(\"a2\") or n()]\npost = [lambda c, r, n: trace.append(\"p1\") or n(), lambda c, r, n: trace.append((\"p2\", r[\"is_error\"])) or n()]\nout = {fn}({\"name\": \"t\", \"arguments\": {}}, {\"kind\": \"allow\"}, tools, around, post)\nassert trace == [\"a1\", \"a2\", \"body\", \"p1\", (\"p2\", False)] and out == {\"is_error\": False, \"content\": []}, (trace, out)\ndef boom(*args):\n    raise KeyError(\"x\")\nfor around, post in (([boom], []), ([], [boom])):\n    try:\n        {fn}({\"name\": \"t\", \"arguments\": {}}, {\"kind\": \"allow\"}, tools, around, post)\n    except KeyError:\n        pass\n    else:\n        raise AssertionError(\"a middleware exception was swallowed\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which decisions skip the tool body but still reach post-execute? Where must the body's exceptions be caught so that around-middleware still sees a result? How do contexts merge on accept versus block?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Write one chain helper that calls middleware with (*args, next) and falls back to an inner function. Build the candidate from the decision, running the around chain with a body step that catches its own exceptions. Then run post-execute and build a new dict for accept or block."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "dsh_tool_admission"
+      ],
+      "modelConnections": [
+        "DeepSeek Harness's dispatchScheduledExecution runs the tools/execute waterfall around dispatchToolBody, and postExecute applies accept or block.",
+        "Claude Code's PostToolUse hooks can likewise block a result and send feedback to the model."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Every call yields one well-formed result, and wrappers and policies attach without changing tools."
+        ],
+        "cons": [
+          "Replacing or blocking results after the fact can hide what the tool really did unless the original is logged."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why must every tool call, including a denied or cancelled one, produce exactly one result for the model?"
+        },
+        {
+          "stage": "concept",
+          "question": "What is around-middleware on tool execution good for? Give three examples."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why are the body's exceptions caught inside the innermost step rather than around the whole chain?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through accept versus block. Why does a blocked result drop the contexts the tool attached?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why do denied and cancelled calls still go through post-execute?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Letting post-execute policies rewrite or block results versus only observing them: power versus auditability?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Returning tool errors to the model versus retrying automatically inside the harness: which errors belong where?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/deepseek-ai/deepseek-harness",
+          "commit": "21638c56315ae6a2b552d6091945d3144c9af32e",
+          "path": "packages/core/tools/src/index.ts",
+          "symbol": "ToolRuntime.dispatchScheduledExecution, dispatchToolBody, postExecute and toolAbortedBeforeDispatchResult",
+          "license": "MIT",
+          "adapted": "Cancel and deny results, the around chain over a body step that catches its own errors, UNKNOWN_TOOL, and accept and block semantics with context merging.",
+          "simplifications": "Synchronous; no value snapshots, output schemas, content projectors, deferred contexts or cancellation signals."
         }
       ]
     }

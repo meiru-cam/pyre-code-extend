@@ -167,7 +167,7 @@
       "descriptionEn": "Mechanisms from DeepSeek's plugin-first agent harness: an event bus with five dispatch modes, the guarded tool pipeline and cooperative timeouts, advisory loop guards, crash recovery and replay of an append-only session log, tool-output pruning, and cache-aware system prompt updates.",
       "descriptionZh": "Mechanisms from DeepSeek's plugin-first agent harness: an event bus with five dispatch modes, the guarded tool pipeline and cooperative timeouts, advisory loop guards, crash recovery and replay of an append-only session log, tool-output pruning, and cache-aware system prompt updates.",
       "icon": "Network",
-      "problems": ["tool_registry", "dsh_event_bus", "dsh_tool_pipeline", "dsh_tool_timeout", "dsh_repeat_tool_reminder", "dsh_open_turn_closers", "dsh_fold_surface", "dsh_tool_result_pruner", "dsh_system_prompt_reconcile", "context_compaction"],
+      "problems": ["tool_registry", "dsh_event_bus", "dsh_tool_admission", "dsh_tool_dispatch", "dsh_tool_timeout", "dsh_tool_pipeline", "dsh_repeat_tool_reminder", "dsh_open_turn_closers", "dsh_fold_surface", "dsh_tool_result_pruner", "dsh_system_prompt_reconcile", "context_compaction"],
       "prerequisites": ["agent-runtime-system-design"]
     },
     {

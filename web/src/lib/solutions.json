@@ -577,6 +577,24 @@
       }
     ]
   },
+  "dsh_tool_admission": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def admit(call, pre_execute, guards, approve=None):\n    queue = list(pre_execute)\n\n    def next():\n        if queue:\n            return queue.pop(0)(call, next)\n        return {\"kind\": \"allow\"}\n\n    decision = next()\n    name = call[\"name\"]\n    if decision[\"kind\"] == \"ask\":\n        reason = decision.get(\"reason\")\n        if approve is None:\n            decision = {\"kind\": \"deny\", \"reason\": reason or f'tool \"{name}\" requires approval (not yet supported)'}\n        else:\n            outcome = approve(call, reason)\n            if outcome == \"allowed-once\":\n                decision = {\"kind\": \"allow\"}\n            elif outcome == \"rejected\":\n                decision = {\"kind\": \"deny\", \"reason\": f'the user rejected tool \"{name}\"'}\n            else:\n                decision = {\"kind\": \"deny\", \"reason\": f'approval for tool \"{name}\" was cancelled'}\n    if decision[\"kind\"] == \"allow\":\n        for guard in guards:\n            reason = guard(call)\n            if reason is not None:\n                return {\"kind\": \"deny\", \"reason\": reason}\n    return decision",
+        "role": "solution"
+      }
+    ]
+  },
+  "dsh_tool_dispatch": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def _chain(middleware, args, inner):\n    queue = list(middleware)\n\n    def next():\n        if queue:\n            return queue.pop(0)(*args, next)\n        return inner()\n\n    return next()\n\n\ndef _error(message, code=None):\n    return {\"is_error\": True, \"content\": [{\"type\": \"text\", \"text\": f\"Error: {message}\"}],\n            \"error\": {\"message\": message, \"code\": code}}\n\n\ndef settle_tool_call(call, decision, tools, around, post_execute):\n    name = call[\"name\"]\n\n    def body():\n        if name not in tools:\n            return _error(f'unknown tool \"{name}\"', \"UNKNOWN_TOOL\")\n        try:\n            return {\"is_error\": False, \"content\": tools[name](call[\"arguments\"])}\n        except Exception as error:\n            return _error(str(error))\n\n    if decision[\"kind\"] == \"cancel\":\n        result = _error(\"tool call aborted before dispatch\", \"ABORTED_BEFORE_DISPATCH\")\n    elif decision[\"kind\"] == \"deny\":\n        result = _error(decision[\"reason\"])\n    else:\n        result = _chain(around, (call,), body)\n\n    post = _chain(post_execute, (call, result), lambda: {\"kind\": \"accept\"})\n    extra = list(post.get(\"additional_contexts\") or [])\n    if post[\"kind\"] == \"block\":\n        feedback = post[\"feedback\"]\n        text = \"\\n\".join(b[\"text\"] for b in feedback if b.get(\"type\") == \"text\")\n        blocked = {\"is_error\": True, \"content\": feedback, \"error\": {\"message\": text, \"code\": None}}\n        if extra:\n            blocked[\"additional_contexts\"] = extra\n        return blocked\n    accepted = dict(result)\n    if \"content\" in post:\n        accepted[\"content\"] = post[\"content\"]\n    contexts = list(result.get(\"additional_contexts\") or []) + extra\n    if contexts:\n        accepted[\"additional_contexts\"] = contexts\n    return accepted",
+        "role": "solution"
+      }
+    ]
+  },
   "dsh_tool_result_pruner": {
     "cells": [
       {

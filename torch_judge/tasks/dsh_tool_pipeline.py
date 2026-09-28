@@ -3,11 +3,11 @@
 from ._interview import interview
 
 TASK = {
-    "title": "Guarded Tool Execution Pipeline",
+    "title": "Tool Pipeline Capstone",
     "difficulty": "Hard",
     "version": 1,
     "function_name": "ToolRuntime",
-    "description_en": r"""Implement the pipeline every tool call in DeepSeek Harness goes through, from the model's request to the single result the model sees.
+    "description_en": r"""Capstone: implement the whole pipeline every tool call in DeepSeek Harness goes through, from the model's request to the single result the model sees. It combines Tool Call Admission and Tool Dispatch and Result Policy, and adds failure containment and observers.
 
 **Signature:** `ToolRuntime(tools, approve=None)` with attributes `pre_execute`, `guards`, `around`, `post_execute`, `observers` (lists you may append to) and method `execute(call) -> dict`.
 
@@ -40,7 +40,7 @@ TASK = {
 **Why denials still reach post-execute.** Post-execute listeners see denied calls too; the repeat-call reminder counts them, because a model hammering a denied call is a loop.
 
 **Why observers are contained.** A logging or telemetry observer must never change or break the result the model receives.""",
-    "advisory_prerequisites": ["dsh_event_bus", "approval_gate"],
+    "advisory_prerequisites": ["dsh_tool_admission", "dsh_tool_dispatch"],
     "hints": [
         {"level": 1, "kind": "questions", "content": "Which stages can produce a result that still goes through post-execute, and which failures skip it? Why do guards run only after an allow? How do you build next() for a list of middleware?"},
         {"level": 2, "kind": "analysis", "content": "Write one helper that chains middleware with an innermost default. In execute: wrap everything before observers in try/except that turns an exception into an error result and jumps to observers. Compute the pre-dispatch result (None when dispatching), otherwise run the around chain whose inner step catches body errors itself. Then run post-execute and apply accept or block."},

@@ -160,5 +160,7 @@
   "dsh_system_prompt_reconcile": "def reconcile_system_prompt(system_nodes, rendered, in_history_capable, new_series):\n    pass",
   "pi_truncate_output": "def truncate_output(content, mode, max_lines=2000, max_bytes=51200):\n    pass",
   "pi_streaming_json": "import json\n\n\ndef parse_streaming_json(text):\n    pass",
-  "pi_parallel_tool_batch": "import asyncio\n\n\nasync def execute_tool_batch(calls, tools, mode=\"parallel\", before_tool_call=None,\n                             is_aborted=lambda: False, emit=lambda event: None):\n    pass"
+  "pi_parallel_tool_batch": "import asyncio\n\n\nasync def execute_tool_batch(calls, tools, mode=\"parallel\", before_tool_call=None,\n                             is_aborted=lambda: False, emit=lambda event: None):\n    pass",
+  "dsh_tool_admission": "def admit(call, pre_execute, guards, approve=None):\n    pass",
+  "dsh_tool_dispatch": "def settle_tool_call(call, decision, tools, around, post_execute):\n    pass"
 }

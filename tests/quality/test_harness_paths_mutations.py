@@ -20,6 +20,8 @@ NEW_TASKS = {
     "dsh_repeat_tool_reminder": "deepseek-harness",
     "dsh_tool_result_pruner": "deepseek-harness",
     "dsh_open_turn_closers": "deepseek-harness",
+    "dsh_tool_admission": "deepseek-harness",
+    "dsh_tool_dispatch": "deepseek-harness",
     "dsh_tool_pipeline": "deepseek-harness",
     "dsh_tool_timeout": "deepseek-harness",
     "dsh_fold_surface": "deepseek-harness",
@@ -152,6 +154,28 @@ MUTATIONS = {
 }
 
 MUTATIONS.update({
+    "dsh_tool_admission": [
+        ("reversed middleware", "    queue = list(pre_execute)", "    queue = list(reversed(pre_execute))"),
+        ("guards run on deny", "    if decision[\"kind\"] == \"allow\":\n        for guard", "    if decision[\"kind\"] != \"cancel\":\n        for guard"),
+        ("no guards after approval", "                decision = {\"kind\": \"allow\"}\n", "                return {\"kind\": \"allow\"}\n"),
+        ("ask allowed without channel", "        if approve is None:\n            decision = {\"kind\": \"deny\"", "        if approve is None:\n            decision = {\"kind\": \"allow\"}\n        elif False:\n            decision = {\"kind\": \"deny\""),
+        ("last guard wins", "            if reason is not None:\n                return {\"kind\": \"deny\", \"reason\": reason}\n    return decision",
+         "            if reason is not None:\n                decision = {\"kind\": \"deny\", \"reason\": reason}\n    return decision"),
+        ("cancel becomes deny", "    if decision[\"kind\"] == \"ask\":", "    if decision[\"kind\"] == \"cancel\":\n        decision = {\"kind\": \"deny\", \"reason\": \"cancelled\"}\n    if decision[\"kind\"] == \"ask\":"),
+        ("default reason instead of ask reason", "decision = {\"kind\": \"deny\", \"reason\": reason or f'tool", "decision = {\"kind\": \"deny\", \"reason\": f'tool"),
+        ("swallows guard errors", "            reason = guard(call)\n", "            try:\n                reason = guard(call)\n            except Exception:\n                reason = None\n"),
+    ],
+    "dsh_tool_dispatch": [
+        ("denied call runs", "    elif decision[\"kind\"] == \"deny\":\n        result = _error(decision[\"reason\"])", "    elif False:\n        pass"),
+        ("refusals skip post-execute", "        result = _error(decision[\"reason\"])\n", "        return _error(decision[\"reason\"])\n"),
+        ("body errors escape", "        except Exception as error:\n            return _error(str(error))", "        except ZeroDivisionError as error:\n            return _error(str(error))"),
+        ("unknown tool without code", "_error(f'unknown tool \"{name}\"', \"UNKNOWN_TOOL\")", "_error(f'unknown tool \"{name}\"')"),
+        ("block keeps tool contexts", "        if extra:\n            blocked[\"additional_contexts\"] = extra", "        contexts = list(result.get(\"additional_contexts\") or []) + extra\n        if contexts:\n            blocked[\"additional_contexts\"] = contexts"),
+        ("decision contexts first", "    contexts = list(result.get(\"additional_contexts\") or []) + extra", "    contexts = extra + list(result.get(\"additional_contexts\") or [])"),
+        ("block message joins without newline", "    text = \"\\n\".join(", "    text = \"\".join("),
+        ("empty contexts kept", "    if contexts:\n        accepted[\"additional_contexts\"] = contexts", "    accepted[\"additional_contexts\"] = contexts"),
+        ("reversed around", "        result = _chain(around, (call,), body)", "        result = _chain(list(reversed(around)), (call,), body)"),
+    ],
     "dsh_tool_pipeline": [
         ("guards run on deny", "            if decision[\"kind\"] == \"allow\":\n                for guard", "            if True:\n                for guard"),
         ("no guards", "                    reason = guard(call)\n", "                    reason = None\n"),
