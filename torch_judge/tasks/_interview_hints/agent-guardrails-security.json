@@ -2,7 +2,7 @@
   "policy_engine": {
     "What is a policy engine in an agent system?": "It decides whether each agent action is allowed, denied or modified, based on composable rules.",
     "How do allow, deny and transform decisions combine?": "Any deny wins; transforms modify the action in order; allow only if no policy denies.",
-    "How do you order policies and resolve conflicts, for example deny wins?": "Evaluate in constructor order and stop at the first deny, so later policies never run. An allow never undoes an earlier transform, and each transform's reason is kept for the decision.",
+    "How do you order policies and resolve conflicts, for example deny wins?": "Evaluate in constructor order and stop at the first deny, so later policies never run. An allow never undoes an earlier transform; transform reasons are kept, but a deny reports only its own reason.",
     "How do transforms chain?": "Each transform receives the output of the previous one, in a deterministic order.",
     "What happens when a policy raises?": "Treat an exception as a deny (fail closed) and log it.",
     "Fail open versus fail closed?": "Fail open keeps things running when the policy system breaks. Fail closed is safer for dangerous actions.",

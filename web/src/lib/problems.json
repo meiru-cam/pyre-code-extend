@@ -2637,7 +2637,7 @@
         {
           "stage": "tradeoffs",
           "question": "RoPE versus ALiBi: extrapolation and efficiency trade-offs?",
-          "hint": "ALiBi adds a linear distance bias inside the attention scores, extrapolates somewhat but always penalizes long range. RoPE is applied to Q and K before attention, so any kernel works unchanged, with comparable or slightly better quality at the training length."
+          "hint": "ALiBi adds a linear distance bias to the attention scores and extrapolates somewhat, but always penalizes long range. RoPE is applied to Q and K beforehand, so any kernel works unchanged, with comparable or slightly better quality at the training length."
         }
       ]
     },
@@ -7103,7 +7103,7 @@
         {
           "stage": "deep_dive",
           "question": "How do you order policies and resolve conflicts, for example deny wins?",
-          "hint": "Evaluate in constructor order and stop at the first deny, so later policies never run. An allow never undoes an earlier transform, and each transform's reason is kept for the decision."
+          "hint": "Evaluate in constructor order and stop at the first deny, so later policies never run. An allow never undoes an earlier transform; transform reasons are kept, but a deny reports only its own reason."
         },
         {
           "stage": "deep_dive",
