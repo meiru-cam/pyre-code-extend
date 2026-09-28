@@ -14377,7 +14377,7 @@
         {
           "stage": "deep_dive",
           "question": "Why does evaluating C(n, k) directly fail for large n, and how does the product form avoid it?",
-          "hint": "The binomials overflow or lose precision. Use the product of (1 - k/(n - i)) over i from n - c + 1 to n."
+          "hint": "The binomials overflow or lose precision. Use the product of (1 - k/i) over i from n - c + 1 to n."
         },
         {
           "stage": "deep_dive",

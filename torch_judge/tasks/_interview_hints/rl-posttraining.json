@@ -210,7 +210,7 @@
     "What does pass@k measure, and why is it the usual metric for code and math generation?": "The probability that at least one of k samples is correct. Code and math have verifiers, and users can retry.",
     "Why is 1 - (1 - c / n) ** k a biased estimate of pass@k?": "It treats the samples as independent draws with replacement using the plug-in rate c/n, and the nonlinear transform of that estimate is biased.",
     "Derive the unbiased estimator by counting size-k subsets of the n samples.": "pass@k = 1 - C(n - c, k) / C(n, k): one minus the chance that a random size-k subset contains no correct sample.",
-    "Why does evaluating C(n, k) directly fail for large n, and how does the product form avoid it?": "The binomials overflow or lose precision. Use the product of (1 - k/(n - i)) over i from n - c + 1 to n.",
+    "Why does evaluating C(n, k) directly fail for large n, and how does the product form avoid it?": "The binomials overflow or lose precision. Use the product of (1 - k/i) over i from n - c + 1 to n.",
     "What should the estimate be when fewer than k samples are wrong?": "If n - c < k, every size-k subset contains a correct sample, so the estimate is 1.",
     "RL often raises pass@1 while pass@k at large k stays flat or drops. What does that say about what RL is learning?": "RL sharpens the distribution onto answers it already could find (better pass@1) but reduces diversity. It may not add new reasoning ability.",
     "pass@k versus majority voting versus a verifier-reranked best-of-n: what does each reward, and which matches deployment?": "pass@k rewards coverage, majority voting rewards consistency, and verifier reranking rewards selection. Deployment usually matches pass@1 or reranking."
