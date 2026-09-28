@@ -11,7 +11,7 @@
   "chat_stream_accumulator": {
     "What does a streamed chat completion chunk contain, and how does a client rebuild the full message from deltas?": "Deltas: a bit of content, or a tool-call fragment with an index. The client merges them into a snapshot of the message.",
     "How are parallel tool calls streamed, and what tells the client which call a fragment belongs to?": "Each fragment carries the index of its call. The first fragment has the id, type and name; later ones add argument text.",
-    "Why must index and type be replaced rather than concatenated? What breaks if they are not?": "They identify rather than carry content. Concatenating would give \"functionfunction\" or index 00.",
+    "Why must index and type be replaced rather than concatenated? What breaks if they are not?": "They identify a call rather than carry content. Concatenating type gives \"functionfunction\", and adding indexes turns 1 + 1 into 2, so later fragments land on the wrong call.",
     "One chunk contains two fragments for the same tool call and the accumulator has no tool_calls yet. Walk through what a naive copy does versus merging by index.": "A naive copy stores both fragments as separate list entries. Merging by index combines them into one call.",
     "Why should a null content delta never overwrite text already received?": "Servers send null content alongside tool deltas. Overwriting would erase the text already received.",
     "Generic recursive delta merging versus a typed per-field accumulator: robustness to new fields versus catching malformed server output?": "Generic merging handles new fields automatically but cannot catch malformed output. Typed merging is strict but needs updates for each API change.",

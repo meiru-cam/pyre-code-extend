@@ -1073,7 +1073,7 @@
         {
           "stage": "tradeoffs",
           "question": "Pre-norm versus post-norm placement: how does it affect training stability?",
-          "hint": "Post-norm puts LayerNorm after the residual add, which makes gradients near the input small without warmup. Pre-norm keeps a clean residual path."
+          "hint": "Post-norm puts LayerNorm after the residual add. At initialization the gradients of the layers near the output are large (Xiong et al. 2020), so it needs learning-rate warmup. Pre-norm keeps a clean identity path and trains without it."
         }
       ]
     },
@@ -1136,7 +1136,7 @@
         {
           "stage": "tradeoffs",
           "question": "Why do many LLMs drop biases from linear layers?",
-          "hint": "The following norm removes their effect, they add memory and communication, and some reports show better stability without them."
+          "hint": "Biases add little quality in large models but cost memory and communication, and PaLM reported more stable training without them."
         }
       ]
     },
@@ -2191,7 +2191,7 @@
         {
           "stage": "deep_dive",
           "question": "How do you compute the scale and round to int8?",
-          "hint": "scale = max(|w|) / 127 per row; q = round(w / scale), clamped to [-127, 127]."
+          "hint": "scale = max(|w|) / 127 per row; q = round(w / scale), then clamp to [-128, 127] as this exercise says. With that scale the values already land in [-127, 127]."
         },
         {
           "stage": "deep_dive",
@@ -2637,7 +2637,7 @@
         {
           "stage": "tradeoffs",
           "question": "RoPE versus ALiBi: extrapolation and efficiency trade-offs?",
-          "hint": "ALiBi adds a linear distance bias and extrapolates somewhat but penalizes long range. RoPE is more expressive and works with FlashAttention."
+          "hint": "ALiBi adds a linear distance bias inside the attention scores; it extrapolates somewhat but always penalizes long range. RoPE is applied to Q and K before attention, so any attention kernel works unchanged, and it gave better quality at the training length."
         }
       ]
     },
@@ -2893,7 +2893,7 @@
         {
           "stage": "deep_dive",
           "question": "Write the smoothed loss as a mix of cross-entropy and a uniform term.",
-          "hint": "loss = (1 - eps) * CE(true) + eps * (mean over classes of -log p)."
+          "hint": "With this exercise's targets: loss = (1 - eps) * (-log p_true) + (eps / (C - 1)) * sum over the wrong classes of -log p_c. PyTorch instead spreads eps over all C classes, which gives eps * mean over classes of -log p."
         },
         {
           "stage": "deep_dive",
@@ -3572,7 +3572,7 @@
         {
           "stage": "deep_dive",
           "question": "How do you compute it stably from logits?",
-          "hint": "Get log p_t from the BCE-with-logits form, and p_t = exp(-bce). Do not compute sigmoid then log."
+          "hint": "Subtract the row max, take log p_t = logit_t - logsumexp(logits) (log-softmax), then p_t = exp(log p_t). Never take the log of a softmax that may have underflowed to 0."
         },
         {
           "stage": "deep_dive",
@@ -4341,7 +4341,7 @@
         {
           "stage": "deep_dive",
           "question": "How do you handle unvisited children in selection?",
-          "hint": "With UCB their score is infinite, so they are picked first. With PUCT the prior term drives the choice."
+          "hint": "In classic UCB1 an unvisited child scores infinity and is tried first. This exercise adds 1 to the visit count, so the score stays finite, but the exploration term is largest for unvisited children. PUCT relies on the prior instead."
         },
         {
           "stage": "deep_dive",
@@ -4704,7 +4704,7 @@
         {
           "stage": "deep_dive",
           "question": "Why clip betas in the cosine schedule?",
-          "hint": "Near the end of the cosine curve the implied betas approach 1, which gives singular steps. Clip them (for example at 0.999)."
+          "hint": "Near the end of the cosine curve the implied betas approach 1, which gives singular steps, so the paper clips them at 0.999. This exercise clips alpha-bar itself to [0.0001, 0.9999] instead."
         },
         {
           "stage": "deep_dive",
@@ -5079,7 +5079,7 @@
         {
           "stage": "deep_dive",
           "question": "Is eps learned or fixed, and what is the difference?",
-          "hint": "Learned eps can adapt the weight of self versus neighbors. Fixed (often 0) is simpler. The theory holds for either."
+          "hint": "Learned eps lets the model weigh self against neighbors. The injectivity proof needs a suitable eps (for example an irrational one), not eps = 0; in practice GIN-0, with eps fixed at 0, performs about as well."
         },
         {
           "stage": "deep_dive",
@@ -5768,7 +5768,7 @@
         {
           "stage": "concept",
           "question": "What design choices of recent LLM attention does this block combine?",
-          "hint": "GQA, RoPE, QK-norm, a sliding window on some layers, pre-norm and no biases. Name one model family per choice."
+          "hint": "Grouped-query attention (Llama), QK-norm (Qwen3, Gemma 3), a causal local/global layer schedule (Gemma, Mistral's sliding window) and bias-free projections. RoPE and the norm placement are left out of this exercise."
         },
         {
           "stage": "concept",
@@ -6339,7 +6339,7 @@
         {
           "stage": "deep_dive",
           "question": "How do you compute the balance and z losses from router logits?",
-          "hint": "Balance: E * sum of f_i * P_i from the top-k assignments and the mean softmax. Z: mean of logsumexp(logits) squared."
+          "hint": "Here: importance = mean over tokens of the softmax, balance = E * sum(importance^2), which is 1 when usage is uniform. Switch uses E * sum f_i * P_i with hard token fractions f_i instead. Z: mean of logsumexp(logits) squared."
         },
         {
           "stage": "deep_dive",
@@ -6521,7 +6521,7 @@
         {
           "stage": "deep_dive",
           "question": "How do you handle duplicate names and unknown tools?",
-          "hint": "Reject a duplicate registration loudly. For an unknown name, return a structured error the model can read, not a crash."
+          "hint": "Reject a duplicate registration loudly. This exercise also rejects an unknown name with an error; the agent runtime above it can turn that into a message the model can read."
         },
         {
           "stage": "deep_dive",
@@ -7103,7 +7103,7 @@
         {
           "stage": "deep_dive",
           "question": "How do you order policies and resolve conflicts, for example deny wins?",
-          "hint": "Evaluate in a fixed order, record every decision, and let deny override allow."
+          "hint": "Evaluate in constructor order and stop at the first deny, so later policies never run. An allow never undoes an earlier transform; record each policy's reason."
         },
         {
           "stage": "deep_dive",
@@ -10402,7 +10402,7 @@
         {
           "stage": "concept",
           "question": "Walk me through one GRPO step from batch to optimizer update.",
-          "hint": "Generate a group per prompt, score rewards, compute group advantages, compute policy and reference log-probs, build the clipped loss plus KL, backprop and step."
+          "hint": "Rollouts are generated and scored, and group advantages computed, before this step. In the step: policy log-probs, reference log-probs under no_grad, the loss (advantage-weighted log-probs minus beta times KL), backward and one optimizer step."
         },
         {
           "stage": "concept",
@@ -10412,7 +10412,7 @@
         {
           "stage": "deep_dive",
           "question": "Where do you shift logits and input_ids to get per-token log-probs, and how do you avoid an off-by-one?",
-          "hint": "Use logits[:, :-1] against input_ids[:, 1:] and shift the response mask the same way."
+          "hint": "In a real trainer, logits[:, :-1] pair with input_ids[:, 1:], and the response mask shifts the same way. This exercise's batch is already aligned, so do not shift here."
         },
         {
           "stage": "deep_dive",
@@ -10585,7 +10585,7 @@
         {
           "stage": "deep_dive",
           "question": "How do you handle an unknown tool name or a tool that raises?",
-          "hint": "Return an error message as the tool result so the model can recover. Do not crash the whole rollout."
+          "hint": "This exercise raises ValueError for an unknown tool name, since that is a harness bug. In production, a tool that raises usually becomes an error message for the model, so it can recover instead of the rollout crashing."
         },
         {
           "stage": "tradeoffs",
@@ -10924,12 +10924,12 @@
         {
           "stage": "deep_dive",
           "question": "How do you enforce max_parallel?",
-          "hint": "Take at most max_parallel ready calls per round, in a deterministic order such as by id, and defer the rest."
+          "hint": "Take at most max_parallel ready calls per round, in input order as this exercise specifies, and defer the rest to the next round."
         },
         {
           "stage": "deep_dive",
           "question": "How do you detect cycles and missing dependencies?",
-          "hint": "Check that every dependency names a known call. If nothing is ready but calls remain, there is a cycle."
+          "hint": "Before running anything, check that every dependency names a known call, then run Kahn's algorithm on the graph: if it cannot order every call, there is a cycle."
         },
         {
           "stage": "tradeoffs",
@@ -11432,7 +11432,7 @@
         {
           "stage": "deep_dive",
           "question": "How do you align token ids, mask and rewards across steps?",
-          "hint": "Append each step's observation tokens (mask False) and action tokens (mask True) to one sequence, and attach each step's reward to its action tokens."
+          "hint": "Here response_ids hold only the policy's tokens, each masked True, and rewards has one entry per step. A full multi-turn sequence would also interleave the observation tokens, masked False."
         },
         {
           "stage": "deep_dive",
@@ -12405,7 +12405,7 @@
         {
           "stage": "deep_dive",
           "question": "How do you route complete, aborted and failed samples, and why do stale samples go to retry rather than dropped?",
-          "hint": "Completed samples go to training, aborted ones are dropped, failed ones are retried. Stale ones are regenerated, since the prompt is still valid."
+          "hint": "Complete samples within the staleness limit train. Stale and aborted samples go to retry: the prompt is still valid, only the generation is unusable. Failed samples are dropped."
         },
         {
           "stage": "deep_dive",
@@ -12648,7 +12648,7 @@
         {
           "stage": "deep_dive",
           "question": "Which sample fields must you update after generation, and why build a new tokens list rather than mutating?",
-          "hint": "Response text, tokens, response length, loss mask, status and log-probs. Build a new list because other code may hold references to the old one."
+          "hint": "tokens (prompt plus response), response_length, loss_mask, response text and status. Build a new tokens list because other code may still hold a reference to the prompt list."
         },
         {
           "stage": "deep_dive",
@@ -14622,7 +14622,7 @@
         {
           "stage": "deep_dive",
           "question": "Walk through implementing top-p on a batch. Is the token that crosses the threshold kept, and how do you map the mask back from sorted order?",
-          "hint": "Sort descending, cumulative sum, remove tokens where the cumsum excluding themselves is already above p (so the crossing token stays), then scatter back with the sort indices."
+          "hint": "Sort descending and take the cumulative sum. Remove a token when the sum of the tokens before it already reaches p, so the token that crosses the threshold stays. Scatter the mask back with the sort indices."
         },
         {
           "stage": "deep_dive",
@@ -17693,7 +17693,7 @@
         {
           "stage": "deep_dive",
           "question": "Why must index and type be replaced rather than concatenated? What breaks if they are not?",
-          "hint": "They identify rather than carry content. Concatenating would give \"functionfunction\" or index 00."
+          "hint": "They identify a call rather than carry content. Concatenating type gives \"functionfunction\", and adding indexes turns 1 + 1 into 2, so later fragments land on the wrong call."
         },
         {
           "stage": "deep_dive",

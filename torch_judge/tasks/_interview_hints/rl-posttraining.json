@@ -171,9 +171,9 @@
     "What would you log at this boundary to debug a data-parallel RL run?": "Rows before and after filtering, tokens per rank, per-chunk sizes, the reason each row was filtered, and group integrity."
   },
   "grpo_train_step": {
-    "Walk me through one GRPO step from batch to optimizer update.": "Generate a group per prompt, score rewards, compute group advantages, compute policy and reference log-probs, build the clipped loss plus KL, backprop and step.",
+    "Walk me through one GRPO step from batch to optimizer update.": "Rollouts are generated and scored, and group advantages computed, before this step. In the step: policy log-probs, reference log-probs under no_grad, the loss (advantage-weighted log-probs minus beta times KL), backward and one optimizer step.",
     "Which model is frozen, which receives gradients, and how do you guarantee it?": "The reference is frozen (requires_grad False, eval mode, no_grad). The policy trains. Assert that the reference has no gradients after backward.",
-    "Where do you shift logits and input_ids to get per-token log-probs, and how do you avoid an off-by-one?": "Use logits[:, :-1] against input_ids[:, 1:] and shift the response mask the same way.",
+    "Where do you shift logits and input_ids to get per-token log-probs, and how do you avoid an off-by-one?": "In a real trainer, logits[:, :-1] pair with input_ids[:, 1:], and the response mask shifts the same way. This exercise's batch is already aligned, so do not shift here.",
     "Why compute reference log-probs under torch.no_grad, and what memory does that save?": "The reference never updates, so there is no need to store activations for backward. no_grad saves that memory.",
     "Why must the returned metrics be detached, and what leaks if they are not?": "Metrics holding tensors with gradient keep the whole graph alive, which leaks memory across steps.",
     "This step does one update per rollout. What changes if you run several PPO epochs on the same batch?": "You need the old log-probs and clipped ratios, since later epochs are off-policy. Monitor KL and the clip fraction.",
@@ -184,7 +184,7 @@
     "Which messages in the trajectory come from the policy and which from the environment?": "Policy: assistant messages and tool calls. Environment: tool results and observations.",
     "How do you execute tool calls and append their results before the next model call?": "Parse the calls from the model output, run each tool, append a tool-role message with the result keyed to the call id, then call the model again.",
     "What happens when max_turns is reached before the model stops calling tools?": "Stop and return the trajectory as truncated. The reward decides how to treat an unfinished task.",
-    "How do you handle an unknown tool name or a tool that raises?": "Return an error message as the tool result so the model can recover. Do not crash the whole rollout.",
+    "How do you handle an unknown tool name or a tool that raises?": "This exercise raises ValueError for an unknown tool name, since that is a harness bug. In production, a tool that raises usually becomes an error message for the model, so it can recover instead of the rollout crashing.",
     "Trajectory-level reward versus per-turn reward: what is the credit-assignment problem here?": "One final reward cannot tell which turn helped. Per-turn rewards need a way to judge intermediate steps.",
     "Why do multi-turn rollouts make batching and GPU utilization hard?": "Turns take different numbers of steps and tool latencies vary, so batches drain unevenly and GPUs idle waiting for tools."
   },
@@ -227,7 +227,7 @@
   "agent_env_adapter": {
     "What does an environment adapter do between a Gym-style env and an LLM RL trainer?": "It turns env observations into prompt tokens and model outputs into env actions, and records ids, masks and rewards in the trainer's format.",
     "Why must environment observations be excluded from the response mask?": "Observations come from the environment. Training on them teaches the model to predict the environment, not to act.",
-    "How do you align token ids, mask and rewards across steps?": "Append each step's observation tokens (mask False) and action tokens (mask True) to one sequence, and attach each step's reward to its action tokens.",
+    "How do you align token ids, mask and rewards across steps?": "Here response_ids hold only the policy's tokens, each masked True, and rewards has one entry per step. A full multi-turn sequence would also interleave the observation tokens, masked False.",
     "How do terminated, truncated and max_steps interact in the stop condition?": "Stop when the env terminates or truncates, or when you reach max_steps. Record which reason applied.",
     "How is the return computed and what happens to rewards after termination?": "Sum the rewards up to and including the terminating step. Nothing after termination counts.",
     "Token-level versus step-level rewards in agent RL: what does each make easier?": "Token-level rewards give fine credit but need token-level judgments. Step-level rewards match env semantics but credit whole actions.",
@@ -236,7 +236,7 @@
   "slime_custom_generate_hook": {
     "What is Slime, and why does it expose a custom generate hook?": "An RL framework (SGLang plus Megatron). The hook lets you customize how samples are generated, for example multi-turn or tool use, without forking the framework.",
     "How do finish reasons map to sample statuses?": "stop maps to completed; length maps to truncated; abort maps to aborted. Each status tells the trainer how to use the sample.",
-    "Which sample fields must you update after generation, and why build a new tokens list rather than mutating?": "Response text, tokens, response length, loss mask, status and log-probs. Build a new list because other code may hold references to the old one.",
+    "Which sample fields must you update after generation, and why build a new tokens list rather than mutating?": "tokens (prompt plus response), response_length, loss_mask, response text and status. Build a new tokens list because other code may still hold a reference to the prompt list.",
     "What should the loss mask look like for the generated tokens?": "One value per generated token, typically all 1 for policy tokens, and 0 for tool or environment tokens.",
     "How should an aborted generation be recorded so the trainer does not use it?": "Mark its status as aborted, so the trainer filters it out or requeues it rather than training on partial garbage.",
     "Why should truncated samples usually still be trained on, and how are they treated differently from completed ones?": "They still contain valid policy decisions. Training teaches that running long is costly, via a penalty or a separate status.",
@@ -263,7 +263,7 @@
   "rollout_weight_sync_staleness": {
     "Why do inference engine weights lag behind trainer weights in RL systems?": "Syncing weights to the inference engine takes time, and rollouts keep running during training, so the rollouts use older weights.",
     "What is staleness, and why cap it?": "The version gap between the policy that generated a sample and the current one. Large gaps make the data too off-policy.",
-    "How do you route complete, aborted and failed samples, and why do stale samples go to retry rather than dropped?": "Completed samples go to training, aborted ones are dropped, failed ones are retried. Stale ones are regenerated, since the prompt is still valid.",
+    "How do you route complete, aborted and failed samples, and why do stale samples go to retry rather than dropped?": "Complete samples within the staleness limit train. Stale and aborted samples go to retry: the prompt is still valid, only the generation is unusable. Failed samples are dropped.",
     "When is it safe to sync weights to the serving engine, and why wait for in-flight requests?": "When no request is running on the old weights. Swapping mid-generation mixes two policies within one sample.",
     "What should happen if lag is negative?": "A sample from a newer version than the trainer means a bookkeeping bug. Raise an error rather than silently accepting it.",
     "Strict on-policy versus bounded staleness: what do you gain in throughput and lose in correctness?": "Bounded staleness gives higher throughput and less idling but introduces an off-policy bias.",

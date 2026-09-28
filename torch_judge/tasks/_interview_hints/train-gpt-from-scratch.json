@@ -20,7 +20,7 @@
   "label_smoothing": {
     "What is label smoothing, and why use it?": "Replace the one-hot target with (1 - eps) on the true class and eps spread over the classes. It regularizes overconfidence.",
     "How does it change the target distribution?": "The target puts a little probability mass on wrong classes, so the model is not rewarded for pushing logits to infinity.",
-    "Write the smoothed loss as a mix of cross-entropy and a uniform term.": "loss = (1 - eps) * CE(true) + eps * (mean over classes of -log p).",
+    "Write the smoothed loss as a mix of cross-entropy and a uniform term.": "With this exercise's targets: loss = (1 - eps) * (-log p_true) + (eps / (C - 1)) * sum over the wrong classes of -log p_c. PyTorch instead spreads eps over all C classes, which gives eps * mean over classes of -log p.",
     "Does the smoothing mass go to all classes or only the wrong ones? How does it change the formula?": "PyTorch spreads eps uniformly over all K classes, including the true one. The alternative is eps / (K - 1) over wrong ones only. Check the constant.",
     "How do you compute it stably from logits?": "Use log_softmax once, then gather the true class and take the mean over the class dimension.",
     "How does label smoothing affect calibration and knowledge distillation?": "It often improves calibration, but teachers trained with smoothing distill worse because it erases the similarity information in their logits.",

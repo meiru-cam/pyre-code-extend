@@ -30,7 +30,7 @@
     "What is GIN, and why is it as expressive as the Weisfeiler-Lehman test?": "Sum aggregation plus an MLP is injective on multisets, which matches the WL test's power to distinguish graphs.",
     "Why sum aggregation instead of mean or max?": "Mean and max lose information about neighbor counts. Sum keeps multiplicity.",
     "How do you implement the (1 + eps) self term and the MLP?": "h' = MLP((1 + eps) * h + sum of neighbor features). Compute the sum with A @ h or scatter.",
-    "Is eps learned or fixed, and what is the difference?": "Learned eps can adapt the weight of self versus neighbors. Fixed (often 0) is simpler. The theory holds for either.",
+    "Is eps learned or fixed, and what is the difference?": "Learned eps lets the model weigh self against neighbors. The injectivity proof needs a suitable eps (for example an irrational one), not eps = 0; in practice GIN-0, with eps fixed at 0, performs about as well.",
     "What are the shapes of each step?": "(N, D) node features, A @ h is (N, D), the combination is (N, D), and the MLP gives (N, D').",
     "What graphs can GIN still not distinguish?": "Graphs that 1-WL cannot tell apart, for example some regular graphs, two triangles versus a hexagon.",
     "What does the expressivity gain cost in training stability?": "Sums grow with degree, so activations can be large. Use normalization inside the MLP."

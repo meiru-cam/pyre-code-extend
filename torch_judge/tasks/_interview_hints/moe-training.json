@@ -56,7 +56,7 @@
   "tiny_moe_train_step": {
     "What goes into one complete MoE training step?": "Route, dispatch, run the experts, combine, compute the task loss plus auxiliary losses, backprop, and step the optimizer. Include routing stats.",
     "Which auxiliary losses are added, and why?": "A load-balancing loss to spread tokens and a router z-loss to keep logits small. Name each one's failure mode.",
-    "How do you compute the balance and z losses from router logits?": "Balance: E * sum of f_i * P_i from the top-k assignments and the mean softmax. Z: mean of logsumexp(logits) squared.",
+    "How do you compute the balance and z losses from router logits?": "Here: importance = mean over tokens of the softmax, balance = E * sum(importance^2), which is 1 when usage is uniform. Switch uses E * sum f_i * P_i with hard token fractions f_i instead. Z: mean of logsumexp(logits) squared.",
     "Why report each loss detached?": "Logged values should not keep the graph alive or leak into later steps. Detached copies are safe to store.",
     "How do you check that router parameters actually receive gradient?": "After backward, check that router.weight.grad is not None and not all zeros. A hard argmax with no path through the weights gives none.",
     "How do auxiliary losses trade against the task loss?": "A larger auxiliary weight improves balance but pulls the router away from what the task wants. Watch whether the task loss plateaus when you raise it.",

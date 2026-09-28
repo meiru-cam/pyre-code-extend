@@ -34,7 +34,7 @@
     "Where does eps go, and what happens with a constant input row?": "eps goes inside the square root, added to the variance. A constant row has variance 0, so the output becomes beta.",
     "How do you normalize over the last dimension for an input of any rank?": "Reduce over dim=-1 with keepdim=True so broadcasting works for any number of leading dimensions.",
     "LayerNorm versus BatchNorm versus RMSNorm: when and why?": "Compare which axis each normalizes over and whether it depends on the batch. RMSNorm drops the mean and is cheaper.",
-    "Pre-norm versus post-norm placement: how does it affect training stability?": "Post-norm puts LayerNorm after the residual add, which makes gradients near the input small without warmup. Pre-norm keeps a clean residual path."
+    "Pre-norm versus post-norm placement: how does it affect training stability?": "Post-norm puts LayerNorm after the residual add. At initialization the gradients of the layers near the output are large (Xiong et al. 2020), so it needs learning-rate warmup. Pre-norm keeps a clean identity path and trains without it."
   },
   "batchnorm": {
     "What does BatchNorm do, and what was the original motivation?": "It normalizes each feature over the batch (and spatial positions). Original motivation: reducing internal covariate shift so higher learning rates work.",
@@ -61,7 +61,7 @@
     "How do you support inputs with arbitrary leading dimensions?": "Use x @ W.T, which broadcasts over leading dimensions, or reshape to 2D and back.",
     "Why register weight and bias as nn.Parameter rather than plain tensors?": "Parameters are registered with the module, so they appear in parameters(), move with .to(), are saved in state_dict and are seen by optimizers.",
     "Xavier versus Kaiming: which activation goes with which?": "Xavier balances fan_in and fan_out for tanh or sigmoid. Kaiming accounts for ReLU zeroing half its inputs.",
-    "Why do many LLMs drop biases from linear layers?": "The following norm removes their effect, they add memory and communication, and some reports show better stability without them."
+    "Why do many LLMs drop biases from linear layers?": "Biases add little quality in large models but cost memory and communication, and PaLM reported more stable training without them."
   },
   "softmax": {
     "What does softmax compute, and where is it used?": "It maps a vector of scores to probabilities: exponentiate and normalize. Name classification outputs, attention and sampling.",

@@ -21,7 +21,7 @@
     "What is focal loss, and what problem does it solve?": "Cross-entropy multiplied by (1 - p_t)^gamma. It solves easy negatives overwhelming the loss in dense detection (RetinaNet).",
     "What do alpha and gamma control?": "alpha balances positive and negative classes. gamma sets how strongly easy, confident examples are downweighted.",
     "Write focal loss in terms of p_t.": "FL = -alpha_t (1 - p_t)^gamma log(p_t), where p_t is the probability of the true class.",
-    "How do you compute it stably from logits?": "Get log p_t from the BCE-with-logits form, and p_t = exp(-bce). Do not compute sigmoid then log.",
+    "How do you compute it stably from logits?": "Subtract the row max, take log p_t = logit_t - logsumexp(logits) (log-softmax), then p_t = exp(log p_t). Never take the log of a softmax that may have underflowed to 0.",
     "What does gamma equal to zero reduce to?": "It reduces to alpha-weighted cross-entropy.",
     "Focal loss versus class reweighting versus resampling?": "Focal loss adapts per example by difficulty. Reweighting is a fixed per-class factor. Resampling changes the data seen.",
     "Why can focal loss hurt calibration?": "Downweighting confident predictions pushes probabilities toward the middle, so raw outputs become miscalibrated."

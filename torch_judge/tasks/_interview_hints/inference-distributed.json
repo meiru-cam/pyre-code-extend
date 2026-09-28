@@ -11,7 +11,7 @@
   "int8_quantization": {
     "What is weight quantization, and why INT8?": "Store weights in 8 bits with a scale to cut memory and bandwidth by about 4x versus fp32 (2x versus fp16).",
     "Why per-channel scales rather than per-tensor?": "Different output channels have different ranges. One scale for all wastes precision on small channels.",
-    "How do you compute the scale and round to int8?": "scale = max(|w|) / 127 per row; q = round(w / scale), clamped to [-127, 127].",
+    "How do you compute the scale and round to int8?": "scale = max(|w|) / 127 per row; q = round(w / scale), then clamp to [-128, 127] as this exercise says. With that scale the values already land in [-127, 127].",
     "Symmetric versus asymmetric quantization?": "Symmetric uses zero point 0 and suits zero-centered weights. Asymmetric adds a zero point for skewed ranges such as post-ReLU activations.",
     "How do you dequantize in the forward pass?": "Compute w approximately as q * scale, then run the matmul, or fold the scale into the output.",
     "Why are outliers a problem for INT8 in LLMs, and what do LLM.int8 or SmoothQuant do?": "A few activation channels are huge, so one scale crushes the rest. LLM.int8 keeps outliers in fp16; SmoothQuant moves scale from activations to weights.",
@@ -29,7 +29,7 @@
   "logits_processors": {
     "What do temperature, top-k and top-p each do to the next-token distribution?": "Temperature rescales all logits; top-k keeps a fixed count; top-p keeps the smallest set covering p of the mass.",
     "Why does the repetition penalty divide positive logits but multiply negative ones?": "The goal is always to make the token less likely. Dividing a negative logit would make it larger, so negatives are multiplied instead.",
-    "Walk through implementing top-p on a batch. Is the token that crosses the threshold kept, and how do you map the mask back from sorted order?": "Sort descending, cumulative sum, remove tokens where the cumsum excluding themselves is already above p (so the crossing token stays), then scatter back with the sort indices.",
+    "Walk through implementing top-p on a batch. Is the token that crosses the threshold kept, and how do you map the mask back from sorted order?": "Sort descending and take the cumulative sum. Remove a token when the sum of the tokens before it already reaches p, so the token that crosses the threshold stays. Scatter the mask back with the sort indices.",
     "Why does the order of temperature and top-p matter? Give a concrete example.": "Temperature changes the shape before the cutoff. Example: logits [2, 1, 0] with p = 0.8 keep a different number of tokens at T = 0.5 than at T = 2.",
     "How should top-k treat ties, and what does torch.topk do with them?": "Ties at the k-th value: either keep all tied tokens or break by index. torch.topk makes no stable guarantee, so the spec must say.",
     "Top-p versus top-k versus min-p for creative writing and for code: which would you use and why?": "Creative writing wants moderate p or min-p for diversity. Code wants low temperature or a small k because one wrong token breaks it.",
