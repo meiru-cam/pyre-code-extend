@@ -9,9 +9,9 @@
     "What does QK-norm change about the effective temperature of attention?": "Logits become bounded by the learned scale times cosine similarity, so the scale acts as a learned inverse temperature."
   },
   "hybrid_attention_schedule": {
-    "Why do some models alternate local and global attention layers?": "Local layers are cheap and have a bounded cache. A few global layers keep long-range access. Name Gemma 2 and 3, and Mistral-style designs.",
+    "Why do some models alternate local and global attention layers?": "Local layers are cheap and have a bounded cache; a few global layers keep long-range access. Gemma 3 uses five local layers per global one.",
     "What is global_every?": "Every global_every-th layer is global; the rest are local. Check whether the index is 0-based and which layers count.",
-    "How do you build the causal local mask for a given window?": "Allowed when j <= i and i - j < window. Build it from broadcast index differences.",
+    "How do you build the causal local mask for a given window?": "Allowed when j <= i and i - j <= window_size: the current token plus at most window_size earlier ones.",
     "How do you decide whether a layer is global from its index?": "Use (layer_index + 1) % global_every == 0 or a similar rule. Match the exercise's convention.",
     "What does each position see in a local layer at the start of the sequence?": "Early positions have fewer than window predecessors, so they see everything before them, the same as global.",
     "How much KV cache does a hybrid schedule save?": "Local layers cache only window tokens, so the total shrinks by about the fraction of local layers times (1 - window / length).",

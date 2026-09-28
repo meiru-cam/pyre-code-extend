@@ -22,7 +22,7 @@
     "How does GAT differ from GCN?": "GCN weights are fixed by degree. GAT learns data-dependent weights per edge.",
     "How do you compute attention logits for each edge?": "e_ij = LeakyReLU(a^T [W h_i || W h_j]). Split a into two halves so the scores are sums of per-node terms.",
     "How do you mask non-edges before the softmax?": "Set e_ij = -inf where there is no edge before the softmax over j, including the self-loop if intended.",
-    "Why LeakyReLU in the attention score?": "Without it, the scores are a monotone function of the summed terms, which limits the attention. LeakyReLU keeps a gradient for negative scores.",
+    "Why LeakyReLU in the attention score?": "Without a nonlinearity, e_ij = a1 . Wh_i + a2 . Wh_j and the i term cancels in the softmax over j, so every node ranks its neighbors identically. LeakyReLU breaks that only partly (GATv2's point) and keeps gradients for negative scores.",
     "Multi-head GAT: why and how?": "Several heads stabilize learning and capture different relations. Concatenate them in hidden layers and average them in the output layer.",
     "What is the cost of GAT on dense versus sparse graphs?": "Dense graphs cost O(N^2). Sparse edge-list implementations cost O(E), which is much cheaper."
   },

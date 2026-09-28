@@ -1,6 +1,6 @@
 {
   "pi_agent_loop": {
-    "Describe the basic agent loop. What makes it stop?": "Call the model, run its tool calls, append the results, and repeat. It stops when the model returns no tool calls, errors, is aborted or hits a limit.",
+    "Describe the basic agent loop. What makes it stop?": "Call the model, run its tool calls, append the results, repeat. It stops when no more tools are needed (no calls, or every result says terminate) and no steering or follow-up is queued, or right away if the model errors or is aborted.",
     "What is the difference between a steering message and a follow-up message, and why treat them differently?": "Steering redirects the current run immediately. A follow-up is queued until the agent would otherwise stop.",
     "Walk through when each queue is polled. What happens if the user steers while tools are running?": "Steering is checked after each tool batch and before the next model call. Follow-ups are checked only when the run would end.",
     "Why are tool calls in a response that hit the output token limit not executed?": "The response was cut off, so the tool call may be incomplete or wrong. Running it could do damage.",
@@ -13,7 +13,7 @@
     "What kinds of tools must never run concurrently with others?": "Tools with side effects on shared state: writes to the same file, shell commands, anything needing sequential semantics.",
     "Why run every before_tool_call hook before any tool starts? What race would appear otherwise?": "Hooks can block or modify calls. If some tools started first, a later hook's decision would come too late.",
     "How do you return results in call order when calls finish in a different order?": "Store each result at its call's index, then emit in index order.",
-    "Where is the abort flag checked, and what result does each skipped or aborted call get?": "Before each call starts and after it finishes. Skipped calls get an aborted error result, so every call still has one result.",
+    "Where is the abort flag checked, and what result does each skipped or aborted call get?": "In preparation, after before_tool_call (that call gets \"Operation aborted\") and after each call (stop preparing; later calls get no message). Then again as each prepared call starts running: it does not execute and gets \"Operation aborted\".",
     "Unbounded parallelism versus a bounded pool versus fully sequential execution: latency, rate limits and resource contention?": "Unbounded is fastest until rate limits or resource contention hit. A pool bounds them. Sequential is safest and slowest.",
     "Declaring sequential per tool versus detecting conflicts from arguments (same file, same process): precision and complexity?": "Declaring per tool is simple and coarse. Detecting conflicts from arguments is precise but complex and can miss hidden conflicts."
   },
@@ -38,7 +38,7 @@
   "pi_multi_edit": {
     "Why do coding agents edit files by string replacement instead of line numbers or full rewrites?": "Line numbers shift after every edit and full rewrites cost tokens and risk accidental changes. String replacement is anchored to content.",
     "Why must old_text be unique, and what should the tool tell the model when it is not?": "An ambiguous match could edit the wrong place. Report how many matches were found and ask for more context.",
-    "Walk through exact-then-fuzzy matching. Which differences does the normalization forgive, and why is fuzzy mode decided once for the whole call?": "Try exact matching first. If any edit fails, normalize (line endings, trailing whitespace, quotes) for all edits. One mode per call keeps the edits consistent.",
+    "Walk through exact-then-fuzzy matching. Which differences does the normalization forgive, and why is fuzzy mode decided once for the whole call?": "Try each old_text exactly. If one is missing but its normalized form matches, turn fuzzy mode on for every edit. Normalization forgives NFKC differences, trailing whitespace, curly quotes, Unicode dashes and special spaces; line endings are unified separately.",
     "Why match all edits against the original content, and why apply replacements from the end of the file backwards?": "Edits are defined against the file the model saw. Applying from the end keeps earlier offsets valid.",
     "In fuzzy mode, how do you write back only the touched lines? What would go wrong if you wrote back the normalized file?": "Replace only the lines covered by each match in the original text. Writing the normalized file would silently change untouched lines.",
     "String replacement versus unified diffs versus whole-file rewrites as the edit format for an LLM: token cost, failure modes and model accuracy?": "Replacement is cheap and precise but needs unique anchors. Diffs are compact but models get the line counts wrong. Rewrites are simple but expensive.",
@@ -56,7 +56,7 @@
   "pi_truncate_output": {
     "Why must a coding agent truncate tool output before it reaches the model, and why cap both lines and bytes?": "Huge outputs blow the context and cost. Lines bound the height; bytes bound one very long line.",
     "Why truncate file reads from the head but command output from the tail?": "For a file, the start usually matters (headers, definitions). For a command, the end has the errors and results.",
-    "Walk through the head loop: what does each kept line cost, and how do you decide whether lines or bytes caused the truncation?": "Each line costs its bytes plus a newline. Stop when the next line would exceed either limit, and record which limit stopped you.",
+    "Walk through the head loop: what does each kept line cost, and how do you decide whether lines or bytes caused the truncation?": "Each kept line costs its UTF-8 bytes plus 1 for the joining newline, except the first kept line. Stop before a line that would exceed max_bytes (truncated_by bytes); if the loop ends any other way, it is lines.",
     "How do you cut a UTF-8 string to at most N bytes from the end without producing an invalid character?": "Cut at a byte offset, then move forward past any continuation bytes (10xxxxxx) so you start on a character boundary.",
     "What should the tool tell the model after truncating so it can read the rest?": "How much was shown and how to get the rest, for example an offset or line number to continue from.",
     "Byte limits versus token limits for tool output: accuracy, speed and tokenizer dependence?": "Bytes are fast and deterministic but approximate the token cost. Tokens are exact but tokenizer-specific and slower.",

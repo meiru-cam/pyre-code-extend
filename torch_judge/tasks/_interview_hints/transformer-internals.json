@@ -29,7 +29,7 @@
   "layernorm": {
     "What does LayerNorm normalize over, and why is that suited to transformers?": "It normalizes over the feature dimension of each token independently. Why does that suit variable-length sequences and small batches?",
     "Why do we need the learnable gamma and beta?": "Normalizing forces mean 0 and variance 1. Gamma and beta let the layer recover any scale and shift, including undoing the normalization.",
-    "Why does normalization make optimization easier? What does it do to the scale of activations and gradients, and what did later work say about the internal covariate shift explanation?": "It keeps activation scale stable across layers, which smooths the loss landscape. Santurkar et al. argued smoothness, not covariate shift, explains the benefit.",
+    "Why does normalization make optimization easier? What does it do to the scale of activations and gradients, and what did later work say about the internal covariate shift explanation?": "It keeps activation scale stable across layers, which smooths the loss landscape. For BatchNorm, Santurkar et al. showed the gain comes from smoothness, not from reducing internal covariate shift.",
     "Biased or unbiased variance: which does LayerNorm use and why?": "It uses the biased (population) variance, dividing by N. It describes the current vector rather than estimating a population.",
     "Where does eps go, and what happens with a constant input row?": "eps goes inside the square root, added to the variance. A constant row has variance 0, so the output becomes beta.",
     "How do you normalize over the last dimension for an input of any rank?": "Reduce over dim=-1 with keepdim=True so broadcasting works for any number of leading dimensions.",
@@ -40,7 +40,7 @@
     "What does BatchNorm do, and what was the original motivation?": "It normalizes each feature over the batch (and spatial positions). Original motivation: reducing internal covariate shift so higher learning rates work.",
     "Why does BatchNorm behave differently in training and evaluation?": "Batch statistics are unavailable or noisy at inference, so eval mode uses running averages collected during training.",
     "How do you update running mean and variance with momentum, and which variance goes into the running estimate?": "running = (1 - momentum) * running + momentum * batch_stat. The running variance uses the unbiased estimate, while the normalization uses the biased one.",
-    "What happens with batch size one in training mode?": "With one sample per feature the variance is zero, so the output collapses to beta. PyTorch raises an error for a single value per channel.",
+    "What happens with batch size one in training mode?": "With one sample per feature the batch variance is 0, so every output becomes beta. PyTorch's BatchNorm raises an error in training mode when a channel has only one value.",
     "Where do gamma and beta apply, and why are they needed?": "After normalization, per channel. They restore representational power, for example letting the network undo the normalization.",
     "Why is BatchNorm rarely used in transformers?": "Think about variable sequence lengths, padding and small or streaming batches. Batch statistics also leak information across examples in autoregressive models.",
     "How does BatchNorm interact with distributed training and small per-device batches?": "Per-device statistics become noisy with small per-device batches. SyncBatchNorm fixes that at the cost of communication."

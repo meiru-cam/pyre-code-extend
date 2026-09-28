@@ -3,7 +3,7 @@
     "What is Differential Attention, and what problem does it target?": "It computes attention as the difference of two softmax maps to cancel attention noise on irrelevant context. It targets long-context retrieval and hallucination.",
     "Why subtract two softmax attention maps?": "Like a differential amplifier: noise common to both maps cancels, while the signal survives.",
     "How do you split Q and K into two halves and combine the maps with lambda?": "Split Q and K into two halves along the head dimension, compute two softmax maps, subtract lambda times the second, and multiply by V.",
-    "How is lambda parameterized and initialized?": "Reparameterized as exp(q1 . k1) - exp(q2 . k2) + lambda_init, with lambda_init depending on layer depth.",
+    "How is lambda parameterized and initialized?": "In the paper lambda = exp(lq1 . lk1) - exp(lq2 . lk2) + lambda_init, with learnable vectors lq and lk, and lambda_init = 0.8 - 0.6 * exp(-0.3 * (layer - 1)). This exercise takes lambda as an input.",
     "What normalization follows the subtraction, and why?": "Per-head GroupNorm or RMSNorm, then scale by (1 - lambda_init). The difference changes the statistics of each head.",
     "What does differential attention cost in compute and parameters?": "Two softmax maps per head at the same total head width, plus a few lambda parameters. Kernels need adapting.",
     "How would you evaluate whether it actually reduces attention noise?": "Check attention mass on the relevant span, needle-in-a-haystack accuracy and hallucination benchmarks against a matched baseline."

@@ -33,7 +33,7 @@
     "Show that exp(r) - r - 1 is never negative. Why is that useful for a per-token penalty?": "f(r) = exp(r) - r - 1 has minimum 0 at r = 0 (f' = exp(r) - 1, f'' > 0). Per-token penalties are then never negative rewards in disguise.",
     "Should the KL term be detached? Which parameters should receive its gradient?": "The policy log-prob should carry gradient; the reference log-prob is detached, since the reference is frozen.",
     "KL as a reward penalty versus KL as a separate loss term: how do the gradients differ?": "As a reward, KL is scaled by advantages and enters through the policy gradient. As a loss term, you differentiate the estimator directly, which gives a different and possibly biased gradient.",
-    "What happens to k3 when the policy puts much less mass than the reference on a sampled token, and is clamping a good fix?": "r becomes large and exp(r) explodes. Clamping bounds the gradient but biases the estimate. Mention it as a stability hack."
+    "What happens to k3 when the policy puts much less mass than the reference on a sampled token, and is clamping a good fix?": "r = log(ref/pi) is large, so exp(r) explodes and so does the gradient. Clamping would hide that and bias the estimate; this exercise deliberately does not clamp, so the caller can see and handle it."
   },
   "response_token_mask": {
     "In RL post-training, which tokens should receive loss and which should not? Why exclude the prompt?": "Only generated response tokens are actions. The prompt was not chosen by the policy, and padding carries no meaning.",
@@ -83,7 +83,7 @@
   "loss_aggregation_modes": {
     "In GRPO-style training, how can the way you average the per-token loss change what the policy learns?": "The averaging decides how much each token and each response contributes. It creates length biases in what gets reinforced.",
     "What is the length bias that Dr. GRPO points out in the original GRPO objective?": "Dividing each response's loss by its own length means long wrong answers get less penalty per token, so wrong answers grow long.",
-    "Write the four aggregation modes. For each, how much gradient does one token of a long response get compared with one token of a short response?": "Token-mean: every token weight 1/N_total. Seq-mean-token-mean: 1/(B * L_i). Seq-mean-token-sum: 1/B. Seq-mean-token-sum-norm: 1/(B * L_max). Compare L = 10 with L = 1000.",
+    "Write the four aggregation modes. For each, how much gradient does one token of a long response get compared with one token of a short response?": "With V valid sequences, n_b tokens in sequence b and padded length T: token-mean weighs each token 1/(sum of n), seq-mean-token-mean 1/(V * n_b), seq-mean-token-sum 1/V, seq-mean-token-sum-norm 1/(V * T). Compare n_b = 10 with n_b = 1000.",
     "Which sequences should take part in a sequence mean, and what goes wrong with sequences that have no valid tokens?": "Only sequences with at least one valid token. An all-masked sequence gives 0/0 and should be excluded from the denominator.",
     "Why can loss * mask still produce NaN, and how do you avoid it?": "NaN or inf in masked positions times 0 is still NaN. Use torch.where or zero out the loss before multiplying.",
     "Token-mean versus sequence-mean: which one would you use for long chain-of-thought RL, and why?": "Token-mean, or a constant normalizer, so long reasoning traces get per-token signal equal to short ones.",
