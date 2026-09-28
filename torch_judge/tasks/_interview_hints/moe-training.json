@@ -1,0 +1,65 @@
+{
+  "dense_vs_sparse_ffn": {
+    "How does a sparse expert forward differ from one dense feed-forward network?": "A dense FFN runs every token through one MLP. Sparse routes each token to k of E experts and mixes their outputs.",
+    "What does active parameter count mean?": "Parameters actually used per token: shared layers plus k experts, compared with the total including all experts.",
+    "How do you group tokens by expert, run each expert once, and scatter results back?": "Flatten tokens, get the routed indices, sort or bucket by expert, run each expert on its slice once, and index_add results back.",
+    "How do you weight and sum outputs when a token picks several experts?": "Multiply each expert's output by that token's gate weight and sum over the k selections.",
+    "What if an expert receives no tokens?": "Skip it: an empty batch must not crash and adds nothing to the output.",
+    "Why are sparse layers harder to run efficiently on GPUs than dense ones?": "Irregular batch sizes per expert, gather and scatter memory traffic, and all-to-all when experts sit on different devices.",
+    "When does a dense model beat an MoE at the same budget?": "At small scale, with limited memory, when serving batch sizes are small, or when communication dominates."
+  },
+  "moe_topk_router": {
+    "What is token-choice top-k routing?": "Each token picks its own top-k experts by router score.",
+    "How does it differ from expert-choice routing?": "In expert choice, each expert picks its top tokens up to capacity. That gives perfect balance, but a token may get zero or many experts.",
+    "Softmax before or after top-k: how do the weights differ?": "Softmax over all experts then topk gives weights that do not sum to 1 unless renormalized. Softmax over only the top-k logits sums to 1. Compare the magnitudes.",
+    "How do you break ties deterministically?": "Prefer the lower expert index on equal scores, for example with a stable sort or by adding tiny index-based offsets.",
+    "What validation is needed on k?": "k must be an integer with 1 <= k <= number of experts.",
+    "Top-1 versus top-2 routing: quality and cost?": "Top-2 is more robust and gives each token two experts' views, at twice the expert compute and communication. Switch showed top-1 can work.",
+    "What load imbalance does token-choice cause?": "Popular experts overflow while others idle, which matters with capacity limits and expert-parallel devices."
+  },
+  "moe_noisy_routing": {
+    "What is noisy top-k gating, and why add noise to routing?": "Add Gaussian noise to the router logits before top-k, so near-ties explore different experts and load spreads.",
+    "Where did it originate?": "Shazeer et al. 2017, \"Outrageously Large Neural Networks\".",
+    "Where is the noise added, and how is it scaled?": "To the logits before selection, scaled by softplus of a learned noise projection of the input.",
+    "How do you compute weights only over the selected experts?": "Mask the unselected experts with -inf, then take the softmax, so weights sum to 1 over the chosen k.",
+    "Why pass noise in as an argument rather than sampling inside?": "Tests become deterministic and the caller controls randomness, such as seeds or turning noise off in eval.",
+    "Noise for exploration versus a load-balancing loss?": "Noise is implicit and indirect. A balancing loss directly targets the imbalance. Modern models mostly use losses or bias updates.",
+    "Should noise be on at inference?": "Usually not: you want deterministic routing at inference. Train and inference then differ slightly."
+  },
+  "moe_router_zloss": {
+    "What is the router z-loss, and what instability does it fix?": "It penalizes the squared log-sum-exp of the router logits, keeping them small. It fixes instability from large logits (ST-MoE).",
+    "Why penalize the log-partition function?": "logsumexp grows with the logit scale. Penalizing it pushes all logits toward small values without changing their ordering much.",
+    "Write the loss with logsumexp over experts.": "z = logsumexp(logits, dim=-1) per token; loss = mean(z^2).",
+    "Why square it, and why average over tokens?": "Squaring penalizes large values more and is smooth. Averaging makes the weight independent of the batch size.",
+    "How does it interact with bf16 numerics?": "Large logits in bf16 have large rounding errors, which flip routing decisions and blow up exp. Smaller logits stay precise.",
+    "Z-loss versus clipping or normalizing router logits?": "Clipping is a hard cutoff with no gradient beyond it. Normalizing changes the scale directly. Z-loss is a soft penalty.",
+    "How large should the z-loss weight be?": "Tiny, around 1e-3, as in ST-MoE. Big enough to stop drift but small next to the main loss."
+  },
+  "moe_capacity_dispatch": {
+    "What is expert capacity, and why cap it?": "Each expert processes at most C tokens per batch: capacity factor times tokens times k over experts. It keeps tensor shapes static and memory bounded.",
+    "What happens to tokens that exceed capacity?": "They are dropped for that expert. Their FFN output is zero and only the residual carries them forward.",
+    "How do you assign capacity slots in a deterministic order?": "Assign slots in token order (and choice rank) with a cumulative count per expert, so the first C win.",
+    "How do dropped tokens flow through the residual?": "The block adds zero from the MoE branch, so the output equals the input via the skip connection.",
+    "What stats would you report for dispatch health?": "Report the drop rate, per-expert load, maximum load divided by the mean, and tokens per expert.",
+    "Capacity factor versus dropless MoE: trade-offs?": "A low capacity factor wastes less compute on padding but drops more tokens. Dropless (MegaBlocks) handles ragged batches without drops.",
+    "How does token dropping interact with evaluation and inference?": "Drops depend on what else is in the batch, so results change with batch composition. Inference often uses a higher capacity or no drops."
+  },
+  "moe_shared_experts": {
+    "What are shared experts in DeepSeek-style MoE?": "A few experts that every token always uses, alongside the routed ones.",
+    "Why add always-on experts next to routed ones?": "They learn common knowledge once, so routed experts do not duplicate it and can specialize.",
+    "How do you combine shared and routed outputs?": "Add them: shared_out plus the weighted sum of routed outputs.",
+    "Do shared experts get router weights?": "No, they are always on with weight 1. Only routed experts get router weights.",
+    "How does fine-grained expert segmentation relate?": "DeepSeekMoE splits experts into many smaller ones and routes more of them per token for finer specialization. Shared experts complement this.",
+    "What do shared experts cost in compute per token?": "Each token runs the shared experts in addition to its k routed ones, so active FLOPs grow by the shared experts' size.",
+    "How do they change expert specialization?": "Common features move into the shared experts, so routed experts become more distinct. Mention the DeepSeekMoE ablations."
+  },
+  "tiny_moe_train_step": {
+    "What goes into one complete MoE training step?": "Route, dispatch, run the experts, combine, compute the task loss plus auxiliary losses, backprop, and step the optimizer. Include routing stats.",
+    "Which auxiliary losses are added, and why?": "A load-balancing loss to spread tokens and a router z-loss to keep logits small. Name each one's failure mode.",
+    "How do you compute the balance and z losses from router logits?": "Balance: E * sum of f_i * P_i from the top-k assignments and the mean softmax. Z: mean of logsumexp(logits) squared.",
+    "Why report each loss detached?": "Logged values should not keep the graph alive or leak into later steps. Detached copies are safe to store.",
+    "How do you check that router parameters actually receive gradient?": "After backward, check that router.weight.grad is not None and not all zeros. A hard argmax with no path through the weights gives none.",
+    "How do auxiliary losses trade against the task loss?": "A larger auxiliary weight improves balance but pulls the router away from what the task wants. Watch whether the task loss plateaus when you raise it.",
+    "What would you monitor to catch routing collapse early?": "Per-expert token fractions, router entropy, max load over mean load, dropped tokens, and router logit magnitude."
+  }
+}

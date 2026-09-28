@@ -1,0 +1,83 @@
+{
+  "embedding": {
+    "What is an embedding layer, and how does it relate to a one-hot linear layer?": "It is a lookup table: row i is the vector for token i. It equals a one-hot vector times the weight matrix.",
+    "Why is it the first layer of most NLP models?": "Tokens are discrete IDs, and the network needs continuous vectors it can learn.",
+    "How do you implement lookup with indexing, and what gradient does the weight receive?": "weight[ids] gathers the rows. In backward only the looked-up rows receive gradient, summed over repeats.",
+    "How should embeddings be initialized?": "Normal with a small std such as 0.02, or scaled by 1/sqrt(d). Mention the padding row set to zero.",
+    "What is weight tying with the output layer?": "The output projection reuses the embedding matrix transposed, which saves parameters and couples input and output semantics.",
+    "How big is the embedding table for a large vocabulary, and how can you shrink it?": "vocab times d: for example 128k * 4096 is about 0.5B parameters. Shrink with a smaller vocabulary, factorized embeddings or quantization.",
+    "Why is the embedding gradient sparse, and what does that mean for optimizers?": "Only rows of tokens in the batch get nonzero gradient. Adam's moments still decay for all rows unless you use sparse or lazy optimizers."
+  },
+  "cross_entropy": {
+    "What does cross-entropy measure, and how does it relate to maximum likelihood and KL divergence?": "The negative log-probability of the true class. Minimizing it is maximum likelihood, and it equals KL to the target plus a constant.",
+    "Why is cross-entropy preferred over mean squared error for classification?": "MSE with softmax has small gradients when the prediction is confidently wrong. Cross-entropy's gradient stays large.",
+    "How do you compute it stably from raw logits? Where does the log-sum-exp trick come in?": "loss = logsumexp(z) - z_y. logsumexp subtracts the max before exponentiating.",
+    "What is the gradient of cross-entropy with respect to the logits, and why is it so simple?": "softmax(z) - onehot(y). Derive it from log-softmax: the log and exp cancel.",
+    "How would you handle ignored labels such as padding with an ignore index?": "Mask out those positions and average over valid tokens only, not over the full length.",
+    "What do label smoothing and focal loss change about cross-entropy, and when would you use each?": "Smoothing softens targets to reduce overconfidence. Focal loss downweights easy examples to handle class imbalance.",
+    "Why does cross-entropy push logits toward infinity on separable data, and what keeps that in check?": "The loss keeps decreasing as the margin grows, so logits grow without bound. Weight decay, early stopping and smoothing limit it."
+  },
+  "label_smoothing": {
+    "What is label smoothing, and why use it?": "Replace the one-hot target with (1 - eps) on the true class and eps spread over the classes. It regularizes overconfidence.",
+    "How does it change the target distribution?": "The target puts a little probability mass on wrong classes, so the model is not rewarded for pushing logits to infinity.",
+    "Write the smoothed loss as a mix of cross-entropy and a uniform term.": "loss = (1 - eps) * CE(true) + eps * (mean over classes of -log p).",
+    "Does the smoothing mass go to all classes or only the wrong ones? How does it change the formula?": "PyTorch spreads eps uniformly over all K classes, including the true one. The alternative is eps / (K - 1) over wrong ones only. Check the constant.",
+    "How do you compute it stably from logits?": "Use log_softmax once, then gather the true class and take the mean over the class dimension.",
+    "How does label smoothing affect calibration and knowledge distillation?": "It often improves calibration, but teachers trained with smoothing distill worse because it erases the similarity information in their logits.",
+    "When should you avoid label smoothing?": "When you need accurate probabilities or dark knowledge for a teacher, or when data is already noisy or low-entropy."
+  },
+  "weight_init": {
+    "Why does weight initialization matter for deep networks?": "Wrong scale compounds over depth, making activations and gradients explode or vanish. It also breaks symmetry between units.",
+    "What does Kaiming initialization preserve?": "The variance of activations (or gradients) from layer to layer for ReLU networks.",
+    "Derive the variance for ReLU networks from fan-in.": "Var(y) = fan_in * Var(w) * E[x^2], and ReLU halves the second moment. Setting that ratio to 1 gives Var(w) = 2 / fan_in.",
+    "Fan-in versus fan-out mode: when each?": "fan_in preserves forward activation variance; fan_out preserves backward gradient variance.",
+    "How do you compute fan-in for a convolution weight?": "fan_in = in_channels * kernel_h * kernel_w.",
+    "Kaiming versus Xavier?": "Xavier uses 2 / (fan_in + fan_out) and suits tanh or sigmoid. Kaiming adds the ReLU factor of 2.",
+    "How do modern LLMs initialize, and why scale residual projections by depth?": "Small normal init such as std 0.02, and output projections scaled by 1/sqrt(2 * n_layers) so residual variance stays bounded."
+  },
+  "adam": {
+    "How does Adam combine momentum and RMSProp?": "m is an EMA of gradients (momentum) and v an EMA of squared gradients (RMSProp). Adam steps by m / sqrt(v).",
+    "Why is bias correction needed, and when does it matter most?": "Both start at zero, so early EMAs are biased toward zero. Dividing by 1 - beta^t fixes the first steps.",
+    "Walk through the per-parameter state and update equations.": "For each parameter keep m and v and the step count t. Update both, bias-correct, then step by lr * m_hat / (sqrt(v_hat) + eps).",
+    "Where does eps go, and what happens with a tiny second moment?": "Outside the square root. With tiny v, eps bounds the step size.",
+    "How much optimizer memory does Adam need per parameter?": "Two fp32 states per parameter, plus often an fp32 master copy with mixed precision: about 12 to 16 bytes per parameter.",
+    "Adam versus AdamW: how does decoupled weight decay differ from L2 regularization?": "L2 adds lambda * w to the gradient, which then gets divided by sqrt(v). AdamW subtracts lr * lambda * w directly.",
+    "Why can Adam generalize worse than SGD, and what alternatives exist for large models?": "Adaptive steps may find sharper minima. Mention SGD for vision, and Lion, Adafactor, Muon or Shampoo for memory or speed."
+  },
+  "cosine_lr": {
+    "Why use learning-rate warmup for transformers?": "Early on, Adam's second moment estimates and the weights are unreliable. Large steps can blow up LayerNorm or attention logits.",
+    "What does cosine decay do compared with step or linear decay?": "It decays smoothly from peak to minimum, spending more time at moderate rates than step decay does.",
+    "Write the schedule piecewise for warmup, decay, and after total steps.": "Linear up to warmup_steps; then min + (max - min) * 0.5 * (1 + cos(pi * progress)); after total steps, hold at min.",
+    "What should the learning rate be at step zero and at the end of warmup?": "Near 0 at the start (check whether step 0 gives exactly 0 or 1/warmup), and the peak lr at the end of warmup.",
+    "How do you add a minimum learning rate floor?": "Interpolate between max_lr and min_lr instead of max_lr and 0.",
+    "Cosine versus warmup-stable-decay schedules: why have recent LLM runs moved to WSD?": "WSD holds a constant rate and decays only at the end, so you can branch or extend training without choosing the length up front.",
+    "How does the schedule interact with the total token budget if you extend training?": "Cosine is tied to a fixed total. Extending it means rewarming or restarting. WSD lets you continue from the stable phase."
+  },
+  "gradient_clipping": {
+    "What is gradient norm clipping, and why use it?": "Scale all gradients down when their total norm exceeds a threshold. It prevents occasional huge updates from destroying training.",
+    "Norm clipping versus value clipping?": "Norm clipping keeps the direction. Value clipping clamps each element and changes the direction.",
+    "How do you compute the global norm across all parameters?": "Take the square root of the sum over parameters of the squared L2 norm of each gradient.",
+    "How do you rescale, and why add a small eps?": "Multiply every gradient by max_norm / (total_norm + eps) when that ratio is below 1. eps avoids dividing by zero.",
+    "What should happen to parameters with no gradient?": "Skip them in both the norm and the rescaling.",
+    "How do you choose max_norm?": "Look at the typical grad-norm curve and pick a value above normal spikes. 1.0 is common for LLMs.",
+    "What does a frequently clipping run tell you?": "The learning rate may be too high, the data may have bad batches, or training is unstable. Inspect the loss spikes."
+  },
+  "gradient_accumulation": {
+    "What is gradient accumulation, and why use it?": "Sum gradients from several micro-batches before one optimizer step to simulate a larger batch within memory limits.",
+    "When is it exactly equivalent to a larger batch?": "When the loss is a mean and micro-batches have equal size, with no batch-dependent layers such as BatchNorm.",
+    "How do you scale the loss across micro-batches?": "Divide each micro-batch loss by the number of micro-batches, or by total tokens for token-level averaging.",
+    "When do you call zero_grad and optimizer.step?": "zero_grad after each step, not after each micro-batch. step once every N micro-batches.",
+    "What breaks with BatchNorm or unequal micro-batch sizes?": "BatchNorm sees small batches. With unequal sizes, per-micro-batch means weight samples unevenly, so normalize by the total count.",
+    "Gradient accumulation versus more data-parallel devices?": "Accumulation trades time for memory. More devices trade money for time and add communication.",
+    "How do you skip gradient synchronization on intermediate micro-batches in DDP?": "Wrap the non-final micro-batches in model.no_sync() so the all-reduce happens only once."
+  },
+  "mixed_precision": {
+    "What is mixed precision training?": "Compute in 16-bit (fp16 or bf16) for speed and memory, and keep sensitive parts such as master weights and reductions in fp32.",
+    "Why keep fp32 master weights?": "Small updates like lr * grad vanish when added to a 16-bit weight because of rounding. fp32 masters keep them.",
+    "Why is loss scaling needed for fp16, and how does dynamic scaling work?": "Small fp16 gradients underflow to zero. Multiply the loss by a scale, unscale the gradients, and adjust the scale on overflow.",
+    "What do you do when gradients overflow?": "Skip the optimizer step, reduce the scale (for example halve it), and continue.",
+    "Where do you cast between fp16 and fp32 in the step?": "Forward and backward in fp16 under autocast; unscale gradients to fp32; update the fp32 master weights; copy them back to fp16.",
+    "bf16 versus fp16: why does bf16 usually not need loss scaling?": "bf16 has fp32's exponent range, so gradients rarely underflow; it has fewer mantissa bits.",
+    "What is FP8 training, and what new problems does it bring?": "8-bit floats (E4M3, E5M2) with per-tensor or per-block scaling. Scale management and outliers become the main issues."
+  }
+}

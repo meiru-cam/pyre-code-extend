@@ -1,0 +1,101 @@
+{
+  "sse_decoder": {
+    "How does a chat completion API stream tokens to the client? What does one SSE event look like on the wire?": "Over one HTTP response with text/event-stream: lines like \"data: {json}\" followed by a blank line, one event per chunk of tokens.",
+    "Why can't a client decode each network chunk as UTF-8 and split it on newlines?": "The network cuts bytes anywhere: through a multi-byte character, or between \\r and \\n.",
+    "Walk through what state the decoder keeps between chunks. What goes wrong if a CRLF is split across two chunks and you forget the pending carriage return?": "The bytes of the unfinished line, a pending carriage-return flag, and the fields of the unfinished event. A forgotten CR makes CRLF read as a line end plus an empty line, which dispatches the event too early.",
+    "Why does the last event id persist across events while the event name and data reset? How is it used on reconnect?": "The id identifies the resume point. The client sends it as Last-Event-ID when reconnecting. The name and data belong to one event only.",
+    "Why does the OpenAI protocol end with a [DONE] sentinel instead of just closing the connection?": "A closed connection could be a network failure. An explicit end marker lets the client tell a finished stream from a cut one.",
+    "SSE versus WebSockets versus gRPC streaming for serving LLM tokens: proxies, bidirectionality, backpressure and client support?": "SSE is simple and proxy-friendly but one-way. WebSockets are bidirectional but harder to proxy. gRPC is typed and fast but less supported in browsers.",
+    "Streaming one event per token versus batching several tokens per event: latency, overhead and user-visible smoothness?": "One event per token gives the lowest latency but more overhead. Batching reduces overhead but makes text appear in jumps."
+  },
+  "chat_stream_accumulator": {
+    "What does a streamed chat completion chunk contain, and how does a client rebuild the full message from deltas?": "Deltas: a bit of content, or a tool-call fragment with an index. The client merges them into a snapshot of the message.",
+    "How are parallel tool calls streamed, and what tells the client which call a fragment belongs to?": "Each fragment carries the index of its call. The first fragment has the id, type and name; later ones add argument text.",
+    "Why must index and type be replaced rather than concatenated? What breaks if they are not?": "They identify rather than carry content. Concatenating would give \"functionfunction\" or index 00.",
+    "One chunk contains two fragments for the same tool call and the accumulator has no tool_calls yet. Walk through what a naive copy does versus merging by index.": "A naive copy stores both fragments as separate list entries. Merging by index combines them into one call.",
+    "Why should a null content delta never overwrite text already received?": "Servers send null content alongside tool deltas. Overwriting would erase the text already received.",
+    "Generic recursive delta merging versus a typed per-field accumulator: robustness to new fields versus catching malformed server output?": "Generic merging handles new fields automatically but cannot catch malformed output. Typed merging is strict but needs updates for each API change.",
+    "Parsing tool arguments incrementally while they stream versus waiting for the call to finish: latency, error handling and UI?": "Incremental parsing lets you show or start work early but needs a partial-JSON parser. Waiting is simpler and always valid."
+  },
+  "incremental_detokenize": {
+    "Why can't a streaming server decode each generated token id on its own and send the result?": "Tokenizers drop leading spaces when decoding a lone token, and a character can span several byte tokens.",
+    "What is byte-fallback tokenization, and what does a client see if the server streams a partial UTF-8 character?": "Rare characters are split into byte tokens. A partial sequence decodes to the replacement character.",
+    "Walk through prefix_offset and read_offset over three steps where the second token is an incomplete byte. What is decoded at each step and what is returned?": "Step 1 emits the text. Step 2 decodes to something ending in the replacement character, so it returns \"\" and keeps the offsets. Step 3 completes the character and emits it.",
+    "Why is the window seeded with the last few prompt tokens instead of starting empty?": "The first generated token needs context for its leading space. Without the prompt it would be decoded at the start of a string.",
+    "Why does the detokenizer compare lengths before slicing, and when can the new decode be shorter than the prefix?": "Decoding can merge or drop characters, so the new text may not be longer than the prefix. Then there is nothing new to send yet.",
+    "Window-based incremental decoding (vLLM) versus buffering until a word boundary (HF TextStreamer): latency, correctness and CJK handling?": "The window approach is exact and fast. Word buffering is simple but adds latency and needs special handling for CJK, which has no spaces.",
+    "Detokenizing in the engine process versus in a separate API server process: throughput, GIL contention and failure isolation?": "A separate process frees the engine from GIL contention and isolates crashes, at the cost of IPC."
+  },
+  "stop_string_holdback": {
+    "What are stop strings in an LLM API, and why can't the server just check each new token against them?": "Text sequences that end generation. A stop string can span several tokens or be part of one.",
+    "Why must a streaming server hold back some text before sending it when stop strings are excluded from the output?": "The end of the text may be the start of a stop string. Once sent, it cannot be taken back.",
+    "Why is the hold-back exactly the longest stop string's length minus one? Show a case where holding one character less leaks part of a stop string.": "At most len - 1 characters of a stop string can be at the end without it being complete. Example: stop \"abc\" with 1 held char leaks \"a\" when \"ab\" arrives.",
+    "Where does the search for a stop string start after an update, and why is the overlap len(s) - 1 characters?": "New text plus len(s) - 1 characters before it, since a stop string can start in old text and end in new text.",
+    "Speculative decoding appends several tokens at once and two stop strings appear. Which one should win and why?": "The one that completes earliest in the text. That matches appending the tokens one at a time.",
+    "Stop strings checked on detokenized text versus stop token ids checked in the sampler: exactness, tokenization ambiguity and cost?": "Token ids are cheap and exact but miss strings with multiple tokenizations. Text matching is exact on output but costs detokenization.",
+    "Holding back text for stop strings versus streaming immediately and letting the client trim: latency versus correctness guarantees?": "Holding back adds a little latency but guarantees correct output. Client trimming is fast but can show text that should not appear."
+  },
+  "request_output_collector": {
+    "In an async LLM server, what sits between the engine loop that produces tokens and the HTTP handler that streams them? Why not call the handler directly?": "A per-request collector or queue. Calling the handler directly would block the engine loop on slow clients.",
+    "What is backpressure, and what happens to an LLM server if one client reads its stream very slowly?": "Slowing the producer to match the consumer. Without it, a slow client makes outputs pile up in memory.",
+    "Why does the collector merge outputs instead of queueing them? What stays the same and what changes for a slow client?": "Merging keeps memory constant: a slow client gets the same text in bigger chunks.",
+    "Delta mode appends and cumulative mode replaces. Walk through three puts in each mode before one get.": "Delta mode: \"a\", \"b\", \"c\" become \"abc\". Cumulative mode: \"a\", \"ab\", \"abc\" become \"abc\" (the latest).",
+    "Why must merging match completions by index when n > 1, and why does an exception override pending output?": "With n > 1 samples, each index is a separate completion. An error must reach the client even if outputs are pending.",
+    "One-slot merging versus a bounded queue that blocks the producer versus an unbounded queue: memory, fairness and latency?": "One slot never blocks the engine and keeps memory bounded. A bounded queue blocks the producer. Unbounded risks running out of memory.",
+    "Detecting client disconnects and aborting the request versus finishing generation anyway: GPU cost, caching and idempotency?": "Aborting saves GPU work. Finishing may help caching or retries. Consider idempotency when the client reconnects."
+  },
+  "attention_sink_cache": {
+    "What is an attention sink, and why does a plain sliding-window KV cache fall apart once the first tokens are evicted?": "Models dump attention mass on the first tokens. Evicting them shifts that mass elsewhere and perplexity explodes.",
+    "What problem does StreamingLLM solve, and what problem does it explicitly not solve?": "Endless generation at constant memory without quality collapse. It does not extend memory of evicted content.",
+    "Walk through evict-for-space when the cache is full and n new tokens arrive. Which slice is dropped and why does it depend on n?": "Keep the first start_size tokens and the last recent_size - n tokens, so the n new tokens fit.",
+    "Why does StreamingLLM give keys positions by cache slot instead of their original text positions? What happens with RoPE if you use text positions?": "Positions stay within the trained range. Text positions grow without bound and have gaps, which is out of distribution for RoPE.",
+    "Why must the cache store keys before RoPE in this design, and what does that cost per decoding step?": "Positions change after eviction, so keys must be rotated again. Every cached key is rotated every step.",
+    "Attention sinks plus a recent window versus H2O-style importance-based eviction versus a learned sink logit (gpt-oss): quality, cost and implementation complexity?": "Sinks and a window are simple and work with standard kernels. H2O adapts to content but needs attention scores. A learned sink is built into training.",
+    "Bounded-memory streaming versus retrieval over an external store of evicted context for long-running assistants?": "Bounded memory is cheap but forgets. Retrieval can recall evicted facts but adds latency and complexity."
+  },
+  "sink_cache_rerotation": {
+    "Why can a RoPE key rotated at one position be moved to another position without the original key?": "RoPE is a rotation. Rotations compose by adding angles, so rotating by -shift moves the position back.",
+    "What does a sink cache keep and what does it evict when the window overflows?": "The first num_sink_tokens tokens and the most recent tokens. It evicts the oldest non-sink tokens.",
+    "Derive the correction: a key rotated at slot p must end up rotated at p - shift. What angle do you apply and why are sinks excluded?": "Rotate by -shift * frequencies. Sinks do not move, so their rotation is already correct.",
+    "Compare storing keys before RoPE and rotating every step (StreamingLLM) with storing them after RoPE and correcting on eviction (SinkCache). What does each cost per token?": "StreamingLLM re-rotates every cached key every step. SinkCache rotates each key once, and corrects all kept keys only on eviction.",
+    "Why does repeated re-rotation accumulate error, and how would you bound it in half precision?": "Every rotation rounds. In half precision errors add up; compute the correction in fp32.",
+    "Correcting rotated keys on eviction versus caching pre-RoPE keys and fusing RoPE into the attention kernel: kernel complexity, memory traffic and numerics?": "Fused RoPE in the kernel avoids the correction step but needs custom kernels. Correction works with standard kernels.",
+    "Shipping a cache strategy inside the modeling library versus as optional Hub code: maintenance cost versus discoverability?": "In the library it is maintained and discoverable but adds maintenance burden. As Hub code it is lighter but easier to miss or break."
+  },
+  "h2o_kv_eviction": {
+    "What is a heavy hitter in the KV cache, and why does accumulated attention identify tokens worth keeping?": "A token that receives a lot of attention over many steps. Past attention predicts future importance.",
+    "Why does H2O keep a recent window in addition to the heavy hitters?": "New tokens have not had time to accumulate score. Local context also matters for fluency.",
+    "Walk through one decoding step: how are the new token's attention weights folded into the scores, and which columns line up with the old scores?": "Sum the new queries' attention over queries. Add the old scores to the first L - n columns, which are the old tokens.",
+    "Why choose heavy hitters per head rather than one set for the whole layer? What does that do to memory layout?": "Heads attend to different things. Per-head selection gives a ragged layout that paged kernels do not handle directly.",
+    "How do attention sinks relate to H2O's heavy hitters?": "The first tokens usually become heavy hitters on their own. Sinks are a fixed special case.",
+    "H2O's accumulated scores versus SnapKV's observation-window scores versus fixed sinks plus a window: accuracy, overhead and compatibility with FlashAttention?": "H2O needs attention weights that FlashAttention does not output. SnapKV scores once from a window. Sinks need nothing.",
+    "Irreversible eviction versus offloading evicted KV to CPU and recalling it when needed: latency, memory and complexity?": "Eviction is simple but permanent. Offloading keeps everything but adds transfer latency and complexity."
+  },
+  "duplex_streaming_session": {
+    "What is a full-duplex interaction model, and how do 200 ms micro-turns differ from turn-based voice pipelines (ASR, LLM, TTS)?": "The model listens and speaks at the same time in 200ms slices. Pipelines wait for the turn to end and add latency at each stage.",
+    "Why would sending every 200 ms chunk as an independent request be too expensive, and what does a streaming session keep on the server?": "Each chunk would re-prefill the whole history. The session keeps the history and KV on the server.",
+    "After a request with a 6-token sequence generates 3 tokens, what is the KV length and why is it not 9?": "The last sampled token never ran through the model, so it has no KV. The KV length is 6 + 3 - 1 = 8.",
+    "Why commit history only when a request finishes? Walk through an aborted chunk followed by the next chunk.": "An aborted chunk leaves partial state. Committing only on finish lets the next chunk start from the last consistent point.",
+    "Why does a streaming session allow only one request in flight, and why strip the BOS token from appended chunks?": "Each chunk depends on the previous output, so concurrent requests would race on the same KV. The BOS token only belongs at the very start.",
+    "One interleaved sequence of micro-turns versus separate input and output streams (as in Moshi): model simplicity, latency and context growth?": "One sequence is simple but grows fast. Separate streams (Moshi) model overlap directly but need a more complex architecture.",
+    "Sticky sessions that pin KV on one GPU versus stateless requests with prefix caching: latency, load balancing and failure recovery?": "Sticky sessions are fast but tie the user to one GPU. Stateless requests with prefix caching are flexible but pay cache misses."
+  },
+  "embodied_action_stream": {
+    "How does an agent like SIMA 2 turn a language model's output into keyboard and mouse control of a running game?": "The model outputs structured text that is parsed deterministically into keyboard and mouse events.",
+    "Why do embodied agents emit actions in chunks, and why is every chunk already stale when it starts executing?": "Inference is slower than the game's frame rate. Each chunk was computed from a frame that is already old when it runs.",
+    "A new chunk arrives while the old plan still holds a key. Walk through what the scheduler drops, what it releases and in which order.": "Drop the old plan's future events, release every key still held (sorted), then schedule the new chunk's actions.",
+    "Why should a malformed chunk be rejected entirely instead of executing the valid prefix, and why must it not preempt the running plan?": "Half a plan is not what the model intended. Keeping the old plan running is the safer fallback.",
+    "How does a slow planner issuing instructions every k steps (Gemini Pro) combine with a fast controller (SIMA 2)? What goes wrong if the controller ignores stale instructions?": "The planner sets goals slowly and the controller acts fast. A controller acting on stale instructions pursues outdated goals.",
+    "Text actions from a general LLM versus a dedicated action head with discrete tokens or continuous outputs: generality, latency and precision?": "Text actions are general but slower and less precise. A dedicated action head is fast and precise but narrow.",
+    "Long action chunks versus short chunks with frequent re-planning: smoothness, reactivity and inference cost?": "Long chunks are smooth but react slowly. Short chunks react quickly but cost more inference."
+  },
+  "posed_frame_context": {
+    "How can a video model act as a world model without any explicit 3D representation? What plays the role of memory?": "It predicts the next frame from previous frames. The frames and their camera poses are the memory.",
+    "Why can't a real-time world model condition every new frame on all frames generated so far?": "Cost grows with every frame. Real time needs a bounded context.",
+    "Walk through choosing context for a camera that turns around in place. Why filter by viewing direction before ranking by distance?": "Frames facing the opposite way show different content. Filter by direction first, then rank by distance.",
+    "Why always include the most recent frames, even when they are far from the query pose in some sense?": "They carry motion and lighting continuity, which keeps the stream smooth.",
+    "How does pose-based retrieval make the world persistent when the user leaves an area and returns?": "Old frames of a place are retrieved again when you return, so it looks the same.",
+    "Retrieval by pose heuristics versus learned retrieval over frame embeddings versus an explicit 3D representation (Gaussian splats): consistency, cost and generality?": "Pose heuristics are cheap but miss occlusion. Learned retrieval adapts but costs more. Explicit 3D is consistent but less general.",
+    "Spending the real-time frame budget on more context frames versus more diffusion steps per frame: quality, latency and memory?": "More context improves consistency. More steps improve quality. Both cost latency."
+  }
+}

@@ -24,6 +24,10 @@ _Avoid_: Gate, required unlock
 The stage at the start of every exercise where the learner answers the opening and deep-dive interview questions, or records a skip, before hints, the solution, AI help and the editor unlock. It gates help inside an exercise, never access to one.
 _Avoid_: Prerequisite lock, quiz
 
+**Interview hint**:
+A one- or two-sentence nudge attached to one interview question, shown only when the learner opens it. It names the angle and the pieces to cover and may state a key fact or formula outright; the explanation, the reasoning between the pieces and the trade-offs stay with the learner. It does not affect the interview gate. Hints live in `torch_judge/tasks/_interview_hints/`, keyed by task id and exact question text.
+_Avoid_: Answer key, solution hint
+
 **Exercise**:
 A code implementation task with a stated contract, independently revealable hints, deterministic checks, and a reference implementation.
 _Avoid_: Lesson, demo

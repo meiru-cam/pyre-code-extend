@@ -1,0 +1,354 @@
+{
+  "per_token_logprobs": {
+    "Why does every policy-gradient loss for LLMs start from per-token log-probabilities rather than sequence probabilities?": "The policy gradient decomposes over tokens: log p(sequence) is the sum of per-token log-probs, and each token is an action. Sequence probabilities underflow.",
+    "What is the difference between the logits at position t and the token at position t in a causal LM, and where does the usual off-by-one shift happen?": "Logits at position t predict token t + 1. Shift: logits[:, :-1] pair with tokens[:, 1:].",
+    "Why use log_softmax instead of softmax followed by log? What breaks numerically with large logits?": "log_softmax uses logsumexp internally. softmax of large logits underflows to 0 for most entries, and log(0) = -inf.",
+    "How do you gather the realized token's log-prob with torch.gather, and what shapes must index have?": "gather(dim=-1, index=tokens.unsqueeze(-1)): the index must have the same number of dims as the logits, with size 1 in the gathered dim.",
+    "Full vocabulary logits for a long batch are huge. How do you compute these log-probs without materializing everything at once?": "Chunk over the sequence or batch, compute log_softmax per chunk and gather immediately, or use logsumexp(logits) - logits[token].",
+    "Summing per-token log-probs gives a sequence log-prob. What goes wrong if you use that sum directly in a loss for long versus short responses?": "Long responses get larger-magnitude sums, so the loss scale depends on length and favors short or long outputs. Normalize.",
+    "Where do per-token log-probs computed by the inference engine and by the trainer disagree, and why does that matter for RL?": "Different kernels, precision and batch composition in vLLM versus the trainer. The ratio to rollout log-probs is no longer 1, which biases the importance weights."
+  },
+  "group_relative_advantage": {
+    "What problem does GRPO's group-relative advantage solve compared with PPO's learned value baseline?": "PPO needs a critic as large as the policy to estimate a baseline. GRPO uses the other samples for the same prompt as the baseline.",
+    "Why standardize rewards within each prompt's group instead of across the whole batch?": "Prompts differ in difficulty. A per-group baseline compares answers to the same question rather than rewarding easy prompts.",
+    "What happens to the advantage when every completion in a group gets the same reward, and why is eps needed?": "The numerator is zero and the std is zero, so 0/0. eps turns it into 0: no signal from that group.",
+    "How do you reshape a flat group-major reward vector to compute per-group mean and std without a Python loop?": "reshape(-1, G), then mean and std over dim 1 with keepdim, then flatten back.",
+    "Population or sample standard deviation: which one, and does it change the gradient direction?": "The two differ by a constant factor for fixed G, so the direction per group is unchanged but the scale changes. Know which one the reference uses.",
+    "Dividing by the group std has been criticized, for example in Dr. GRPO. What bias does it introduce across easy and hard prompts?": "Low-variance groups (nearly all right or all wrong) get amplified advantages, so easy or hard prompts get outsized weight.",
+    "What does GRPO cost you in sampling compared with PPO with a critic, and when is that trade worth it?": "Many samples per prompt (for example 8 to 64) versus one sample plus a critic. Worth it when rewards are verifiable and critic training is unstable."
+  },
+  "rloo_advantage": {
+    "What is RLOO, and what baseline does it use for each sample?": "REINFORCE with k samples per prompt. Each sample's baseline is the mean reward of the other k - 1 samples.",
+    "Why does including a sample's own reward in its baseline bias the policy gradient?": "The baseline would depend on the sample's own action, so the baseline term no longer has zero expected gradient.",
+    "How do you compute every leave-one-out mean in one vectorized step?": "The leave-one-out mean is (group sum - r_i) / (k - 1). Compute the group sum once and broadcast.",
+    "Show that the RLOO advantage equals k / (k - 1) times the mean-centred reward.": "r_i - (S - r_i)/(k - 1) = (k r_i - S)/(k - 1) = k/(k - 1) * (r_i - S/k).",
+    "Why must the group size be at least 2, and what happens when all rewards in a group are equal?": "With k = 1 there are no others to average. With equal rewards every advantage is exactly 0.",
+    "RLOO versus GRPO: what does dividing by the group standard deviation add, and what bias does it introduce?": "The std division rescales each group to unit variance, a per-prompt learning-rate change that biases toward low-variance prompts.",
+    "RLOO versus PPO with a learned critic: sample cost, variance and stability?": "RLOO needs several samples per prompt but no critic. It is simple and stable, with variance depending on k. A critic is cheaper per sample but can be wrong."
+  },
+  "k3_kl_penalty": {
+    "Why do RLHF and GRPO add a KL penalty to a frozen reference model at all?": "To keep the policy near the reference: this prevents reward hacking, language drift and forgetting.",
+    "What are the k1, k2 and k3 KL estimators, and why is k3 popular?": "With r = log(ref/pi): k1 = -r (unbiased, can be negative), k2 = r^2 / 2 (biased, low variance), k3 = exp(r) - r - 1 (unbiased, non-negative, low variance).",
+    "Why must the log-ratio be reference minus policy for k3? What quantity do you get if you flip it?": "It estimates KL(pi || ref) only when r = log ref - log pi, with samples from pi. Flipping gives an estimate of a different quantity with no such guarantees.",
+    "Show that exp(r) - r - 1 is never negative. Why is that useful for a per-token penalty?": "f(r) = exp(r) - r - 1 has minimum 0 at r = 0 (f' = exp(r) - 1, f'' > 0). Per-token penalties are then never negative rewards in disguise.",
+    "Should the KL term be detached? Which parameters should receive its gradient?": "The policy log-prob should carry gradient; the reference log-prob is detached, since the reference is frozen.",
+    "KL as a reward penalty versus KL as a separate loss term: how do the gradients differ?": "As a reward, KL is scaled by advantages and enters through the policy gradient. As a loss term, you differentiate the estimator directly, which gives a different and possibly biased gradient.",
+    "What happens to k3 when the policy puts much less mass than the reference on a sampled token, and is clamping a good fix?": "r = log(ref/pi) is large, so exp(r) explodes and so does the gradient. Clamping would hide that and bias the estimate; this exercise deliberately does not clamp, so the caller can see and handle it."
+  },
+  "response_token_mask": {
+    "In RL post-training, which tokens should receive loss and which should not? Why exclude the prompt?": "Only generated response tokens are actions. The prompt was not chosen by the policy, and padding carries no meaning.",
+    "What goes wrong in training if padding tokens leak into the policy loss?": "The loss averages in zeros or garbage, gradients go to padding logits, and length-dependent scaling becomes wrong.",
+    "Build the mask for a right-padded batch without a Python loop. What broadcasting do you use?": "positions = arange(max_len); mask = (positions >= prompt_len[:, None]) & (positions < total_len[:, None]).",
+    "How would the mask change for left-padded batches, which many inference engines return?": "Positions shift: real tokens start at max_len - len. Compute offsets from the left padding length.",
+    "What are the edge cases: an empty generation, a row that fills max_len exactly, prompt length zero?": "An empty generation gives an all-false row. A full row has no padding. With prompt length 0 everything up to the length is response.",
+    "Multi-turn agent rollouts interleave tool output with model tokens. How does a single prompt/response mask break down there?": "Tool outputs sit inside the response but were not generated, so they must be masked too. You need a per-segment mask.",
+    "Where else does the same mask get reused downstream, and what bug appears if the mask and logits are misaligned by one position?": "It is reused in the KL term, advantage broadcast, entropy and loss averaging. An off-by-one shift trains on the wrong token or leaks the prompt."
+  },
+  "rlvr_format_reward": {
+    "What is RLVR, and why do reasoning models get a separate format reward in addition to a correctness reward?": "Reinforcement learning with verifiable rewards such as math answers or tests. Format rewards teach the structure (think/answer tags) so the answer can be parsed.",
+    "Why give partial credit instead of a strict 0 or 1 for format?": "Partial credit gives a denser signal early, when strict all-or-nothing is almost always 0.",
+    "Walk through how you check that each tag appears exactly once and in order. Why not a single regex?": "Count each tag, then check the index order. One regex tends to accept duplicates, overlaps or nesting.",
+    "Why require the completion to end with the EOS token before checking anything else?": "Truncated generations are not complete answers. Rewarding them teaches the model to stop mid-thought or ignore the length limit.",
+    "What edge cases would you test: nested tags, tags inside the answer text, whitespace-only answers?": "Nested think tags, a closing tag before the opening one, tags inside answer text, empty or whitespace-only answers, and text after the final tag.",
+    "How can a model reward-hack a format reward, and how do you keep the format term from dominating correctness?": "The model emits perfect tags with junk inside. Keep the format weight small, gate it on correctness, or anneal it.",
+    "Rule-based verifiable rewards versus a learned reward model: what do you gain and what do you lose?": "Verifiable rewards are cheap and hard to hack but narrow. Learned RMs cover open-ended tasks but are noisy and exploitable."
+  },
+  "reinforce_discounted_returns": {
+    "What is the reward-to-go in REINFORCE, and why use it instead of the full episode return for every action?": "Reward-to-go counts only rewards after the action, since an action cannot affect past rewards. This lowers variance without bias.",
+    "What does the discount factor gamma trade off?": "gamma < 1 favors near-term rewards and lowers variance. gamma = 1 values all future rewards equally.",
+    "How do you compute discounted returns in one backward pass, and where does the running sum reset?": "Iterate t from T - 1 down to 0: G = r_t + gamma * G. Reset G to 0 when an episode boundary is crossed.",
+    "A flat rollout contains several episodes. How do dones change the recursion, and is the terminal reward included?": "At a done, the return from that step is just its reward (terminal included), and the next episode's accumulation starts fresh.",
+    "What should happen for the final unfinished episode, and why is that a biased estimate?": "It is truncated: future rewards are unknown. Using the partial sum underestimates it unless you bootstrap with a value estimate.",
+    "Monte Carlo returns versus bootstrapped TD targets: what is the bias and variance trade?": "MC is unbiased with high variance. TD bootstraps from a critic: lower variance, biased by critic error.",
+    "For LLM RL with a single terminal reward, is gamma below 1 useful? What does it do to long responses?": "With a terminal-only reward, gamma < 1 shrinks the signal for early tokens, which implicitly favors shorter responses. Most LLM RL uses gamma = 1."
+  },
+  "reinforce_policy_loss": {
+    "Derive the REINFORCE policy gradient in words: why is log-prob times return an unbiased gradient estimate?": "The gradient of expected return is E[return times grad log pi(a|s)], by the log-derivative trick. Sampling gives an unbiased estimate.",
+    "Why does subtracting a baseline reduce variance without adding bias?": "E[b * grad log pi] = b * grad of sum pi = b * grad 1 = 0, as long as b does not depend on the action. It removes common variance.",
+    "Why must returns and the baseline be detached in the actor loss? What happens if the baseline receives gradient here?": "They are weights, not things to optimize. A baseline with gradient would be trained to shrink the loss rather than to predict value.",
+    "Masked mean over valid tokens: how do you make masked positions contribute neither value nor gradient?": "Multiply by the mask, sum, and divide by mask.sum(). Use where rather than multiplying NaNs so masked positions add neither value nor gradient.",
+    "What input validation matters here and why raise instead of returning NaN?": "Shapes must match and the mask must have at least one valid token. NaN spreads silently through training, so fail fast.",
+    "Token-mean versus sequence-mean normalization: how does each weight long and short responses?": "Token-mean gives every token equal weight, so long responses dominate. Sequence-mean gives each response equal weight, so tokens in short responses weigh more.",
+    "REINFORCE versus PPO: what does PPO add, and when is plain REINFORCE with a good baseline enough?": "PPO adds clipped importance ratios for several update epochs and usually a critic. REINFORCE with a good baseline (RLOO) is enough for on-policy single-update training."
+  },
+  "grpo_token_loss": {
+    "Walk me through the GRPO objective end to end: which pieces come from the policy, the reference and the reward?": "Policy: current log-probs. Old policy: the ratio for clipping. Reference: the KL term. Reward: group-relative advantages broadcast to tokens.",
+    "Why is there no value network in GRPO, and what replaces it?": "Group statistics replace the value network. The baseline comes from other samples of the same prompt.",
+    "How do you broadcast a per-sequence advantage onto per-token log-probs?": "Unsqueeze the (B,) advantage to (B, 1) and let it broadcast over the (B, T) log-probs, then apply the mask.",
+    "What denominator do you use for the loss, and how does the choice change the gradient scale per token?": "Per-sequence mean (original GRPO) versus total valid tokens (DAPO). Say which one makes each token's gradient depend on its response length.",
+    "What is the role of beta, and what happens to training when it is too large or zero?": "beta weights the KL to the reference. Too large and the policy barely moves. Zero lets it drift, which risks hacking but is common for verifiable rewards.",
+    "Sequence-level versus token-level loss aggregation in GRPO: which is used by DAPO and why?": "DAPO uses token-level aggregation so long responses are not down-weighted per token and bad long patterns get penalized properly.",
+    "What instability does GRPO show on long reasoning traces, and how do GSPO or DAPO address it?": "Per-token ratios on long sequences get noisy and clipping becomes erratic, especially in MoE. GSPO uses a sequence-level ratio; DAPO uses clip-higher and dynamic sampling."
+  },
+  "loss_aggregation_modes": {
+    "In GRPO-style training, how can the way you average the per-token loss change what the policy learns?": "The averaging decides how much each token and each response contributes. It creates length biases in what gets reinforced.",
+    "What is the length bias that Dr. GRPO points out in the original GRPO objective?": "Dividing each response's loss by its own length means long wrong answers get less penalty per token, so wrong answers grow long.",
+    "Write the four aggregation modes. For each, how much gradient does one token of a long response get compared with one token of a short response?": "With V valid sequences, n_b tokens in sequence b and padded length T: token-mean weighs each token 1/(sum of n), seq-mean-token-mean 1/(V * n_b), seq-mean-token-sum 1/V, seq-mean-token-sum-norm 1/(V * T). Compare n_b = 10 with n_b = 1000.",
+    "Which sequences should take part in a sequence mean, and what goes wrong with sequences that have no valid tokens?": "Only sequences with at least one valid token. An all-masked sequence gives 0/0 and should be excluded from the denominator.",
+    "Why can loss * mask still produce NaN, and how do you avoid it?": "NaN or inf in masked positions times 0 is still NaN. Use torch.where or zero out the loss before multiplying.",
+    "Token-mean versus sequence-mean: which one would you use for long chain-of-thought RL, and why?": "Token-mean, or a constant normalizer, so long reasoning traces get per-token signal equal to short ones.",
+    "How does the aggregation mode interact with gradient accumulation and data-parallel batch splits?": "Token-mean must use the global token count across micro-batches and ranks. Averaging per micro-batch reweights them."
+  },
+  "ppo_clipped_policy_loss": {
+    "Why does PPO clip the importance ratio? What is the trust-region intuition?": "The ratio measures how far the new policy has moved from the rollout policy. Clipping removes the incentive to move beyond 1 +/- eps.",
+    "Why is the objective the minimum of the clipped and unclipped terms rather than just the clipped one?": "The minimum is a pessimistic bound: it clips only when that would increase the objective, and still applies the full penalty when the ratio moves the wrong way.",
+    "Compute the ratio in log space. Why exp(logprobs - old_logprobs) rather than dividing probabilities?": "Ratios of tiny probabilities are unstable. Subtracting log-probs is exact and then exp once.",
+    "What is dual-clip, and which case does it bound: positive or negative advantages?": "Dual-clip bounds the objective for negative advantages when the ratio is very large (above c, for example 3), to avoid huge penalties from stale data.",
+    "old_logprobs and advantages are constants. What bug appears if one of them carries gradient?": "The gradient then flows into the rollout policy's log-probs or into the advantages, which changes the objective. Loss values can look fine while updates are wrong.",
+    "How do the number of PPO epochs and minibatches per rollout interact with clip_eps?": "More epochs and minibatches let the ratio drift further, so clipping activates more. Keep the total drift per rollout in mind.",
+    "What metric would you log to tell whether clipping is actually active, and what value worries you?": "Clip fraction: the share of tokens where clipping is active. Values rising above about 0.2 to 0.3 suggest steps that are too large."
+  },
+  "ppo_value_loss": {
+    "What does the critic predict in PPO for LLMs, and at which positions?": "The expected return (value) at each response token, from a value head on the LM, used as the GAE baseline.",
+    "Why clip the value update around old_values?": "It prevents the critic from changing too fast per update, like policy clipping, keeping it consistent with the data.",
+    "Why take the maximum of clipped and unclipped squared errors instead of the minimum?": "Taking the max is pessimistic, like the policy's min. It keeps the larger error, so clipping never gives a smaller loss artificially.",
+    "How do you mask and average the value loss, and why the 0.5 factor?": "Mask to response tokens and average over valid ones. 0.5 makes the gradient of the squared error the plain error.",
+    "What happens if returns are not detached?": "The critic target would move with the critic, and gradients would flow into the return computation.",
+    "Value clipping has been reported to hurt in some settings. When would you turn it off?": "When returns change a lot between updates, or with reward scaling changes. Clipping then slows needed updates. Andrychowicz et al. found it can hurt.",
+    "Why have GRPO-style methods dropped the critic entirely, and what do they lose?": "A critic costs memory and is hard to train on sparse terminal rewards. You lose per-token credit assignment and variance reduction."
+  },
+  "gae_advantage": {
+    "What is Generalized Advantage Estimation, and what do gamma and lambda control?": "A weighted sum of TD residuals. gamma is the discount; lambda interpolates between one-step TD (low variance, biased) and Monte Carlo (unbiased, high variance).",
+    "What are the two extremes lambda = 0 and lambda = 1?": "lambda = 0: A_t = delta_t = r + gamma V(t+1) - V(t). lambda = 1: A_t = discounted return - V(t).",
+    "Walk through the backward recursion for delta and A. Why is values of shape T + 1?": "delta_t = r_t + gamma V_{t+1} (1 - done) - V_t; A_t = delta_t + gamma lambda (1 - done) A_{t+1}. You need V at T for bootstrapping.",
+    "How do dones enter both the TD residual and the recursion, and why must they cut both?": "At a done there is no next state: zero the bootstrap in delta and stop the recursion so the next episode's advantage does not leak back.",
+    "Why run the loop backwards over time but vectorized over the batch?": "Each A_t depends on A_{t+1}, so time must be sequential. Batch entries are independent and vectorize.",
+    "For an LLM with one reward at the final token, what does GAE with lambda = 1 reduce to?": "A_t = final reward - V_t for every token (with gamma = 1): Monte Carlo minus the baseline.",
+    "How does critic quality affect GAE, and why is a bad critic worse than no critic?": "GAE trusts V for bootstrapping. A biased critic injects systematic errors, while no critic (MC) is just noisier."
+  },
+  "gspo_sequence_ratio": {
+    "What is GSPO, and why does it replace PPO's per-token importance ratio with a sequence-level one?": "Group Sequence Policy Optimization. Rewards are per sequence, so importance weighting and clipping are done per sequence to match.",
+    "Why length-normalize the sequence log-ratio?": "A sum of log-ratios grows with length. The length-normalized geometric mean keeps the ratio's scale comparable across lengths.",
+    "Why aggregate the log-ratio first and exponentiate once, rather than averaging per-token ratios?": "The mean of log-ratios then exp gives the geometric mean, which is stable. Averaging raw ratios lets one outlier token dominate.",
+    "How do you handle a sequence whose mask is entirely False?": "Define its log-ratio as 0 (ratio 1) or exclude it. Do not divide by zero.",
+    "What does this ratio look like for a sequence of length 1 versus 1000 with the same per-token drift?": "The same per-token drift gives the same normalized ratio at length 1 and at length 1000, while an unnormalized product would be astronomically different.",
+    "Why is sequence-level importance weighting said to stabilize MoE RL training?": "MoE routing changes between rollout and training, making per-token ratios very noisy. A sequence-level ratio averages that out.",
+    "What information is lost by collapsing per-token ratios into one number per sequence?": "Token-level credit: one bad token among many good ones cannot be singled out, and all tokens share one clip decision."
+  },
+  "dapo_dynamic_sampling": {
+    "What is DAPO's dynamic sampling, and why do groups with identical rewards contribute no learning signal?": "Filter out groups whose rewards are all the same (all correct or all wrong) and resample until the batch is full. Such groups have zero advantage.",
+    "Why must keep or drop decisions apply to whole groups?": "Advantages are defined relative to the group. Keeping part of a group changes its baseline and breaks the estimate.",
+    "How do you compute the per-group spread and broadcast the decision back to each response?": "Per-group max minus min (or std) via reshape, compare with tol, then repeat_interleave the keep flag back to responses.",
+    "What does tol protect against with continuous rewards?": "Floating rewards that differ by rounding noise would count as informative. tol treats near-identical rewards as equal.",
+    "After filtering, the batch may be smaller than planned. What does the training loop do about that?": "It generates more rollouts until enough informative groups accumulate, or trains on a smaller batch and rescales.",
+    "Dynamic sampling costs extra generation. When is that worth it and when is it wasteful?": "Worth it when many groups are degenerate, since the extra sampling replaces wasted compute. Wasteful when almost all groups already vary.",
+    "How does the fraction of degenerate groups change as training progresses, and what does it tell you?": "As the model improves, more groups become all-correct. A rising fraction means the curriculum is too easy."
+  },
+  "dapo_clip_higher_loss": {
+    "What is Clip-Higher in DAPO, and why use an asymmetric clip range?": "It uses a larger upper clip bound (for example 1.28) than the lower one (0.8), letting low-probability tokens with positive advantage grow more.",
+    "How does clip-higher relate to entropy collapse?": "With symmetric clipping, unlikely tokens barely increase, so entropy collapses and exploration dies. Raising the upper bound keeps them viable.",
+    "Walk through which tokens hit the upper bound and which hit the lower bound for positive and negative advantages.": "A > 0: clipped when the ratio exceeds 1 + eps_high. A < 0: clipped when the ratio drops below 1 - eps_low.",
+    "Why detach both old log-probs and advantages?": "Both come from rollout time and must be constants. Gradient through them corrupts the update.",
+    "How do you reduce the per-token objective to a scalar, and why only over valid tokens?": "Sum the objective over valid tokens and divide by the total valid token count (token-level mean), excluding padding.",
+    "What risk does a larger upper clip bound bring, and how would you choose clip_high?": "A bigger step for positive-advantage tokens can destabilize training. Tune by watching entropy and clip fractions.",
+    "Compare clip-higher with adding an entropy bonus to prevent collapse.": "Clip-higher targets the specific mechanism (rare tokens not growing). An entropy bonus raises randomness everywhere and can add noise."
+  },
+  "vineppo_mc_value": {
+    "What problem with learned critics does VinePPO address?": "Learned critics for LLM reasoning are inaccurate, which gives poor credit assignment across reasoning steps.",
+    "How does Monte Carlo rollout from intermediate states give value estimates?": "From an intermediate state, sample K continuations with the current policy and average their final rewards as V(state).",
+    "Why average across the K continuations of one state and never across states?": "Each state needs its own value. Mixing continuations from different states blurs the per-step credit.",
+    "Why does the last state use the trajectory's final reward as its next value?": "At the end nothing is left to roll out, so its value is the realized terminal reward.",
+    "How does K trade estimation variance against compute?": "Variance falls as 1/K while generation cost grows linearly with K.",
+    "VinePPO needs extra generation per step. When does that beat training a critic?": "When the critic is poor, as in math reasoning, and generation is cheap relative to the gains. Not when rollouts are very expensive.",
+    "What does VinePPO require from the environment or the inference engine that a critic does not?": "The ability to reset to any intermediate state and continue generating, which needs prefix caching or a resettable environment."
+  },
+  "rollout_batch_assembly": {
+    "What does a trainer need from a rollout batch, and why is assembling it a common source of silent bugs?": "Padded ids, attention and response masks, old log-probs, per-token advantages and rewards, all aligned per token. A misalignment still trains, just on the wrong targets.",
+    "Why broadcast one scalar advantage per response onto every generated token?": "The reward judges the whole response. Every token that produced it shares the credit (no critic), so the scalar is repeated across its tokens.",
+    "How do you pad rows with different prompt and generation lengths and build the matching mask?": "Pad each row to the batch max. The mask is True on generated positions only: after the prompt length, before the total length.",
+    "What should happen for a response that generated no tokens?": "Keep the row with an all-False response mask so it contributes nothing, or drop it consistently from every tensor.",
+    "Which tensors need which dtypes, and why does it matter for the loss?": "ids as long, masks as bool, log-probs and advantages as float32. Float masks in integer math or bfloat16 advantages silently change the loss.",
+    "Padding every row to the batch max wastes compute. What alternatives exist, such as sequence packing, and what do they complicate?": "Packing several sequences into one row (with cu_seqlens or a block-diagonal mask) or dynamic batching. It complicates masks, position ids and per-sequence reductions.",
+    "Where would you add assertions in the pipeline to catch misaligned masks early?": "At assembly: equal lengths, mask sums equal to the generation lengths, advantages zero outside the mask, and log-prob positions aligned with target tokens."
+  },
+  "verl_dataproto_filter_chunk": {
+    "What is VERL's DataProto, and why carry tensors, non-tensor fields and meta info together?": "A batch container with a dict of tensors, a dict of non-tensor arrays (strings, ids) and meta info. Keeping them together means indexing keeps every field aligned.",
+    "Why filter out rows with an empty response mask before training?": "Rows with no response tokens add nothing to the loss, can produce 0/0 in means, and waste compute.",
+    "Why use select_idxs rather than rebuilding a tensor-only batch?": "select_idxs slices every field (tensor and non-tensor) with the same indices, so no field is dropped or misaligned.",
+    "Chunking requires the row count to divide evenly. What are your options when it does not?": "Pad with dummy rows and mask them, drop the remainder, or rebalance the chunks. Say what each does to the gradient.",
+    "How do you keep the original order across filtering and chunking, and why does order matter?": "Use index-based selection, which keeps relative order, and chunk contiguously. Order matters for grouping (GRPO groups) and for matching results back.",
+    "Filtering changes the effective batch size between steps. How does that affect optimization?": "The effective batch size changes the gradient noise and the loss scale between steps. Normalize by the actual token count.",
+    "What would you log at this boundary to debug a data-parallel RL run?": "Rows before and after filtering, tokens per rank, per-chunk sizes, the reason each row was filtered, and group integrity."
+  },
+  "grpo_train_step": {
+    "Walk me through one GRPO step from batch to optimizer update.": "Generate a group per prompt, score rewards, compute group advantages, compute policy and reference log-probs, build the clipped loss plus KL, backprop and step.",
+    "Which model is frozen, which receives gradients, and how do you guarantee it?": "The reference is frozen (requires_grad False, eval mode, no_grad). The policy trains. Assert that the reference has no gradients after backward.",
+    "Where do you shift logits and input_ids to get per-token log-probs, and how do you avoid an off-by-one?": "Use logits[:, :-1] against input_ids[:, 1:] and shift the response mask the same way.",
+    "Why compute reference log-probs under torch.no_grad, and what memory does that save?": "The reference never updates, so there is no need to store activations for backward. no_grad saves that memory.",
+    "Why must the returned metrics be detached, and what leaks if they are not?": "Metrics holding tensors with gradient keep the whole graph alive, which leaks memory across steps.",
+    "This step does one update per rollout. What changes if you run several PPO epochs on the same batch?": "You need the old log-probs and clipped ratios, since later epochs are off-policy. Monitor KL and the clip fraction.",
+    "How would you scale this step to a model that does not fit on one GPU?": "FSDP or tensor parallelism for the policy, a separate inference engine for rollouts, and a sharded or offloaded reference."
+  },
+  "agentic_rollout_loop": {
+    "What is an agentic rollout, and how does it differ from single-turn RL generation?": "Generation over several turns with tool calls, where environment responses are part of the trajectory. Single-turn RL generates once and scores it.",
+    "Which messages in the trajectory come from the policy and which from the environment?": "Policy: assistant messages and tool calls. Environment: tool results and observations.",
+    "How do you execute tool calls and append their results before the next model call?": "Parse the calls from the model output, run each tool, append a tool-role message with the result keyed to the call id, then call the model again.",
+    "What happens when max_turns is reached before the model stops calling tools?": "Stop and return the trajectory as truncated. The reward decides how to treat an unfinished task.",
+    "How do you handle an unknown tool name or a tool that raises?": "Return an error message as the tool result so the model can recover. Do not crash the whole rollout.",
+    "Trajectory-level reward versus per-turn reward: what is the credit-assignment problem here?": "One final reward cannot tell which turn helped. Per-turn rewards need a way to judge intermediate steps.",
+    "Why do multi-turn rollouts make batching and GPU utilization hard?": "Turns take different numbers of steps and tool latencies vary, so batches drain unevenly and GPUs idle waiting for tools."
+  },
+  "agent_rollout_truncation": {
+    "Why do multi-turn agent rollouts get truncated at a training window, and what goes wrong if you ignore it?": "Trajectories must fit a fixed training context. Ignoring that crashes training or trains on misaligned partial data.",
+    "Why do tool-output tokens get a False response mask?": "Tool outputs were not generated by the policy, so they are not actions and must not get policy gradient.",
+    "How do you truncate ids, mask and rollout log-probs consistently?": "Cut all three arrays at the same position so ids, mask and log-probs stay aligned.",
+    "How does the overlong penalty change the reward, and when should it apply?": "Subtract a penalty when the response was truncated, and apply it only to truncated samples.",
+    "Why keep rollout-time log-probs at all, and what are they used for later?": "They record the probabilities of the sampling policy, used for importance ratios or checks against trainer log-probs.",
+    "Truncation penalty versus dropping truncated samples: what does each bias?": "A penalty teaches shorter responses but may punish correct long reasoning. Dropping them biases the data toward short responses.",
+    "How does truncation interact with importance ratios when inference and training disagree?": "Truncation cuts tokens where rollout log-probs exist. Ratios must use the same token set, or the IS weights are computed on mismatched positions."
+  },
+  "rl_eval_loop": {
+    "What should an RL evaluation loop measure, and why is it separate from training metrics?": "Episode success, return and length under a fixed protocol. Training metrics are noisy and on-policy; evaluation is controlled and comparable.",
+    "Why seed each episode with seed plus episode index?": "Each episode then gets a different but reproducible start. The results are repeatable and not correlated with each other.",
+    "How do you handle terminated versus truncated, and why stop on either?": "Terminated means a natural end; truncated means a time limit. Either way the episode is over, so stop stepping.",
+    "Why call the policy exactly once per environment step?": "The environment's step and the policy's action must correspond one to one. Extra calls add randomness or cost.",
+    "Which metrics are averaged per episode and which per step?": "Return and success per episode; step-level stats such as action frequencies per step. Average in the right unit.",
+    "Deterministic versus sampled actions during evaluation: which do you report and why?": "Deterministic shows the best-mode behavior; sampled matches training. Report which one and keep it consistent.",
+    "How many episodes do you need before a success-rate difference is meaningful?": "Use a binomial confidence interval: the standard error is sqrt(p(1 - p)/n). Hundreds of episodes are needed for differences of a few percent."
+  },
+  "pass_at_k": {
+    "What does pass@k measure, and why is it the usual metric for code and math generation?": "The probability that at least one of k samples is correct. Code and math have verifiers, and users can retry.",
+    "Why is 1 - (1 - c / n) ** k a biased estimate of pass@k?": "It treats the samples as independent draws with replacement using the plug-in rate c/n, and the nonlinear transform of that estimate is biased.",
+    "Derive the unbiased estimator by counting size-k subsets of the n samples.": "pass@k = 1 - C(n - c, k) / C(n, k): one minus the chance that a random size-k subset contains no correct sample.",
+    "Why does evaluating C(n, k) directly fail for large n, and how does the product form avoid it?": "The binomials overflow or lose precision. Use the product of (1 - k/i) over i from n - c + 1 to n.",
+    "What should the estimate be when fewer than k samples are wrong?": "If n - c < k, every size-k subset contains a correct sample, so the estimate is 1.",
+    "RL often raises pass@1 while pass@k at large k stays flat or drops. What does that say about what RL is learning?": "RL sharpens the distribution onto answers it already could find (better pass@1) but reduces diversity. It may not add new reasoning ability.",
+    "pass@k versus majority voting versus a verifier-reranked best-of-n: what does each reward, and which matches deployment?": "pass@k rewards coverage, majority voting rewards consistency, and verifier reranking rewards selection. Deployment usually matches pass@1 or reranking."
+  },
+  "async_agent_rollout": {
+    "Why run agent rollouts asynchronously, and what is the bottleneck in synchronous rollout?": "Tool calls and long generations leave GPUs idle. In synchronous mode the slowest trajectory in the batch sets the pace.",
+    "What does bounded concurrency protect?": "The inference server, tool APIs and memory: without a bound, you overload them and fail more.",
+    "How do you bound concurrency with asyncio, for example a semaphore?": "asyncio.Semaphore(n): acquire it around each rollout with async with.",
+    "How do you apply a per-call timeout without cancelling siblings?": "Wrap each call in asyncio.wait_for and catch TimeoutError per task, so one failure does not cancel the gather.",
+    "How do you return results in input order when they finish out of order?": "Remember each input index, and write each result into a preallocated list at that index.",
+    "Timeouts turn slow samples into failures. What bias does that add to training data?": "Hard or long tasks time out more, so the training data over-represents easy, short trajectories.",
+    "Async rollouts versus batched synchronous generation: what are the throughput and reproducibility trade-offs?": "Async keeps GPUs and tools busy but makes ordering and timing nondeterministic. Synchronous batching is reproducible but idles."
+  },
+  "agent_env_adapter": {
+    "What does an environment adapter do between a Gym-style env and an LLM RL trainer?": "It turns env observations into prompt tokens and model outputs into env actions, and records ids, masks and rewards in the trainer's format.",
+    "Why must environment observations be excluded from the response mask?": "Observations come from the environment. Training on them teaches the model to predict the environment, not to act.",
+    "How do you align token ids, mask and rewards across steps?": "Append each step's observation tokens (mask False) and action tokens (mask True) to one sequence, and attach each step's reward to its action tokens.",
+    "How do terminated, truncated and max_steps interact in the stop condition?": "Stop when the env terminates or truncates, or when you reach max_steps. Record which reason applied.",
+    "How is the return computed and what happens to rewards after termination?": "Sum the rewards up to and including the terminating step. Nothing after termination counts.",
+    "Token-level versus step-level rewards in agent RL: what does each make easier?": "Token-level rewards give fine credit but need token-level judgments. Step-level rewards match env semantics but credit whole actions.",
+    "What goes wrong if the tokenizer re-encodes decoded text instead of keeping the policy's token ids?": "Re-encoding can produce different token ids than the policy sampled, so log-probs and ratios no longer match the actual actions."
+  },
+  "slime_custom_generate_hook": {
+    "What is Slime, and why does it expose a custom generate hook?": "An RL framework (SGLang plus Megatron). The hook lets you customize how samples are generated, for example multi-turn or tool use, without forking the framework.",
+    "How do finish reasons map to sample statuses?": "stop maps to completed; length maps to truncated; abort maps to aborted. Each status tells the trainer how to use the sample.",
+    "Which sample fields must you update after generation, and why build a new tokens list rather than mutating?": "Response text, tokens, response length, loss mask, status and log-probs. Build a new list because other code may hold references to the old one.",
+    "What should the loss mask look like for the generated tokens?": "One value per generated token, typically all 1 for policy tokens, and 0 for tool or environment tokens.",
+    "How should an aborted generation be recorded so the trainer does not use it?": "Mark its status as aborted, so the trainer filters it out or requeues it rather than training on partial garbage.",
+    "Why should truncated samples usually still be trained on, and how are they treated differently from completed ones?": "They still contain valid policy decisions. Training teaches that running long is costly, via a penalty or a separate status.",
+    "What are the risks of letting user code run inside the rollout path?": "User code can crash, hang or corrupt samples inside the hot path. Validate the outputs and apply timeouts."
+  },
+  "rollout_train_boundary": {
+    "What has to happen at the boundary between rollout workers and the trainer?": "Convert trajectories into aligned token tensors: ids, masks, per-token advantages, episode ids, and the log-probs from the rollout.",
+    "Why broadcast the trajectory return to every token?": "With a single outcome reward, every policy token shares the credit (no critic).",
+    "Why zero advantages and loss mask on non-policy tokens?": "Environment and prompt tokens are not policy actions. Nonzero values would train on them.",
+    "Why keep episode ids after concatenation?": "Downstream steps such as group statistics, per-episode metrics and debugging need to know which tokens belong together.",
+    "Why not normalize advantages across episodes at this boundary?": "Normalization belongs where group structure is known and at a consistent scope. Doing it here can mix groups or double-normalize.",
+    "What does summing per-step rewards into one return lose compared with per-step credit assignment?": "Which step caused success. All steps share credit, so good early steps in failed episodes get punished.",
+    "Where should advantage normalization live, and why?": "In one place in the algorithm (for example the advantage estimator) with an explicit scope, so it happens exactly once."
+  },
+  "fully_async_rollout_buffer": {
+    "What is fully asynchronous RL, and how does it differ from synchronous on-policy training?": "Rollout and training run concurrently, and the trainer consumes data that may come from slightly older weights. Synchronous training alternates between the two.",
+    "Why train as soon as a batch is ready instead of waiting for all rollouts?": "It keeps the trainer busy and avoids waiting for the slowest rollout.",
+    "How do you keep at most max_concurrency producers in flight while also calling train_fn?": "A semaphore or a counter of in-flight tasks, refilled as tasks finish, with train_fn called whenever batch_size results are buffered.",
+    "How do you preserve original order within each emitted batch?": "Tag each result with its index and sort each batch by index before emitting it.",
+    "What happens to timeouts and failures, and how do you train the final partial batch?": "Record timeouts and failures as dropped, not trained on. Flush the leftover items as a final smaller batch at the end.",
+    "Async training makes data off-policy. How stale can samples be, and how do you correct for it?": "Bounded staleness (for example one or two policy versions). Importance weighting or truncated IS corrects the mismatch.",
+    "How do long-tail slow rollouts bias the training distribution toward short responses?": "Short rollouts finish first and fill the batches, so long responses are under-represented and length behavior drifts."
+  },
+  "rollout_weight_sync_staleness": {
+    "Why do inference engine weights lag behind trainer weights in RL systems?": "Syncing weights to the inference engine takes time, and rollouts keep running during training, so the rollouts use older weights.",
+    "What is staleness, and why cap it?": "The version gap between the policy that generated a sample and the current one. Large gaps make the data too off-policy.",
+    "How do you route complete, aborted and failed samples, and why do stale samples go to retry rather than dropped?": "Completed samples go to training, aborted ones are dropped, failed ones are retried. Stale ones are regenerated, since the prompt is still valid.",
+    "When is it safe to sync weights to the serving engine, and why wait for in-flight requests?": "When no request is running on the old weights. Swapping mid-generation mixes two policies within one sample.",
+    "What should happen if lag is negative?": "A sample from a newer version than the trainer means a bookkeeping bug. Raise an error rather than silently accepting it.",
+    "Strict on-policy versus bounded staleness: what do you gain in throughput and lose in correctness?": "Bounded staleness gives higher throughput and less idling but introduces an off-policy bias.",
+    "Besides dropping stale samples, how can importance weighting correct for staleness?": "Weight each sample by pi_current / pi_behavior (truncated) so the gradient estimate stays nearly unbiased."
+  },
+  "truncated_importance_sampling": {
+    "Why do the rollout engine and the trainer assign different probabilities to the same token, and why does that make on-policy RL off-policy?": "Different kernels, precision, batch composition or quantization in vLLM versus the FSDP trainer give slightly different log-probs for the same token.",
+    "What does importance sampling correct, and why truncate the ratio instead of using it directly?": "It reweights samples from the rollout distribution to match the trainer's. Truncation bounds the variance from rare huge ratios.",
+    "Write the token-level and sequence-level weights. Which one is closer to the true trajectory ratio, and which one hits the cap more often?": "Token: exp(train - rollout) per token, capped. Sequence: exp of the summed log-ratios, capped. Sequence is the true trajectory ratio but explodes and hits the cap much more often.",
+    "Why must the weight be detached, and where does it enter the loss?": "It is a fixed correction factor, not something to optimize. It multiplies the per-token policy loss.",
+    "How do you keep the weight finite when a log-ratio is huge, and why must masked positions be excluded before arithmetic?": "Clamp the log-ratio before exp and zero masked positions first, since padded garbage can overflow.",
+    "How do you choose the cap? What do you monitor to detect that the rollout engine itself is broken?": "Pick a small cap such as 2 and watch the fraction of capped tokens and the mean log-ratio. A spike means the engine is misbehaving.",
+    "Truncated IS versus fixing the mismatch at the source (same kernels, fp32 logits, batch-invariant ops): costs and benefits?": "Fixing the source gives exact on-policy data but costs speed. Truncated IS is cheap but biased and only patches small mismatches."
+  },
+  "rl_data_audit": {
+    "What integrity problems in an offline RL or SFT dataset would you check before training?": "Missing fields, duplicate ids and prompts, train/eval leakage, empty responses, label errors and format problems.",
+    "Why does train and eval ID overlap matter?": "Evaluation on training items overstates performance. The metric becomes memorization.",
+    "How do you report missing fields, duplicates and leakage without mutating input rows?": "Read the rows without changing them, collect findings in separate lists or counters, and return a report.",
+    "Why ignore empty IDs in duplicate and leakage checks?": "Empty ids are missing data, not a shared id. Counting them would create false duplicates.",
+    "What data structures keep this linear in the number of rows?": "Hash sets and dicts from id to first index make one pass and O(1) lookups.",
+    "ID-based leakage detection misses paraphrases. What would you add to catch near-duplicates?": "Normalized-text hashing, MinHash or n-gram overlap, and embedding similarity with a threshold.",
+    "What is the cost of false positives in a leakage check?": "You discard good data or distrust valid results. Tune thresholds and review samples manually."
+  },
+  "masked_perplexity": {
+    "What does perplexity measure, and why compute it only on response tokens?": "exp of the average negative log-likelihood per token. Prompt tokens were given, not predicted.",
+    "How does perplexity relate to cross-entropy?": "Perplexity = exp(cross-entropy in nats).",
+    "Token-weighted across the batch versus mean of per-sequence perplexities: how do they differ numerically?": "Token-weighted pools all tokens, so long sequences dominate. The mean of per-sequence values weights sequences equally, and exp is nonlinear.",
+    "Why exponentiate the mean negative log-prob instead of averaging per-token probabilities?": "Averaging probabilities gives a different, non-geometric mean. Perplexity is the geometric mean of inverse probabilities.",
+    "What should happen with an all-zero mask?": "There are no tokens to average. Raise an error or return NaN explicitly rather than silently dividing by zero.",
+    "Why is perplexity a poor proxy for RL-trained model quality?": "RL optimizes rewards, not likelihood of reference text. Better policies can have worse perplexity on a fixed corpus.",
+    "How can two models with the same perplexity differ in downstream accuracy?": "Perplexity averages over all tokens. Accuracy depends on a few decisive tokens, formatting and calibration."
+  },
+  "confidence_calibration": {
+    "What is calibration, and why does it matter for RL-trained reasoning models?": "Whether stated or implied confidence matches the actual accuracy. It matters for deciding when to trust or abstain.",
+    "How do accuracy, Brier score and ECE differ?": "Accuracy: fraction correct. Brier: mean squared error of the probabilities. ECE: the weighted average gap between confidence and accuracy per bin.",
+    "How do you assign confidences to equal-width bins, including the boundaries at 0 and 1?": "bin = min(floor(conf * B), B - 1), so 1.0 goes in the last bin. Check how 0 is handled.",
+    "Why weight each bin's gap by its count?": "Bins with more samples should matter more. Otherwise a nearly empty bin could dominate.",
+    "How do empty bins affect ECE?": "They have no samples and no gap. Skip them, with weight zero.",
+    "Why is ECE sensitive to the number of bins, and what alternatives exist?": "Bin width trades bias against variance. Alternatives: adaptive or equal-mass bins, smooth calibration curves, and the Brier score.",
+    "RL with correctness rewards often makes models overconfident. How would you fix that?": "Reward calibrated confidence (proper scoring rules such as Brier), use temperature scaling, or add an abstain option."
+  },
+  "embedding_diversity_selection": {
+    "Why select diverse training data, and what does embedding diversity capture?": "Diverse data covers more of the task space and reduces redundancy. Embeddings capture semantic similarity.",
+    "What is farthest-first traversal?": "Pick a start point, then repeatedly add the point farthest from its nearest selected point. It is a 2-approximation for k-center.",
+    "How do you maintain each row's distance to its nearest selected row efficiently?": "Keep min_dist per row. After each pick, update it with the minimum of the old value and the distance to the new pick. That is O(N) per step.",
+    "Why cosine distance rather than Euclidean for embeddings?": "Embedding direction carries meaning, while norms vary with length or frequency. Cosine ignores the norm.",
+    "How do tie-breaking and the seed index affect determinism?": "Fix the first pick (the seed index) and break ties by lowest index, so the same input gives the same output.",
+    "Diverse in embedding space does not mean useful for training. What else would you consider?": "Quality, difficulty, label correctness and relevance to the target task. Combine diversity with a quality filter.",
+    "Farthest-first tends to pick outliers. How do you protect against selecting noise?": "Filter outliers first, cap each point's distance, or use density-aware sampling."
+  },
+  "gradient_orthogonality_audit": {
+    "What does the cosine similarity between per-example gradients tell you?": "Whether two examples push the parameters in similar (positive), unrelated (near zero) or opposing (negative) directions.",
+    "What do negative cosines mean for multi-task or multi-objective training?": "The tasks conflict: improving one hurts the other, so the combined gradient cancels.",
+    "How do you compute pairwise cosines for N gradients in one matrix operation?": "Normalize the gradient rows to unit length, then G G^T gives all pairwise cosines.",
+    "How do you count unordered off-diagonal pairs without double counting?": "Take the upper triangle with triu_indices(N, N, offset=1) to count each unordered pair once.",
+    "Why reject zero gradients?": "A cosine with a zero vector is undefined (0/0), so the result is meaningless.",
+    "How expensive are per-example gradients for large models, and what approximations exist?": "One backward per example is O(N) passes. Approximations: random projections, last-layer gradients, LoRA gradients or per-sample gradient tricks.",
+    "Gradient conflict methods such as PCGrad project gradients. When would you use them?": "When tasks consistently conflict, shown by negative cosines, and one task's gains hurt another. PCGrad removes the conflicting component."
+  },
+  "masked_kd_kl": {
+    "When training a small model or compressing an LLM, which distillation methods have you used?": "Logit distillation (KL to the teacher), sequence-level distillation on teacher outputs, feature matching and on-policy distillation. Pick one you know well.",
+    "For sequence- or token-level knowledge distillation, how do forward KL and reverse KL differ, and what behavior does each encourage in the student?": "Forward KL(teacher || student) is mass-covering: the student spreads over all teacher modes. Reverse KL is mode-seeking: the student commits to a few.",
+    "Why divide the logits by a temperature T when computing the KD loss, and why multiply the loss by T*T at the end?": "T > 1 softens both distributions to expose the dark knowledge. The soft gradient scales as 1/T^2, so multiplying by T^2 keeps its magnitude.",
+    "What goes wrong if padding or masked positions contribute to the loss or the gradient? How do you handle the mask and numerical stability in code?": "Padded positions add fake targets and gradients. Use log_softmax for both, compute the KL per position, and take a masked mean.",
+    "Should gradients flow back into the teacher? How do you cut them in PyTorch?": "No: the teacher is fixed. Compute teacher logits under torch.no_grad() or call detach().",
+    "If every position in the batch is masked, or T <= 0, what should the loss function do and why?": "With no valid positions, the mean is undefined. Raise an error for an empty mask and for T <= 0 rather than returning NaN.",
+    "Temperature KD is teacher-forced distillation. What are its limits for autoregressive generation, for example exposure bias or distribution shift?": "The student trains on teacher-forced prefixes but generates from its own. Errors compound. On-policy distillation addresses this.",
+    "Compared with plain cross-entropy SFT on teacher outputs, what does matching the full teacher distribution buy you, and what does it cost?": "The full distribution carries the teacher's uncertainty and near-miss answers (more signal per token). It costs teacher logits at train time, storage, and a shared vocabulary."
+  },
+  "opd_sampled_kl_advantage": {
+    "What is on-policy distillation, and how does it differ from teacher-forced KD?": "The student samples its own outputs and the teacher scores them token by token. Teacher-forced KD trains on teacher or data prefixes the student may never produce.",
+    "Why evaluate the teacher on student-generated tokens?": "The student then learns to fix the mistakes it actually makes, avoiding the train-test mismatch of teacher forcing.",
+    "Why is student minus teacher log-prob a sampled reverse-KL estimate?": "The expectation over student samples of log p_student - log p_teacher is exactly KL(student || teacher), so each sampled token gives an unbiased estimate.",
+    "Why must the shaped advantage be detached?": "It is a reward-like weight for the policy gradient. Gradient through it would optimize the estimate itself rather than the policy.",
+    "How do masked positions stay exactly zero?": "Multiply by the mask or use torch.where so padded positions are exactly 0 and add no gradient.",
+    "Sampled-token reverse KL versus full-vocabulary KL: variance and compute trade-offs?": "The sampled token is cheap and unbiased but noisy. The full vocabulary is exact with lower variance but needs all teacher logits.",
+    "How do you choose beta against the task reward?": "Balance the scales: the KL per token versus the reward magnitude. Tune on the validation reward and the distance to the teacher."
+  },
+  "opsd_privileged_context_kl": {
+    "What is on-policy self-distillation with privileged context?": "The same model acts as its own teacher by seeing extra information (such as the gold solution). The student version without it is trained toward the teacher's distribution.",
+    "Why must the student generate without seeing the gold solution?": "At test time there is no gold solution. Generating with it would teach behavior that depends on information the model will not have.",
+    "Why call the same model twice on the same generated tokens, once with privileged context?": "Both score the same student tokens: once without the privileged context (student) and once with it (teacher). That gives a per-token KL on identical actions.",
+    "Which call should receive gradients, and why?": "Only the student call. The privileged call is the target and must be detached, otherwise the model learns to change its teacher.",
+    "How do you apply the mask and average the KL across valid tokens?": "Compute the KL per token, multiply by the mask, sum, and divide by the number of valid tokens.",
+    "What leaks if privileged context reaches generation?": "The model learns to rely on the answer being present, and the evaluation becomes contaminated.",
+    "How does self-distillation compare with using a separate larger teacher?": "No second model is needed, and the teacher improves with the student. But the teacher is only as good as the model plus the hint."
+  }
+}
