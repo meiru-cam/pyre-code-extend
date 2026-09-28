@@ -182,12 +182,22 @@ def test_mutations_rejected_across_distinct_seeds(task_id, targets, repeat):
     assert set(rejected) == {name for name, _, _ in targets}
 
 
+# Tasks that cite only papers or blog posts, each with the reason no code source can be pinned.
+PAPER_ONLY = {
+    "h2o_kv_eviction": "the official FMInference/H2O repository has no license",
+    "embodied_action_stream": "SIMA 2 has no public code",
+    "posed_frame_context": "RTFM has no public code",
+}
+
+
 @pytest.mark.parametrize("task_id", NEW_TASKS)
 def test_task_metadata_is_valid_and_cited(task_id):
     task = get_task(task_id)
     validate_task(task_id, task)
     assert not {"title_zh", "description_zh", "hint_zh"} & set(task)
     assert task["interview_questions"]
+    has_code = any(source["kind"] == "code" for source in task["sources"])
+    assert has_code != (task_id in PAPER_ONLY), f"{task_id}: pin a code source or list it in PAPER_ONLY"
     assert task["sources"]
 
 

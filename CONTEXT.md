@@ -25,7 +25,7 @@ The stage at the start of every exercise where the learner answers the opening a
 _Avoid_: Prerequisite lock, quiz
 
 **Interview hint**:
-A one- or two-sentence nudge attached to one interview question, shown only when the learner opens it. It names the angle or the pieces to cover, never the full answer, and it does not affect the interview gate. Hints live in `torch_judge/tasks/_interview_hints/`, keyed by task id and exact question text.
+A one- or two-sentence nudge attached to one interview question, shown only when the learner opens it. It names the angle and the pieces to cover and may state a key fact or formula outright; the explanation, the reasoning between the pieces and the trade-offs stay with the learner. It does not affect the interview gate. Hints live in `torch_judge/tasks/_interview_hints/`, keyed by task id and exact question text.
 _Avoid_: Answer key, solution hint
 
 **Exercise**:
