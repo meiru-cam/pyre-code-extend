@@ -3,7 +3,7 @@
     "What is a noise schedule in diffusion, and what does alpha-bar represent?": "The schedule sets how much noise is added at each step. alpha-bar_t is the fraction of the signal's variance left at step t.",
     "How does the schedule relate to the signal-to-noise ratio?": "SNR(t) = alpha-bar / (1 - alpha-bar). The schedule is the path SNR follows from high to low.",
     "Implement linear, cosine and another schedule. How do betas become alpha-bar?": "Linear: evenly spaced betas. Cosine: define alpha-bar with a cos^2 curve directly. alpha-bar_t is the cumulative product of (1 - beta).",
-    "Why clip betas in the cosine schedule?": "Near the end of the cosine curve the implied betas approach 1, which gives singular steps. Clip them (for example at 0.999).",
+    "Why clip betas in the cosine schedule?": "Near the end of the cosine curve the implied betas approach 1, which gives singular steps, so the paper clips them at 0.999. This exercise clips alpha-bar itself to [0.0001, 0.9999] instead.",
     "What should alpha-bar look like at the first and last timestep?": "Close to 1 at the first step (almost clean) and close to 0 at the last (almost pure noise).",
     "Why did the cosine schedule improve over linear for small images?": "The linear schedule destroys low-resolution images too early, wasting many steps on pure noise. Cosine spreads the SNR decrease more evenly.",
     "How does the schedule interact with image resolution?": "High-resolution images keep more signal at the same noise level because of pixel redundancy. Shift the schedule toward more noise (SNR shift)."

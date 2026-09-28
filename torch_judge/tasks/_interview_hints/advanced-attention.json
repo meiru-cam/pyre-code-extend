@@ -18,7 +18,7 @@
     "What long-range tasks suffer from mostly local layers?": "Retrieval of facts far in the past and multi-hop reasoning across distant parts, when too few global layers exist."
   },
   "frontier_attention_block": {
-    "What design choices of recent LLM attention does this block combine?": "GQA, RoPE, QK-norm, a sliding window on some layers, pre-norm and no biases. Name one model family per choice.",
+    "What design choices of recent LLM attention does this block combine?": "Grouped-query attention (Llama), QK-norm (Qwen3, Gemma 3), a causal local/global layer schedule (Gemma, Mistral's sliding window) and bias-free projections. RoPE and the norm placement are left out of this exercise.",
     "Why mix local and global attention layers?": "Local layers cut compute and cache; global layers preserve long-range access.",
     "How do you decide per layer whether attention is local or global?": "Use the layer index against the configured schedule, for example every n-th layer global.",
     "Where do QK normalization and RoPE go relative to each other?": "Normalize first, then rotate. RoPE preserves norms, so the order mainly affects which values get the learned scale.",

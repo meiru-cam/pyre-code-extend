@@ -15,7 +15,7 @@
     "Interleaved pairs versus half-split pairs: why do implementations differ, and what breaks if you mix them?": "Interleaved pairs (original paper, GPT-J, Meta's LLaMA code) versus half-split (GPT-NeoX, Hugging Face LLaMA, which permutes Meta's q/k weights). Mixing conventions pairs the wrong dimensions and scrambles positions.",
     "How do you apply RoPE with a KV cache when new tokens start at an offset?": "Rotate new tokens at their absolute positions (offset plus index) and cache the rotated keys.",
     "Why does RoPE degrade beyond the training context length?": "Low-frequency dims never completed a full rotation during training, so longer positions produce unseen angles.",
-    "RoPE versus ALiBi: extrapolation and efficiency trade-offs?": "ALiBi adds a linear distance bias and extrapolates somewhat but penalizes long range. RoPE is more expressive and works with FlashAttention."
+    "RoPE versus ALiBi: extrapolation and efficiency trade-offs?": "ALiBi adds a linear distance bias to the attention scores and extrapolates somewhat, but always penalizes long range. RoPE is applied to Q and K beforehand, so any kernel works unchanged, with comparable or slightly better quality at the training length."
   },
   "alibi": {
     "What is ALiBi, and how does it replace positional embeddings?": "It adds a per-head bias to the attention logits proportional to query-key distance, with no position embeddings at all.",

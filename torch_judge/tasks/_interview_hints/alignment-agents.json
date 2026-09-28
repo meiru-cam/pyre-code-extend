@@ -49,7 +49,7 @@
     "What is Monte Carlo Tree Search, and what are its four phases?": "It builds a search tree with random or learned playouts. Selection, expansion, simulation (or evaluation) and backpropagation.",
     "How has MCTS been used with LLMs for reasoning?": "Nodes are reasoning steps, a value model or verifier scores them, and the search finds better chains or creates training data (AlphaZero-style).",
     "Explain the UCB or PUCT selection score. What do the exploitation and exploration terms each do?": "PUCT = Q + c * P * sqrt(N_parent) / (1 + N_child). Q exploits known value; the second term explores children with high prior and few visits.",
-    "How do you handle unvisited children in selection?": "With UCB their score is infinite, so they are picked first. With PUCT the prior term drives the choice.",
+    "How do you handle unvisited children in selection?": "Classic UCB1 scores an unvisited child as infinity, so it is tried first, and PUCT relies on the prior instead. This exercise adds 1 to the visit count, which keeps the score finite while giving unvisited children the largest exploration term.",
     "What gets updated during backpropagation, and how?": "Walk back from the leaf, incrementing visit counts and adding the value to each node's total (or updating the running mean).",
     "What does c_puct trade off?": "Exploration versus exploitation: high c spreads visits widely, low c commits to the current best.",
     "Why is MCTS expensive for LLM reasoning, and what cheaper alternatives are used, such as best-of-N or beam search?": "Every node needs LLM generation and evaluation, so costs grow fast. Best-of-N with a verifier and beam search are simpler and parallelize better."

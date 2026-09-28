@@ -3,7 +3,7 @@
     "What does a tool registry own in an agent system?": "Tool names, schemas, handlers and validation. It is the single source of truth for what tools exist and how to call them.",
     "Why keep it provider-neutral?": "Different providers (OpenAI, Anthropic) have different tool-call formats. A neutral core with adapters avoids lock-in.",
     "How do you validate arguments against the schema?": "Check required fields, types and enums, and reject unknown fields if strict. Use JSON Schema or a small validator.",
-    "How do you handle duplicate names and unknown tools?": "Reject a duplicate registration loudly. For an unknown name, return a structured error the model can read, not a crash.",
+    "How do you handle duplicate names and unknown tools?": "Reject a duplicate registration loudly. This exercise also rejects an unknown name with an error; the agent runtime above it can turn that into a message the model can read.",
     "How do you report invocation errors?": "As a structured error result (type, message) returned to the agent, keeping the loop alive.",
     "Strict schema validation versus lenient coercion?": "Strict catches bugs and injection early but rejects near-misses. Coercion is friendlier but can hide mistakes.",
     "How do you version tools without breaking agents?": "Version the names or schemas, keep the old versions for a while, and make changes additive."
@@ -39,8 +39,8 @@
     "Why run dependent tool calls as a DAG?": "Some calls need others' outputs. A DAG runs independent calls in parallel and dependent ones in order.",
     "What is a round?": "A set of calls whose dependencies are all completed, run together before the next set.",
     "How do you find calls whose dependencies are satisfied?": "Track remaining dependency counts or check that every dependency is done. Topological order, as in Kahn's algorithm.",
-    "How do you enforce max_parallel?": "Take at most max_parallel ready calls per round, in a deterministic order such as by id, and defer the rest.",
-    "How do you detect cycles and missing dependencies?": "Check that every dependency names a known call. If nothing is ready but calls remain, there is a cycle.",
+    "How do you enforce max_parallel?": "Take at most max_parallel ready calls per round, in input order as this exercise specifies, and defer the rest to the next round.",
+    "How do you detect cycles and missing dependencies?": "Before running anything, check that every dependency names a known call, then run Kahn's algorithm on the graph: if it cannot order every call, there is a cycle.",
     "What happens downstream when one call fails?": "Mark calls that depend on it (transitively) as skipped or failed. Do not run them.",
     "Parallel rounds versus a fully async scheduler?": "Rounds wait for the slowest call. A fully async scheduler starts each call as soon as its inputs are ready."
   },
