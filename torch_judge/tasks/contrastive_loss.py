@@ -1,5 +1,7 @@
 """Contrastive Loss (InfoNCE) task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Contrastive Loss (InfoNCE)",
     "title_zh": "对比损失（InfoNCE）",
@@ -75,4 +77,19 @@ k_rand = k_rand / k_rand.norm(dim=-1, keepdim=True)
 loss_rand = contrastive_loss(q_rand, k_rand)
 print(f"Random embeddings loss:  {loss_rand:.4f}  (should be higher)")""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is InfoNCE, and how does it relate to CLIP and SimCLR?',
+            'Why do in-batch negatives work?',
+        ],
+        deep_dive=[
+            'How do you build the similarity matrix and the targets for a batch?',
+            'Why normalize embeddings, and what does the temperature do?',
+            'What makes the CLIP loss symmetric?',
+        ],
+        tradeoffs=[
+            'How does batch size affect contrastive learning, and how do you scale it across GPUs?',
+            'What goes wrong with false negatives in the batch?',
+        ],
+    ),
 }

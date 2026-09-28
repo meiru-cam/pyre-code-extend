@@ -1,5 +1,7 @@
 """SwiGLU Activation task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "SwiGLU Activation",
     "title_zh": "SwiGLU 激活函数",
@@ -78,4 +80,19 @@ gate = x @ Wgate
 swish_gate = gate * torch.sigmoid(gate)
 print("Gate (swish) sample values:", swish_gate[0, :4])""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is a gated linear unit, and what does SwiGLU add?',
+            'Why do LLaMA and PaLM use SwiGLU in the feed-forward block?',
+        ],
+        deep_dive=[
+            'Write SwiGLU in terms of x, W1, Wgate and W2. Which projection gets the Swish?',
+            'Why is d_ff often set to about 8/3 of d_model with SwiGLU instead of 4 times?',
+            'What are the parameter and FLOP counts compared with a standard two-matrix MLP?',
+        ],
+        tradeoffs=[
+            'What does gating buy you empirically, and is there a good theoretical explanation?',
+            'What does SwiGLU cost at inference time?',
+        ],
+    ),
 }

@@ -1,5 +1,7 @@
 """Gradient Accumulation task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Gradient Accumulation",
     "title_zh": "梯度累积",
@@ -39,4 +41,19 @@ loss = accumulated_step(model, opt, nn.MSELoss(),
     [(torch.randn(2, 4), torch.randn(2, 2)) for _ in range(4)])
 print('Accumulated loss:', loss)""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is gradient accumulation, and why use it?',
+            'When is it exactly equivalent to a larger batch?',
+        ],
+        deep_dive=[
+            'How do you scale the loss across micro-batches?',
+            'When do you call zero_grad and optimizer.step?',
+            'What breaks with BatchNorm or unequal micro-batch sizes?',
+        ],
+        tradeoffs=[
+            'Gradient accumulation versus more data-parallel devices?',
+            'How do you skip gradient synchronization on intermediate micro-batches in DDP?',
+        ],
+    ),
 }

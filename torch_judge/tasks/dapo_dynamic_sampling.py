@@ -1,5 +1,7 @@
 """DAPO dynamic sampling — dropping the groups that carry no gradient signal."""
 
+from ._interview import interview
+
 TASK = {
     "title": "DAPO Dynamic Sampling",
     "difficulty": "Medium",
@@ -260,4 +262,19 @@ def dapo_dynamic_sampling(rewards, group_size, tol=0.0):
     keep = spread > tol
     return keep.repeat_interleave(group_size)
 ''',
+    "interview_questions": interview(
+        concept=[
+            "What is DAPO's dynamic sampling, and why do groups with identical rewards contribute no learning signal?",
+            'Why must keep or drop decisions apply to whole groups?',
+        ],
+        deep_dive=[
+            'How do you compute the per-group spread and broadcast the decision back to each response?',
+            'What does tol protect against with continuous rewards?',
+            'After filtering, the batch may be smaller than planned. What does the training loop do about that?',
+        ],
+        tradeoffs=[
+            'Dynamic sampling costs extra generation. When is that worth it and when is it wasteful?',
+            'How does the fraction of degenerate groups change as training progresses, and what does it tell you?',
+        ],
+    ),
 }

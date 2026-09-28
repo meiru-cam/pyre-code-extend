@@ -1,5 +1,7 @@
 """Graph Autoencoder (GAE) task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Graph Autoencoder (GAE)",
     "title_zh": "图自编码器（GAE）",
@@ -71,4 +73,19 @@ assert torch.allclose(A_hat, expected, atol=1e-5), f'Numerical mismatch: max dif
     H = torch.relu(A_norm @ X @ W1)
     Z = A_norm @ H @ W2
     return torch.sigmoid(Z @ Z.T)''',
+    "interview_questions": interview(
+        concept=[
+            'What is a graph autoencoder?',
+            'Why reconstruct the adjacency matrix?',
+        ],
+        deep_dive=[
+            'How does the two-layer GCN encoder produce embeddings?',
+            'What does the inner-product decoder compute, and why a sigmoid?',
+            'How do you normalize the adjacency with self-loops?',
+        ],
+        tradeoffs=[
+            'What is the class imbalance problem in adjacency reconstruction, and how do you handle it?',
+            'GAE versus variational GAE?',
+        ],
+    ),
 }

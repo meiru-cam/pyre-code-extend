@@ -1,5 +1,7 @@
 """Tensor Parallel MLP task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Tensor Parallel MLP",
     "title_zh": "张量并行 MLP",
@@ -107,4 +109,19 @@ ref = torch.nn.functional.gelu(x @ w1_full) @ w2_full
 
 print("Max diff vs reference:", (out - ref).abs().max().item())  # expect ~0""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is tensor parallelism in Megatron-style MLPs?',
+            'Why column-parallel first and row-parallel second?',
+        ],
+        deep_dive=[
+            'Where do the all-reduce operations happen in forward and backward?',
+            'Why no communication between the two linear layers?',
+            'How do you split biases correctly?',
+        ],
+        tradeoffs=[
+            'Why is tensor parallelism usually kept within a node?',
+            'Tensor versus pipeline versus data parallelism: how do you combine them?',
+        ],
+    ),
 }

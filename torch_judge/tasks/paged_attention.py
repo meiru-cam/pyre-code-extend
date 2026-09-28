@@ -1,5 +1,7 @@
 """Paged Attention task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Paged Attention",
     "title_zh": "分页注意力",
@@ -147,4 +149,19 @@ print('Shape:', paged_out.shape)
 print('Max diff vs reference:', (paged_out - ref_out).abs().max().item())
 print('Match:', torch.allclose(paged_out, ref_out, atol=1e-5))""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is PagedAttention, and what problem does it solve in serving?',
+            'How does a block table work?',
+        ],
+        deep_dive=[
+            'How do you map a logical token position to a physical page and offset?',
+            'How do you gather keys and values for attention?',
+            'What happens with the last partially filled page?',
+        ],
+        tradeoffs=[
+            'What does paging enable, such as prefix sharing and copy on write?',
+            'What does the extra indirection cost?',
+        ],
+    ),
 }

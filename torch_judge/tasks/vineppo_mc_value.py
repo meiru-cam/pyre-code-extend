@@ -1,5 +1,7 @@
 """VinePPO Monte Carlo values — per-step credit assignment without a critic."""
 
+from ._interview import interview
+
 TASK = {
     "title": "VinePPO Monte Carlo Value Estimation",
     "difficulty": "Hard",
@@ -268,4 +270,19 @@ def vineppo_mc_value(rollout_rewards, final_reward):
     next_value = torch.cat([values[1:], bootstrap])
     return values, next_value - values
 ''',
+    "interview_questions": interview(
+        concept=[
+            'What problem with learned critics does VinePPO address?',
+            'How does Monte Carlo rollout from intermediate states give value estimates?',
+        ],
+        deep_dive=[
+            'Why average across the K continuations of one state and never across states?',
+            "Why does the last state use the trajectory's final reward as its next value?",
+            'How does K trade estimation variance against compute?',
+        ],
+        tradeoffs=[
+            'VinePPO needs extra generation per step. When does that beat training a critic?',
+            'What does VinePPO require from the environment or the inference engine that a critic does not?',
+        ],
+    ),
 }

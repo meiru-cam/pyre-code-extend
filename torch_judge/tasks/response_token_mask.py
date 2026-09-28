@@ -1,5 +1,7 @@
 """Response token mask — the mask that keeps prompt and padding out of the policy gradient."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Response Token Mask",
     "difficulty": "Easy",
@@ -238,4 +240,19 @@ def response_token_mask(prompt_lens, total_lens, max_len):
     positions = torch.arange(max_len, device=prompt_lens.device).unsqueeze(0)
     return (positions >= prompt_lens.unsqueeze(-1)) & (positions < total_lens.unsqueeze(-1))
 ''',
+    "interview_questions": interview(
+        concept=[
+            'In RL post-training, which tokens should receive loss and which should not? Why exclude the prompt?',
+            'What goes wrong in training if padding tokens leak into the policy loss?',
+        ],
+        deep_dive=[
+            'Build the mask for a right-padded batch without a Python loop. What broadcasting do you use?',
+            'How would the mask change for left-padded batches, which many inference engines return?',
+            'What are the edge cases: an empty generation, a row that fills max_len exactly, prompt length zero?',
+        ],
+        tradeoffs=[
+            'Multi-turn agent rollouts interleave tool output with model tokens. How does a single prompt/response mask break down there?',
+            'Where else does the same mask get reused downstream, and what bug appears if the mask and logits are misaligned by one position?',
+        ],
+    ),
 }

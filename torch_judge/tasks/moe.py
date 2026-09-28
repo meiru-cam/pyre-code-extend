@@ -1,5 +1,7 @@
 """Mixture of Experts (MoE) task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Mixture of Experts (MoE)",
     "title_zh": "混合专家（MoE）",
@@ -90,4 +92,19 @@ x = torch.randn(2, 8, 32)
 print('Output:', moe(x).shape)
 print('Params:', sum(p.numel() for p in moe.parameters()))""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is a mixture-of-experts layer, and why does it decouple parameters from compute?',
+            'What does the router do?',
+        ],
+        deep_dive=[
+            'How do you select top-k experts per token and normalize their weights?',
+            'How do you dispatch tokens to experts without a per-token Python loop?',
+            'How do you combine expert outputs back into token order?',
+        ],
+        tradeoffs=[
+            'What makes MoE training unstable?',
+            'MoE versus a dense model with the same active compute: memory and serving trade-offs?',
+        ],
+    ),
 }

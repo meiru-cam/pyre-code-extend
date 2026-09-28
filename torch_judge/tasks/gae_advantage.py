@@ -1,5 +1,7 @@
 """Generalized advantage estimation — the backward recursion that feeds PPO's policy loss."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Generalized Advantage Estimation",
     "difficulty": "Hard",
@@ -302,4 +304,19 @@ def gae_advantage(rewards, values, dones, gamma=0.99, lam=0.95):
         advantages[..., t] = running
     return advantages
 ''',
+    "interview_questions": interview(
+        concept=[
+            'What is Generalized Advantage Estimation, and what do gamma and lambda control?',
+            'What are the two extremes lambda = 0 and lambda = 1?',
+        ],
+        deep_dive=[
+            'Walk through the backward recursion for delta and A. Why is values of shape T + 1?',
+            'How do dones enter both the TD residual and the recursion, and why must they cut both?',
+            'Why run the loop backwards over time but vectorized over the batch?',
+        ],
+        tradeoffs=[
+            'For an LLM with one reward at the final token, what does GAE with lambda = 1 reduce to?',
+            'How does critic quality affect GAE, and why is a bad critic worse than no critic?',
+        ],
+    ),
 }

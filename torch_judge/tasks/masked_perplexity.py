@@ -1,5 +1,6 @@
 """Compute response-only perplexity from token log probabilities."""
 
+from ._interview import interview
 from ._rl_extension import NANO, case, code_source, paper, task
 
 TASK = task(
@@ -58,4 +59,19 @@ def masked_perplexity(logprobs, mask):
     model_connections=["nano-aha-moment computes realized-token log probabilities; this task reduces those scores into response-only token-weighted perplexity."],
     pros=["A single scalar exposes deteriorating likelihood on the exact response tokens used for RL."],
     cons=["Token-weighted batch perplexity differs from the mean of per-sequence perplexities reported by some trainers."],
+    interview_questions=interview(
+        concept=[
+            'What does perplexity measure, and why compute it only on response tokens?',
+            'How does perplexity relate to cross-entropy?',
+        ],
+        deep_dive=[
+            'Token-weighted across the batch versus mean of per-sequence perplexities: how do they differ numerically?',
+            'Why exponentiate the mean negative log-prob instead of averaging per-token probabilities?',
+            'What should happen with an all-zero mask?',
+        ],
+        tradeoffs=[
+            'Why is perplexity a poor proxy for RL-trained model quality?',
+            'How can two models with the same perplexity differ in downstream accuracy?',
+        ],
+    ),
 )

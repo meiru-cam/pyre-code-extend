@@ -1,5 +1,7 @@
 """Consume completed agent rollouts from a buffer without waiting for the slowest sample."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Fully-Async Rollout Buffer",
     "difficulty": "Hard",
@@ -194,4 +196,19 @@ for kwargs in (
     failures = [result for _, result in sorted(failures)]
     return {"trained_batches": trained_batches, "failures": failures}
 ''',
+    "interview_questions": interview(
+        concept=[
+            'What is fully asynchronous RL, and how does it differ from synchronous on-policy training?',
+            'Why train as soon as a batch is ready instead of waiting for all rollouts?',
+        ],
+        deep_dive=[
+            'How do you keep at most max_concurrency producers in flight while also calling train_fn?',
+            'How do you preserve original order within each emitted batch?',
+            'What happens to timeouts and failures, and how do you train the final partial batch?',
+        ],
+        tradeoffs=[
+            'Async training makes data off-policy. How stale can samples be, and how do you correct for it?',
+            'How do long-tail slow rollouts bias the training distribution toward short responses?',
+        ],
+    ),
 }

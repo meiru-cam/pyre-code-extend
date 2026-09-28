@@ -1,5 +1,7 @@
 """Linear Self-Attention task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Linear Self-Attention",
     "title_zh": "线性自注意力",
@@ -89,4 +91,19 @@ assert torch.allclose(out, expected, atol=1e-5), f'Numerical mismatch: max diff 
     "demo": """Q=torch.randn(1,8,16); K=torch.randn(1,8,16); V=torch.randn(1,8,32)
 print('Shape:', linear_attention(Q,K,V).shape)""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is linear attention, and how does it avoid the quadratic cost?',
+            'What role does the feature map phi play?',
+        ],
+        deep_dive=[
+            'Show how reordering the matrix products changes the complexity.',
+            'Why must phi produce non-negative features, and why the normalizer?',
+            'How would you make linear attention causal with a running sum?',
+        ],
+        tradeoffs=[
+            'Why does linear attention usually underperform softmax attention in quality?',
+            'How do modern state-space and linear RNN models relate to linear attention?',
+        ],
+    ),
 }

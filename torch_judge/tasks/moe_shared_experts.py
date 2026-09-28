@@ -1,5 +1,7 @@
 """Shared always-on experts alongside routed sparse experts."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Shared and Routed Experts",
     "difficulty": "Medium",
@@ -179,4 +181,19 @@ x=torch.randn(5,4)
 indices=torch.tensor([[0,1],[0,2],[1,2],[0,1],[2,0]])
 weights=torch.full((5,2),.5)
 print(shared_routed_moe(x,indices,weights,routed,shared).shape)""",
+    "interview_questions": interview(
+        concept=[
+            'What are shared experts in DeepSeek-style MoE?',
+            'Why add always-on experts next to routed ones?',
+        ],
+        deep_dive=[
+            'How do you combine shared and routed outputs?',
+            'Do shared experts get router weights?',
+            'How does fine-grained expert segmentation relate?',
+        ],
+        tradeoffs=[
+            'What do shared experts cost in compute per token?',
+            'How do they change expert specialization?',
+        ],
+    ),
 }

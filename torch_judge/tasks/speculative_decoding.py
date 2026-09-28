@@ -1,5 +1,7 @@
 """Speculative Decoding task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Speculative Decoding",
     "title_zh": "推测解码",
@@ -50,4 +52,19 @@ probs = torch.softmax(torch.randn(4, 10), dim=-1)
 tokens = torch.tensor([2, 5, 1, 8])
 print('Perfect draft:', speculative_decode(probs, probs, tokens))""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is speculative decoding, and why does it speed up inference?',
+            'Why is the output distribution unchanged?',
+        ],
+        deep_dive=[
+            'Walk through the accept rule min(1, p over q).',
+            'How do you sample the correction token on rejection?',
+            'What happens when all draft tokens are accepted?',
+        ],
+        tradeoffs=[
+            'What determines the speedup, and when does it vanish?',
+            'Draft model versus self-speculation methods such as Medusa or EAGLE?',
+        ],
+    ),
 }

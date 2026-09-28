@@ -2,6 +2,8 @@
 
 from torch_judge.tasks._schema import build_design_note_rubric
 
+from ._interview import interview
+
 TASK = {
     "title": "Validated Agent Tool Registry",
     "difficulty": "Medium",
@@ -145,4 +147,19 @@ registry=ToolRegistry()
 registry.register(FakeTool('lookup','look up a record',{'id':str},outcomes=[{'name':'Ada'}]))
 print(registry.describe())
 print(registry.invoke('lookup',{'id':'42'},idempotency_key='lookup-42'))""",
+    "interview_questions": interview(
+        concept=[
+            'What does a tool registry own in an agent system?',
+            'Why keep it provider-neutral?',
+        ],
+        deep_dive=[
+            'How do you validate arguments against the schema?',
+            'How do you handle duplicate names and unknown tools?',
+            'How do you report invocation errors?',
+        ],
+        tradeoffs=[
+            'Strict schema validation versus lenient coercion?',
+            'How do you version tools without breaking agents?',
+        ],
+    ),
 }

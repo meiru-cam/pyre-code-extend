@@ -1,5 +1,7 @@
 """MCTS for Reasoning task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "MCTS for Reasoning",
     "title_zh": "推理蒙特卡洛树搜索",
@@ -64,4 +66,19 @@ for step in range(5):
 print(f"\nTotal visits: {visits.sum().item()} (expected 5)")
 print(f"All nodes visited at least once: {(visits > 0).all().item()}")""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is Monte Carlo Tree Search, and what are its four phases?',
+            'How has MCTS been used with LLMs for reasoning?',
+        ],
+        deep_dive=[
+            'Explain the UCB or PUCT selection score. What do the exploitation and exploration terms each do?',
+            'How do you handle unvisited children in selection?',
+            'What gets updated during backpropagation, and how?',
+        ],
+        tradeoffs=[
+            'What does c_puct trade off?',
+            'Why is MCTS expensive for LLM reasoning, and what cheaper alternatives are used, such as best-of-N or beam search?',
+        ],
+    ),
 }

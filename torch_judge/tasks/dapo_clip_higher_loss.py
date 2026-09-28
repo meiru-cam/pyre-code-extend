@@ -1,5 +1,7 @@
 """DAPO asymmetric clipping over policy importance ratios."""
 
+from ._interview import interview
+
 TASK = {
     "title": "DAPO Clip-Higher Token Loss",
     "difficulty": "Hard",
@@ -126,4 +128,19 @@ for low,high,mask in [(0.5,0.2,m),(1.,1.,m),(0.2,0.3,torch.tensor([False]))]:
     clipped = torch.clamp(ratio, 1 - clip_low, 1 + clip_high) * advantage
     return -torch.minimum(raw, clipped).mean()
 ''',
+    "interview_questions": interview(
+        concept=[
+            'What is Clip-Higher in DAPO, and why use an asymmetric clip range?',
+            'How does clip-higher relate to entropy collapse?',
+        ],
+        deep_dive=[
+            'Walk through which tokens hit the upper bound and which hit the lower bound for positive and negative advantages.',
+            'Why detach both old log-probs and advantages?',
+            'How do you reduce the per-token objective to a scalar, and why only over valid tokens?',
+        ],
+        tradeoffs=[
+            'What risk does a larger upper clip bound bring, and how would you choose clip_high?',
+            'Compare clip-higher with adding an entropy bonus to prevent collapse.',
+        ],
+    ),
 }

@@ -1,5 +1,7 @@
 """NTK-aware RoPE Scaling task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "NTK-aware RoPE Scaling",
     "title_zh": "NTK-aware RoPE 缩放",
@@ -125,4 +127,19 @@ print("Norm preservation (scale=4):")
 print("  q input norm:", q.norm(dim=-1).mean().item())
 print("  q output norm:", q4.norm(dim=-1).mean().item())""",
 
+    "interview_questions": interview(
+        concept=[
+            'Why does plain RoPE fail beyond the training context?',
+            'What does NTK-aware scaling do differently from linear position interpolation?',
+        ],
+        deep_dive=[
+            'How is the base adjusted from the scale factor and head dimension?',
+            'Why are high-frequency dimensions preserved and low-frequency ones stretched?',
+            'What stays unchanged when scale equals one?',
+        ],
+        tradeoffs=[
+            'NTK scaling versus YaRN versus fine-tuning on long data: trade-offs?',
+            'What quality regressions do you see on short contexts after scaling?',
+        ],
+    ),
 }

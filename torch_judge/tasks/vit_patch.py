@@ -1,5 +1,7 @@
 """ViT Patch Embedding task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "ViT Patch Embedding",
     "title_zh": "ViT Patch Embedding",
@@ -70,4 +72,19 @@ x = torch.randn(1, 3, 224, 224)
 print('Output:', pe(x).shape)
 print('Patches:', pe.num_patches)""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is patch embedding in ViT?',
+            'Why is a strided convolution equivalent to patchify plus linear?',
+        ],
+        deep_dive=[
+            'Compute the number of patches and the output shape.',
+            'Where do the class token and position embeddings go?',
+            'What if the image size is not divisible by the patch size?',
+        ],
+        tradeoffs=[
+            'How does patch size trade sequence length against detail?',
+            'How do you handle images of different resolution at inference?',
+        ],
+    ),
 }

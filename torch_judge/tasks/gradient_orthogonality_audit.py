@@ -1,5 +1,6 @@
 """Measure whether sample gradients reinforce or conflict."""
 
+from ._interview import interview
 from ._rl_extension import SKLEARN_COSINE, case, code_source, paper, task
 
 TASK = task(
@@ -58,4 +59,19 @@ def gradient_orthogonality_audit(gradients):
     model_connections=["scikit-learn supplies pairwise cosine geometry; PCGrad motivates treating negative gradient similarity as interference, though this task only audits per-example gradients."],
     pros=["Separates aligned, orthogonal, and opposing sample updates before deciding how to mix training data."],
     cons=["Per-example gradients are costly to obtain, and pairwise cosine alone does not predict final training benefit."],
+    interview_questions=interview(
+        concept=[
+            'What does the cosine similarity between per-example gradients tell you?',
+            'What do negative cosines mean for multi-task or multi-objective training?',
+        ],
+        deep_dive=[
+            'How do you compute pairwise cosines for N gradients in one matrix operation?',
+            'How do you count unordered off-diagonal pairs without double counting?',
+            'Why reject zero gradients?',
+        ],
+        tradeoffs=[
+            'How expensive are per-example gradients for large models, and what approximations exist?',
+            'Gradient conflict methods such as PCGrad project gradients. When would you use them?',
+        ],
+    ),
 )

@@ -1,5 +1,7 @@
 """Probability-normalized token-choice top-k MoE router."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Top-k MoE Router",
     "difficulty": "Medium",
@@ -126,4 +128,19 @@ assert torch.allclose(perm_w,base_w,atol=1e-12)
 expert_indices,expert_weights=moe_topk_router(router_logits,2)
 print(expert_indices)
 print(expert_weights, expert_weights.sum(-1))""",
+    "interview_questions": interview(
+        concept=[
+            'What is token-choice top-k routing?',
+            'How does it differ from expert-choice routing?',
+        ],
+        deep_dive=[
+            'Softmax before or after top-k: how do the weights differ?',
+            'How do you break ties deterministically?',
+            'What validation is needed on k?',
+        ],
+        tradeoffs=[
+            'Top-1 versus top-2 routing: quality and cost?',
+            'What load imbalance does token-choice cause?',
+        ],
+    ),
 }

@@ -1,5 +1,7 @@
 """Max Pooling 2D task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Max Pooling 2D",
     "title_zh": "二维最大池化",
@@ -40,4 +42,19 @@ ref = F.max_pool2d(x, kernel_size=2, stride=2)
 print("Output shape:", out.shape)
 print("Matches F.max_pool2d:", torch.allclose(out, ref))""",
 
+    "interview_questions": interview(
+        concept=[
+            'What does max pooling do, and why use it?',
+            'What happens when stride equals kernel size?',
+        ],
+        deep_dive=[
+            'Derive the output size.',
+            'How does the gradient flow through max pooling?',
+            'How would you implement it with unfold?',
+        ],
+        tradeoffs=[
+            'Max versus average pooling versus strided convolution?',
+            'Why do vision transformers not use pooling layers?',
+        ],
+    ),
 }

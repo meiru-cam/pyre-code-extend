@@ -1,5 +1,7 @@
 """Gradient Norm Clipping task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Gradient Norm Clipping",
     "title_zh": "梯度范数裁剪",
@@ -42,4 +44,19 @@ orig = clip_grad_norm([p], max_norm=1.0)
 print('After: ', p.grad.norm().item())
 print('Returned:', orig)""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is gradient norm clipping, and why use it?',
+            'Norm clipping versus value clipping?',
+        ],
+        deep_dive=[
+            'How do you compute the global norm across all parameters?',
+            'How do you rescale, and why add a small eps?',
+            'What should happen to parameters with no gradient?',
+        ],
+        tradeoffs=[
+            'How do you choose max_norm?',
+            'What does a frequently clipping run tell you?',
+        ],
+    ),
 }

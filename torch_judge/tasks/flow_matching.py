@@ -1,5 +1,7 @@
 """Flow Matching Loss task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Flow Matching Loss",
     "title_zh": "流匹配损失",
@@ -124,4 +126,19 @@ noisy_output = perfect_output + 0.1 * torch.randn(B, D)
 loss_noisy = flow_matching_loss(noisy_output, x0, x1, t)
 print(f"Noisy prediction   => loss = {loss_noisy.item():.4f}   (expected small but > 0)")""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is flow matching, and how does it differ from diffusion training?',
+            'What is the target velocity for the straight-line path?',
+        ],
+        deep_dive=[
+            'How do you sample t and build the interpolated point?',
+            'Write the loss. Which direction does the velocity point, noise to data or data to noise?',
+            'How do you sample at inference from the learned velocity?',
+        ],
+        tradeoffs=[
+            'Why do straight paths allow fewer sampling steps?',
+            'How do timestep sampling distributions such as logit-normal affect quality?',
+        ],
+    ),
 }

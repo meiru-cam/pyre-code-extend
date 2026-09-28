@@ -2,6 +2,8 @@
 
 from torch_judge.tasks._schema import build_design_note_rubric
 
+from ._interview import interview
+
 TASK = {
     "title": "Budgeted Retrying Agent Loop",
     "difficulty": "Hard",
@@ -398,4 +400,19 @@ model=ScriptedModel([
 ])
 result=budgeted_agent_loop(model,Registry(tool),[],{'max_iterations':3,'max_tool_calls':2,'max_tokens':10,'max_time':5,'max_cost':1},{'max_attempts':2,'base_delay':1},VirtualClock(),TraceRecorder())
 print(result.status,result.content)""",
+    "interview_questions": interview(
+        concept=[
+            'What limits should an agent loop enforce?',
+            'Why must the loop be deterministic for testing?',
+        ],
+        deep_dive=[
+            'How do you separate retryable from permanent errors?',
+            'How do you enforce token, step and time budgets together?',
+            'What goes in the trace?',
+        ],
+        tradeoffs=[
+            'Retry with backoff versus failing fast?',
+            'What happens to partial tool side effects when the budget runs out?',
+        ],
+    ),
 }

@@ -1,5 +1,7 @@
 """Adaptive LayerNorm Zero (adaLN-Zero) task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Adaptive LayerNorm Zero (adaLN-Zero)",
     "title_zh": "自适应层归一化 Zero",
@@ -108,4 +110,19 @@ b_ada_rand = torch.randn(6 * D) * 0.1
 out_rand = adaln_zero(x, cond, W_ada_rand, b_ada_rand)
 print(f"Random W_ada          => output shape: {out_rand.shape}, mean abs: {out_rand.abs().mean().item():.4f}")""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is adaLN-Zero in DiT, and how does it inject the timestep and class condition?',
+            'Why initialize the modulation so that each block starts as the identity?',
+        ],
+        deep_dive=[
+            'Which parameters does the conditioning projection regress, and where does each apply in the block?',
+            'Why zero-initialize the final projection rather than the whole block?',
+            'How do the shapes broadcast from a per-sample condition to every token?',
+        ],
+        tradeoffs=[
+            'adaLN versus cross-attention conditioning versus in-context tokens: trade-offs?',
+            'What does zero initialization buy for very deep diffusion transformers?',
+        ],
+    ),
 }

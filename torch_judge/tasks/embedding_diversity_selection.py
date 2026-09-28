@@ -1,5 +1,6 @@
 """Greedy max-min selection in embedding space."""
 
+from ._interview import interview
 from ._rl_extension import SKLEARN_COSINE, case, code_source, paper, task
 
 TASK = task(
@@ -61,4 +62,19 @@ def embedding_diversity_selection(embeddings, k, seed_index=0):
     model_connections=["scikit-learn's cosine_similarity supplies the geometry; the core-set k-center objective supplies the farthest-first selection rule."],
     pros=["Greedy max-min selection avoids choosing many near-duplicate embeddings."],
     cons=["The chosen seed and embedding quality can dominate the selected subset; cosine diversity is not gradient diversity."],
+    interview_questions=interview(
+        concept=[
+            'Why select diverse training data, and what does embedding diversity capture?',
+            'What is farthest-first traversal?',
+        ],
+        deep_dive=[
+            "How do you maintain each row's distance to its nearest selected row efficiently?",
+            'Why cosine distance rather than Euclidean for embeddings?',
+            'How do tie-breaking and the seed index affect determinism?',
+        ],
+        tradeoffs=[
+            'Diverse in embedding space does not mean useful for training. What else would you consider?',
+            'Farthest-first tends to pick outliers. How do you protect against selecting noise?',
+        ],
+    ),
 )

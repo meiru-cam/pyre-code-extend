@@ -1,5 +1,7 @@
 """Mixed Precision Training Step task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Mixed Precision Training Step",
     "title_zh": "混合精度训练步骤",
@@ -142,4 +144,19 @@ print("Loss:", loss_val)
 print("Weights updated:", not torch.allclose(model.weight.data, weights_before))
 print("Model dtype after step:", model.weight.dtype)""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is mixed precision training?',
+            'Why keep fp32 master weights?',
+        ],
+        deep_dive=[
+            'Why is loss scaling needed for fp16, and how does dynamic scaling work?',
+            'What do you do when gradients overflow?',
+            'Where do you cast between fp16 and fp32 in the step?',
+        ],
+        tradeoffs=[
+            'bf16 versus fp16: why does bf16 usually not need loss scaling?',
+            'What is FP8 training, and what new problems does it bring?',
+        ],
+    ),
 }

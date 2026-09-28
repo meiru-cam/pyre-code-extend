@@ -1,5 +1,7 @@
 """Rollout batch assembly — turning ragged generations into the padded batch a loss can consume."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Rollout Batch Assembly",
     "difficulty": "Hard",
@@ -309,4 +311,19 @@ def rollout_batch_assembly(prompt_ids, generation_ids, advantages, pad_id=0):
         "lengths": gen_lens,
     }
 ''',
+    "interview_questions": interview(
+        concept=[
+            'What does a trainer need from a rollout batch, and why is assembling it a common source of silent bugs?',
+            'Why broadcast one scalar advantage per response onto every generated token?',
+        ],
+        deep_dive=[
+            'How do you pad rows with different prompt and generation lengths and build the matching mask?',
+            'What should happen for a response that generated no tokens?',
+            'Which tensors need which dtypes, and why does it matter for the loss?',
+        ],
+        tradeoffs=[
+            'Padding every row to the batch max wastes compute. What alternatives exist, such as sequence packing, and what do they complicate?',
+            'Where would you add assertions in the pipeline to catch misaligned masks early?',
+        ],
+    ),
 }

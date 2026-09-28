@@ -1,5 +1,7 @@
 """Top-k / Top-p Sampling task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Top-k / Top-p Sampling",
     "title_zh": "Top-k / Top-p 采样",
@@ -49,4 +51,19 @@ TASK = {
 print('top_k=1:', sample_top_k_top_p(logits.clone(), top_k=1))
 print('top_p=0.5:', sample_top_k_top_p(logits.clone(), top_p=0.5))""",
 
+    "interview_questions": interview(
+        concept=[
+            'What are top-k and top-p sampling?',
+            'What does temperature do before filtering?',
+        ],
+        deep_dive=[
+            'How do you implement top-p with a sorted cumulative sum?',
+            'How do you make sure at least one token survives?',
+            'In which order do temperature, top-k and top-p apply?',
+        ],
+        tradeoffs=[
+            'Top-p versus min-p versus typical sampling?',
+            'How do sampling settings affect RL rollouts and evaluation?',
+        ],
+    ),
 }

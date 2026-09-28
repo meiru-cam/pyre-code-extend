@@ -1,5 +1,7 @@
 """Rotary Position Embedding (RoPE) task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Rotary Position Embedding (RoPE)",
     "title_zh": "旋转位置编码（RoPE）",
@@ -75,4 +77,19 @@ qr, kr = apply_rope(q, k)
 print('Shape preserved:', qr.shape == q.shape)
 print('Norm preserved:', torch.allclose(q.norm(dim=-1), qr.norm(dim=-1), atol=1e-4))""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is RoPE, and why does rotating Q and K encode relative position?',
+            'Why is RoPE applied to Q and K but not V?',
+        ],
+        deep_dive=[
+            'Walk through pairing dimensions and applying the rotation. How are the frequencies defined?',
+            'Interleaved pairs versus half-split pairs: why do implementations differ, and what breaks if you mix them?',
+            'How do you apply RoPE with a KV cache when new tokens start at an offset?',
+        ],
+        tradeoffs=[
+            'Why does RoPE degrade beyond the training context length?',
+            'RoPE versus ALiBi: extrapolation and efficiency trade-offs?',
+        ],
+    ),
 }

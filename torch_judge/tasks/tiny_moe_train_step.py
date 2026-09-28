@@ -1,5 +1,7 @@
 """One complete differentiable TinyMoE optimization step."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Train a TinyMoE Router and Experts",
     "difficulty": "Hard",
@@ -215,4 +217,19 @@ assert torch.equal(loads,torch.tensor([5,5,5]))
 # Supply a model whose forward returns (task_logits, router_logits), then:
 # metrics=tiny_moe_train_step(model,optimizer,x,targets)
 # print({name: float(value) for name,value in metrics.items()})""",
+    "interview_questions": interview(
+        concept=[
+            'What goes into one complete MoE training step?',
+            'Which auxiliary losses are added, and why?',
+        ],
+        deep_dive=[
+            'How do you compute the balance and z losses from router logits?',
+            'Why report each loss detached?',
+            'How do you check that router parameters actually receive gradient?',
+        ],
+        tradeoffs=[
+            'How do auxiliary losses trade against the task loss?',
+            'What would you monitor to catch routing collapse early?',
+        ],
+    ),
 }

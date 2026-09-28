@@ -1,5 +1,7 @@
 """ViT Transformer Block task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "ViT Transformer Block",
     "title_zh": "ViT Transformer Block",
@@ -145,4 +147,19 @@ print("Output shape:", out.shape)  # (2, 16, 64)
 assert out.shape == x.shape, "Shape mismatch!"
 print("Shape preserved: True")""",
 
+    "interview_questions": interview(
+        concept=[
+            'How does a ViT block differ from a GPT-2 block?',
+            'Why no causal mask?',
+        ],
+        deep_dive=[
+            'Walk through pre-norm attention and MLP with residuals.',
+            'What MLP expansion ratio and activation are used?',
+            'How do shapes flow from tokens in to tokens out?',
+        ],
+        tradeoffs=[
+            'Why do ViTs need more data than CNNs?',
+            'What changed in later ViT variants, such as layer scale or register tokens?',
+        ],
+    ),
 }

@@ -1,5 +1,7 @@
 """Implement a Slime custom generation hook's Sample contract."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Slime Custom Generate Hook",
     "difficulty": "Medium",
@@ -143,4 +145,19 @@ for output in ({"token_ids":[2],"text":"x","finish_reason":"unknown"},
     sample.status = statuses[reason]
     return sample
 ''',
+    "interview_questions": interview(
+        concept=[
+            'What is Slime, and why does it expose a custom generate hook?',
+            'How do finish reasons map to sample statuses?',
+        ],
+        deep_dive=[
+            'Which sample fields must you update after generation, and why build a new tokens list rather than mutating?',
+            'What should the loss mask look like for the generated tokens?',
+            'How should an aborted generation be recorded so the trainer does not use it?',
+        ],
+        tradeoffs=[
+            'Why should truncated samples usually still be trained on, and how are they treated differently from completed ones?',
+            'What are the risks of letting user code run inside the rollout path?',
+        ],
+    ),
 }

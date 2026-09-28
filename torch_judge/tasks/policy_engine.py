@@ -3,6 +3,8 @@
 from torch_judge.tasks._schema import build_design_note_rubric
 
 
+from ._interview import interview
+
 TASK = {
     "title": "Composable Fail-Closed Policy Engine",
     "difficulty": "Medium",
@@ -173,4 +175,19 @@ class PolicyEngine:
                     reasons.append(f"{policy.name}: {reason}")
         return PolicyDecision("transform" if transformed else "allow", working, reasons)''',
     "demo": "engine=PolicyEngine([])\nprint(engine.evaluate({'request':'hello'}).action)",
+    "interview_questions": interview(
+        concept=[
+            'What is a policy engine in an agent system?',
+            'How do allow, deny and transform decisions combine?',
+        ],
+        deep_dive=[
+            'How do you order policies and resolve conflicts, for example deny wins?',
+            'How do transforms chain?',
+            'What happens when a policy raises?',
+        ],
+        tradeoffs=[
+            'Fail open versus fail closed?',
+            'Rule-based policies versus model-based classifiers?',
+        ],
+    ),
 }

@@ -1,5 +1,7 @@
 """Adam Optimizer task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Adam Optimizer",
     "title_zh": "Adam 优化器",
@@ -59,4 +61,19 @@ for i in range(5):
     opt.zero_grad()
     print(f'Step {i}: loss={loss.item():.4f}')""",
 
+    "interview_questions": interview(
+        concept=[
+            'How does Adam combine momentum and RMSProp?',
+            'Why is bias correction needed, and when does it matter most?',
+        ],
+        deep_dive=[
+            'Walk through the per-parameter state and update equations.',
+            'Where does eps go, and what happens with a tiny second moment?',
+            'How much optimizer memory does Adam need per parameter?',
+        ],
+        tradeoffs=[
+            'Adam versus AdamW: how does decoupled weight decay differ from L2 regularization?',
+            'Why can Adam generalize worse than SGD, and what alternatives exist for large models?',
+        ],
+    ),
 }

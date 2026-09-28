@@ -30,7 +30,8 @@ def test_agent_runtime_path_is_separate_and_progressive():
 
 def test_legacy_alignment_path_is_not_repurposed():
     paths = {path["id"]: path for path in _json("web/src/lib/paths.json")["paths"]}
-    assert paths["alignment-agents"]["problems"] == [
+    later_additions = {"simpo_ipo_loss"}
+    assert [t for t in paths["alignment-agents"]["problems"] if t not in later_additions] == [
         "cross_entropy", "reward_model", "dpo_loss", "grpo_loss", "ppo_loss", "mcts_search"
     ]
 

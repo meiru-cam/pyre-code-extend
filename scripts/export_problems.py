@@ -23,6 +23,7 @@ _OPTIONAL_FIELDS = (
     ("advisory_prerequisites", "advisoryPrerequisites"),
     ("model_connections", "modelConnections"),
     ("pro_con_analysis", "proConAnalysis"),
+    ("interview_questions", "interviewQuestions"),
     ("sources", "sources"),
     ("design_note_rubric", "designNoteRubric"),
 )

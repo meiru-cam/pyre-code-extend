@@ -1,5 +1,7 @@
 """Ring Attention task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Ring Attention",
     "title_zh": "环形注意力",
@@ -117,4 +119,19 @@ for num_devices in [2, 4]:
     match = torch.allclose(ring_out, ref_out, atol=1e-5)
     print(f'num_devices={num_devices}  shape={tuple(ring_out.shape)}  max_diff={max_diff:.2e}  match={match}')""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is ring attention, and why is it needed for long contexts?',
+            'How does it parallelize across the sequence?',
+        ],
+        deep_dive=[
+            'How do K and V chunks rotate around the ring?',
+            'How does online softmax combine partial results exactly?',
+            'How do you handle causal masking across chunks?',
+        ],
+        tradeoffs=[
+            'How does communication overlap with compute?',
+            'Ring attention versus other sequence parallelism approaches such as Ulysses?',
+        ],
+    ),
 }

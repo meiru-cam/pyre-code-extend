@@ -1,5 +1,6 @@
 """Temperature-scaled masked knowledge-distillation loss."""
 
+from ._interview import interview
 from ._rl_extension import TRL_GKD, case, paper, task
 
 TASK = task(
@@ -79,4 +80,20 @@ def masked_kd_kl(student_logits, teacher_logits, mask, temperature=1.0):
     model_connections=["TRL GKD computes temperature-scaled token distribution divergence between a teacher and student; this exercise fixes the divergence to forward KL."],
     pros=["Full-vocabulary targets transmit more information than hard teacher labels."],
     cons=["Teacher-forced tokens need not match the student's rollout distribution and full logits cost memory."],
+    interview_questions=interview(
+        concept=[
+            "When training a small model or compressing an LLM, which distillation methods have you used?",
+            "For sequence- or token-level knowledge distillation, how do forward KL and reverse KL differ, and what behavior does each encourage in the student?",
+            "Why divide the logits by a temperature T when computing the KD loss, and why multiply the loss by T*T at the end?",
+        ],
+        deep_dive=[
+            "What goes wrong if padding or masked positions contribute to the loss or the gradient? How do you handle the mask and numerical stability in code?",
+            "Should gradients flow back into the teacher? How do you cut them in PyTorch?",
+            "If every position in the batch is masked, or T <= 0, what should the loss function do and why?",
+        ],
+        tradeoffs=[
+            "Temperature KD is teacher-forced distillation. What are its limits for autoregressive generation, for example exposure bias or distribution shift?",
+            "Compared with plain cross-entropy SFT on teacher outputs, what does matching the full teacher distribution buy you, and what does it cost?",
+        ],
+    ),
 )

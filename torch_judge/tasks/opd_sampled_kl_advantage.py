@@ -1,5 +1,6 @@
 """Sampled-token OPD reward shaping on student rollouts."""
 
+from ._interview import interview
 from ._rl_extension import SLIME_OPD, case, paper, task
 
 TASK = task(
@@ -66,4 +67,19 @@ def opd_sampled_kl_advantage(advantages, student_logprobs, teacher_logprobs, mas
     model_connections=["Slime's apply_opd_kl_to_advantages subtracts sampled student-minus-teacher log probability after the base advantage estimator."],
     pros=["Only the sampled token needs a teacher score, so the signal fits an existing policy-gradient trainer."],
     cons=["A single sampled token gives a noisier teacher signal than a full-vocabulary divergence."],
+    interview_questions=interview(
+        concept=[
+            'What is on-policy distillation, and how does it differ from teacher-forced KD?',
+            'Why evaluate the teacher on student-generated tokens?',
+        ],
+        deep_dive=[
+            'Why is student minus teacher log-prob a sampled reverse-KL estimate?',
+            'Why must the shaped advantage be detached?',
+            'How do masked positions stay exactly zero?',
+        ],
+        tradeoffs=[
+            'Sampled-token reverse KL versus full-vocabulary KL: variance and compute trade-offs?',
+            'How do you choose beta against the task reward?',
+        ],
+    ),
 )

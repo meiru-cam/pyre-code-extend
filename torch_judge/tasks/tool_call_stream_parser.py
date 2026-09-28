@@ -2,6 +2,8 @@
 
 from torch_judge.tasks._schema import build_design_note_rubric
 
+from ._interview import interview
+
 TASK = {
     "title": "Streaming Tool-Call Parser",
     "difficulty": "Hard",
@@ -367,4 +369,19 @@ class ToolCallStreamParser:
             return {"type": "error", "raw": body, "reason": "not_a_call"}
         return {"type": "tool_call", "name": name, "arguments": arguments}
 ''',
+    "interview_questions": interview(
+        concept=[
+            'Why parse tool calls from a stream instead of waiting for the full response?',
+            'What makes streaming parsing hard?',
+        ],
+        deep_dive=[
+            'How do you handle a tag split across chunks?',
+            'How do you buffer text versus tool-call JSON?',
+            'What do you do with malformed JSON?',
+        ],
+        tradeoffs=[
+            'Latency versus correctness when emitting partial text?',
+            'Structured tool-call APIs versus tag parsing?',
+        ],
+    ),
 }

@@ -1,5 +1,7 @@
 """Causal local/global attention scheduling exercise."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Hybrid Local/Global Attention Schedule",
     "difficulty": "Medium",
@@ -263,4 +265,19 @@ K = torch.zeros(1, 4, 1)
 V = torch.arange(1, 5, dtype=torch.float32).view(1, 4, 1)
 print('local:', hybrid_attention_schedule(Q, K, V, 0, 1, 2).flatten())
 print('global:', hybrid_attention_schedule(Q, K, V, 1, 1, 2).flatten())""",
+    "interview_questions": interview(
+        concept=[
+            'Why do some models alternate local and global attention layers?',
+            'What is global_every?',
+        ],
+        deep_dive=[
+            'How do you build the causal local mask for a given window?',
+            'How do you decide whether a layer is global from its index?',
+            'What does each position see in a local layer at the start of the sequence?',
+        ],
+        tradeoffs=[
+            'How much KV cache does a hybrid schedule save?',
+            'What long-range tasks suffer from mostly local layers?',
+        ],
+    ),
 }

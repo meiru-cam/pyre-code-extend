@@ -1,5 +1,7 @@
 """Router z-loss for logit stability."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Router z-loss",
     "difficulty": "Medium",
@@ -111,4 +113,19 @@ assert torch.allclose({fn}(logits),{fn}(logits[:,perm]),atol=1e-12)
     return log_partition.square().mean()''',
     "demo": r"""logits=torch.randn(8,16)
 print(float(router_z_loss(logits)))""",
+    "interview_questions": interview(
+        concept=[
+            'What is the router z-loss, and what instability does it fix?',
+            'Why penalize the log-partition function?',
+        ],
+        deep_dive=[
+            'Write the loss with logsumexp over experts.',
+            'Why square it, and why average over tokens?',
+            'How does it interact with bf16 numerics?',
+        ],
+        tradeoffs=[
+            'Z-loss versus clipping or normalizing router logits?',
+            'How large should the z-loss weight be?',
+        ],
+    ),
 }

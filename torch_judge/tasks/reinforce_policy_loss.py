@@ -1,5 +1,7 @@
 """Masked REINFORCE policy gradient with a detached baseline."""
 
+from ._interview import interview
+
 TASK = {
     "title": "REINFORCE Policy Loss",
     "difficulty": "Medium",
@@ -101,4 +103,19 @@ else: raise AssertionError("mismatched returns accepted")
     advantage = returns.detach() - baseline.detach()
     return -(log_probs * advantage * mask).sum() / mask.sum()
 ''',
+    "interview_questions": interview(
+        concept=[
+            'Derive the REINFORCE policy gradient in words: why is log-prob times return an unbiased gradient estimate?',
+            'Why does subtracting a baseline reduce variance without adding bias?',
+        ],
+        deep_dive=[
+            'Why must returns and the baseline be detached in the actor loss? What happens if the baseline receives gradient here?',
+            'Masked mean over valid tokens: how do you make masked positions contribute neither value nor gradient?',
+            'What input validation matters here and why raise instead of returning NaN?',
+        ],
+        tradeoffs=[
+            'Token-mean versus sequence-mean normalization: how does each weight long and short responses?',
+            'REINFORCE versus PPO: what does PPO add, and when is plain REINFORCE with a good baseline enough?',
+        ],
+    ),
 }

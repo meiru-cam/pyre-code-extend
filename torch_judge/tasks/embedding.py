@@ -1,5 +1,7 @@
 """Embedding Layer task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Embedding Layer",
     "title_zh": "Embedding 层",
@@ -39,4 +41,19 @@ idx = torch.tensor([0, 3, 7])
 print('Output shape:', emb(idx).shape)
 print('Matches manual:', torch.equal(emb(idx)[0], emb.weight[0]))""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is an embedding layer, and how does it relate to a one-hot linear layer?',
+            'Why is it the first layer of most NLP models?',
+        ],
+        deep_dive=[
+            'How do you implement lookup with indexing, and what gradient does the weight receive?',
+            'How should embeddings be initialized?',
+            'What is weight tying with the output layer?',
+        ],
+        tradeoffs=[
+            'How big is the embedding table for a large vocabulary, and how can you shrink it?',
+            'Why is the embedding gradient sparse, and what does that mean for optimizers?',
+        ],
+    ),
 }

@@ -1,5 +1,7 @@
 """Softmax implementation task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Implement Softmax",
     "title_zh": "实现 Softmax",
@@ -67,4 +69,19 @@ print("Output:", my_softmax(x, dim=-1))
 print("Sum:   ", my_softmax(x, dim=-1).sum())
 print("Ref:   ", torch.softmax(x, dim=-1))""",
 
+    "interview_questions": interview(
+        concept=[
+            'What does softmax compute, and where is it used?',
+            'Why is it called soft max, and what does temperature do to it?',
+        ],
+        deep_dive=[
+            'Why subtract the max before exponentiating? Does it change the result?',
+            'What is the Jacobian of softmax?',
+            'How do you handle a row where every entry is negative infinity, for example a fully masked attention row?',
+        ],
+        tradeoffs=[
+            'Softmax versus sigmoid for multi-label classification?',
+            'What are the costs of softmax over a very large vocabulary, and what alternatives exist?',
+        ],
+    ),
 }

@@ -1,5 +1,7 @@
 """Graph Readout (Graph-Level Pooling) task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Graph Readout (Graph-Level Pooling)",
     "title_zh": "图读出（图级池化）",
@@ -108,4 +110,19 @@ assert torch.allclose(out_max, exp_max, atol=1e-5), f'Max mismatch: {out_max} vs
         return out
     else:
         raise ValueError(f"Unsupported mode: {mode}")""",
+    "interview_questions": interview(
+        concept=[
+            'What is a graph readout, and when do you need one?',
+            'Why must readout be permutation invariant?',
+        ],
+        deep_dive=[
+            'How do you pool nodes per graph using the batch vector?',
+            'How do you implement mean pooling with scatter or index_add?',
+            'How do you handle a graph with zero nodes?',
+        ],
+        tradeoffs=[
+            'Sum versus mean versus max readout: expressivity trade-offs?',
+            'When would you use attention-based pooling?',
+        ],
+    ),
 }

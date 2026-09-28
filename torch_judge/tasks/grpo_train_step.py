@@ -1,5 +1,7 @@
 """One complete GRPO optimization step — the capstone of the RL post-training path."""
 
+from ._interview import interview
+
 TASK = {
     "title": "One Complete GRPO Training Step",
     "difficulty": "Hard",
@@ -395,4 +397,19 @@ def grpo_train_step(model, ref_model, optimizer, batch, beta=0.04):
         "num_tokens": denominator.detach(),
     }
 ''',
+    "interview_questions": interview(
+        concept=[
+            'Walk me through one GRPO step from batch to optimizer update.',
+            'Which model is frozen, which receives gradients, and how do you guarantee it?',
+        ],
+        deep_dive=[
+            'Where do you shift logits and input_ids to get per-token log-probs, and how do you avoid an off-by-one?',
+            'Why compute reference log-probs under torch.no_grad, and what memory does that save?',
+            'Why must the returned metrics be detached, and what leaks if they are not?',
+        ],
+        tradeoffs=[
+            'This step does one update per rollout. What changes if you run several PPO epochs on the same batch?',
+            'How would you scale this step to a model that does not fit on one GPU?',
+        ],
+    ),
 }

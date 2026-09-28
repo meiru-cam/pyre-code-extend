@@ -13,6 +13,15 @@
       }
     ]
   },
+  "binary_cross_entropy": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\nimport torch.nn.functional as F\n\ndef binary_cross_entropy(logits, targets, pos_weight=None):\n    if logits.shape != targets.shape:\n        raise ValueError(f\"shape mismatch: {tuple(logits.shape)} vs {tuple(targets.shape)}\")\n    weight = 1.0 if pos_weight is None else pos_weight\n    per_element = weight * targets * F.softplus(-logits) + (1 - targets) * F.softplus(logits)\n    return per_element.mean()",
+        "role": "solution"
+      }
+    ]
+  },
   "cross_entropy": {
     "cells": [
       {
@@ -185,6 +194,15 @@
       }
     ]
   },
+  "pass_at_k": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def pass_at_k(num_samples, num_correct, k):\n    if not num_samples or len(num_samples) != len(num_correct):\n        raise ValueError(\"need one correct count per problem\")\n    if k < 1:\n        raise ValueError(\"k must be at least 1\")\n    total = 0.0\n    for n, c in zip(num_samples, num_correct):\n        if n < k or c < 0 or c > n:\n            raise ValueError(\"need k <= n and 0 <= c <= n\")\n        if n - c < k:\n            total += 1.0\n            continue\n        miss = 1.0\n        for i in range(n - c + 1, n + 1):\n            miss *= 1.0 - k / i\n        total += 1.0 - miss\n    return total / len(num_samples)",
+        "role": "solution"
+      }
+    ]
+  },
   "per_token_logprobs": {
     "cells": [
       {
@@ -213,6 +231,15 @@
       {
         "type": "code",
         "source": "import torch\n\n\ndef response_token_mask(prompt_lens, total_lens, max_len):\n    if prompt_lens.shape != total_lens.shape:\n        raise ValueError(\n            f\"shape mismatch: {tuple(prompt_lens.shape)} vs {tuple(total_lens.shape)}\"\n        )\n    if not isinstance(max_len, int) or max_len <= 0:\n        raise ValueError(f\"max_len must be a positive integer, got {max_len!r}\")\n    if (prompt_lens < 0).any() or (total_lens < prompt_lens).any() or (total_lens > max_len).any():\n        raise ValueError(\"every row must satisfy 0 <= prompt_lens <= total_lens <= max_len\")\n    positions = torch.arange(max_len, device=prompt_lens.device).unsqueeze(0)\n    return (positions >= prompt_lens.unsqueeze(-1)) & (positions < total_lens.unsqueeze(-1))",
+        "role": "solution"
+      }
+    ]
+  },
+  "rloo_advantage": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\n\ndef rloo_advantage(rewards, group_size):\n    if rewards.ndim != 1 or group_size < 2 or rewards.numel() % group_size != 0:\n        raise ValueError(\"rewards must be 1-D and group_size >= 2 must divide its length\")\n    grouped = rewards.reshape(-1, group_size)\n    baseline = (grouped.sum(dim=1, keepdim=True) - grouped) / (group_size - 1)\n    return (grouped - baseline).reshape(-1)",
         "role": "solution"
       }
     ]
@@ -256,6 +283,15 @@
         "type": "code",
         "source": "w = torch.empty(256, 512)\nkaiming_init(w)\nprint(f'Mean: {w.mean():.4f} (expect ~0)')\nprint(f'Std:  {w.std():.4f} (expect {math.sqrt(2/512):.4f})')",
         "role": "demo"
+      }
+    ]
+  },
+  "weight_regularization": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def regularized_loss(data_loss, named_parameters, l1=0.0, l2=0.0):\n    if l1 < 0 or l2 < 0:\n        raise ValueError(\"regularization strengths must be non-negative\")\n    loss = data_loss\n    for _name, weight in named_parameters:\n        if weight.ndim < 2:\n            continue\n        loss = loss + l1 * weight.abs().sum() + 0.5 * l2 * (weight * weight).sum()\n    return loss",
+        "role": "solution"
       }
     ]
   },
@@ -496,6 +532,78 @@
       }
     ]
   },
+  "dsh_event_bus": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import asyncio\nimport inspect\n\n\nclass EventBus:\n    def __init__(self):\n        self._hooks = {}\n\n    def on(self, name, listener, prepend=False):\n        hooks = self._hooks.setdefault(name, [])\n        record = [listener]\n        if prepend:\n            hooks.insert(0, record)\n        else:\n            hooks.append(record)\n\n        def dispose():\n            for i, item in enumerate(hooks):\n                if item is record:\n                    del hooks[i]\n                    return True\n            return False\n\n        return dispose\n\n    def once(self, name, listener, prepend=False):\n        def wrapper(*args):\n            dispose()\n            return listener(*args)\n\n        dispose = self.on(name, wrapper, prepend)\n        return dispose\n\n    def _snapshot(self, name):\n        return [record[0] for record in self._hooks.get(name, [])]\n\n    @staticmethod\n    def _bailed(value):\n        return value is not None and value is not False\n\n    def emit(self, name, *args):\n        for listener in self._snapshot(name):\n            listener(*args)\n\n    def bail(self, name, *args):\n        for listener in self._snapshot(name):\n            result = listener(*args)\n            if self._bailed(result):\n                return result\n        return None\n\n    async def serial(self, name, *args):\n        for listener in self._snapshot(name):\n            result = listener(*args)\n            if inspect.isawaitable(result):\n                result = await result\n            if self._bailed(result):\n                return result\n        return None\n\n    async def parallel(self, name, *args):\n        async def run(listener):\n            result = listener(*args)\n            if inspect.isawaitable(result):\n                await result\n\n        results = await asyncio.gather(*(run(l) for l in self._snapshot(name)), return_exceptions=True)\n        errors = [r for r in results if isinstance(r, BaseException)]\n        if errors:\n            raise ExceptionGroup(f\"{len(errors)} listener(s) of {name!r} failed\", errors)\n\n    def waterfall(self, name, *args, inner):\n        queue = self._snapshot(name)\n\n        def next():\n            if queue:\n                return queue.pop(0)(*args, next)\n            return inner(*args)\n\n        return next()",
+        "role": "solution"
+      }
+    ]
+  },
+  "dsh_fold_surface": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "MESSAGE_TYPES = {\"system/message\", \"user/message\", \"assistant/message\", \"tool/result\"}\n\n\ndef _without_content(data):\n    return {**data, \"message\": {**data[\"message\"], \"content\": None}}\n\n\ndef fold_surface(events):\n    nodes = []\n    replacements = []\n    for index, event in enumerate(events):\n        seq = event[\"seq\"]\n        if seq != index:\n            raise ValueError(f\"seq {seq} is not contiguous; expected {index}\")\n        op = event.get(\"surface_op\")\n        if event[\"type\"] not in MESSAGE_TYPES:\n            if op is not None:\n                raise ValueError(f\"{event['type']} cannot carry a surface_op\")\n            continue\n        if op is None:\n            raise ValueError(f\"{event['type']} requires a surface_op\")\n        if op == \"append\":\n            nodes.append(seq)\n            continue\n        if not (isinstance(op, dict) and op.get(\"op\") == \"replace\"\n                and isinstance(op.get(\"start_seq\"), int) and isinstance(op.get(\"end_seq\"), int)):\n            raise ValueError(\"invalid surface_op\")\n        start, end = op[\"start_seq\"], op[\"end_seq\"]\n        if start >= seq or end >= seq:\n            raise ValueError(\"replace must reference earlier events\")\n        if start not in nodes or end not in nodes:\n            raise ValueError(\"replace range is not on the current surface\")\n        start_idx, end_idx = nodes.index(start), nodes.index(end)\n        if start_idx > end_idx:\n            raise ValueError(\"replace start comes after its end\")\n        shadowed = nodes[start_idx:end_idx + 1]\n        if event[\"type\"] == \"tool/result\":\n            if len(shadowed) != 1 or events[shadowed[0]][\"type\"] != \"tool/result\":\n                raise ValueError(\"a tool/result replace must rewrite exactly one tool/result\")\n            if _without_content(events[shadowed[0]][\"data\"]) != _without_content(event[\"data\"]):\n                raise ValueError(\"a tool/result replace may change only content\")\n        if start_idx == 0 and events[nodes[0]][\"type\"] == \"system/message\":\n            if event[\"type\"] != \"system/message\" or len(shadowed) != 1:\n                raise ValueError(\"the system prompt at node 0 may only be replaced by one system/message\")\n        nodes[start_idx:end_idx + 1] = [seq]\n        replacements.append({\"seq\": seq, \"start\": start, \"end\": end, \"shadowed\": shadowed})\n    return {\n        \"nodes\": list(nodes),\n        \"messages\": [events[s][\"data\"][\"message\"] for s in nodes],\n        \"replacements\": replacements,\n    }",
+        "role": "solution"
+      }
+    ]
+  },
+  "dsh_open_turn_closers": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "CAUSES = (\"interrupted\", \"forked\")\n\n\ndef open_turn_closers(events, cause=\"interrupted\"):\n    if cause not in CAUSES:\n        raise ValueError(f\"unknown cause {cause!r}\")\n    open_turn = None\n    open_step = None\n    pending = {}\n    for event in events:\n        kind, data = event[\"type\"], event[\"data\"]\n        if kind in (\"turn/start\", \"turn/end\", \"step/end\"):\n            pending.clear()\n        if kind == \"turn/start\":\n            open_turn, open_step = data[\"turn\"], None\n        elif kind == \"turn/end\":\n            open_turn, open_step = None, None\n        elif kind == \"step/start\":\n            open_step = data[\"step\"]\n        elif kind == \"step/end\":\n            open_step = None\n        elif kind == \"assistant/message\":\n            for call_id in data[\"tool_call_ids\"]:\n                pending[call_id] = {\"turn\": data[\"turn\"], \"step\": data[\"step\"], \"call_seq\": None}\n        elif kind == \"tool/call\":\n            entry = pending.get(data[\"call_id\"])\n            if entry is not None:\n                entry[\"call_seq\"] = event[\"seq\"]\n        elif kind == \"tool/result\":\n            entry = pending.get(data[\"call_id\"])\n            if (entry is not None and data[\"surface_op\"] == \"append\"\n                    and entry[\"turn\"] == data[\"turn\"] and entry[\"step\"] == data[\"step\"]):\n                del pending[data[\"call_id\"]]\n\n    if not events or open_turn is None:\n        return []\n    last = events[-1]\n    seq, time = last[\"seq\"], last[\"time\"]\n    closers = []\n    for call_id, entry in pending.items():\n        seq += 1\n        started = entry[\"call_seq\"] is not None\n        result = {\n            \"turn\": entry[\"turn\"], \"step\": entry[\"step\"], \"call_id\": call_id, \"surface_op\": \"append\",\n            \"is_error\": True, \"started\": started,\n            \"error_code\": \"TOOL_OUTCOME_UNKNOWN\" if started else \"TOOL_NOT_STARTED\",\n        }\n        if started:\n            result[\"source_event_seqs\"] = [entry[\"call_seq\"]]\n        closers.append({\"type\": \"tool/result\", \"seq\": seq, \"time\": time, \"data\": result})\n    if open_step is not None:\n        seq += 1\n        closers.append({\"type\": \"step/end\", \"seq\": seq, \"time\": time, \"data\": {\"turn\": open_turn, \"step\": open_step}})\n    seq += 1\n    closers.append({\"type\": \"turn/end\", \"seq\": seq, \"time\": time, \"data\": {\"turn\": open_turn, \"reason\": {\"kind\": cause}}})\n    return closers",
+        "role": "solution"
+      }
+    ]
+  },
+  "dsh_repeat_tool_reminder": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import json\nimport re\n\nGENTLE = (\"You are repeating the exact same tool call with identical arguments. \"\n          \"Carefully analyze the previous result before calling again: if the task is \"\n          \"not complete, try a different approach or different arguments instead of \"\n          \"repeating the call.\")\nDETAILED = (\"Repeated tool call detected:\\n- tool: {tool}\\n- consecutive_calls: {count}\\n\"\n            \"- arguments: {preview}\\nThe repeated calls are not making progress. Do not call \"\n            \"this tool with these exact arguments again. Inspect the latest result and choose a \"\n            \"different action, different arguments, or finish the task if enough evidence has \"\n            \"been gathered.\")\n\n\ndef _pattern(text):\n    return re.compile(re.escape(text).replace(r\"\\*\", \".*\"))\n\n\nclass RepeatToolReminder:\n    def __init__(self, thresholds=(3, 5, 8), include=(), exclude=(), arguments_preview_chars=500):\n        values = list(thresholds)\n        if not values:\n            raise ValueError(\"thresholds must not be empty\")\n        for value in values:\n            if type(value) is not int or value < 2:\n                raise ValueError(f\"invalid threshold {value!r}\")\n        if len(set(values)) != len(values):\n            raise ValueError(\"thresholds must not contain duplicates\")\n        if type(arguments_preview_chars) is not int or arguments_preview_chars < 1:\n            raise ValueError(\"arguments_preview_chars must be an integer >= 1\")\n        self.thresholds = sorted(values)\n        self.include = [_pattern(p) for p in include]\n        self.exclude = [_pattern(p) for p in exclude]\n        self.preview_chars = arguments_preview_chars\n        self.chains = {}\n\n    def _tracked(self, name):\n        if self.include and not any(p.fullmatch(name) for p in self.include):\n            return False\n        return not any(p.fullmatch(name) for p in self.exclude)\n\n    def _observe(self, agent, name, arguments):\n        if agent is None or not self._tracked(name):\n            return None\n        canonical = json.dumps(arguments, sort_keys=True, separators=(\",\", \":\"), ensure_ascii=False)\n        key = (name, canonical)\n        chain = self.chains.get(agent)\n        count = chain[1] + 1 if chain is not None and chain[0] == key else 1\n        self.chains[agent] = (key, count)\n        if count not in self.thresholds:\n            return None\n        if count == self.thresholds[0]:\n            text = GENTLE\n        else:\n            preview = canonical\n            if len(canonical) > self.preview_chars:\n                preview = f\"{canonical[:self.preview_chars]}… (+{len(canonical) - self.preview_chars} more chars)\"\n            text = DETAILED.format(tool=name, count=count, preview=preview)\n        return {\"summary\": f\"{name} × {count}\", \"text\": text}\n\n    def post_execute(self, agent, tool_name, arguments, next):\n        reminder = self._observe(agent, tool_name, arguments)\n        downstream = next()\n        if reminder is None:\n            return downstream\n        return {**downstream, \"additional_contexts\": [reminder, *downstream.get(\"additional_contexts\", [])]}\n\n    def on_user_message(self, agent):\n        self.chains.pop(agent, None)",
+        "role": "solution"
+      }
+    ]
+  },
+  "dsh_system_prompt_reconcile": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def reconcile_system_prompt(system_nodes, rendered, in_history_capable, new_series):\n    seqs = [seq for seq, _ in system_nodes]\n    if len(set(seqs)) != len(seqs):\n        raise ValueError(\"duplicate system node seqs\")\n    if not system_nodes:\n        return [(\"append\", rendered)]\n    head_seq, head_text = system_nodes[0]\n    later = [(seq, text) for seq, text in system_nodes[1:] if text]\n\n    def consolidate(target):\n        ops = [(\"replace\", seq, \"\") for seq, _ in later]\n        if head_text != target:\n            ops.append((\"replace\", head_seq, target))\n        return ops\n\n    if rendered == \"\":\n        return consolidate(\"\")\n    if in_history_capable and not new_series:\n        effective = next((text for _, text in reversed(system_nodes) if text), None)\n        return [] if effective == rendered else [(\"append\", rendered)]\n    return consolidate(rendered)",
+        "role": "solution"
+      }
+    ]
+  },
+  "dsh_tool_admission": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def admit(call, pre_execute, guards, approve=None):\n    queue = list(pre_execute)\n\n    def next():\n        if queue:\n            return queue.pop(0)(call, next)\n        return {\"kind\": \"allow\"}\n\n    decision = next()\n    name = call[\"name\"]\n    if decision[\"kind\"] == \"ask\":\n        reason = decision.get(\"reason\")\n        if approve is None:\n            decision = {\"kind\": \"deny\", \"reason\": reason or f'tool \"{name}\" requires approval (not yet supported)'}\n        else:\n            outcome = approve(call, reason)\n            if outcome == \"allowed-once\":\n                decision = {\"kind\": \"allow\"}\n            elif outcome == \"rejected\":\n                decision = {\"kind\": \"deny\", \"reason\": f'the user rejected tool \"{name}\"'}\n            else:\n                decision = {\"kind\": \"deny\", \"reason\": f'approval for tool \"{name}\" was cancelled'}\n    if decision[\"kind\"] == \"allow\":\n        for guard in guards:\n            reason = guard(call)\n            if reason is not None:\n                return {\"kind\": \"deny\", \"reason\": reason}\n    return decision",
+        "role": "solution"
+      }
+    ]
+  },
+  "dsh_tool_dispatch": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def _chain(middleware, args, inner):\n    queue = list(middleware)\n\n    def next():\n        if queue:\n            return queue.pop(0)(*args, next)\n        return inner()\n\n    return next()\n\n\ndef _error(message, code=None):\n    return {\"is_error\": True, \"content\": [{\"type\": \"text\", \"text\": f\"Error: {message}\"}],\n            \"error\": {\"message\": message, \"code\": code}}\n\n\ndef settle_tool_call(call, decision, tools, around, post_execute):\n    name = call[\"name\"]\n\n    def body():\n        if name not in tools:\n            return _error(f'unknown tool \"{name}\"', \"UNKNOWN_TOOL\")\n        try:\n            return {\"is_error\": False, \"content\": tools[name](call[\"arguments\"])}\n        except Exception as error:\n            return _error(str(error))\n\n    if decision[\"kind\"] == \"cancel\":\n        result = _error(\"tool call aborted before dispatch\", \"ABORTED_BEFORE_DISPATCH\")\n    elif decision[\"kind\"] == \"deny\":\n        result = _error(decision[\"reason\"])\n    else:\n        result = _chain(around, (call,), body)\n\n    post = _chain(post_execute, (call, result), lambda: {\"kind\": \"accept\"})\n    extra = list(post.get(\"additional_contexts\") or [])\n    if post[\"kind\"] == \"block\":\n        feedback = post[\"feedback\"]\n        text = \"\\n\".join(b[\"text\"] for b in feedback if b.get(\"type\") == \"text\")\n        blocked = {\"is_error\": True, \"content\": feedback, \"error\": {\"message\": text, \"code\": None}}\n        if extra:\n            blocked[\"additional_contexts\"] = extra\n        return blocked\n    accepted = dict(result)\n    if \"content\" in post:\n        accepted[\"content\"] = post[\"content\"]\n    contexts = list(result.get(\"additional_contexts\") or []) + extra\n    if contexts:\n        accepted[\"additional_contexts\"] = contexts\n    return accepted",
+        "role": "solution"
+      }
+    ]
+  },
+  "dsh_tool_result_pruner": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "MARKER = \"\\n\\n[... tool result middle pruned ...]\\n\\n\"\n\n\ndef prune_content(blocks, threshold_chars=8192, head_chars=4096, tail_chars=1024):\n    if type(threshold_chars) is not int or threshold_chars <= 0:\n        raise ValueError(\"threshold_chars must be a positive integer\")\n    for name, value in ((\"head_chars\", head_chars), (\"tail_chars\", tail_chars)):\n        if type(value) is not int or value < 0:\n            raise ValueError(f\"{name} must be a non-negative integer\")\n    if head_chars + len(MARKER) + tail_chars > threshold_chars:\n        raise ValueError(\"head_chars + marker + tail_chars must fit within threshold_chars\")\n\n    total = sum(len(block[\"text\"]) for block in blocks if block[\"type\"] == \"text\")\n    if total <= threshold_chars:\n        return None\n\n    removed_start = head_chars\n    removed_end = total - tail_chars\n    pruned = []\n    consumed = 0\n    marker_placed = False\n    for block in blocks:\n        if block[\"type\"] != \"text\":\n            pruned.append(block)\n            continue\n        text = block[\"text\"]\n        start, end = consumed, consumed + len(text)\n        head_end = min(len(text), max(0, removed_start - start))\n        tail_start = min(len(text), max(0, removed_end - start))\n        marker = \"\"\n        if start < removed_end and end > removed_start and not marker_placed:\n            marker, marker_placed = MARKER, True\n        new_text = text[:head_end] + marker + text[tail_start:]\n        if new_text:\n            pruned.append({**block, \"text\": new_text})\n        consumed = end\n    return pruned",
+        "role": "solution"
+      }
+    ]
+  },
   "focal_loss": {
     "cells": [
       {
@@ -611,6 +719,15 @@
       }
     ]
   },
+  "logits_processors": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\n\ndef process_logits(logits, generated_ids, temperature=1.0, top_k=0, top_p=1.0, repetition_penalty=1.0):\n    if temperature <= 0 or top_k < 0 or not 0 < top_p <= 1 or repetition_penalty < 1:\n        raise ValueError(\"invalid sampling settings\")\n    if len(generated_ids) != logits.shape[0]:\n        raise ValueError(\"need one id list per row\")\n    out = logits.clone()\n    if repetition_penalty != 1.0:\n        for b, ids in enumerate(generated_ids):\n            if not ids:\n                continue\n            idx = torch.tensor(sorted(set(ids)), dtype=torch.long)\n            seen = out[b, idx]\n            out[b, idx] = torch.where(seen > 0, seen / repetition_penalty, seen * repetition_penalty)\n    out = out / temperature\n    if top_k:\n        kth = torch.topk(out, min(top_k, out.shape[-1]), dim=-1).values[:, -1:]\n        out = out.masked_fill(out < kth, float(\"-inf\"))\n    if top_p < 1.0:\n        sorted_logits, order = torch.sort(out, dim=-1, descending=True)\n        probs = torch.softmax(sorted_logits, dim=-1)\n        before = torch.cumsum(probs, dim=-1) - probs\n        remove_sorted = before >= top_p\n        remove_sorted[:, 0] = False\n        remove = torch.zeros_like(remove_sorted).scatter(-1, order, remove_sorted)\n        out = out.masked_fill(remove, float(\"-inf\"))\n    return out",
+        "role": "solution"
+      }
+    ]
+  },
   "lora": {
     "cells": [
       {
@@ -622,6 +739,24 @@
         "type": "code",
         "source": "layer = LoRALinear(16, 8, rank=4)\nx = torch.randn(2, 16)\nprint('Output:', layer(x).shape)\ntrainable = sum(p.numel() for p in layer.parameters() if p.requires_grad)\ntotal = sum(p.numel() for p in layer.parameters())\nprint(f'Trainable: {trainable}/{total} ({100*trainable/total:.1f}%)')",
         "role": "demo"
+      }
+    ]
+  },
+  "loss_aggregation_modes": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\n\nMODES = (\"token-mean\", \"seq-mean-token-mean\", \"seq-mean-token-sum\", \"seq-mean-token-sum-norm\")\n\ndef aggregate_loss(per_token_loss, mask, mode):\n    if mode not in MODES:\n        raise ValueError(f\"unknown mode {mode!r}\")\n    if per_token_loss.ndim != 2 or per_token_loss.shape != mask.shape:\n        raise ValueError(\"per_token_loss and mask must share one (B, T) shape\")\n    mask = mask.bool()\n    if not bool(mask.any()):\n        raise ValueError(\"mask has no valid tokens\")\n    masked = torch.where(mask, per_token_loss, torch.zeros_like(per_token_loss))\n    seq_sum = masked.sum(dim=1)\n    seq_len = mask.sum(dim=1)\n    if mode == \"token-mean\":\n        return seq_sum.sum() / seq_len.sum()\n    valid = seq_len > 0\n    if mode == \"seq-mean-token-mean\":\n        per_seq = seq_sum[valid] / seq_len[valid]\n    elif mode == \"seq-mean-token-sum\":\n        per_seq = seq_sum[valid]\n    else:\n        per_seq = seq_sum[valid] / mask.shape[1]\n    return per_seq.mean()",
+        "role": "solution"
+      }
+    ]
+  },
+  "manual_backprop_mlp": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\n\ndef mlp_forward_backward(x, W1, b1, W2, b2, y):\n    N, D = x.shape\n    H, C = W1.shape[0], W2.shape[0]\n    if W1.shape != (H, D) or b1.shape != (H,) or W2.shape != (C, H) or b2.shape != (C,) or y.shape != (N,):\n        raise ValueError(\"parameter shapes do not line up\")\n    if bool((y < 0).any()) or bool((y >= C).any()):\n        raise ValueError(\"labels must lie in [0, C)\")\n\n    z1 = x @ W1.T + b1\n    a1 = z1.clamp(min=0)\n    logits = a1 @ W2.T + b2\n    shifted = logits - logits.max(dim=1, keepdim=True).values\n    log_probs = shifted - torch.log(torch.exp(shifted).sum(dim=1, keepdim=True))\n    rows = torch.arange(N)\n    loss = -log_probs[rows, y].mean()\n\n    dlogits = torch.exp(log_probs)\n    dlogits[rows, y] -= 1\n    dlogits /= N\n    dW2 = dlogits.T @ a1\n    db2 = dlogits.sum(dim=0)\n    da1 = dlogits @ W2\n    dz1 = da1 * (z1 > 0).to(da1.dtype)\n    dW1 = dz1.T @ x\n    db1 = dz1.sum(dim=0)\n    return loss, {\"W1\": dW1, \"b1\": db1, \"W2\": dW2, \"b2\": db2}",
+        "role": "solution"
       }
     ]
   },
@@ -764,6 +899,51 @@
       }
     ]
   },
+  "packed_sequence_mask": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\n\ndef packed_attention_mask(seq_lens, total_len):\n    if not seq_lens or any(n <= 0 for n in seq_lens) or sum(seq_lens) > total_len:\n        raise ValueError(\"seq_lens must be positive and fit in total_len\")\n    used = sum(seq_lens)\n    lengths = torch.tensor(seq_lens)\n    doc_id = torch.repeat_interleave(torch.arange(len(seq_lens)), lengths)\n    pad_ids = torch.arange(len(seq_lens), len(seq_lens) + total_len - used)\n    doc_id = torch.cat([doc_id, pad_ids])\n    causal = torch.ones(total_len, total_len, dtype=torch.bool).tril()\n    mask = (doc_id[:, None] == doc_id[None, :]) & causal\n\n    cu_seqlens = torch.cat([torch.zeros(1, dtype=torch.long), torch.cumsum(lengths, 0)])\n    starts = torch.repeat_interleave(cu_seqlens[:-1], lengths)\n    position_ids = torch.zeros(total_len, dtype=torch.long)\n    position_ids[:used] = torch.arange(used) - starts\n    return mask, position_ids, cu_seqlens.to(torch.int32)",
+        "role": "solution"
+      }
+    ]
+  },
+  "pi_agent_loop": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "LENGTH_TEXT = ('Tool call \"{}\" was not executed: the response hit the output token limit, so its '\n               'arguments may be truncated. Re-issue the tool call with complete arguments.')\n\n\ndef _run_tools(message, execute_tool):\n    results, terminates = [], []\n    for call in (b for b in message[\"content\"] if b[\"type\"] == \"toolCall\"):\n        base = {\"role\": \"toolResult\", \"tool_call_id\": call[\"id\"], \"tool_name\": call[\"name\"]}\n        if message[\"stop_reason\"] == \"length\":\n            results.append({**base, \"content\": [{\"type\": \"text\", \"text\": LENGTH_TEXT.format(call[\"name\"])}], \"is_error\": True})\n            terminates.append(False)\n            continue\n        try:\n            outcome = execute_tool(call)\n        except Exception as error:\n            results.append({**base, \"content\": [{\"type\": \"text\", \"text\": str(error)}], \"is_error\": True})\n            terminates.append(False)\n            continue\n        results.append({**base, \"content\": outcome[\"content\"], \"is_error\": bool(outcome.get(\"is_error\"))})\n        terminates.append(bool(outcome.get(\"terminate\")))\n    return results, bool(results) and not all(terminates)\n\n\ndef agent_loop(prompts, model, execute_tool, get_steering, get_follow_up):\n    context = list(prompts)\n    new_messages = list(prompts)\n    pending = get_steering()\n    while True:\n        more_tools = True\n        while more_tools or pending:\n            for message in pending:\n                context.append(message)\n                new_messages.append(message)\n            pending = []\n            reply = model(list(context))\n            context.append(reply)\n            new_messages.append(reply)\n            if reply[\"stop_reason\"] in (\"error\", \"aborted\"):\n                return new_messages\n            results, more_tools = _run_tools(reply, execute_tool)\n            context.extend(results)\n            new_messages.extend(results)\n            pending = get_steering()\n        follow = get_follow_up()\n        if not follow:\n            return new_messages\n        pending = follow",
+        "role": "solution"
+      }
+    ]
+  },
+  "pi_compaction_cut_point": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "ROLES = {\"user\", \"assistant\", \"toolResult\", \"bashExecution\", \"custom\", \"branchSummary\", \"compactionSummary\", \"meta\"}\nTURN_STARTS = {\"user\", \"bashExecution\", \"custom\", \"branchSummary\", \"compactionSummary\"}\n\n\ndef find_cut_point(entries, keep_recent_tokens):\n    if type(keep_recent_tokens) is not int or keep_recent_tokens < 1:\n        raise ValueError(\"keep_recent_tokens must be a positive integer\")\n    for entry in entries:\n        if entry[\"role\"] not in ROLES:\n            raise ValueError(f\"unknown role {entry['role']!r}\")\n        if type(entry[\"tokens\"]) is not int or entry[\"tokens\"] < 0:\n            raise ValueError(\"tokens must be a non-negative integer\")\n\n    cut_points = [i for i, e in enumerate(entries) if e[\"role\"] not in (\"toolResult\", \"meta\")]\n    if not cut_points:\n        return {\"first_kept_index\": 0, \"turn_start_index\": -1, \"is_split_turn\": False}\n\n    cut = cut_points[0]\n    accumulated = 0\n    for i in range(len(entries) - 1, -1, -1):\n        tokens = entries[i][\"tokens\"]\n        if tokens == 0:\n            continue\n        accumulated += tokens\n        if accumulated >= keep_recent_tokens:\n            cut = next((c for c in cut_points if c >= i), cut_points[-1])\n            break\n\n    while cut > 0 and entries[cut - 1][\"role\"] == \"meta\":\n        cut -= 1\n\n    if entries[cut][\"role\"] in TURN_STARTS:\n        return {\"first_kept_index\": cut, \"turn_start_index\": -1, \"is_split_turn\": False}\n    turn_start = next((j for j in range(cut, -1, -1) if entries[j][\"role\"] in TURN_STARTS), -1)\n    return {\"first_kept_index\": cut, \"turn_start_index\": turn_start, \"is_split_turn\": turn_start != -1}",
+        "role": "solution"
+      }
+    ]
+  },
+  "pi_parallel_tool_batch": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import asyncio\n\n\ndef _error(text, terminate=False):\n    return {\"content\": [{\"type\": \"text\", \"text\": text}], \"is_error\": True, \"terminate\": terminate}\n\n\nasync def execute_tool_batch(calls, tools, mode=\"parallel\", before_tool_call=None,\n                             is_aborted=lambda: False, emit=lambda event: None):\n    async def prepare(call):\n        emit({\"type\": \"start\", \"id\": call[\"id\"]})\n        tool = tools.get(call[\"name\"])\n        if tool is None:\n            outcome = _error(f\"Tool {call['name']} not found\")\n        else:\n            outcome = None\n            if before_tool_call is not None:\n                decision = await before_tool_call(call)\n                if is_aborted():\n                    outcome = _error(\"Operation aborted\")\n                elif decision and decision.get(\"block\"):\n                    outcome = _error(decision.get(\"reason\") or \"Tool execution was blocked\",\n                                     decision.get(\"terminate\") is True)\n        if outcome is not None:\n            emit({\"type\": \"end\", \"id\": call[\"id\"]})\n        return outcome\n\n    async def run(call, check_abort):\n        if check_abort and is_aborted():\n            outcome = _error(\"Operation aborted\")\n        else:\n            try:\n                result = await tools[call[\"name\"]][\"execute\"](call[\"arguments\"])\n                outcome = {\"content\": result[\"content\"], \"is_error\": False,\n                           \"terminate\": result.get(\"terminate\") is True}\n            except Exception as error:\n                outcome = _error(str(error))\n        emit({\"type\": \"end\", \"id\": call[\"id\"]})\n        return outcome\n\n    sequential = mode == \"sequential\" or any(\n        tools.get(c[\"name\"], {}).get(\"sequential\") for c in calls)\n    recorded = []\n    if sequential:\n        for call in calls:\n            outcome = await prepare(call)\n            if outcome is None:\n                outcome = await run(call, False)\n            recorded.append((call, outcome))\n            if is_aborted():\n                break\n    else:\n        pending = []\n        for call in calls:\n            outcome = await prepare(call)\n            pending.append((call, outcome))\n            if is_aborted():\n                break\n\n        async def settle(call, outcome):\n            return outcome if outcome is not None else await run(call, True)\n\n        outcomes = await asyncio.gather(*(settle(c, o) for c, o in pending))\n        recorded = list(zip([c for c, _ in pending], outcomes))\n\n    messages = [{\"role\": \"toolResult\", \"tool_call_id\": call[\"id\"], \"tool_name\": call[\"name\"],\n                 \"content\": outcome[\"content\"], \"is_error\": outcome[\"is_error\"]}\n                for call, outcome in recorded]\n    terminate = bool(recorded) and all(outcome[\"terminate\"] for _, outcome in recorded)\n    return {\"messages\": messages, \"terminate\": terminate}",
+        "role": "solution"
+      }
+    ]
+  },
+  "pi_truncate_output": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def _lines(content):\n    if content == \"\":\n        return []\n    parts = content.split(\"\\n\")\n    if content.endswith(\"\\n\"):\n        parts.pop()\n    return parts\n\n\ndef _size(text):\n    return len(text.encode(\"utf-8\"))\n\n\ndef _suffix_within(line, max_bytes):\n    raw = line.encode(\"utf-8\")\n    if len(raw) <= max_bytes:\n        return line\n    start = len(raw) - max_bytes\n    while start < len(raw) and raw[start] & 0xC0 == 0x80:\n        start += 1\n    return raw[start:].decode(\"utf-8\")\n\n\ndef truncate_output(content, mode, max_lines=2000, max_bytes=51200):\n    if mode not in (\"head\", \"tail\"):\n        raise ValueError(f\"unknown mode {mode!r}\")\n    if max_lines < 1 or max_bytes < 1:\n        raise ValueError(\"limits must be at least 1\")\n    lines = _lines(content)\n    total_bytes = _size(content)\n    result = {\"total_lines\": len(lines), \"total_bytes\": total_bytes,\n              \"last_line_partial\": False, \"first_line_exceeds_limit\": False}\n    if len(lines) <= max_lines and total_bytes <= max_bytes:\n        return {**result, \"content\": content, \"truncated\": False, \"truncated_by\": None,\n                \"output_lines\": len(lines), \"output_bytes\": total_bytes}\n\n    kept, used, truncated_by = [], 0, \"lines\"\n    if mode == \"head\":\n        if _size(lines[0]) > max_bytes:\n            return {**result, \"content\": \"\", \"truncated\": True, \"truncated_by\": \"bytes\",\n                    \"output_lines\": 0, \"output_bytes\": 0, \"first_line_exceeds_limit\": True}\n        for line in lines[:max_lines]:\n            cost = _size(line) + (1 if kept else 0)\n            if used + cost > max_bytes:\n                truncated_by = \"bytes\"\n                break\n            kept.append(line)\n            used += cost\n    else:\n        for line in reversed(lines):\n            if len(kept) >= max_lines:\n                break\n            cost = _size(line) + (1 if kept else 0)\n            if used + cost > max_bytes:\n                truncated_by = \"bytes\"\n                if not kept:\n                    kept.append(_suffix_within(line, max_bytes))\n                    result[\"last_line_partial\"] = True\n                break\n            kept.insert(0, line)\n            used += cost\n    output = \"\\n\".join(kept)\n    return {**result, \"content\": output, \"truncated\": True, \"truncated_by\": truncated_by,\n            \"output_lines\": len(kept), \"output_bytes\": _size(output)}",
+        "role": "solution"
+      }
+    ]
+  },
   "policy_engine": {
     "cells": [
       {
@@ -797,6 +977,15 @@
       {
         "type": "code",
         "source": "import torch\n\n\ndef ppo_value_loss(values, old_values, returns, mask, clip_eps=0.2):\n    shapes = (values.shape, old_values.shape, returns.shape, mask.shape)\n    if len(set(shapes)) != 1:\n        raise ValueError(f\"all tensors must share a shape, got {shapes}\")\n    if clip_eps <= 0:\n        raise ValueError(f\"clip_eps must be positive, got {clip_eps}\")\n\n    keep = mask.to(values.dtype)\n    denominator = keep.sum()\n    if denominator == 0:\n        return torch.zeros((), dtype=values.dtype, device=values.device)\n\n    clipped_value = old_values + (values - old_values).clamp(-clip_eps, clip_eps)\n    unclipped_error = (values - returns) ** 2\n    clipped_error = (clipped_value - returns) ** 2\n    per_token = 0.5 * torch.max(unclipped_error, clipped_error)\n    return (per_token * keep).sum() / denominator",
+        "role": "solution"
+      }
+    ]
+  },
+  "precision_recall_f1": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\n\ndef precision_recall_f1(preds, targets, average=\"macro\"):\n    if average not in (\"micro\", \"macro\", \"weighted\"):\n        raise ValueError(f\"unknown average {average!r}\")\n    if preds.ndim != 1 or targets.ndim != 1 or preds.shape != targets.shape or preds.numel() == 0:\n        raise ValueError(\"preds and targets must be non-empty 1-D tensors of equal length\")\n\n    def divide(a, b):\n        return a / b if b else 0.0\n\n    classes = torch.unique(torch.cat([preds, targets])).tolist()\n    counts = []\n    for c in classes:\n        pred_c, true_c = preds == c, targets == c\n        tp = int((pred_c & true_c).sum())\n        fp = int((pred_c & ~true_c).sum())\n        fn = int((~pred_c & true_c).sum())\n        counts.append((tp, fp, fn, int(true_c.sum())))\n\n    if average == \"micro\":\n        tp, fp, fn = (sum(row[i] for row in counts) for i in range(3))\n        precision, recall, f1 = divide(tp, tp + fp), divide(tp, tp + fn), divide(2 * tp, 2 * tp + fp + fn)\n    else:\n        per_class = [\n            (divide(tp, tp + fp), divide(tp, tp + fn), divide(2 * tp, 2 * tp + fp + fn))\n            for tp, fp, fn, _ in counts\n        ]\n        weights = [1.0] * len(counts) if average == \"macro\" else [row[3] for row in counts]\n        total = sum(weights)\n        precision, recall, f1 = (\n            divide(sum(w * values[i] for w, values in zip(weights, per_class)), total)\n            for i in range(3)\n        )\n    return {\"precision\": float(precision), \"recall\": float(recall), \"f1\": float(f1)}",
         "role": "solution"
       }
     ]
@@ -888,6 +1077,15 @@
       }
     ]
   },
+  "roc_auc": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\n\ndef roc_auc(scores, labels):\n    if scores.ndim != 1 or labels.ndim != 1 or scores.shape != labels.shape:\n        raise ValueError(\"scores and labels must be 1-D tensors of equal length\")\n    labels = labels.long()\n    if bool(((labels != 0) & (labels != 1)).any()):\n        raise ValueError(\"labels must be 0 or 1\")\n    if not bool(torch.isfinite(scores).all()):\n        raise ValueError(\"scores must be finite\")\n    n_pos = int(labels.sum())\n    n_neg = labels.numel() - n_pos\n    if n_pos == 0 or n_neg == 0:\n        raise ValueError(\"AUC needs at least one positive and one negative\")\n\n    sorted_scores, order = torch.sort(scores.double())\n    _, counts = torch.unique_consecutive(sorted_scores, return_counts=True)\n    ends = torch.cumsum(counts, 0)\n    average_rank = (ends - counts + 1 + ends).double() / 2\n    ranks = torch.repeat_interleave(average_rank, counts)\n    rank_sum = float(ranks[labels[order] == 1].sum())\n    return (rank_sum - n_pos * (n_pos + 1) / 2) / (n_pos * n_neg)",
+        "role": "solution"
+      }
+    ]
+  },
   "rope": {
     "cells": [
       {
@@ -899,6 +1097,24 @@
         "type": "code",
         "source": "q = torch.randn(1, 8, 16)\nk = torch.randn(1, 8, 16)\nqr, kr = apply_rope(q, k)\nprint('Shape preserved:', qr.shape == q.shape)\nprint('Norm preserved:', torch.allclose(q.norm(dim=-1), qr.norm(dim=-1), atol=1e-4))",
         "role": "demo"
+      }
+    ]
+  },
+  "sgd_momentum": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\n\nclass SGDMomentum:\n    def __init__(self, params, lr, momentum=0.0, weight_decay=0.0, nesterov=False):\n        if lr < 0 or momentum < 0 or weight_decay < 0:\n            raise ValueError(\"lr, momentum and weight_decay must be non-negative\")\n        if nesterov and momentum == 0:\n            raise ValueError(\"Nesterov momentum requires momentum > 0\")\n        self.params = list(params)\n        self.lr = lr\n        self.momentum = momentum\n        self.weight_decay = weight_decay\n        self.nesterov = nesterov\n        self.buffers = {}\n\n    @torch.no_grad()\n    def step(self):\n        for index, p in enumerate(self.params):\n            if p.grad is None:\n                continue\n            d = p.grad\n            if self.weight_decay:\n                d = d + self.weight_decay * p\n            if self.momentum:\n                buf = self.buffers.get(index)\n                if buf is None:\n                    buf = d.clone()\n                    self.buffers[index] = buf\n                else:\n                    buf.mul_(self.momentum).add_(d)\n                d = d + self.momentum * buf if self.nesterov else buf\n            p.add_(d, alpha=-self.lr)\n\n    def zero_grad(self):\n        for p in self.params:\n            p.grad = None",
+        "role": "solution"
+      }
+    ]
+  },
+  "simpo_ipo_loss": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\nimport torch.nn.functional as F\n\ndef preference_loss(chosen_logps, rejected_logps, loss_type, beta, chosen_lengths=None, rejected_lengths=None,\n                    gamma=0.0, ref_chosen_logps=None, ref_rejected_logps=None):\n    if beta <= 0:\n        raise ValueError(\"beta must be positive\")\n    if loss_type == \"simpo\":\n        if chosen_lengths is None or rejected_lengths is None:\n            raise ValueError(\"SimPO needs response lengths\")\n        if bool((chosen_lengths <= 0).any()) or bool((rejected_lengths <= 0).any()):\n            raise ValueError(\"lengths must be positive\")\n        margin = beta * (chosen_logps / chosen_lengths - rejected_logps / rejected_lengths) - gamma\n        return F.softplus(-margin).mean()\n    if loss_type == \"ipo\":\n        if ref_chosen_logps is None or ref_rejected_logps is None:\n            raise ValueError(\"IPO needs reference log-probabilities\")\n        gap = (chosen_logps - ref_chosen_logps) - (rejected_logps - ref_rejected_logps)\n        return ((gap - 1 / (2 * beta)) ** 2).mean()\n    raise ValueError(f\"unknown loss_type {loss_type!r}\")",
+        "role": "solution"
       }
     ]
   },
@@ -964,6 +1180,15 @@
         "type": "code",
         "source": "logits = torch.tensor([1.0, 5.0, 2.0, 0.5])\nprint('top_k=1:', sample_top_k_top_p(logits.clone(), top_k=1))\nprint('top_p=0.5:', sample_top_k_top_p(logits.clone(), top_p=0.5))",
         "role": "demo"
+      }
+    ]
+  },
+  "truncated_importance_sampling": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import math\nimport torch\n\ndef truncated_is_weights(train_logprobs, rollout_logprobs, mask, cap=2.0, level=\"token\"):\n    if cap <= 0:\n        raise ValueError(\"cap must be positive\")\n    if level not in (\"token\", \"sequence\"):\n        raise ValueError(f\"unknown level {level!r}\")\n    if train_logprobs.ndim != 2 or train_logprobs.shape != rollout_logprobs.shape or train_logprobs.shape != mask.shape:\n        raise ValueError(\"inputs must share one (B, T) shape\")\n    mask = mask.bool()\n    delta = torch.where(mask, train_logprobs.detach() - rollout_logprobs.detach(), torch.zeros_like(train_logprobs))\n    if level == \"sequence\":\n        delta = delta.sum(dim=1, keepdim=True).expand_as(delta)\n    weights = torch.exp(torch.clamp(delta, max=math.log(cap)))\n    return torch.where(mask, weights, torch.zeros_like(weights))",
+        "role": "solution"
       }
     ]
   },
@@ -1050,6 +1275,15 @@
       }
     ]
   },
+  "chunked_cross_entropy": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\nimport torch.nn.functional as F\nfrom torch.utils.checkpoint import checkpoint\n\ndef chunked_cross_entropy(hidden, weight, targets, chunk_size, ignore_index=-100):\n    if chunk_size < 1:\n        raise ValueError(\"chunk_size must be positive\")\n    if hidden.ndim != 2 or weight.ndim != 2 or hidden.shape[1] != weight.shape[1] or targets.shape != hidden.shape[:1]:\n        raise ValueError(\"expected hidden (N, D), weight (V, D) and targets (N,)\")\n    valid = int((targets != ignore_index).sum())\n    if valid == 0:\n        raise ValueError(\"no target to score\")\n\n    def chunk_loss(h, w, t):\n        return F.cross_entropy(h @ w.T, t, ignore_index=ignore_index, reduction=\"sum\")\n\n    total = hidden.new_zeros(())\n    for start in range(0, hidden.shape[0], chunk_size):\n        end = start + chunk_size\n        total = total + checkpoint(chunk_loss, hidden[start:end], weight, targets[start:end], use_reentrant=False)\n    return total / valid",
+        "role": "solution"
+      }
+    ]
+  },
   "context_compaction": {
     "cells": [
       {
@@ -1079,6 +1313,24 @@
         "type": "code",
         "source": "torch.manual_seed(0)\nB, S, D2, D_v = 2, 4, 8, 6\nQ = torch.randn(B, S, D2)\nK = torch.randn(B, S, D2)\nV = torch.randn(B, S, D_v)\n\nD_h = D2 // 2\nscale = D_h ** -0.5\nstandard = torch.softmax(Q[..., :D_h] @ K[..., :D_h].transpose(-2, -1) * scale, dim=-1) @ V\ndiff_zero = diff_attention(Q, K, V, lambda_val=0.0)\nprint(\"lambda=0 matches standard attention:\", torch.allclose(diff_zero, standard, atol=1e-6))\n\nQ_same = torch.cat([Q[..., :D_h], Q[..., :D_h]], dim=-1)\nK_same = torch.cat([K[..., :D_h], K[..., :D_h]], dim=-1)\ndiff_one = diff_attention(Q_same, K_same, V, lambda_val=1.0)\nprint(\"lambda=1 with identical halves gives zero:\", torch.allclose(diff_one, torch.zeros_like(diff_one), atol=1e-6))\nprint(\"Output shape:\", diff_zero.shape)  # (2, 4, 6)",
         "role": "demo"
+      }
+    ]
+  },
+  "dsh_tool_pipeline": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def _chain(middleware, args, inner):\n    queue = list(middleware)\n\n    def next():\n        if queue:\n            return queue.pop(0)(*args, next)\n        return inner()\n\n    return next()\n\n\ndef _error(message, code=None):\n    return {\"is_error\": True, \"content\": [{\"type\": \"text\", \"text\": f\"Error: {message}\"}],\n            \"error\": {\"message\": message, \"code\": code}}\n\n\nclass ToolRuntime:\n    def __init__(self, tools, approve=None):\n        self.tools = tools\n        self.approve = approve\n        self.pre_execute = []\n        self.guards = []\n        self.around = []\n        self.post_execute = []\n        self.observers = []\n\n    def _body(self, call):\n        name = call[\"name\"]\n        if name not in self.tools:\n            return _error(f'unknown tool \"{name}\"', \"UNKNOWN_TOOL\")\n        try:\n            return {\"is_error\": False, \"content\": self.tools[name](call[\"arguments\"])}\n        except Exception as error:\n            return _error(str(error))\n\n    def _resolve_ask(self, call, decision):\n        name = call[\"name\"]\n        if self.approve is None:\n            return {\"kind\": \"deny\", \"reason\": decision.get(\"reason\") or f'tool \"{name}\" requires approval (not yet supported)'}\n        outcome = self.approve(call, decision.get(\"reason\"))\n        if outcome == \"allowed-once\":\n            return {\"kind\": \"allow\"}\n        if outcome == \"rejected\":\n            return {\"kind\": \"deny\", \"reason\": f'the user rejected tool \"{name}\"'}\n        return {\"kind\": \"deny\", \"reason\": f'approval for tool \"{name}\" was cancelled'}\n\n    def _post(self, call, result):\n        decision = _chain(self.post_execute, (call, result), lambda: {\"kind\": \"accept\"})\n        extra = list(decision.get(\"additional_contexts\") or [])\n        if decision[\"kind\"] == \"block\":\n            feedback = decision[\"feedback\"]\n            text = \"\\n\".join(b[\"text\"] for b in feedback if b.get(\"type\") == \"text\")\n            blocked = {\"is_error\": True, \"content\": feedback, \"error\": {\"message\": text, \"code\": None}}\n            if extra:\n                blocked[\"additional_contexts\"] = extra\n            return blocked\n        accepted = dict(result)\n        if \"content\" in decision:\n            accepted[\"content\"] = decision[\"content\"]\n        contexts = list(result.get(\"additional_contexts\") or []) + extra\n        if contexts:\n            accepted[\"additional_contexts\"] = contexts\n        return accepted\n\n    def _run(self, call):\n        decision = _chain(self.pre_execute, (call,), lambda: {\"kind\": \"allow\"})\n        if decision[\"kind\"] == \"ask\":\n            decision = self._resolve_ask(call, decision)\n        if decision[\"kind\"] == \"cancel\":\n            result = _error(\"tool call aborted before dispatch\", \"ABORTED_BEFORE_DISPATCH\")\n        else:\n            reason = decision.get(\"reason\") if decision[\"kind\"] == \"deny\" else None\n            if decision[\"kind\"] == \"allow\":\n                for guard in self.guards:\n                    reason = guard(call)\n                    if reason is not None:\n                        break\n            if reason is not None:\n                result = _error(reason)\n            else:\n                result = _chain(self.around, (call,), lambda: self._body(call))\n        return self._post(call, result)\n\n    def execute(self, call):\n        try:\n            result = self._run(call)\n        except Exception as error:\n            result = _error(str(error))\n        for observer in self.observers:\n            try:\n                observer(call, result)\n            except Exception:\n                pass\n        return result",
+        "role": "solution"
+      }
+    ]
+  },
+  "dsh_tool_timeout": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import asyncio\nfrom types import SimpleNamespace\n\n\nclass _Signal:\n    def __init__(self):\n        self.aborted = False\n        self.reason = None\n        self._listeners = []\n\n    def add_listener(self, fn):\n        if self.aborted:\n            fn(self.reason)\n        else:\n            self._listeners.append(fn)\n\n\nclass AbortController:\n    def __init__(self):\n        self.signal = _Signal()\n\n    def abort(self, reason):\n        signal = self.signal\n        if signal.aborted:\n            return\n        signal.aborted = True\n        signal.reason = reason\n        listeners, signal._listeners = signal._listeners, []\n        for fn in listeners:\n            fn(reason)\n\n\ndef any_signal(signals):\n    controller = AbortController()\n    for signal in signals:\n        if signal.aborted:\n            controller.abort(signal.reason)\n            return controller.signal\n    for signal in signals:\n        signal.add_listener(controller.abort)\n    return controller.signal\n\n\nclass TimeoutReason(Exception):\n    def __init__(self, code, timeout):\n        super().__init__(f\"{code} after {timeout}s\")\n        self.code = code\n        self.timeout = timeout\n\n\nclass _Deadline:\n    def __init__(self, signal, handle=None):\n        self.signal = signal\n        self._handle = handle\n\n    def dispose(self):\n        if self._handle is not None:\n            self._handle.cancel()\n\n\ndef deadline(upstream, timeout, code):\n    if timeout <= 0:\n        return _Deadline(upstream if upstream is not None else AbortController().signal)\n    timer = AbortController()\n    handle = asyncio.get_running_loop().call_later(timeout, timer.abort, TimeoutReason(code, timeout))\n    signal = timer.signal if upstream is None else any_signal([upstream, timer.signal])\n    return _Deadline(signal, handle)\n\n\ndef timeout_of(signal, code=None):\n    reason = signal.reason\n    if not isinstance(reason, TimeoutReason):\n        return None\n    return reason if code is None or reason.code == code else None\n\n\nasync def with_timeout(execution, next, timeout):\n    if timeout is None:\n        return await next()\n    d = deadline(execution[\"signal\"], timeout, \"TOOL_TIMEOUT\")\n    upstream = execution[\"signal\"]\n    execution[\"signal\"] = d.signal\n    try:\n        result = await next()\n        if timeout_of(d.signal, \"TOOL_TIMEOUT\") is not None:\n            message = f\"tool call timed out after {timeout}s\"\n            return {\"is_error\": True, \"content\": [{\"type\": \"text\", \"text\": f\"Error: {message}\"}],\n                    \"error\": {\"message\": message, \"code\": \"TOOL_TIMEOUT\"}}\n        return result\n    finally:\n        execution[\"signal\"] = upstream\n        d.dispose()\n\n\ntool_timeout = SimpleNamespace(AbortController=AbortController, any_signal=any_signal, deadline=deadline,\n                               timeout_of=timeout_of, TimeoutReason=TimeoutReason, with_timeout=with_timeout)",
+        "role": "solution"
       }
     ]
   },
@@ -1387,6 +1639,15 @@
       }
     ]
   },
+  "muon_newton_schulz": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import math\nimport torch\n\ndef muon_update(grad, momentum, beta=0.95, nesterov=True, ns_steps=5, eps=1e-7):\n    if grad.ndim != 2 or momentum.shape != grad.shape:\n        raise ValueError(\"grad and momentum must share one 2-D shape\")\n    if not 0 <= beta < 1 or ns_steps < 1:\n        raise ValueError(\"need 0 <= beta < 1 and ns_steps >= 1\")\n    momentum.mul_(beta).add_(grad, alpha=1 - beta)\n    G = (1 - beta) * grad + beta * momentum if nesterov else momentum.clone()\n\n    a, b, c = 3.4445, -4.7750, 2.0315\n    rows, cols = G.shape\n    X = G / (G.norm() + eps)\n    tall = rows > cols\n    if tall:\n        X = X.T\n    for _ in range(ns_steps):\n        A = X @ X.T\n        B = b * A + c * A @ A\n        X = a * X + B @ X\n    if tall:\n        X = X.T\n    return X * math.sqrt(max(1.0, rows / cols))",
+        "role": "solution"
+      }
+    ]
+  },
   "opd_sampled_kl_advantage": {
     "cells": [
       {
@@ -1416,6 +1677,42 @@
         "type": "code",
         "source": "torch.manual_seed(0)\nB, S, D = 2, 8, 16\nblock_size = 4\nnum_blocks = S // block_size\n\nK_full = torch.randn(B, S, D)\nV_full = torch.randn(B, S, D)\nQ = torch.randn(B, 1, D)\n\nscale = D ** -0.5\nscores_ref = (Q @ K_full.transpose(-2, -1)) * scale\nref_out = torch.softmax(scores_ref, dim=-1) @ V_full\n\ntotal_pages = B * num_blocks\nk_pages = torch.zeros(total_pages, block_size, D)\nv_pages = torch.zeros(total_pages, block_size, D)\nblock_table = []\nfor b in range(B):\n    page_ids = []\n    for blk in range(num_blocks):\n        pid = b * num_blocks + blk\n        k_pages[pid] = K_full[b, blk*block_size:(blk+1)*block_size]\n        v_pages[pid] = V_full[b, blk*block_size:(blk+1)*block_size]\n        page_ids.append(pid)\n    block_table.append(page_ids)\n\npaged_out = paged_attention(Q, k_pages, v_pages, block_table, context_len=S, block_size=block_size)\n\nprint('Shape:', paged_out.shape)\nprint('Max diff vs reference:', (paged_out - ref_out).abs().max().item())\nprint('Match:', torch.allclose(paged_out, ref_out, atol=1e-5))",
         "role": "demo"
+      }
+    ]
+  },
+  "pi_file_mutation_queue": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import asyncio\nimport os\n\n\nclass FileMutationQueue:\n    def __init__(self):\n        self._tails = {}\n        self._background = set()\n\n    def active_keys(self):\n        return set(self._tails)\n\n    def _release(self, key, done):\n        done.set()\n        if self._tails.get(key) is done:\n            del self._tails[key]\n\n    async def run(self, path, fn):\n        key = os.path.realpath(os.path.abspath(path))\n        prev = self._tails.get(key)\n        done = asyncio.Event()\n        self._tails[key] = done\n        if prev is not None:\n            try:\n                await prev.wait()\n            except asyncio.CancelledError:\n                async def hand_over():\n                    await prev.wait()\n                    self._release(key, done)\n\n                task = asyncio.ensure_future(hand_over())\n                self._background.add(task)\n                task.add_done_callback(self._background.discard)\n                raise\n        try:\n            return await fn()\n        finally:\n            self._release(key, done)",
+        "role": "solution"
+      }
+    ]
+  },
+  "pi_multi_edit": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import re\nimport unicodedata\n\n_SINGLE = dict.fromkeys(map(ord, \"\\u2018\\u2019\\u201a\\u201b\"), \"'\")\n_DOUBLE = dict.fromkeys(map(ord, \"\\u201c\\u201d\\u201e\\u201f\"), '\"')\n_DASH = dict.fromkeys(map(ord, \"\\u2010\\u2011\\u2012\\u2013\\u2014\\u2015\\u2212\"), \"-\")\n_SPACE = dict.fromkeys([0x00A0, *range(0x2002, 0x200B), 0x202F, 0x205F, 0x3000], \" \")\n_TABLE = {**_SINGLE, **_DOUBLE, **_DASH, **_SPACE}\n\n\ndef _norm(text):\n    text = unicodedata.normalize(\"NFKC\", text)\n    text = \"\\n\".join(line.rstrip() for line in text.split(\"\\n\"))\n    return text.translate(_TABLE)\n\n\ndef _to_lf(text):\n    return text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\")\n\n\ndef _line_spans(text):\n    spans, offset = [], 0\n    for line in re.findall(r\"[^\\n]*\\n|[^\\n]+\", text):\n        spans.append((offset, offset + len(line)))\n        offset += len(line)\n    return spans\n\n\ndef _apply(text, replacements, offset=0):\n    for start, length, new in sorted(replacements, reverse=True):\n        start -= offset\n        text = text[:start] + new + text[start + length:]\n    return text\n\n\ndef apply_edits(content, edits):\n    crlf_at, lf_at = content.find(\"\\r\\n\"), content.find(\"\\n\")\n    crlf = lf_at != -1 and crlf_at != -1 and crlf_at <= lf_at\n    original = _to_lf(content)\n    edits = [(_to_lf(e[\"old_text\"]), _to_lf(e[\"new_text\"])) for e in edits]\n    if any(not old for old, _ in edits):\n        raise ValueError(\"old_text must not be empty\")\n\n    fuzzy = any(old not in original and _norm(old) in _norm(original) for old, _ in edits)\n    base = _norm(original) if fuzzy else original\n\n    matches = []\n    for old, new in edits:\n        index, length = base.find(old), len(old)\n        if index == -1:\n            index, length = base.find(_norm(old)), len(_norm(old))\n        if index == -1:\n            raise ValueError(\"could not find old_text in the file\")\n        if _norm(base).count(_norm(old)) > 1:\n            raise ValueError(\"old_text must be unique; add more context\")\n        matches.append((index, length, new))\n    matches.sort()\n    for (s1, l1, _), (s2, _, _) in zip(matches, matches[1:]):\n        if s1 + l1 > s2:\n            raise ValueError(\"edits overlap; merge them or target disjoint regions\")\n\n    if not fuzzy:\n        result = _apply(base, matches)\n    else:\n        original_lines = re.findall(r\"[^\\n]*\\n|[^\\n]+\", original)\n        spans = _line_spans(base)\n        groups = []\n        for start, length, new in matches:\n            first = next(i for i, (a, b) in enumerate(spans) if a <= start < b)\n            last = first\n            while spans[last][1] < start + length:\n                last += 1\n            if groups and first < groups[-1][1]:\n                groups[-1][1] = max(groups[-1][1], last + 1)\n                groups[-1][2].append((start, length, new))\n            else:\n                groups.append([first, last + 1, [(start, length, new)]])\n        result, cursor = \"\", 0\n        for first, end, reps in groups:\n            result += \"\".join(original_lines[cursor:first])\n            lo, hi = spans[first][0], spans[end - 1][1]\n            result += _apply(base[lo:hi], reps, lo)\n            cursor = end\n        result += \"\".join(original_lines[cursor:])\n\n    if result == original:\n        raise ValueError(\"no changes: the replacements produced identical content\")\n    return result.replace(\"\\n\", \"\\r\\n\") if crlf else result",
+        "role": "solution"
+      }
+    ]
+  },
+  "pi_streaming_json": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import json\nimport re\n\n_VALID_ESCAPES = set('\"\\\\/bfnrtu')\n_NUMBER = re.compile(r\"-?(0|[1-9][0-9]*)(\\.[0-9]+)?([eE][+-]?[0-9]+)?\")\n_CONTROL = {\"\\b\": \"\\\\b\", \"\\f\": \"\\\\f\", \"\\n\": \"\\\\n\", \"\\r\": \"\\\\r\", \"\\t\": \"\\\\t\"}\n_MISSING = object()\n\n\nclass _Invalid(Exception):\n    pass\n\n\ndef repair(text):\n    out = []\n    in_string = False\n    i = 0\n    while i < len(text):\n        ch = text[i]\n        if not in_string:\n            out.append(ch)\n            in_string = ch == '\"'\n            i += 1\n            continue\n        if ch == '\"':\n            out.append(ch)\n            in_string = False\n        elif ch == \"\\\\\":\n            nxt = text[i + 1] if i + 1 < len(text) else None\n            if nxt == \"u\" and re.fullmatch(r\"[0-9a-fA-F]{4}\", text[i + 2:i + 6]):\n                out.append(text[i:i + 6])\n                i += 6\n                continue\n            if nxt is not None and nxt in _VALID_ESCAPES:\n                out.append(\"\\\\\" + nxt)\n                i += 2\n                continue\n            out.append(\"\\\\\\\\\")\n        elif ord(ch) < 0x20:\n            out.append(_CONTROL.get(ch, f\"\\\\u{ord(ch):04x}\"))\n        else:\n            out.append(ch)\n        i += 1\n    return \"\".join(out)\n\n\ndef _partial(s):\n    n = len(s)\n\n    def ws(i):\n        while i < n and s[i] in \" \\t\\n\\r\":\n            i += 1\n        return i\n\n    def string(i):\n        j = i + 1\n        while j < n:\n            ch = s[j]\n            if ch == '\"':\n                return json.loads(s[i:j + 1]), j + 1, True\n            if ch == \"\\\\\":\n                if j + 1 == n:\n                    break\n                esc = s[j + 1]\n                if esc == \"u\":\n                    digits = s[j + 2:j + 6]\n                    if not re.fullmatch(r\"[0-9a-fA-F]*\", digits):\n                        raise _Invalid()\n                    if len(digits) < 4:\n                        break\n                    j += 6\n                    continue\n                if esc not in _VALID_ESCAPES:\n                    raise _Invalid()\n                j += 2\n                continue\n            if ord(ch) < 0x20:\n                raise _Invalid()\n            j += 1\n        text = json.loads(s[i:j] + '\"')\n        if text and 0xD800 <= ord(text[-1]) <= 0xDBFF:\n            text = text[:-1]\n        return text, n, False\n\n    def number(i):\n        j = i\n        while j < n and s[j] in \"0123456789+-.eE\":\n            j += 1\n        token = s[i:j]\n        if j == n:\n            token = token.rstrip(\"+-.eE\")\n            if _NUMBER.fullmatch(token):\n                return json.loads(token), n, False\n            return _MISSING, n, False\n        if not _NUMBER.fullmatch(token):\n            raise _Invalid()\n        return json.loads(token), j, True\n\n    def container(i, close, is_object):\n        result = {} if is_object else []\n        j = ws(i + 1)\n        if j == n:\n            return result, n, False\n        if s[j] == close:\n            return result, j + 1, True\n        while True:\n            j = ws(j)\n            if j == n:\n                return result, n, False\n            key = None\n            if is_object:\n                if s[j] != '\"':\n                    raise _Invalid()\n                key, j, done = string(j)\n                if not done:\n                    return result, n, False\n                j = ws(j)\n                if j == n:\n                    return result, n, False\n                if s[j] != \":\":\n                    raise _Invalid()\n                j += 1\n            item, j, done = value(j)\n            if item is not _MISSING:\n                if is_object:\n                    result[key] = item\n                else:\n                    result.append(item)\n            if not done:\n                return result, n, False\n            j = ws(j)\n            if j == n:\n                return result, n, False\n            if s[j] == close:\n                return result, j + 1, True\n            if s[j] != \",\":\n                raise _Invalid()\n            j += 1\n\n    def value(i):\n        i = ws(i)\n        if i == n:\n            return _MISSING, n, False\n        ch = s[i]\n        if ch == \"{\":\n            return container(i, \"}\", True)\n        if ch == \"[\":\n            return container(i, \"]\", False)\n        if ch == '\"':\n            return string(i)\n        if ch == \"-\" or ch.isdigit():\n            return number(i)\n        for literal, parsed in ((\"true\", True), (\"false\", False), (\"null\", None)):\n            if s.startswith(literal, i):\n                return parsed, i + len(literal), True\n            if literal.startswith(s[i:]):\n                return _MISSING, n, False\n        raise _Invalid()\n\n    result, end, done = value(0)\n    if done and ws(end) != n:\n        raise _Invalid()\n    return {} if result is _MISSING else result\n\n\ndef parse_streaming_json(text):\n    if not text or not text.strip():\n        return {}\n    try:\n        return json.loads(text)\n    except ValueError:\n        pass\n    fixed = repair(text)\n    if fixed != text:\n        try:\n            return json.loads(fixed)\n        except ValueError:\n            pass\n    for candidate in (text, fixed):\n        try:\n            return _partial(candidate)\n        except (_Invalid, ValueError):\n            continue\n    return {}",
+        "role": "solution"
+      }
+    ]
+  },
+  "pi_transform_messages": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "NON_VISION_USER = \"(image omitted: model does not support images)\"\nNON_VISION_TOOL = \"(tool image omitted: model does not support images)\"\nNO_RESULT = \"No result provided\"\n\n\ndef _replace_images(content, placeholder):\n    result = []\n    previous_was_placeholder = False\n    for block in content:\n        if block[\"type\"] == \"image\":\n            if not previous_was_placeholder:\n                result.append({\"type\": \"text\", \"text\": placeholder})\n            previous_was_placeholder = True\n            continue\n        result.append(block)\n        previous_was_placeholder = block.get(\"text\") == placeholder\n    return result\n\n\ndef transform_messages(messages, model, normalize_tool_call_id=None):\n    supports_images = \"image\" in model[\"input\"]\n    id_map = {}\n    transformed = []\n    for msg in messages:\n        if msg.get(\"content\") is None:\n            msg = {**msg, \"content\": []}\n        role = msg[\"role\"]\n        if not supports_images:\n            if role == \"user\" and isinstance(msg[\"content\"], list):\n                msg = {**msg, \"content\": _replace_images(msg[\"content\"], NON_VISION_USER)}\n            elif role == \"toolResult\":\n                msg = {**msg, \"content\": _replace_images(msg[\"content\"], NON_VISION_TOOL)}\n        if role == \"toolResult\":\n            new_id = id_map.get(msg[\"tool_call_id\"])\n            if new_id is not None and new_id != msg[\"tool_call_id\"]:\n                msg = {**msg, \"tool_call_id\": new_id}\n        elif role == \"assistant\":\n            same = (msg[\"provider\"] == model[\"provider\"] and msg[\"api\"] == model[\"api\"]\n                    and msg[\"model\"] == model[\"id\"])\n            content = []\n            for block in msg[\"content\"]:\n                kind = block[\"type\"]\n                if kind == \"thinking\":\n                    if block.get(\"redacted\"):\n                        if same:\n                            content.append(block)\n                        continue\n                    if same and block.get(\"signature\"):\n                        content.append(block)\n                        continue\n                    if not block.get(\"thinking\", \"\").strip():\n                        continue\n                    content.append(block if same else {\"type\": \"text\", \"text\": block[\"thinking\"]})\n                elif kind == \"text\":\n                    content.append(block if same else {\"type\": \"text\", \"text\": block[\"text\"]})\n                elif kind == \"toolCall\":\n                    call = block\n                    if not same and \"thought_signature\" in call:\n                        call = {k: v for k, v in call.items() if k != \"thought_signature\"}\n                    if not same and normalize_tool_call_id is not None:\n                        new_id = normalize_tool_call_id(block[\"id\"], model, msg)\n                        if new_id != block[\"id\"]:\n                            id_map[block[\"id\"]] = new_id\n                            call = {**call, \"id\": new_id}\n                    content.append(call)\n                else:\n                    content.append(block)\n            msg = {**msg, \"content\": content}\n        transformed.append(msg)\n\n    result = []\n    pending = []\n    answered = set()\n    held = []\n\n    def close():\n        nonlocal pending, answered\n        for call in pending:\n            if call[\"id\"] not in answered:\n                result.append({\"role\": \"toolResult\", \"tool_call_id\": call[\"id\"], \"tool_name\": call[\"name\"],\n                               \"content\": [{\"type\": \"text\", \"text\": NO_RESULT}], \"is_error\": True})\n        pending, answered = [], set()\n        result.extend(held)\n        held.clear()\n\n    for msg in transformed:\n        role = msg[\"role\"]\n        if role == \"assistant\":\n            close()\n            if msg.get(\"stop_reason\") in (\"error\", \"aborted\"):\n                continue\n            calls = [b for b in msg[\"content\"] if b[\"type\"] == \"toolCall\"]\n            if calls:\n                pending, answered = calls, set()\n            result.append(msg)\n        elif role == \"toolResult\":\n            answered.add(msg[\"tool_call_id\"])\n            result.append(msg)\n        elif role == \"system\":\n            (held if pending else result).append(msg)\n        elif role == \"user\":\n            close()\n            result.append(msg)\n        else:\n            result.append(msg)\n    close()\n    return result",
+        "role": "solution"
       }
     ]
   },

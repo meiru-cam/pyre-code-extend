@@ -1,5 +1,7 @@
 """RMSNorm implementation task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Implement RMSNorm",
     "title_zh": "实现 RMSNorm",
@@ -84,4 +86,19 @@ assert weight.grad is not None, 'weight.grad is None'
 out = rms_norm(x, torch.ones(8))
 print('RMS of output:', out.pow(2).mean(dim=-1).sqrt())""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is RMSNorm, and how does it differ from LayerNorm?',
+            'Why do modern LLMs use RMSNorm?',
+        ],
+        deep_dive=[
+            'Write the formula. Why is there no mean subtraction and no bias?',
+            'Where do you compute in float32 when the input is bfloat16, and why?',
+            'Where does eps go, inside or outside the square root?',
+        ],
+        tradeoffs=[
+            'What does dropping mean-centering cost in expressiveness, and what does it save?',
+            'How do QK-norm and other placements of RMSNorm help training stability?',
+        ],
+    ),
 }

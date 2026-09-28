@@ -1,5 +1,7 @@
 """Per-head query/key RMS normalization exercise."""
 
+from ._interview import interview
+
 TASK = {
     "title": "QK Normalization for Stable Attention",
     "difficulty": "Medium",
@@ -238,4 +240,19 @@ k = torch.randn(1, 1, 3, 4)
 q_normalized, k_normalized = qk_norm(q, k)
 print(q_normalized.square().mean(dim=-1))
 print(k_normalized.square().mean(dim=-1))""",
+    "interview_questions": interview(
+        concept=[
+            'What is QK-norm, and why was it introduced?',
+            'What instability does it address?',
+        ],
+        deep_dive=[
+            'Why normalize per head over the head dimension?',
+            'Where does it go relative to RoPE?',
+            'Is there a learnable scale, and why?',
+        ],
+        tradeoffs=[
+            'QK-norm versus logit soft-capping?',
+            'What does QK-norm change about the effective temperature of attention?',
+        ],
+    ),
 }

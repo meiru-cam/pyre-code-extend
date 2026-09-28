@@ -1,5 +1,7 @@
 """Cross-Entropy Loss task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Cross-Entropy Loss",
     "title_zh": "交叉熵损失",
@@ -35,4 +37,19 @@ targets = torch.randint(0, 10, (4,))
 print('Loss:', cross_entropy_loss(logits, targets).item())
 print('Ref: ', torch.nn.functional.cross_entropy(logits, targets).item())""",
 
+    "interview_questions": interview(
+        concept=[
+            'What does cross-entropy measure, and how does it relate to maximum likelihood and KL divergence?',
+            'Why is cross-entropy preferred over mean squared error for classification?',
+        ],
+        deep_dive=[
+            'How do you compute it stably from raw logits? Where does the log-sum-exp trick come in?',
+            'What is the gradient of cross-entropy with respect to the logits, and why is it so simple?',
+            'How would you handle ignored labels such as padding with an ignore index?',
+        ],
+        tradeoffs=[
+            'What do label smoothing and focal loss change about cross-entropy, and when would you use each?',
+            'Why does cross-entropy push logits toward infinity on separable data, and what keeps that in check?',
+        ],
+    ),
 }

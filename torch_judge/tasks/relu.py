@@ -1,5 +1,7 @@
 """ReLU implementation task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Implement ReLU",
     "title_zh": "实现 ReLU",
@@ -65,4 +67,19 @@ assert elapsed < 5.0, f'Too slow: {elapsed:.2f}s for 100 iterations'
 print("Input: ", x)
 print("Output:", relu(x))""",
 
+    "interview_questions": interview(
+        concept=[
+            'Why do neural networks need nonlinear activations at all?',
+            'Why did ReLU replace sigmoid and tanh in deep networks?',
+        ],
+        deep_dive=[
+            'What is the gradient of ReLU at zero, and what does PyTorch do there?',
+            'How do you implement ReLU without an in-place operation that breaks autograd?',
+            'What is the dying ReLU problem, and how does it show up in training?',
+        ],
+        tradeoffs=[
+            'Compare ReLU with Leaky ReLU, GELU and SiLU.',
+            'Why do most modern LLMs not use plain ReLU in the MLP?',
+        ],
+    ),
 }

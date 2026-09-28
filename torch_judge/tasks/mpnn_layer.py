@@ -1,5 +1,7 @@
 """MPNN Layer (Message Passing Neural Network) task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "MPNN Layer (Message Passing)",
     "title_zh": "MPNN 层（消息传递）",
@@ -139,4 +141,19 @@ assert torch.allclose(out, ref, atol=1e-5), f'Empty graph mismatch:\\n{out}\\nvs
     msgs = msgs * A.unsqueeze(-1)
     agg = msgs.sum(dim=1)
     return torch.relu(torch.cat([X, agg], dim=-1) @ W_upd)''',
+    "interview_questions": interview(
+        concept=[
+            'What is a message passing neural network?',
+            'How do edge features enter the message?',
+        ],
+        deep_dive=[
+            'How do you compute messages per edge and aggregate per node?',
+            'What does the update function combine?',
+            'How do you vectorize over edges?',
+        ],
+        tradeoffs=[
+            'Sum versus mean aggregation for messages?',
+            'How does MPNN relate to GCN, GAT and GIN as special cases?',
+        ],
+    ),
 }

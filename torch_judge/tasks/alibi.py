@@ -1,5 +1,7 @@
 """ALiBi Attention task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "ALiBi Attention",
     "title_zh": "ALiBi 注意力",
@@ -123,4 +125,19 @@ h_idx = torch.arange(1, H + 1, dtype=torch.float32)
 slopes = 1.0 / (2.0 ** (8.0 * h_idx / H))
 print("Slopes for 4 heads:", slopes)""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is ALiBi, and how does it replace positional embeddings?',
+            'Why does ALiBi extrapolate to longer sequences?',
+        ],
+        deep_dive=[
+            'How are head slopes computed, and why geometric?',
+            'How do you build the bias matrix and combine it with the causal mask?',
+            'Where exactly is the bias added?',
+        ],
+        tradeoffs=[
+            "What does ALiBi's linear recency bias cost on tasks that need long-range attention?",
+            'Why did most recent LLMs pick RoPE over ALiBi?',
+        ],
+    ),
 }

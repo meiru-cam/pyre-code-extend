@@ -1,5 +1,7 @@
 """PPO clipped policy loss — the token-level, masked, dual-clipped form used in LLM RL."""
 
+from ._interview import interview
+
 TASK = {
     "title": "PPO Clipped Policy Loss (Token-Level)",
     "difficulty": "Hard",
@@ -342,4 +344,19 @@ def ppo_clipped_policy_loss(
 
     return (per_token * keep).sum() / denominator
 ''',
+    "interview_questions": interview(
+        concept=[
+            'Why does PPO clip the importance ratio? What is the trust-region intuition?',
+            'Why is the objective the minimum of the clipped and unclipped terms rather than just the clipped one?',
+        ],
+        deep_dive=[
+            'Compute the ratio in log space. Why exp(logprobs - old_logprobs) rather than dividing probabilities?',
+            'What is dual-clip, and which case does it bound: positive or negative advantages?',
+            'old_logprobs and advantages are constants. What bug appears if one of them carries gradient?',
+        ],
+        tradeoffs=[
+            'How do the number of PPO epochs and minibatches per rollout interact with clip_eps?',
+            'What metric would you log to tell whether clipping is actually active, and what value worries you?',
+        ],
+    ),
 }

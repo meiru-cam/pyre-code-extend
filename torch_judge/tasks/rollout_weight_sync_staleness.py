@@ -1,5 +1,7 @@
 """Route Slime-style rollout samples across a weight-sync boundary."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Rollout Weight Sync and Staleness",
     "difficulty": "Hard",
@@ -152,4 +154,19 @@ for samples in ([sample,sample],[{"sample_id":"b","weight_version":9,"status":"c
         "serving_version": serving_version, "sync_deferred": sync_deferred,
     }
 ''',
+    "interview_questions": interview(
+        concept=[
+            'Why do inference engine weights lag behind trainer weights in RL systems?',
+            'What is staleness, and why cap it?',
+        ],
+        deep_dive=[
+            'How do you route complete, aborted and failed samples, and why do stale samples go to retry rather than dropped?',
+            'When is it safe to sync weights to the serving engine, and why wait for in-flight requests?',
+            'What should happen if lag is negative?',
+        ],
+        tradeoffs=[
+            'Strict on-policy versus bounded staleness: what do you gain in throughput and lose in correctness?',
+            'Besides dropping stale samples, how can importance weighting correct for staleness?',
+        ],
+    ),
 }

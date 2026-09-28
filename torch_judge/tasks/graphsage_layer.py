@@ -1,5 +1,7 @@
 """GraphSAGE Layer task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "GraphSAGE Layer",
     "title_zh": "GraphSAGE 层",
@@ -182,4 +184,19 @@ assert torch.allclose(out[2], expected_2.squeeze(), atol=1e-5), f'Isolated node 
     out = torch.relu(concat @ W)
     out = out / out.norm(dim=-1, keepdim=True).clamp(min=1e-8)
     return out''',
+    "interview_questions": interview(
+        concept=[
+            'What is GraphSAGE, and why was it designed for inductive learning?',
+            'Why concatenate self features with aggregated neighbors?',
+        ],
+        deep_dive=[
+            'How do you compute the mean of neighbor features?',
+            'What does neighbor sampling with k do?',
+            'Why L2 normalize the output?',
+        ],
+        tradeoffs=[
+            'Sampling versus full-batch aggregation: bias and variance?',
+            'GraphSAGE versus GCN on unseen nodes?',
+        ],
+    ),
 }

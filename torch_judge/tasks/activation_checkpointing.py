@@ -1,5 +1,7 @@
 """Activation Checkpointing task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Activation Checkpointing",
     "title_zh": "激活检查点",
@@ -92,4 +94,19 @@ print("Outputs match:", torch.allclose(out_cp, out_naive, atol=1e-5))
 out_cp.sum().backward()
 print("Gradient flows (x.grad is not None):", x.grad is not None)""",
 
+    "interview_questions": interview(
+        concept=[
+            'What is activation checkpointing, and what does it trade?',
+            'Which activations dominate memory in transformer training?',
+        ],
+        deep_dive=[
+            'How does torch.utils.checkpoint recompute the forward during backward?',
+            'What goes wrong with randomness such as dropout during recomputation, and how is RNG state handled?',
+            'How do you choose which layers or segments to checkpoint?',
+        ],
+        tradeoffs=[
+            'Roughly how much extra compute does full checkpointing cost, and when is selective checkpointing better?',
+            'Checkpointing versus offloading activations to CPU: when would you pick each?',
+        ],
+    ),
 }

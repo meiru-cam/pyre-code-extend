@@ -20,6 +20,10 @@ _Avoid_: Beginner course, PyTorch benchmark
 A recommended earlier exercise or capability that helps a learner succeed but never prevents access to a learning path or exercise.
 _Avoid_: Gate, required unlock
 
+**Interview gate**:
+The stage at the start of every exercise where the learner answers the opening and deep-dive interview questions, or records a skip, before hints, the solution, AI help and the editor unlock. It gates help inside an exercise, never access to one.
+_Avoid_: Prerequisite lock, quiz
+
 **Exercise**:
 A code implementation task with a stated contract, independently revealable hints, deterministic checks, and a reference implementation.
 _Avoid_: Lesson, demo

@@ -1,5 +1,7 @@
 """Sinusoidal Position Encoding task."""
 
+from ._interview import interview
+
 TASK = {
     "title": "Sinusoidal Position Encoding",
     "title_zh": "正弦位置编码",
@@ -61,4 +63,19 @@ assert pe.min() >= -1.0 - 1e-5 and pe.max() <= 1.0 + 1e-5, 'PE values must be in
 print(pe.shape)
 print(pe[:3, :4])""",
 
+    "interview_questions": interview(
+        concept=[
+            'Why do transformers need positional information at all?',
+            'How does the sinusoidal encoding work, and what is the intuition for multiple frequencies?',
+        ],
+        deep_dive=[
+            'Write out the formula. Which dimensions get sin and which get cos?',
+            'Why can a fixed linear transformation map the encoding at position p to position p plus k?',
+            'How do you compute it without a Python loop?',
+        ],
+        tradeoffs=[
+            'Sinusoidal versus learned absolute positions versus RoPE: trade-offs?',
+            'Why do absolute encodings extrapolate poorly to longer sequences?',
+        ],
+    ),
 }
