@@ -14262,6 +14262,1012 @@
           "question": "Newton-Schulz versus an exact SVD or polar decomposition: speed, numerical precision and bfloat16 stability?"
         }
       ]
+    },
+    {
+      "id": "dsh_event_bus",
+      "title": "Plugin Event Bus with Dispatch Modes",
+      "titleZh": "Plugin Event Bus with Dispatch Modes",
+      "difficulty": "Medium",
+      "functionName": "EventBus",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Implement the event bus that every DeepSeek Harness plugin talks through.\n\n**Signature:** `class EventBus` with the methods below. Listeners are plain callables; `serial` and `parallel` also accept `async def` listeners.\n\n**Registration:**\n- `on(name, listener, prepend=False) -> dispose` — append the listener to the event's list, or put it first when `prepend` is True. Return a zero-argument `dispose` function that removes this registration and returns True, or returns False if it was already removed.\n- `once(name, listener, prepend=False) -> dispose` — like `on`, but the registration removes itself right before the listener runs for the first time.\n\n**Dispatch.** Every mode first takes a snapshot of the event's listener list. Listeners added or removed during a dispatch do not change which listeners that dispatch calls. A value is a *bail value* when it is not `None` and not `False`.\n- `emit(name, *args) -> None` — call every listener in order with `*args`; ignore return values.\n- `bail(name, *args)` — call listeners in order and return the first bail value; return None if there is none.\n- `async serial(name, *args)` — call listeners in order, awaiting each result if it is awaitable, and return the first bail value; return None if there is none.\n- `async parallel(name, *args) -> None` — start every listener concurrently and wait for all of them. If any raised, raise an `ExceptionGroup` holding every raised exception, after all listeners have finished.\n- `waterfall(name, *args, inner)` — around-middleware. Each listener is called as `listener(*args, next)`. Calling `next()` with no arguments runs the next listener in order, or `inner(*args)` after the last one, and returns its value. The first listener's return value is the result. A listener that returns without calling `next()` skips everything after it, including `inner`.\n\n**Constraints:**\n- An exception raised by a listener in `emit`, `bail`, `serial` or `waterfall` propagates to the caller.\n- Events are independent: dispatching one name never calls listeners of another.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why a bus.** In DeepSeek Harness there is no privileged core. The model adapter, tool registry, session log and even the agent loop are plugins that register listeners and services on a shared context, so any of them can be swapped from configuration.\n\n**Why five modes.** The dispatch mode is part of an event's contract. `emit` is fire-and-forget observation. `bail` and `serial` let the first listener that owns a decision answer it. `parallel` fans out independent work. `waterfall` is middleware: `tools/pre-execute`, `tools/execute` and `tools/post-execute` are waterfalls, which is how timeouts, approval prompts and repeat-call reminders wrap tool execution without touching the loop.\n\n**Why disposers.** Every registration is an effect that returns its own undo. When a plugin unloads or hot-reloads, its listeners disappear with it.",
+      "descriptionZh": "Implement the event bus that every DeepSeek Harness plugin talks through.\n\n**Signature:** `class EventBus` with the methods below. Listeners are plain callables; `serial` and `parallel` also accept `async def` listeners.\n\n**Registration:**\n- `on(name, listener, prepend=False) -> dispose` — append the listener to the event's list, or put it first when `prepend` is True. Return a zero-argument `dispose` function that removes this registration and returns True, or returns False if it was already removed.\n- `once(name, listener, prepend=False) -> dispose` — like `on`, but the registration removes itself right before the listener runs for the first time.\n\n**Dispatch.** Every mode first takes a snapshot of the event's listener list. Listeners added or removed during a dispatch do not change which listeners that dispatch calls. A value is a *bail value* when it is not `None` and not `False`.\n- `emit(name, *args) -> None` — call every listener in order with `*args`; ignore return values.\n- `bail(name, *args)` — call listeners in order and return the first bail value; return None if there is none.\n- `async serial(name, *args)` — call listeners in order, awaiting each result if it is awaitable, and return the first bail value; return None if there is none.\n- `async parallel(name, *args) -> None` — start every listener concurrently and wait for all of them. If any raised, raise an `ExceptionGroup` holding every raised exception, after all listeners have finished.\n- `waterfall(name, *args, inner)` — around-middleware. Each listener is called as `listener(*args, next)`. Calling `next()` with no arguments runs the next listener in order, or `inner(*args)` after the last one, and returns its value. The first listener's return value is the result. A listener that returns without calling `next()` skips everything after it, including `inner`.\n\n**Constraints:**\n- An exception raised by a listener in `emit`, `bail`, `serial` or `waterfall` propagates to the caller.\n- Events are independent: dispatching one name never calls listeners of another.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why a bus.** In DeepSeek Harness there is no privileged core. The model adapter, tool registry, session log and even the agent loop are plugins that register listeners and services on a shared context, so any of them can be swapped from configuration.\n\n**Why five modes.** The dispatch mode is part of an event's contract. `emit` is fire-and-forget observation. `bail` and `serial` let the first listener that owns a decision answer it. `parallel` fans out independent work. `waterfall` is middleware: `tools/pre-execute`, `tools/execute` and `tools/post-execute` are waterfalls, which is how timeouts, approval prompts and repeat-call reminders wrap tool execution without touching the loop.\n\n**Why disposers.** Every registration is an effect that returns its own undo. When a plugin unloads or hot-reloads, its listeners disappear with it.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Waterfall wraps the inner call",
+          "code": "\nbus = {fn}()\ncalls = []\ndef outer(x, next):\n    calls.append(\"outer-in\"); r = next(); calls.append(\"outer-out\"); return r + 1\ndef inner_listener(x, next):\n    calls.append(\"inner\"); return next() * 10\nbus.on(\"tools/execute\", outer)\nbus.on(\"tools/execute\", inner_listener)\nout = bus.waterfall(\"tools/execute\", 2, inner=lambda x: x + 3)\nassert out == 51, out\nassert calls == [\"outer-in\", \"inner\", \"outer-out\"], calls\n",
+          "behavior": "events.ordering"
+        },
+        {
+          "name": "Bail, prepend and dispose",
+          "code": "\nbus = {fn}()\nbus.on(\"pick\", lambda x: None)\ndispose = bus.on(\"pick\", lambda x: x * 2)\nbus.on(\"pick\", lambda x: \"late\")\nbus.on(\"pick\", lambda x: False, prepend=True)\nassert bus.bail(\"pick\", 4) == 8\nassert dispose() is True and dispose() is False\nassert bus.bail(\"pick\", 4) == \"late\"\nassert bus.bail(\"nobody\", 1) is None\n",
+          "behavior": "events.ordering"
+        },
+        {
+          "name": "Waterfall short-circuit and snapshot semantics",
+          "visibility": "unshown",
+          "behavior": "events.ordering",
+          "failureMessage": "A listener that skips next() vetoes the rest; listeners added during a dispatch wait for the next dispatch.",
+          "hiddenCode": "\nbus = {fn}()\nseen = []\ndef veto(req, next):\n    seen.append(\"veto\")\n    bus.on(\"pre\", lambda req, next: seen.append(\"added\") or next())\n    return {\"kind\": \"deny\"}\nbus.on(\"pre\", veto)\nbus.on(\"pre\", lambda req, next: seen.append(\"second\") or next())\nout = bus.waterfall(\"pre\", {}, inner=lambda req: seen.append(\"inner\") or {\"kind\": \"allow\"})\nassert out == {\"kind\": \"deny\"} and seen == [\"veto\"], (out, seen)\nseen.clear()\nbus2 = {fn}()\nassert bus2.waterfall(\"empty\", 3, inner=lambda x: x * 7) == 21\norder = []\ndef remover(x, next):\n    order.append(\"a\"); d2(); return next()\nbus2.on(\"chain\", remover)\nd2 = bus2.on(\"chain\", lambda x, next: order.append(\"b\") or next())\nbus2.waterfall(\"chain\", 0, inner=lambda x: order.append(\"inner\"))\nassert order == [\"a\", \"b\", \"inner\"], order\norder.clear()\nbus2.waterfall(\"chain\", 0, inner=lambda x: order.append(\"inner\"))\nassert order == [\"a\", \"inner\"], order\n"
+        },
+        {
+          "name": "Once removes itself before running and emit snapshots",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "once must unregister before calling the listener, and emit must call exactly the listeners present when it started.",
+          "hiddenCode": "\nbus = {fn}()\nlog = []\ndef reenter(v):\n    log.append((\"once\", v))\n    if v < 3:\n        bus.emit(\"tick\", v + 1)\nd = bus.once(\"tick\", reenter)\nbus.on(\"tick\", lambda v: log.append((\"on\", v)))\nbus.emit(\"tick\", 1)\nassert log == [(\"once\", 1), (\"on\", 2), (\"on\", 1)], log\nassert d() is False\nlog.clear()\nbus.emit(\"tick\", 9)\nassert log == [(\"on\", 9)], log\nb = {fn}()\ngot = []\nb.on(\"a\", lambda: got.append(\"a\"))\nb.on(\"b\", lambda: got.append(\"b\"))\nb.emit(\"a\")\nassert got == [\"a\"], got\nseq = []\ndef adder():\n    seq.append(1); b.on(\"c\", lambda: seq.append(2))\nb.on(\"c\", adder)\nb.emit(\"c\")\nassert seq == [1], seq\np = {fn}()\norder2 = []\np.on(\"x\", lambda: order2.append(1))\np.on(\"x\", lambda: order2.append(0), prepend=True)\np.on(\"x\", lambda: order2.append(2))\np.emit(\"x\")\nassert order2 == [0, 1, 2], order2\n"
+        },
+        {
+          "name": "Serial awaits in order and stops at the first bail value",
+          "visibility": "unshown",
+          "behavior": "events.ordering",
+          "failureMessage": "serial must await each listener before starting the next and return the first value that is not None or False.",
+          "hiddenCode": "\nimport asyncio\nasync def main():\n    bus = {fn}()\n    trace = []\n    async def slow(x):\n        trace.append(\"slow-start\"); await asyncio.sleep(0.01); trace.append(\"slow-end\"); return None\n    def sync_false(x):\n        trace.append(\"false\"); return False\n    async def decide(x):\n        trace.append(\"decide\"); return 0\n    async def never(x):\n        trace.append(\"never\"); return \"x\"\n    for f in (slow, sync_false, decide, never):\n        bus.on(\"stop\", f)\n    out = await bus.serial(\"stop\", 1)\n    assert out == 0 and trace == [\"slow-start\", \"slow-end\", \"false\", \"decide\"], (out, trace)\n    assert await bus.serial(\"none\") is None\nasyncio.run(main())\n"
+        },
+        {
+          "name": "Parallel runs concurrently and groups every failure",
+          "visibility": "unshown",
+          "behavior": "scheduler.concurrency",
+          "failureMessage": "parallel must start all listeners together, wait for all of them, and raise one ExceptionGroup containing every failure.",
+          "hiddenCode": "\nimport asyncio, time\nasync def main():\n    bus = {fn}()\n    finished = []\n    async def sleeper(tag):\n        await asyncio.sleep(0.2); finished.append(tag)\n    for tag in \"abc\":\n        bus.on(\"fan\", lambda _, tag=tag: sleeper(tag))\n    start = time.perf_counter()\n    assert await bus.parallel(\"fan\", None) is None\n    assert time.perf_counter() - start < 0.5 and sorted(finished) == [\"a\", \"b\", \"c\"], finished\n    done = []\n    async def boom(msg):\n        await asyncio.sleep(0.01); raise ValueError(msg)\n    async def ok(msg):\n        await asyncio.sleep(0.05); done.append(msg)\n    bus.on(\"fail\", lambda m: boom(\"one\"))\n    bus.on(\"fail\", ok)\n    bus.on(\"fail\", lambda m: boom(\"two\"))\n    try:\n        await bus.parallel(\"fail\", \"m\")\n    except ExceptionGroup as group:\n        assert sorted(str(e) for e in group.exceptions) == [\"one\", \"two\"], group.exceptions\n    else:\n        raise AssertionError(\"expected an ExceptionGroup\")\n    assert done == [\"m\"], \"parallel returned before every listener finished\"\nasyncio.run(main())\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Why take a copy of the listener list before calling anyone? How can next() know which listener comes after the current one? How do you tell a disposer that already ran from one that has not?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Store a list of registration records per name; dispose removes its own record by identity. For waterfall, copy the list into a queue and define next() that pops the head and calls it with (*args, next), falling back to inner(*args). For parallel use asyncio.gather(..., return_exceptions=True) and wrap every exception in one ExceptionGroup."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "tool_registry"
+      ],
+      "modelConnections": [
+        "DeepSeek Harness builds on its vendored Cordis framework: tools/pre-execute, tools/execute and agent/pre-step are waterfalls, agent/turn-stopping is serial.",
+        "The same around-middleware shape appears in Koa, Express and ASGI middleware stacks."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Plugins extend behavior without importing each other or patching the loop, and registrations unwind cleanly on unload."
+        ],
+        "cons": [
+          "Control flow becomes implicit: the order of registration decides semantics, and a waterfall listener that forgets next() silently vetoes everything after it."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What problem does an event bus solve in an agent harness where everything is a plugin?"
+        },
+        {
+          "stage": "concept",
+          "question": "Explain the difference between emit, bail, serial, parallel and waterfall. Which would you use for an approval check, and which for a timeout wrapper?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why snapshot the listener list at the start of a dispatch? What bugs appear without it?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through how next() in a waterfall finds the next listener. What happens if a listener calls next() twice?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why should registration return a disposer instead of offering a separate off(name, listener) method?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Should a failing emit listener stop the others, or should the dispatcher contain the exception? What does each choice cost?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Waterfall middleware versus explicit hook points in the agent loop: debuggability, ordering bugs and extensibility?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/deepseek-ai/deepseek-harness",
+          "commit": "21638c56315ae6a2b552d6091945d3144c9af32e",
+          "path": "vendor/cordis/src/events.ts",
+          "symbol": "EventsService.dispatch, emit, bail, serial, parallel, waterfall, on and once",
+          "license": "MIT",
+          "adapted": "Dispatch snapshot, bail-value rule, waterfall next() chaining, AggregateError for parallel, and disposer-returning registration.",
+          "simplifications": "No fibers, context filters, this-binding, internal/* events or global hooks."
+        }
+      ]
+    },
+    {
+      "id": "dsh_open_turn_closers",
+      "title": "Close an Interrupted Session Turn",
+      "titleZh": "Close an Interrupted Session Turn",
+      "difficulty": "Medium",
+      "functionName": "open_turn_closers",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "After a crash, an agent's append-only session log can end in the middle of a turn. Compute the synthetic events that close it so the log can be resumed.\n\n**Signature:** `open_turn_closers(events, cause=\"interrupted\") -> list[dict]`\n\n**Input events.** `events` is a list of dicts in log order, each with `type`, an integer `seq` (strictly increasing), a `time` and a `data` dict:\n- `turn/start` `{turn}`, `turn/end` `{turn, reason}`\n- `step/start` `{turn, step}`, `step/end` `{turn, step}`\n- `assistant/message` `{turn, step, tool_call_ids}` — the ids of the tool calls the model requested, in order\n- `tool/call` `{call_id}` — the harness recorded that the call started\n- `tool/result` `{turn, step, call_id, surface_op}` — `surface_op` is `\"append\"` for a new result or `\"replace\"` for a rewrite of an older one\n- any other type — ignore it\n\n**Pending calls.** Scan the events in order:\n- `turn/start`, `turn/end` and `step/end` forget every pending call.\n- `assistant/message` makes each of its ids pending with that message's turn and step, not started. If an id is already pending, reset its entry to the new turn and step and to not started, but keep its original position in the pending order.\n- `tool/call` marks a pending id as started and remembers the `seq` of that event.\n- `tool/result` with `surface_op == \"append\"` and the same turn and step as the pending entry answers it and removes it.\n\n**Returns.** If the log is empty or has no open turn (no `turn/start` after the last `turn/end`), return `[]`. Otherwise, with `last` the final event, return in this order:\n- one `tool/result` event per pending call, in pending order, with `data = {\"turn\", \"step\", \"call_id\", \"surface_op\": \"append\", \"is_error\": True, \"started\": bool, \"error_code\": \"TOOL_OUTCOME_UNKNOWN\" if started else \"TOOL_NOT_STARTED\"}`, plus `\"source_event_seqs\": [seq of its tool/call]` in `data` when started;\n- a `step/end` event `{turn, step}` if a step is still open;\n- a `turn/end` event `{turn, reason: {\"kind\": cause}}`.\n\nSynthetic events get consecutive `seq` values starting at `last[\"seq\"] + 1` and reuse `last[\"time\"]`.\n\n**Constraints:**\n- Do not modify the input.\n- Raise `ValueError` when `cause` is not `\"interrupted\"` or `\"forked\"`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why results must be synthesized.** Model APIs reject a history in which an assistant tool call has no matching result, so an unanswered call makes the session impossible to resume.\n\n**Started versus not started.** A call with no start record never ran, so it is safe to retry. A call that started but has no durable result may have had side effects: the harness tells the model to retry only read-only or idempotent operations and otherwise to check external state or ask the user.\n\n**Why append, never rewrite.** The log is the source of the model's context. Appending closers keeps every earlier event, and therefore the provider's KV cache prefix, intact. The same closers seal a fork that is cut in the middle of the parent's turn, with `cause=\"forked\"`.",
+      "descriptionZh": "After a crash, an agent's append-only session log can end in the middle of a turn. Compute the synthetic events that close it so the log can be resumed.\n\n**Signature:** `open_turn_closers(events, cause=\"interrupted\") -> list[dict]`\n\n**Input events.** `events` is a list of dicts in log order, each with `type`, an integer `seq` (strictly increasing), a `time` and a `data` dict:\n- `turn/start` `{turn}`, `turn/end` `{turn, reason}`\n- `step/start` `{turn, step}`, `step/end` `{turn, step}`\n- `assistant/message` `{turn, step, tool_call_ids}` — the ids of the tool calls the model requested, in order\n- `tool/call` `{call_id}` — the harness recorded that the call started\n- `tool/result` `{turn, step, call_id, surface_op}` — `surface_op` is `\"append\"` for a new result or `\"replace\"` for a rewrite of an older one\n- any other type — ignore it\n\n**Pending calls.** Scan the events in order:\n- `turn/start`, `turn/end` and `step/end` forget every pending call.\n- `assistant/message` makes each of its ids pending with that message's turn and step, not started. If an id is already pending, reset its entry to the new turn and step and to not started, but keep its original position in the pending order.\n- `tool/call` marks a pending id as started and remembers the `seq` of that event.\n- `tool/result` with `surface_op == \"append\"` and the same turn and step as the pending entry answers it and removes it.\n\n**Returns.** If the log is empty or has no open turn (no `turn/start` after the last `turn/end`), return `[]`. Otherwise, with `last` the final event, return in this order:\n- one `tool/result` event per pending call, in pending order, with `data = {\"turn\", \"step\", \"call_id\", \"surface_op\": \"append\", \"is_error\": True, \"started\": bool, \"error_code\": \"TOOL_OUTCOME_UNKNOWN\" if started else \"TOOL_NOT_STARTED\"}`, plus `\"source_event_seqs\": [seq of its tool/call]` in `data` when started;\n- a `step/end` event `{turn, step}` if a step is still open;\n- a `turn/end` event `{turn, reason: {\"kind\": cause}}`.\n\nSynthetic events get consecutive `seq` values starting at `last[\"seq\"] + 1` and reuse `last[\"time\"]`.\n\n**Constraints:**\n- Do not modify the input.\n- Raise `ValueError` when `cause` is not `\"interrupted\"` or `\"forked\"`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why results must be synthesized.** Model APIs reject a history in which an assistant tool call has no matching result, so an unanswered call makes the session impossible to resume.\n\n**Started versus not started.** A call with no start record never ran, so it is safe to retry. A call that started but has no durable result may have had side effects: the harness tells the model to retry only read-only or idempotent operations and otherwise to check external state or ask the user.\n\n**Why append, never rewrite.** The log is the source of the model's context. Appending closers keeps every earlier event, and therefore the provider's KV cache prefix, intact. The same closers seal a fork that is cut in the middle of the parent's turn, with `cause=\"forked\"`.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Closes an open step with one unanswered call",
+          "code": "\nevents = [\n    {\"type\": \"turn/start\", \"seq\": 1, \"time\": 10, \"data\": {\"turn\": 1}},\n    {\"type\": \"step/start\", \"seq\": 2, \"time\": 11, \"data\": {\"turn\": 1, \"step\": 1}},\n    {\"type\": \"assistant/message\", \"seq\": 3, \"time\": 12, \"data\": {\"turn\": 1, \"step\": 1, \"tool_call_ids\": [\"a\", \"b\"]}},\n    {\"type\": \"tool/call\", \"seq\": 4, \"time\": 13, \"data\": {\"call_id\": \"a\"}},\n    {\"type\": \"tool/result\", \"seq\": 5, \"time\": 14, \"data\": {\"turn\": 1, \"step\": 1, \"call_id\": \"a\", \"surface_op\": \"append\"}},\n    {\"type\": \"tool/call\", \"seq\": 6, \"time\": 15, \"data\": {\"call_id\": \"b\"}},\n]\nout = {fn}(events)\nassert out == [\n    {\"type\": \"tool/result\", \"seq\": 7, \"time\": 15, \"data\": {\"turn\": 1, \"step\": 1, \"call_id\": \"b\", \"surface_op\": \"append\", \"is_error\": True, \"started\": True, \"error_code\": \"TOOL_OUTCOME_UNKNOWN\", \"source_event_seqs\": [6]}},\n    {\"type\": \"step/end\", \"seq\": 8, \"time\": 15, \"data\": {\"turn\": 1, \"step\": 1}},\n    {\"type\": \"turn/end\", \"seq\": 9, \"time\": 15, \"data\": {\"turn\": 1, \"reason\": {\"kind\": \"interrupted\"}}},\n], out\n",
+          "behavior": "checkpoint.recovery"
+        },
+        {
+          "name": "Matches a seeded replay oracle",
+          "visibility": "unshown",
+          "behavior": "checkpoint.recovery",
+          "failureMessage": "Track pending calls per the rules, answer them only with appended results from the same turn and step, and number closers after the last event.",
+          "hiddenCode": "\nimport copy, random\ndef oracle(events, cause):\n    open_turn = open_step = None\n    pending = {}\n    for e in events:\n        t, d = e[\"type\"], e[\"data\"]\n        if t in (\"turn/start\", \"turn/end\", \"step/end\"):\n            pending = {}\n        if t == \"turn/start\":\n            open_turn, open_step = d[\"turn\"], None\n        elif t == \"turn/end\":\n            open_turn = open_step = None\n        elif t == \"step/start\":\n            open_step = d[\"step\"]\n        elif t == \"step/end\":\n            open_step = None\n        elif t == \"assistant/message\":\n            for cid in d[\"tool_call_ids\"]:\n                pending[cid] = {\"turn\": d[\"turn\"], \"step\": d[\"step\"], \"call\": None}\n        elif t == \"tool/call\" and d[\"call_id\"] in pending:\n            pending[d[\"call_id\"]][\"call\"] = e[\"seq\"]\n        elif t == \"tool/result\" and d[\"call_id\"] in pending:\n            p = pending[d[\"call_id\"]]\n            if d[\"surface_op\"] == \"append\" and p[\"turn\"] == d[\"turn\"] and p[\"step\"] == d[\"step\"]:\n                del pending[d[\"call_id\"]]\n    if not events or open_turn is None:\n        return []\n    seq, time, out = events[-1][\"seq\"], events[-1][\"time\"], []\n    for cid, p in pending.items():\n        seq += 1\n        data = {\"turn\": p[\"turn\"], \"step\": p[\"step\"], \"call_id\": cid, \"surface_op\": \"append\", \"is_error\": True,\n                \"started\": p[\"call\"] is not None, \"error_code\": \"TOOL_OUTCOME_UNKNOWN\" if p[\"call\"] is not None else \"TOOL_NOT_STARTED\"}\n        if p[\"call\"] is not None:\n            data[\"source_event_seqs\"] = [p[\"call\"]]\n        out.append({\"type\": \"tool/result\", \"seq\": seq, \"time\": time, \"data\": data})\n    if open_step is not None:\n        seq += 1\n        out.append({\"type\": \"step/end\", \"seq\": seq, \"time\": time, \"data\": {\"turn\": open_turn, \"step\": open_step}})\n    out.append({\"type\": \"turn/end\", \"seq\": seq + 1, \"time\": time, \"data\": {\"turn\": open_turn, \"reason\": {\"kind\": cause}}})\n    return out\nfor seed in (8, 33, 71):\n    rng = random.Random(seed)\n    for trial in range(60):\n        events, counter, turn, step, ids = [], [0], 0, 0, 0\n        def add(t, **data):\n            counter[0] += rng.randint(1, 3)\n            events.append({\"type\": t, \"seq\": counter[0], \"time\": 100 + counter[0], \"data\": data})\n        for _ in range(rng.randint(1, 3)):\n            turn += 1; add(\"turn/start\", turn=turn)\n            for _ in range(rng.randint(0, 3)):\n                step += 1; add(\"step/start\", turn=turn, step=step)\n                calls = [f\"c{ids + i}\" for i in range(rng.randint(0, 3))]\n                if calls and rng.random() < 0.2:\n                    calls.append(calls[0])\n                ids += len(calls)\n                add(\"assistant/message\", turn=turn, step=step, tool_call_ids=calls)\n                if rng.random() < 0.2:\n                    add(\"progress\", note=\"noise\")\n                for cid in calls:\n                    if rng.random() < 0.7:\n                        add(\"tool/call\", call_id=cid)\n                    if rng.random() < 0.5:\n                        add(\"tool/result\", turn=turn, step=rng.choice([step, step, step - 1]), call_id=cid, surface_op=rng.choice([\"append\", \"append\", \"replace\"]))\n                if rng.random() < 0.6:\n                    add(\"step/end\", turn=turn, step=step)\n            if rng.random() < 0.5:\n                add(\"turn/end\", turn=turn, reason={\"kind\": \"done\"})\n        cut = rng.randint(0, len(events))\n        prefix = events[:cut]\n        cause = rng.choice([\"interrupted\", \"forked\"])\n        frozen = copy.deepcopy(prefix)\n        got = {fn}(prefix, cause)\n        assert prefix == frozen, \"input was modified\"\n        assert got == oracle(prefix, cause), (seed, trial, prefix, got)\n"
+        },
+        {
+          "name": "Balanced logs and closed steps need no closers",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "Return nothing for an empty or balanced log; step/end forgets unanswered calls and only an open step gets a synthetic step/end.",
+          "hiddenCode": "\nassert {fn}([]) == []\ndone = [{\"type\": \"turn/start\", \"seq\": 1, \"time\": 0, \"data\": {\"turn\": 1}},\n        {\"type\": \"assistant/message\", \"seq\": 2, \"time\": 0, \"data\": {\"turn\": 1, \"step\": 1, \"tool_call_ids\": [\"x\"]}},\n        {\"type\": \"turn/end\", \"seq\": 3, \"time\": 0, \"data\": {\"turn\": 1, \"reason\": {\"kind\": \"done\"}}}]\nassert {fn}(done) == []\nclosed = done[:2] + [{\"type\": \"step/end\", \"seq\": 3, \"time\": 5, \"data\": {\"turn\": 1, \"step\": 1}}]\nassert {fn}(closed, \"forked\") == [{\"type\": \"turn/end\", \"seq\": 4, \"time\": 5, \"data\": {\"turn\": 1, \"reason\": {\"kind\": \"forked\"}}}]\nagain = [{\"type\": \"turn/start\", \"seq\": 1, \"time\": 0, \"data\": {\"turn\": 1}},\n         {\"type\": \"step/start\", \"seq\": 2, \"time\": 0, \"data\": {\"turn\": 1, \"step\": 1}},\n         {\"type\": \"assistant/message\", \"seq\": 3, \"time\": 0, \"data\": {\"turn\": 1, \"step\": 1, \"tool_call_ids\": [\"k\", \"m\"]}},\n         {\"type\": \"tool/call\", \"seq\": 4, \"time\": 0, \"data\": {\"call_id\": \"k\"}},\n         {\"type\": \"assistant/message\", \"seq\": 5, \"time\": 0, \"data\": {\"turn\": 1, \"step\": 1, \"tool_call_ids\": [\"m\", \"k\"]}}]\nout = {fn}(again)\nassert [(e[\"data\"][\"call_id\"], e[\"data\"][\"started\"]) for e in out[:2]] == [(\"k\", False), (\"m\", False)], out\n"
+        },
+        {
+          "name": "Rejects an unknown cause",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "cause must be interrupted or forked.",
+          "hiddenCode": "\ntry:\n    {fn}([], \"crashed\")\nexcept ValueError:\n    pass\nelse:\n    raise AssertionError(\"accepted an unknown cause\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which events end the lifetime of a pending call? What makes a tool result count as the answer to a pending call? Where do the step and turn closers get their numbers from?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Keep open_turn and open_step cursors and an insertion-ordered dict of pending call_id -> {turn, step, call_seq}. Update the cursors and the dict per event type. At the end, return [] when open_turn is None; otherwise emit one result per pending entry, then step/end if open_step is set, then turn/end, numbering seq from last seq + 1."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "dsh_event_bus"
+      ],
+      "modelConnections": [
+        "DeepSeek Harness runs this recovery on resume and on fork; OpenAI and Anthropic chat APIs both reject assistant tool calls without matching results."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "The log stays append-only and replayable, and the model gets an honest, retry-safe explanation of what is unknown."
+        ],
+        "cons": [
+          "The model must reason about possibly duplicated side effects; the harness cannot know whether a started call finished."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why does an agent session log need crash recovery at all? What breaks if you resume a log that ends in the middle of a tool call?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why does the harness distinguish a tool call that never started from one that started but has no result?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through which events forget pending calls and which answer them. Why must an answering result be an append from the same turn and step?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why append closers instead of truncating the log back to the last complete step?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How should the model be told to handle a started call whose outcome is unknown, for example a payment or a file deletion?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Append-only event log with derived context versus a mutable message list: replay, forking, KV cache reuse and storage cost?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Should recovery happen eagerly on load or lazily on the next request? What are the risks of each?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/deepseek-ai/deepseek-harness",
+          "commit": "21638c56315ae6a2b552d6091945d3144c9af32e",
+          "path": "packages/core/session/src/repair.ts",
+          "symbol": "openTurnClosers and ToolCallRecovery.observe and results",
+          "license": "MIT",
+          "adapted": "Turn and step cursors, pending-call tracking with started records, append-only answer matching, synthetic result ordering and seq numbering.",
+          "simplifications": "Model-visible wording, message ids and frozen message objects are replaced by started and error_code fields."
+        }
+      ]
+    },
+    {
+      "id": "dsh_repeat_tool_reminder",
+      "title": "Repeat Tool-Call Reminder",
+      "titleZh": "Repeat Tool-Call Reminder",
+      "difficulty": "Medium",
+      "functionName": "RepeatToolReminder",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Implement the DeepSeek Harness guard that notices an agent calling the same tool with the same arguments again and again, and adds a reminder without ever blocking the call.\n\n**Signature:** `RepeatToolReminder(thresholds=(3, 5, 8), include=(), exclude=(), arguments_preview_chars=500)` with methods `post_execute(agent, tool_name, arguments, next) -> dict` and `on_user_message(agent) -> None`.\n\n**Construction.** Raise `ValueError` when `thresholds` is empty, contains a value that is not an `int` (a `bool` is not accepted), a value below 2, or a duplicate, or when `arguments_preview_chars` is not an `int` of at least 1. Sort thresholds ascending; the smallest is the *gentle* threshold.\n\n**Tracking.**\n- `include` and `exclude` are tool-name patterns where `*` matches any run of characters and every other character is literal; a pattern must match the whole name. A tool is tracked when (`include` is empty or some include pattern matches) and no exclude pattern matches.\n- The canonical form of `arguments` is `json.dumps(arguments, sort_keys=True, separators=(\",\", \":\"), ensure_ascii=False)`.\n- Each agent has its own chain: the key `(tool_name, canonical)` of its last tracked call and a run length. A tracked call with the same key adds 1; a different key restarts at 1. Untracked calls leave the chain unchanged. Calls with `agent=None` are ignored.\n- `on_user_message(agent)` clears that agent's chain.\n\n**`post_execute`.** Advance the chain first, then call `next()` exactly once to get the downstream decision, a dict with `kind` equal to `\"accept\"` or `\"block\"` and an optional `additional_contexts` list. Return a new dict equal to the downstream one; if the run length equals a threshold, its `additional_contexts` is `[reminder] + downstream contexts`. Do not mutate the downstream dict. The reminder is a dict with:\n- `summary` — `f\"{tool_name} × {count}\"`.\n- `text` — at the gentle threshold exactly the `GENTLE` text below; at a higher threshold the `DETAILED` text with the tool name, the run length and the argument preview filled in.\n\nThe argument preview is the canonical string itself if it has at most `arguments_preview_chars` characters, otherwise its first `arguments_preview_chars` characters followed by `f\"… (+{remaining} more chars)\"`.\n\n    GENTLE = (\"You are repeating the exact same tool call with identical arguments. \"\n              \"Carefully analyze the previous result before calling again: if the task is \"\n              \"not complete, try a different approach or different arguments instead of \"\n              \"repeating the call.\")\n    DETAILED = (\"Repeated tool call detected:\\n- tool: {tool}\\n- consecutive_calls: {count}\\n\"\n                \"- arguments: {preview}\\nThe repeated calls are not making progress. Do not call \"\n                \"this tool with these exact arguments again. Inspect the latest result and choose a \"\n                \"different action, different arguments, or finish the task if enough evidence has \"\n                \"been gathered.\")\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Advisory, not veto.** An agent stuck re-running `grep X` wastes tokens, but blocking the call can break a legitimate retry. The guard only adds a message after the tool result, and a later listener can still block.\n\n**Why count in post-execute.** Post-execute also runs for calls that a policy denied, and a model hammering a denied call is exactly the loop worth breaking.\n\n**Why bookkeeping tools are transparent.** If `todo_write` reset the chain, the model could launder a loop by interleaving it: `grep X, todo_write, grep X`.\n\n**Why canonicalize.** The model can emit the same arguments with keys in a different order; sorting keys makes the identity exact and deterministic.",
+      "descriptionZh": "Implement the DeepSeek Harness guard that notices an agent calling the same tool with the same arguments again and again, and adds a reminder without ever blocking the call.\n\n**Signature:** `RepeatToolReminder(thresholds=(3, 5, 8), include=(), exclude=(), arguments_preview_chars=500)` with methods `post_execute(agent, tool_name, arguments, next) -> dict` and `on_user_message(agent) -> None`.\n\n**Construction.** Raise `ValueError` when `thresholds` is empty, contains a value that is not an `int` (a `bool` is not accepted), a value below 2, or a duplicate, or when `arguments_preview_chars` is not an `int` of at least 1. Sort thresholds ascending; the smallest is the *gentle* threshold.\n\n**Tracking.**\n- `include` and `exclude` are tool-name patterns where `*` matches any run of characters and every other character is literal; a pattern must match the whole name. A tool is tracked when (`include` is empty or some include pattern matches) and no exclude pattern matches.\n- The canonical form of `arguments` is `json.dumps(arguments, sort_keys=True, separators=(\",\", \":\"), ensure_ascii=False)`.\n- Each agent has its own chain: the key `(tool_name, canonical)` of its last tracked call and a run length. A tracked call with the same key adds 1; a different key restarts at 1. Untracked calls leave the chain unchanged. Calls with `agent=None` are ignored.\n- `on_user_message(agent)` clears that agent's chain.\n\n**`post_execute`.** Advance the chain first, then call `next()` exactly once to get the downstream decision, a dict with `kind` equal to `\"accept\"` or `\"block\"` and an optional `additional_contexts` list. Return a new dict equal to the downstream one; if the run length equals a threshold, its `additional_contexts` is `[reminder] + downstream contexts`. Do not mutate the downstream dict. The reminder is a dict with:\n- `summary` — `f\"{tool_name} × {count}\"`.\n- `text` — at the gentle threshold exactly the `GENTLE` text below; at a higher threshold the `DETAILED` text with the tool name, the run length and the argument preview filled in.\n\nThe argument preview is the canonical string itself if it has at most `arguments_preview_chars` characters, otherwise its first `arguments_preview_chars` characters followed by `f\"… (+{remaining} more chars)\"`.\n\n    GENTLE = (\"You are repeating the exact same tool call with identical arguments. \"\n              \"Carefully analyze the previous result before calling again: if the task is \"\n              \"not complete, try a different approach or different arguments instead of \"\n              \"repeating the call.\")\n    DETAILED = (\"Repeated tool call detected:\\n- tool: {tool}\\n- consecutive_calls: {count}\\n\"\n                \"- arguments: {preview}\\nThe repeated calls are not making progress. Do not call \"\n                \"this tool with these exact arguments again. Inspect the latest result and choose a \"\n                \"different action, different arguments, or finish the task if enough evidence has \"\n                \"been gathered.\")\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Advisory, not veto.** An agent stuck re-running `grep X` wastes tokens, but blocking the call can break a legitimate retry. The guard only adds a message after the tool result, and a later listener can still block.\n\n**Why count in post-execute.** Post-execute also runs for calls that a policy denied, and a model hammering a denied call is exactly the loop worth breaking.\n\n**Why bookkeeping tools are transparent.** If `todo_write` reset the chain, the model could launder a loop by interleaving it: `grep X, todo_write, grep X`.\n\n**Why canonicalize.** The model can emit the same arguments with keys in a different order; sorting keys makes the identity exact and deterministic.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Gentle then detailed reminders",
+          "code": "\nguard = {fn}()\naccept = lambda: {\"kind\": \"accept\"}\nouts = [guard.post_execute(\"a1\", \"grep\", {\"q\": \"x\", \"path\": \".\"}, accept) for _ in range(5)]\nassert [bool(o.get(\"additional_contexts\")) for o in outs] == [False, False, True, False, True], outs\ngentle = outs[2][\"additional_contexts\"][0]\nassert gentle[\"summary\"] == \"grep × 3\" and gentle[\"text\"].startswith(\"You are repeating the exact same tool call\"), gentle\ndetailed = outs[4][\"additional_contexts\"][0][\"text\"]\nassert \"- tool: grep\\n- consecutive_calls: 5\\n- arguments: {\\\"path\\\":\\\".\\\",\\\"q\\\":\\\"x\\\"}\\n\" in detailed, detailed\nassert outs[0] == {\"kind\": \"accept\"}\n",
+          "behavior": "state.invariant"
+        },
+        {
+          "name": "Seeded call streams match an independent chain oracle",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "Track (tool, canonical arguments) per agent; untracked tools are transparent and a user message resets only that agent.",
+          "hiddenCode": "\nimport json, random, re\ndef canon(a):\n    return json.dumps(a, sort_keys=True, separators=(\",\", \":\"), ensure_ascii=False)\nfor seed in (3, 14, 27):\n    rng = random.Random(seed)\n    guard = {fn}(thresholds=[4, 2, 6], exclude=[\"todo_*\"])\n    state = {}\n    for step in range(120):\n        agent = rng.choice([\"a\", \"b\", None])\n        if rng.random() < 0.05:\n            if agent is not None:\n                guard.on_user_message(agent); state.pop(agent, None)\n            continue\n        tool = rng.choice([\"read\", \"read\", \"todo_write\", \"bash\"])\n        args = rng.choice([{\"p\": 1, \"q\": [1, 2]}, {\"q\": [1, 2], \"p\": 1}, {\"p\": 2}])\n        out = guard.post_execute(agent, tool, args, lambda: {\"kind\": \"accept\", \"additional_contexts\": [{\"summary\": \"other\"}]})\n        want = None\n        if agent is not None and not tool.startswith(\"todo_\"):\n            key = (tool, canon(args))\n            prev = state.get(agent)\n            count = prev[1] + 1 if prev and prev[0] == key else 1\n            state[agent] = (key, count)\n            if count in (2, 4, 6):\n                want = f\"{tool} × {count}\"\n        contexts = out[\"additional_contexts\"]\n        if want is None:\n            assert contexts == [{\"summary\": \"other\"}], (seed, step, out)\n        else:\n            assert len(contexts) == 2 and contexts[0][\"summary\"] == want and contexts[1] == {\"summary\": \"other\"}, (seed, step, out)\n            gentle = contexts[0][\"text\"].startswith(\"You are repeating\")\n            assert gentle == (want.endswith(\"× 2\")), (seed, step, contexts[0])\n"
+        },
+        {
+          "name": "Include and exclude use anchored wildcards",
+          "visibility": "unshown",
+          "behavior": "protocol.validation",
+          "failureMessage": "Only '*' is a wildcard, other characters are literal, and a pattern must match the whole tool name.",
+          "hiddenCode": "\nguard = {fn}(thresholds=[2], include=[\"mcp_*\", \"a.b\"], exclude=[\"mcp_slow\"])\nacc = lambda: {\"kind\": \"accept\"}\ndef fires(tool):\n    guard.on_user_message(\"x\")\n    guard.post_execute(\"x\", tool, {}, acc)\n    return bool(guard.post_execute(\"x\", tool, {}, acc).get(\"additional_contexts\"))\nassert fires(\"mcp_search\") and fires(\"a.b\")\nassert not fires(\"mcp_slow\") and not fires(\"axb\") and not fires(\"xmcp_search\") and not fires(\"bash\")\n"
+        },
+        {
+          "name": "Blocked decisions keep their feedback and gain the reminder",
+          "visibility": "unshown",
+          "behavior": "effects.idempotency",
+          "failureMessage": "Count before delegating, call next() exactly once, and fold the reminder into a new copy of whatever decision came back.",
+          "hiddenCode": "\nguard = {fn}(thresholds=[2])\ncalls = []\ndownstream = {\"kind\": \"block\", \"feedback\": \"denied\", \"additional_contexts\": [{\"summary\": \"policy\"}]}\ndef nxt():\n    calls.append(1); return downstream\nguard.post_execute(\"a\", \"rm\", {\"path\": \"/\"}, nxt)\nout = guard.post_execute(\"a\", \"rm\", {\"path\": \"/\"}, nxt)\nassert calls == [1, 1], calls\nassert out[\"kind\"] == \"block\" and out[\"feedback\"] == \"denied\", out\nassert [c[\"summary\"] for c in out[\"additional_contexts\"]] == [\"rm × 2\", \"policy\"], out\nassert downstream[\"additional_contexts\"] == [{\"summary\": \"policy\"}], \"downstream decision was mutated\"\n"
+        },
+        {
+          "name": "Long arguments are previewed but compared in full",
+          "visibility": "unshown",
+          "behavior": "budget.enforcement",
+          "failureMessage": "Truncate only the quoted preview; the chain key must use the full canonical arguments.",
+          "hiddenCode": "\nguard = {fn}(thresholds=[2, 3], arguments_preview_chars=10)\nacc = lambda: {\"kind\": \"accept\"}\nbody = \"x\" * 40\nfor _ in range(2):\n    guard.post_execute(\"a\", \"write\", {\"body\": body}, acc)\nout = guard.post_execute(\"a\", \"write\", {\"body\": body}, acc)\ntext = out[\"additional_contexts\"][0][\"text\"]\ncanonical = '{\"body\":\"' + body + '\"}'\nassert \"- arguments: \" + canonical[:10] + \"… (+\" + str(len(canonical) - 10) + \" more chars)\\n\" in text, text\nguard2 = {fn}(thresholds=[2], arguments_preview_chars=5)\nguard2.post_execute(\"a\", \"write\", {\"body\": body + \"1\"}, acc)\nout = guard2.post_execute(\"a\", \"write\", {\"body\": body + \"2\"}, acc)\nassert not out.get(\"additional_contexts\"), \"different arguments that share a prefix were treated as repeats\"\n"
+        },
+        {
+          "name": "Rejects invalid configuration",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Empty, non-integer, too small or duplicate thresholds and a bad preview size must raise ValueError at construction.",
+          "hiddenCode": "\nfor kwargs in ({\"thresholds\": []}, {\"thresholds\": [1, 3]}, {\"thresholds\": [3, 3]}, {\"thresholds\": [2.5]},\n               {\"thresholds\": [True, 3]}, {\"arguments_preview_chars\": 0}):\n    try:\n        {fn}(**kwargs)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"accepted {kwargs}\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "What state must be kept per agent, and when does it reset? Why must an excluded tool neither increment nor reset the chain? Why count before calling next()?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Compile patterns with re.escape then replace the escaped star by '.*' and use fullmatch. Keep a dict agent -> (key, count). In post_execute: compute the reminder (or None) from the updated chain, call next(), and return {**downstream, 'additional_contexts': [reminder, *downstream.get('additional_contexts', [])]} only when there is a reminder."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "dsh_event_bus"
+      ],
+      "modelConnections": [
+        "DeepSeek Harness ships this guard in its base bundle with thresholds 3, 5 and 8; the reminder rides the post-execute decision's additionalContexts so the tool result itself stays unchanged for audit."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Cheap, deterministic loop detection that never breaks a legitimate repeated call and leaves the tool output untouched."
+        ],
+        "cons": [
+          "Only exact repeats are caught; near-identical calls with a changed timestamp or offset slip through, and the in-memory chain resets on resume."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why do long-running agents get stuck calling the same tool repeatedly, and why is a reminder better than blocking the call?"
+        },
+        {
+          "stage": "concept",
+          "question": "What counts as the same call here, and why canonicalize the arguments?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why must excluded bookkeeping tools neither increment nor reset the chain? Give a sequence that would launder a loop otherwise."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why count in post-execute rather than pre-execute, and why count before calling next()?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "The preview is truncated but the key uses the full arguments. What bug would appear if the key used the preview?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Exact-match detection versus similarity-based detection of near-duplicate calls: false positives, false negatives and cost?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "The chain lives only in memory and resets on resume. When is that acceptable, and what would durable tracking require?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/deepseek-ai/deepseek-harness",
+          "commit": "21638c56315ae6a2b552d6091945d3144c9af32e",
+          "path": "packages/guard/repeat-tool-reminder/src/index.ts",
+          "symbol": "apply, observe, canonicalize, wildcardToRegExp, previewArguments and validateThresholds",
+          "license": "MIT",
+          "adapted": "Per-agent repeat chain, transparent untracked tools, threshold escalation, argument preview and folding the reminder into the downstream decision.",
+          "simplifications": "No Cordis listeners, WeakMap keying, message sources or schemastery config; agents are plain hashable keys and user prompts arrive through on_user_message."
+        }
+      ]
+    },
+    {
+      "id": "dsh_tool_result_pruner",
+      "title": "Tool Result Pruner",
+      "titleZh": "Tool Result Pruner",
+      "difficulty": "Medium",
+      "functionName": "prune_content",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Shrink an oversized tool result to a bounded head, a fixed marker and a bounded tail, keeping every non-text block in place.\n\n**Signature:** `prune_content(blocks, threshold_chars=8192, head_chars=4096, tail_chars=1024) -> list | None`\n\n**Parameters:**\n- `blocks` — list of content-block dicts. A block with `\"type\": \"text\"` has a `\"text\"` string; any other type (an image, for example) is opaque.\n- `threshold_chars`, `head_chars`, `tail_chars` — character budgets.\n\n**Marker:** `MARKER = \"\\n\\n[... tool result middle pruned ...]\\n\\n\"`\n\n**Returns.** Let `total` be the combined length of all text blocks, read in order as one string. If `total <= threshold_chars`, return `None`. Otherwise return a new list where:\n- A character at combined position `i` is kept when `i < head_chars` or `i >= total - tail_chars`; every other text character is removed.\n- `MARKER` appears exactly once, inside the first text block that loses at least one character, right after that block's kept head part.\n- Each text block keeps all its other keys; a text block left with an empty string is dropped.\n- Non-text blocks are kept unchanged, in their original positions relative to the text.\n\n**Constraints:**\n- Do not modify `blocks` or the dicts inside it.\n- Raise `ValueError` if `threshold_chars` is not a positive `int`, if `head_chars` or `tail_chars` is not a non-negative `int`, or if `head_chars + len(MARKER) + tail_chars > threshold_chars`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why prune before summarizing.** A single `cat` of a log file can be larger than the rest of the conversation. Trimming the middle of oversized tool output needs no model call and often relieves enough context pressure that summarization is not needed at all.\n\n**Why the budget check.** Requiring head plus marker plus tail to fit inside the threshold makes pruning converge in one pass: every pruned result is at most the threshold and strictly smaller than its input, so it will never be pruned again.\n\n**Replay safety.** In DeepSeek Harness the original tool result stays in the append-only session log; the pruned copy is appended as a replacement that cites the original, so replay can always recover the full output.\n\n**Characters.** The harness counts Unicode code points so a slice never splits an emoji surrogate pair. Python strings are already sequences of code points.",
+      "descriptionZh": "Shrink an oversized tool result to a bounded head, a fixed marker and a bounded tail, keeping every non-text block in place.\n\n**Signature:** `prune_content(blocks, threshold_chars=8192, head_chars=4096, tail_chars=1024) -> list | None`\n\n**Parameters:**\n- `blocks` — list of content-block dicts. A block with `\"type\": \"text\"` has a `\"text\"` string; any other type (an image, for example) is opaque.\n- `threshold_chars`, `head_chars`, `tail_chars` — character budgets.\n\n**Marker:** `MARKER = \"\\n\\n[... tool result middle pruned ...]\\n\\n\"`\n\n**Returns.** Let `total` be the combined length of all text blocks, read in order as one string. If `total <= threshold_chars`, return `None`. Otherwise return a new list where:\n- A character at combined position `i` is kept when `i < head_chars` or `i >= total - tail_chars`; every other text character is removed.\n- `MARKER` appears exactly once, inside the first text block that loses at least one character, right after that block's kept head part.\n- Each text block keeps all its other keys; a text block left with an empty string is dropped.\n- Non-text blocks are kept unchanged, in their original positions relative to the text.\n\n**Constraints:**\n- Do not modify `blocks` or the dicts inside it.\n- Raise `ValueError` if `threshold_chars` is not a positive `int`, if `head_chars` or `tail_chars` is not a non-negative `int`, or if `head_chars + len(MARKER) + tail_chars > threshold_chars`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why prune before summarizing.** A single `cat` of a log file can be larger than the rest of the conversation. Trimming the middle of oversized tool output needs no model call and often relieves enough context pressure that summarization is not needed at all.\n\n**Why the budget check.** Requiring head plus marker plus tail to fit inside the threshold makes pruning converge in one pass: every pruned result is at most the threshold and strictly smaller than its input, so it will never be pruned again.\n\n**Replay safety.** In DeepSeek Harness the original tool result stays in the append-only session log; the pruned copy is appended as a replacement that cites the original, so replay can always recover the full output.\n\n**Characters.** The harness counts Unicode code points so a slice never splits an emoji surrogate pair. Python strings are already sequences of code points.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Prunes one long text block",
+          "code": "\nMARKER = \"\\n\\n[... tool result middle pruned ...]\\n\\n\"\ntext = \"\".join(chr(ord(\"a\") + i % 26) for i in range(100))\nout = {fn}([{\"type\": \"text\", \"text\": text}], threshold_chars=60, head_chars=10, tail_chars=5)\nassert out == [{\"type\": \"text\", \"text\": text[:10] + MARKER + text[-5:]}], out\nassert {fn}([{\"type\": \"text\", \"text\": \"short\"}], threshold_chars=60, head_chars=10, tail_chars=5) is None\n",
+          "behavior": "budget.enforcement"
+        },
+        {
+          "name": "Matches a character-level oracle on seeded block layouts",
+          "visibility": "unshown",
+          "behavior": "budget.enforcement",
+          "failureMessage": "Keep combined positions below head_chars or at least total - tail_chars, insert one marker in the first block that loses text, and keep non-text blocks in place.",
+          "hiddenCode": "\nimport random\nMARKER = \"\\n\\n[... tool result middle pruned ...]\\n\\n\"\ndef oracle(blocks, threshold, head, tail):\n    total = sum(len(b[\"text\"]) for b in blocks if b[\"type\"] == \"text\")\n    if total <= threshold:\n        return None\n    out, pos, placed = [], 0, False\n    for b in blocks:\n        if b[\"type\"] != \"text\":\n            out.append(b); continue\n        kept_head, kept_tail, lost = [], [], False\n        for ch in b[\"text\"]:\n            if pos < head:\n                kept_head.append(ch)\n            elif pos >= total - tail:\n                kept_tail.append(ch)\n            else:\n                lost = True\n            pos += 1\n        marker = \"\"\n        if lost and not placed:\n            marker, placed = MARKER, True\n        text = \"\".join(kept_head) + marker + \"\".join(kept_tail)\n        if text:\n            out.append({**b, \"text\": text})\n    return out\nfor seed in (5, 22, 61):\n    rng = random.Random(seed)\n    for _ in range(40):\n        blocks = []\n        for i in range(rng.randint(1, 6)):\n            if rng.random() < 0.3:\n                blocks.append({\"type\": \"image\", \"id\": i})\n            else:\n                n = rng.choice([0, 1, 3, 8, 20, 45])\n                blocks.append({\"type\": \"text\", \"text\": \"\".join(rng.choice(\"ab😀\\n \") for _ in range(n)), \"meta\": i})\n        head, tail = rng.randint(0, 12), rng.randint(0, 12)\n        threshold = head + len(MARKER) + tail + rng.randint(0, 10)\n        snapshot = [dict(b) for b in blocks]\n        got = {fn}(blocks, threshold_chars=threshold, head_chars=head, tail_chars=tail)\n        assert blocks == snapshot, \"input was modified\"\n        assert got == oracle(blocks, threshold, head, tail), (seed, blocks, head, tail, threshold, got)\n"
+        },
+        {
+          "name": "Marker lands once when the removed range spans blocks",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "Only the first text block that loses characters gets the marker; fully removed blocks are dropped.",
+          "hiddenCode": "\nMARKER = \"\\n\\n[... tool result middle pruned ...]\\n\\n\"\nblocks = [{\"type\": \"text\", \"text\": \"A\" * 30}, {\"type\": \"image\", \"src\": \"x\"}, {\"type\": \"text\", \"text\": \"B\" * 50}, {\"type\": \"text\", \"text\": \"C\" * 30}]\nout = {fn}(blocks, threshold_chars=60, head_chars=10, tail_chars=10)\nassert out == [{\"type\": \"text\", \"text\": \"A\" * 10 + MARKER}, {\"type\": \"image\", \"src\": \"x\"}, {\"type\": \"text\", \"text\": \"C\" * 10}], out\nout = {fn}([{\"type\": \"text\", \"text\": \"x\" * 70}], threshold_chars=len(MARKER), head_chars=0, tail_chars=0)\nassert out == [{\"type\": \"text\", \"text\": MARKER}], out\nassert {fn}([{\"type\": \"text\", \"text\": \"x\" * 30}, {\"type\": \"text\", \"text\": \"y\" * 30}], threshold_chars=60, head_chars=10, tail_chars=10) is None\n"
+        },
+        {
+          "name": "Rejects budgets that cannot converge in one pass",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Budgets must be integers and head_chars + len(MARKER) + tail_chars must fit within threshold_chars.",
+          "hiddenCode": "\nMARKER = \"\\n\\n[... tool result middle pruned ...]\\n\\n\"\nbad = [dict(threshold_chars=0, head_chars=0, tail_chars=0), dict(threshold_chars=100, head_chars=-1, tail_chars=0),\n       dict(threshold_chars=100, head_chars=40, tail_chars=40), dict(threshold_chars=100.0, head_chars=1, tail_chars=1),\n       dict(threshold_chars=100, head_chars=1.5, tail_chars=1)]\nfor kwargs in bad:\n    try:\n        {fn}([{\"type\": \"text\", \"text\": \"x\"}], **kwargs)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"accepted {kwargs}\")\nok = {fn}([{\"type\": \"text\", \"text\": \"y\" * 200}], threshold_chars=len(MARKER) + 80, head_chars=40, tail_chars=40)\nassert ok is not None\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Where does the removed range start and end in combined coordinates? For one block, which part of it falls in the head and which in the tail? How do you remember that the marker was already placed?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Validate, measure the total, and return None when within budget. Set removed_start = head_chars and removed_end = total - tail_chars. Walk the blocks with a running offset; for a text block at [start, end) keep text[:clamp(removed_start - start)] and text[clamp(removed_end - start):], insert the marker if the block intersects the removed range and no marker was placed yet, and skip empty results."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "context_compaction"
+      ],
+      "modelConnections": [
+        "DeepSeek Harness's compaction-tool-result-pruner runs before compaction-basic summarizes history, with defaults of 8192, 4096 and 1024 code points.",
+        "Coding agents such as Claude Code and Codex truncate long command output with a similar head-and-tail view before it reaches the model."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Deterministic, free and replay-safe; errors usually live at the end of output and headers at the start, which head plus tail keeps."
+        ],
+        "cons": [
+          "The removed middle can hold the one line that mattered, and character counts only approximate tokens."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why do tool results dominate the context window in coding agents, and why trim them before summarizing history?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why keep both a head and a tail of the output rather than only the beginning?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through how one block's kept head and kept tail are computed from combined coordinates. Where does the marker go when the removed range spans several blocks?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why must head plus marker plus tail fit inside the threshold? What goes wrong if it does not?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why keep the original result in the log and append a replacement instead of editing it in place?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Character budgets versus token budgets for deciding what to prune: accuracy, speed and determinism?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Head-and-tail pruning versus letting the model page through output with an offset and limit, or spilling the full output to a file: when would you pick each?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/deepseek-ai/deepseek-harness",
+          "commit": "21638c56315ae6a2b552d6091945d3144c9af32e",
+          "path": "packages/compaction/compaction-tool-result-pruner/src/index.ts",
+          "symbol": "ToolResultPruner.pruneContent and measureContent; resolveConfig in src/config.ts",
+          "license": "MIT",
+          "adapted": "Combined-coordinate head and tail retention, single marker in the first intersecting block, preserved non-text blocks, and the one-pass budget validation.",
+          "simplifications": "No session rewrite, shadow-price event, token meter or replacement citation; JavaScript code-point arrays become Python strings."
+        }
+      ]
+    },
+    {
+      "id": "pi_agent_loop",
+      "title": "Agent Loop with Steering and Follow-ups",
+      "titleZh": "Agent Loop with Steering and Follow-ups",
+      "difficulty": "Medium",
+      "functionName": "agent_loop",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Implement the Pi agent's main loop: call the model, run the tools it asks for, and fold in messages the user typed while the agent was working.\n\n**Signature:** `agent_loop(prompts, model, execute_tool, get_steering, get_follow_up) -> list[dict]`\n\n**Parameters:**\n- `prompts` — list of initial messages.\n- `model(context)` — given a copy of the context list, returns an assistant message `{\"role\": \"assistant\", \"content\": [...], \"stop_reason\": str}`. Content blocks with `\"type\": \"toolCall\"` have `id`, `name` and `arguments`.\n- `execute_tool(call)` — runs one tool call and returns `{\"content\": [...], \"is_error\"?: bool, \"terminate\"?: bool}`; it may raise.\n- `get_steering()` / `get_follow_up()` — each returns a list of queued user messages, possibly empty. Steering is delivered while the agent is working; follow-ups are delivered only when it would otherwise stop.\n\n**Loop.** Keep a `context` list and a `new_messages` list; both start as copies of `prompts`. Set `pending = get_steering()`.\n- Outer loop: set `more_tools = True`, then run the inner loop.\n- Inner loop, while `more_tools` or `pending` is non-empty:\n  - append each pending message to `context` and `new_messages`; clear `pending`;\n  - call `model` with a copy of `context` and append the assistant message to both lists;\n  - if its `stop_reason` is `\"error\"` or `\"aborted\"`, return `new_messages` immediately;\n  - for each tool call in order, create a result message `{\"role\": \"toolResult\", \"tool_call_id\": id, \"tool_name\": name, \"content\": ..., \"is_error\": ...}`. If `stop_reason` is `\"length\"`, do not execute any call: each result is an error whose content is `[{\"type\": \"text\", \"text\": f'Tool call \"{name}\" was not executed: the response hit the output token limit, so its arguments may be truncated. Re-issue the tool call with complete arguments.'}]`. Otherwise call `execute_tool`; if it raises `e`, the result is an error with content `[{\"type\": \"text\", \"text\": str(e)}]`; if not, use its `content` and `bool(is_error)`. Append every result to both lists;\n  - `more_tools` is True when there was at least one tool call and not every call's result had `terminate` true (exceptions and length-stop failures count as not terminating);\n  - `pending = get_steering()`.\n- After the inner loop: `follow = get_follow_up()`. If it is non-empty, set `pending = follow` and repeat the outer loop; otherwise return `new_messages`.\n\n**Constraints:** Each call to `model` must receive a list that later loop steps do not modify.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Steering versus follow-up.** A user who notices the agent going the wrong way can type a correction that is injected before the next model call, without waiting for the task to finish. A follow-up is a new request queued for after the agent is done. Pi's TUI exposes the two as different keys.\n\n**Why truncated tool calls are not executed.** When the output hits the token limit, the last tool call's JSON arguments may be cut off, and executing a half-written `bash` command or `write` payload is dangerous. Returning an error lets the model re-issue the call.\n\n**Why a tool error is a message, not an exception.** The model can read the error and recover, for example by fixing a path, which is usually better than aborting the whole run.",
+      "descriptionZh": "Implement the Pi agent's main loop: call the model, run the tools it asks for, and fold in messages the user typed while the agent was working.\n\n**Signature:** `agent_loop(prompts, model, execute_tool, get_steering, get_follow_up) -> list[dict]`\n\n**Parameters:**\n- `prompts` — list of initial messages.\n- `model(context)` — given a copy of the context list, returns an assistant message `{\"role\": \"assistant\", \"content\": [...], \"stop_reason\": str}`. Content blocks with `\"type\": \"toolCall\"` have `id`, `name` and `arguments`.\n- `execute_tool(call)` — runs one tool call and returns `{\"content\": [...], \"is_error\"?: bool, \"terminate\"?: bool}`; it may raise.\n- `get_steering()` / `get_follow_up()` — each returns a list of queued user messages, possibly empty. Steering is delivered while the agent is working; follow-ups are delivered only when it would otherwise stop.\n\n**Loop.** Keep a `context` list and a `new_messages` list; both start as copies of `prompts`. Set `pending = get_steering()`.\n- Outer loop: set `more_tools = True`, then run the inner loop.\n- Inner loop, while `more_tools` or `pending` is non-empty:\n  - append each pending message to `context` and `new_messages`; clear `pending`;\n  - call `model` with a copy of `context` and append the assistant message to both lists;\n  - if its `stop_reason` is `\"error\"` or `\"aborted\"`, return `new_messages` immediately;\n  - for each tool call in order, create a result message `{\"role\": \"toolResult\", \"tool_call_id\": id, \"tool_name\": name, \"content\": ..., \"is_error\": ...}`. If `stop_reason` is `\"length\"`, do not execute any call: each result is an error whose content is `[{\"type\": \"text\", \"text\": f'Tool call \"{name}\" was not executed: the response hit the output token limit, so its arguments may be truncated. Re-issue the tool call with complete arguments.'}]`. Otherwise call `execute_tool`; if it raises `e`, the result is an error with content `[{\"type\": \"text\", \"text\": str(e)}]`; if not, use its `content` and `bool(is_error)`. Append every result to both lists;\n  - `more_tools` is True when there was at least one tool call and not every call's result had `terminate` true (exceptions and length-stop failures count as not terminating);\n  - `pending = get_steering()`.\n- After the inner loop: `follow = get_follow_up()`. If it is non-empty, set `pending = follow` and repeat the outer loop; otherwise return `new_messages`.\n\n**Constraints:** Each call to `model` must receive a list that later loop steps do not modify.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Steering versus follow-up.** A user who notices the agent going the wrong way can type a correction that is injected before the next model call, without waiting for the task to finish. A follow-up is a new request queued for after the agent is done. Pi's TUI exposes the two as different keys.\n\n**Why truncated tool calls are not executed.** When the output hits the token limit, the last tool call's JSON arguments may be cut off, and executing a half-written `bash` command or `write` payload is dangerous. Returning an error lets the model re-issue the call.\n\n**Why a tool error is a message, not an exception.** The model can read the error and recover, for example by fixing a path, which is usually better than aborting the whole run.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Runs tools until the model stops",
+          "code": "\nreplies = [\n    {\"role\": \"assistant\", \"content\": [{\"type\": \"toolCall\", \"id\": \"1\", \"name\": \"ls\", \"arguments\": {}}], \"stop_reason\": \"toolUse\"},\n    {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"done\"}], \"stop_reason\": \"stop\"},\n]\nseen = []\ndef model(ctx):\n    seen.append(ctx); return replies[len(seen) - 1]\nout = {fn}([{\"role\": \"user\", \"content\": \"list\"}], model, lambda call: {\"content\": [{\"type\": \"text\", \"text\": \"a.py\"}]}, lambda: [], lambda: [])\nassert [m[\"role\"] for m in out] == [\"user\", \"assistant\", \"toolResult\", \"assistant\"], out\nassert out[2] == {\"role\": \"toolResult\", \"tool_call_id\": \"1\", \"tool_name\": \"ls\", \"content\": [{\"type\": \"text\", \"text\": \"a.py\"}], \"is_error\": False}\nassert len(seen[0]) == 1 and len(seen[1]) == 3, [len(s) for s in seen]\n",
+          "behavior": "rl.trajectory"
+        },
+        {
+          "name": "Matches a seeded script oracle",
+          "visibility": "unshown",
+          "behavior": "rl.trajectory",
+          "failureMessage": "Follow the inner and outer loop exactly: steering before each model call, follow-ups only when idle, and early return on error or aborted.",
+          "hiddenCode": "\nimport copy, random\nLEN = 'Tool call \"{}\" was not executed: the response hit the output token limit, so its arguments may be truncated. Re-issue the tool call with complete arguments.'\ndef make_world(seed):\n    rng = random.Random(seed)\n    replies, steering, follow, outcomes = [], [], [], {}\n    for k in range(80):\n        calls = [{\"type\": \"toolCall\", \"id\": f\"{k}.{j}\", \"name\": rng.choice([\"a\", \"b\"]), \"arguments\": {\"k\": k}} for j in range(rng.choice([0, 0, 1, 2]))]\n        stop = rng.choices([\"stop\", \"toolUse\", \"length\", \"error\", \"aborted\"], weights=[4, 6, 1, 0.15, 0.15])[0]\n        replies.append({\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": str(k)}] + calls, \"stop_reason\": stop})\n        for c in calls:\n            outcomes[c[\"id\"]] = rng.choice([\"ok\", \"err\", \"raise\", \"term\"])\n    for _ in range(200):\n        steering.append([{\"role\": \"user\", \"content\": f\"s{rng.random():.3f}\"}] if rng.random() < 0.15 else [])\n        follow.append([{\"role\": \"user\", \"content\": f\"f{rng.random():.3f}\"}] if rng.random() < 0.3 else [])\n    return replies, steering, follow, outcomes\ndef run_tool(outcomes, call):\n    o = outcomes[call[\"id\"]]\n    if o == \"raise\":\n        raise RuntimeError(\"boom \" + call[\"id\"])\n    return {\"content\": [{\"type\": \"text\", \"text\": call[\"id\"]}], \"is_error\": o == \"err\", \"terminate\": o == \"term\"}\ndef oracle(prompts, replies, steering, follow, outcomes):\n    s, f, r = list(steering), list(follow), list(replies)\n    ctx, new = list(prompts), list(prompts)\n    pending = s.pop(0) if s else []\n    while True:\n        more = True\n        while more or pending:\n            ctx += pending; new += pending; pending = []\n            msg = r.pop(0); ctx.append(msg); new.append(msg)\n            if msg[\"stop_reason\"] in (\"error\", \"aborted\"):\n                return new\n            calls = [b for b in msg[\"content\"] if b[\"type\"] == \"toolCall\"]\n            terms = []\n            for c in calls:\n                if msg[\"stop_reason\"] == \"length\":\n                    res = {\"role\": \"toolResult\", \"tool_call_id\": c[\"id\"], \"tool_name\": c[\"name\"], \"content\": [{\"type\": \"text\", \"text\": LEN.format(c[\"name\"])}], \"is_error\": True}\n                    terms.append(False)\n                else:\n                    try:\n                        o = run_tool(outcomes, c)\n                        res = {\"role\": \"toolResult\", \"tool_call_id\": c[\"id\"], \"tool_name\": c[\"name\"], \"content\": o[\"content\"], \"is_error\": bool(o.get(\"is_error\"))}\n                        terms.append(bool(o.get(\"terminate\")))\n                    except Exception as e:\n                        res = {\"role\": \"toolResult\", \"tool_call_id\": c[\"id\"], \"tool_name\": c[\"name\"], \"content\": [{\"type\": \"text\", \"text\": str(e)}], \"is_error\": True}\n                        terms.append(False)\n                ctx.append(res); new.append(res)\n            more = bool(calls) and not all(terms)\n            pending = s.pop(0) if s else []\n        fu = f.pop(0) if f else []\n        if not fu:\n            return new\n        pending = fu\nfor seed, world in ((s, w) for s in (7, 24, 63) for w in range(8)):\n    replies, steering, follow, outcomes = make_world(seed * 100 + world)\n    prompts = [{\"role\": \"user\", \"content\": \"go\"}]\n    want = oracle(prompts, replies, steering, follow, outcomes)\n    r, s, f = list(replies), list(steering), list(follow)\n    snapshots = []\n    def model(ctx):\n        snapshots.append((ctx, copy.deepcopy(ctx))); return r.pop(0)\n    got = {fn}(prompts, model, lambda c: run_tool(outcomes, c), lambda: s.pop(0) if s else [], lambda: f.pop(0) if f else [])\n    assert got == want, (seed, got, want)\n    assert all(a == b for a, b in snapshots), \"a context passed to the model changed afterwards\"\n    assert prompts == [{\"role\": \"user\", \"content\": \"go\"}]\n"
+        },
+        {
+          "name": "Length stops fail tools without running them",
+          "visibility": "unshown",
+          "behavior": "rl.trajectory",
+          "failureMessage": "Never execute tool calls from a response cut off by the token limit; return an error result for each and keep looping.",
+          "hiddenCode": "\nran = []\nreplies = iter([\n    {\"role\": \"assistant\", \"content\": [{\"type\": \"toolCall\", \"id\": \"w\", \"name\": \"write\", \"arguments\": {\"body\": \"trunc\"}}], \"stop_reason\": \"length\"},\n    {\"role\": \"assistant\", \"content\": [], \"stop_reason\": \"stop\"},\n])\nout = {fn}([], lambda ctx: next(replies), lambda c: ran.append(c) or {\"content\": []}, lambda: [], lambda: [])\nassert ran == [], ran\nassert out[1][\"is_error\"] is True and 'Tool call \"write\" was not executed' in out[1][\"content\"][0][\"text\"], out\nassert out[-1][\"stop_reason\"] == \"stop\" and len(out) == 3, out\n"
+        },
+        {
+          "name": "Terminate needs every result and steering is injected mid-run",
+          "visibility": "unshown",
+          "behavior": "rl.trajectory",
+          "failureMessage": "Stop tool looping only when every result terminates, and inject steering before the next model call.",
+          "hiddenCode": "\nreplies = iter([\n    {\"role\": \"assistant\", \"content\": [{\"type\": \"toolCall\", \"id\": \"1\", \"name\": \"t\", \"arguments\": {}}, {\"type\": \"toolCall\", \"id\": \"2\", \"name\": \"t\", \"arguments\": {}}], \"stop_reason\": \"toolUse\"},\n    {\"role\": \"assistant\", \"content\": [{\"type\": \"toolCall\", \"id\": \"3\", \"name\": \"t\", \"arguments\": {}}], \"stop_reason\": \"toolUse\"},\n])\nresults = {\"1\": {\"content\": [], \"terminate\": True}, \"2\": {\"content\": []}, \"3\": {\"content\": [], \"terminate\": True}}\nsteer = iter([[], [{\"role\": \"user\", \"content\": \"use v2\"}], []])\nout = {fn}([{\"role\": \"user\", \"content\": \"go\"}], lambda ctx: next(replies), lambda c: results[c[\"id\"]], lambda: next(steer), lambda: [])\nassert [m.get(\"content\") if m[\"role\"] == \"user\" else m[\"role\"] for m in out] == [\"go\", \"assistant\", \"toolResult\", \"toolResult\", \"use v2\", \"assistant\", \"toolResult\"], out\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "What keeps the inner loop running: tool calls, steering, or both? When is the follow-up queue consulted? What should happen to tool calls in a response that was cut off by the token limit?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Write two nested while loops exactly as described. Inside, a helper builds one toolResult per call, catching exceptions from execute_tool. Track whether every result terminated. Pass list(context) to the model so later appends do not change what it saw."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "budgeted_agent_loop"
+      ],
+      "modelConnections": [
+        "Pi's agent-loop runLoop implements steering and follow-up queues; Claude Code and Codex let users interrupt or queue messages in the same way."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Users can correct a running agent without cancelling it, and malformed or failing tool calls become recoverable messages."
+        ],
+        "cons": [
+          "Steering can land between a tool result and the next model call in ways the model finds confusing, and queued follow-ups can pile up behind a long task."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Describe the basic agent loop. What makes it stop?"
+        },
+        {
+          "stage": "concept",
+          "question": "What is the difference between a steering message and a follow-up message, and why treat them differently?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through when each queue is polled. What happens if the user steers while tools are running?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why are tool calls in a response that hit the output token limit not executed?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why turn tool exceptions into error results instead of raising, and why stop immediately on an errored or aborted model response?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Injecting steering mid-run versus cancelling and restarting the turn: context coherence, latency and wasted work?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Sequential versus parallel tool execution inside one step: speed, ordering of results, and conflicts between tools?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/badlogic/pi-mono",
+          "commit": "6f7551516b84278eb9da1c340c8e7bc66be1a6ba",
+          "path": "packages/agent/src/agent-loop.ts",
+          "symbol": "runLoop, failToolCallsFromTruncatedMessage and shouldTerminateToolBatch",
+          "license": "MIT",
+          "adapted": "Inner loop over tool calls and steering, outer loop over follow-ups, error and aborted early exit, length-stop tool failure, and all-terminate batch rule.",
+          "simplifications": "Synchronous, sequential tools only; no events, streaming, prepareNextTurn, finishTurn decisions or explicit continuation."
+        }
+      ]
+    },
+    {
+      "id": "pi_compaction_cut_point",
+      "title": "Compaction Cut Point",
+      "titleZh": "Compaction Cut Point",
+      "difficulty": "Medium",
+      "functionName": "find_cut_point",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "When the Pi coding agent compacts a long session, it summarizes older entries and keeps the most recent ones verbatim. Choose the first entry to keep.\n\n**Signature:** `find_cut_point(entries, keep_recent_tokens) -> dict`\n\n**Parameters:**\n- `entries` — list of dicts with `role` and a non-negative integer `tokens`. Roles: `user`, `assistant`, `toolResult`, `bashExecution`, `custom`, `branchSummary`, `compactionSummary`, and `meta` for bookkeeping entries the model never sees (a model change, a label).\n- `keep_recent_tokens` — positive integer.\n\n**Definitions:**\n- A *cut point* is an entry whose role is neither `toolResult` nor `meta`.\n- A *turn start* is an entry whose role is `user`, `bashExecution`, `custom`, `branchSummary` or `compactionSummary`.\n\n**Algorithm:**\n- If there is no cut point, return `{\"first_kept_index\": 0, \"turn_start_index\": -1, \"is_split_turn\": False}`.\n- Walk from the last entry backwards, skipping entries with 0 tokens and adding the others' tokens to a running sum. At the first entry `i` where the sum reaches `keep_recent_tokens`, the cut is the first cut point with index `>= i`, or the last cut point if there is none. If the sum never reaches the budget, the cut is the first cut point.\n- Then, while the entry just before the cut is `meta`, move the cut back by one.\n- If the entry at the cut is a turn start, `turn_start_index` is -1. Otherwise it is the index of the closest turn start at or before the cut, or -1 if there is none.\n- `is_split_turn` is True when the cut entry is not a turn start and a turn start was found.\n\n**Returns:** `{\"first_kept_index\": int, \"turn_start_index\": int, \"is_split_turn\": bool}`.\n\n**Constraints:** Raise `ValueError` for an unknown role, a negative or non-integer token count, or `keep_recent_tokens < 1`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why never cut at a tool result.** A tool result must follow the assistant message that requested it; keeping a result whose call was summarized away produces an invalid transcript. Cutting at the assistant keeps the call and all its results together.\n\n**Why prefer the cut point at or after the budget crossing.** It keeps at least the requested amount of recent context without splitting a tool exchange, and when trailing tool output alone exceeds the budget, the assistant call that produced it is kept rather than falling back to the start of the session.\n\n**Split turns.** If the cut falls inside a turn, the start of that turn is summarized separately, so the summary can tell the model what request the kept messages belong to.\n\n**Why pull metadata along.** Bookkeeping entries right before the cut, such as a model switch, describe the kept messages, so they stay with them.",
+      "descriptionZh": "When the Pi coding agent compacts a long session, it summarizes older entries and keeps the most recent ones verbatim. Choose the first entry to keep.\n\n**Signature:** `find_cut_point(entries, keep_recent_tokens) -> dict`\n\n**Parameters:**\n- `entries` — list of dicts with `role` and a non-negative integer `tokens`. Roles: `user`, `assistant`, `toolResult`, `bashExecution`, `custom`, `branchSummary`, `compactionSummary`, and `meta` for bookkeeping entries the model never sees (a model change, a label).\n- `keep_recent_tokens` — positive integer.\n\n**Definitions:**\n- A *cut point* is an entry whose role is neither `toolResult` nor `meta`.\n- A *turn start* is an entry whose role is `user`, `bashExecution`, `custom`, `branchSummary` or `compactionSummary`.\n\n**Algorithm:**\n- If there is no cut point, return `{\"first_kept_index\": 0, \"turn_start_index\": -1, \"is_split_turn\": False}`.\n- Walk from the last entry backwards, skipping entries with 0 tokens and adding the others' tokens to a running sum. At the first entry `i` where the sum reaches `keep_recent_tokens`, the cut is the first cut point with index `>= i`, or the last cut point if there is none. If the sum never reaches the budget, the cut is the first cut point.\n- Then, while the entry just before the cut is `meta`, move the cut back by one.\n- If the entry at the cut is a turn start, `turn_start_index` is -1. Otherwise it is the index of the closest turn start at or before the cut, or -1 if there is none.\n- `is_split_turn` is True when the cut entry is not a turn start and a turn start was found.\n\n**Returns:** `{\"first_kept_index\": int, \"turn_start_index\": int, \"is_split_turn\": bool}`.\n\n**Constraints:** Raise `ValueError` for an unknown role, a negative or non-integer token count, or `keep_recent_tokens < 1`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why never cut at a tool result.** A tool result must follow the assistant message that requested it; keeping a result whose call was summarized away produces an invalid transcript. Cutting at the assistant keeps the call and all its results together.\n\n**Why prefer the cut point at or after the budget crossing.** It keeps at least the requested amount of recent context without splitting a tool exchange, and when trailing tool output alone exceeds the budget, the assistant call that produced it is kept rather than falling back to the start of the session.\n\n**Split turns.** If the cut falls inside a turn, the start of that turn is summarized separately, so the summary can tell the model what request the kept messages belong to.\n\n**Why pull metadata along.** Bookkeeping entries right before the cut, such as a model switch, describe the kept messages, so they stay with them.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Cuts at the assistant that owns trailing tool results",
+          "code": "\nentries = [\n    {\"role\": \"user\", \"tokens\": 50},\n    {\"role\": \"assistant\", \"tokens\": 20},\n    {\"role\": \"toolResult\", \"tokens\": 30},\n    {\"role\": \"user\", \"tokens\": 10},\n    {\"role\": \"assistant\", \"tokens\": 10},\n    {\"role\": \"toolResult\", \"tokens\": 500},\n]\nassert {fn}(entries, 100) == {\"first_kept_index\": 4, \"turn_start_index\": 3, \"is_split_turn\": True}\nassert {fn}(entries, 540) == {\"first_kept_index\": 3, \"turn_start_index\": -1, \"is_split_turn\": False}\nassert {fn}(entries, 10000) == {\"first_kept_index\": 0, \"turn_start_index\": -1, \"is_split_turn\": False}\n",
+          "behavior": "budget.enforcement"
+        },
+        {
+          "name": "Matches a seeded oracle",
+          "visibility": "unshown",
+          "behavior": "budget.enforcement",
+          "failureMessage": "Accumulate from the end, cut at the first valid point at or after the crossing, pull back over meta entries, and detect split turns.",
+          "hiddenCode": "\nimport random\nROLES = [\"user\", \"assistant\", \"toolResult\", \"bashExecution\", \"custom\", \"branchSummary\", \"compactionSummary\", \"meta\"]\nSTARTS = {\"user\", \"bashExecution\", \"custom\", \"branchSummary\", \"compactionSummary\"}\ndef oracle(entries, keep):\n    cuts = [i for i, e in enumerate(entries) if e[\"role\"] not in (\"toolResult\", \"meta\")]\n    if not cuts:\n        return {\"first_kept_index\": 0, \"turn_start_index\": -1, \"is_split_turn\": False}\n    cut, total = cuts[0], 0\n    for i in range(len(entries) - 1, -1, -1):\n        if entries[i][\"tokens\"] == 0:\n            continue\n        total += entries[i][\"tokens\"]\n        if total >= keep:\n            later = [c for c in cuts if c >= i]\n            cut = later[0] if later else cuts[-1]\n            break\n    while cut > 0 and entries[cut - 1][\"role\"] == \"meta\":\n        cut -= 1\n    if entries[cut][\"role\"] in STARTS:\n        return {\"first_kept_index\": cut, \"turn_start_index\": -1, \"is_split_turn\": False}\n    ts = next((j for j in range(cut, -1, -1) if entries[j][\"role\"] in STARTS), -1)\n    return {\"first_kept_index\": cut, \"turn_start_index\": ts, \"is_split_turn\": ts != -1}\nfor seed in (3, 58, 91):\n    rng = random.Random(seed)\n    for trial in range(200):\n        entries = []\n        for _ in range(rng.randint(0, 14)):\n            role = rng.choices(ROLES, weights=[3, 4, 4, 1, 1, 1, 1, 2])[0]\n            tokens = 0 if role == \"meta\" or rng.random() < 0.1 else rng.randint(1, 60)\n            entries.append({\"role\": role, \"tokens\": tokens})\n        keep = rng.randint(1, 250)\n        assert {fn}(entries, keep) == oracle(entries, keep), (seed, trial, entries, keep)\n"
+        },
+        {
+          "name": "Pulls meta entries along and handles no cut points",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "Move the cut back over adjacent meta entries; with no cut point keep everything from index 0.",
+          "hiddenCode": "\nentries = [{\"role\": \"user\", \"tokens\": 10}, {\"role\": \"assistant\", \"tokens\": 10}, {\"role\": \"meta\", \"tokens\": 0},\n           {\"role\": \"meta\", \"tokens\": 0}, {\"role\": \"user\", \"tokens\": 30}]\nassert {fn}(entries, 25) == {\"first_kept_index\": 2, \"turn_start_index\": 0, \"is_split_turn\": True}\nonly_results = [{\"role\": \"toolResult\", \"tokens\": 100}, {\"role\": \"meta\", \"tokens\": 0}]\nassert {fn}(only_results, 5) == {\"first_kept_index\": 0, \"turn_start_index\": -1, \"is_split_turn\": False}\nno_start = [{\"role\": \"assistant\", \"tokens\": 5}, {\"role\": \"toolResult\", \"tokens\": 5}, {\"role\": \"assistant\", \"tokens\": 5}]\nassert {fn}(no_start, 5) == {\"first_kept_index\": 2, \"turn_start_index\": -1, \"is_split_turn\": False}\n"
+        },
+        {
+          "name": "Rejects invalid input",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Unknown roles, negative or non-integer tokens and a non-positive budget must raise ValueError.",
+          "hiddenCode": "\nbad = [([{\"role\": \"robot\", \"tokens\": 1}], 5), ([{\"role\": \"user\", \"tokens\": -1}], 5),\n       ([{\"role\": \"user\", \"tokens\": 1.5}], 5), ([{\"role\": \"user\", \"tokens\": 1}], 0)]\nfor entries, keep in bad:\n    try:\n        {fn}(entries, keep)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"accepted {entries} {keep}\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which entries can the kept range start at, and why not a tool result? Once the running sum crosses the budget, which direction do you move to find a cut point? When is a cut a split turn?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Validate, then list cut-point indices. Walk i from the end down to 0 accumulating nonzero tokens; on crossing, pick next((c for c in cuts if c >= i), cuts[-1]). Default to cuts[0]. Step back over meta entries. Then scan backwards from the cut for a turn start unless the cut itself is one."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "context_compaction"
+      ],
+      "modelConnections": [
+        "Pi's findCutPoint drives both manual and automatic compaction; Claude Code and Codex also summarize old turns while keeping recent ones verbatim."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Cheap, deterministic and always yields a valid transcript that keeps tool calls with their results."
+        ],
+        "cons": [
+          "Token counts are estimates, so the kept range only approximates the budget, and one huge tool result can force keeping more or less than intended."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is context compaction in a coding agent, and why keep the most recent messages verbatim instead of summarizing everything?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why can the kept range never start at a tool result?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through choosing the cut: accumulating from the end, the budget crossing, and picking the cut point at or after it. What happens when one trailing tool result exceeds the budget?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What is a split turn, and what extra summary does it need so the kept messages still make sense?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why pull adjacent metadata entries into the kept range?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Estimated tokens (chars / 4) versus the provider's reported usage for deciding when and where to compact: accuracy, cost and staleness?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Cut-and-summarize compaction versus pruning tool outputs versus retrieval over the full log: what does each lose?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/badlogic/pi-mono",
+          "commit": "6f7551516b84278eb9da1c340c8e7bc66be1a6ba",
+          "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+          "symbol": "findCutPoint, findValidCutPoints, findTurnStartIndex, isCutPointMessage and isTurnStartMessage",
+          "license": "MIT",
+          "adapted": "Backward token accumulation, cut-point selection at or after the crossing, metadata pull-back and split-turn detection.",
+          "simplifications": "Flat entries with precomputed token counts instead of session entries that project to messages; no compaction-entry boundaries or start and end index window."
+        }
+      ]
+    },
+    {
+      "id": "pi_file_mutation_queue",
+      "title": "Per-File Mutation Queue",
+      "titleZh": "Per-File Mutation Queue",
+      "difficulty": "Hard",
+      "functionName": "FileMutationQueue",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "When an agent runs several tool calls in parallel, two edits to the same file must not interleave, but edits to different files should still run concurrently. Implement the queue that enforces this.\n\n**Signature:** `class FileMutationQueue` with `async run(path, fn)` and `active_keys() -> set[str]`.\n\n**`run(path, fn)`** — `fn` is a zero-argument async function. Return its result or propagate its exception.\n- The queue key is `os.path.realpath(os.path.abspath(path))`, so relative paths and symlinks that reach the same file share one key.\n- Calls with the same key run `fn` strictly one at a time, in the order `run` was called. Calls with different keys do not wait for each other.\n- A failing `fn` releases the key for the next caller.\n- If a call is cancelled while it is still waiting its turn, it never runs `fn`, and the calls queued behind it still wait for every earlier call to finish; they must neither deadlock nor start early.\n\n**`active_keys()`** — the set of keys that currently have a running or waiting call. Once every call for a key has finished, the key is gone.\n\n**Constraints:** Use only `asyncio` and the standard library. Everything runs on one event loop.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why serialize per file.** An edit tool reads a file, applies replacements and writes it back. Two concurrent edits to the same file each read the old version, and the second write silently discards the first. Serializing by resolved path keeps parallel tool execution safe.\n\n**Why resolve symlinks.** `src/app.py` and `./link/app.py` can name the same inode; keying by the raw string would let them race.\n\n**The cancellation trap.** Pi is written in TypeScript, where promises cannot be cancelled, so a simple chain of promises is enough there. An `asyncio` task can be cancelled while waiting; if its slot in the chain is released at that moment, the next caller starts while an earlier edit is still running, and if it is never released, every later caller hangs.",
+      "descriptionZh": "When an agent runs several tool calls in parallel, two edits to the same file must not interleave, but edits to different files should still run concurrently. Implement the queue that enforces this.\n\n**Signature:** `class FileMutationQueue` with `async run(path, fn)` and `active_keys() -> set[str]`.\n\n**`run(path, fn)`** — `fn` is a zero-argument async function. Return its result or propagate its exception.\n- The queue key is `os.path.realpath(os.path.abspath(path))`, so relative paths and symlinks that reach the same file share one key.\n- Calls with the same key run `fn` strictly one at a time, in the order `run` was called. Calls with different keys do not wait for each other.\n- A failing `fn` releases the key for the next caller.\n- If a call is cancelled while it is still waiting its turn, it never runs `fn`, and the calls queued behind it still wait for every earlier call to finish; they must neither deadlock nor start early.\n\n**`active_keys()`** — the set of keys that currently have a running or waiting call. Once every call for a key has finished, the key is gone.\n\n**Constraints:** Use only `asyncio` and the standard library. Everything runs on one event loop.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why serialize per file.** An edit tool reads a file, applies replacements and writes it back. Two concurrent edits to the same file each read the old version, and the second write silently discards the first. Serializing by resolved path keeps parallel tool execution safe.\n\n**Why resolve symlinks.** `src/app.py` and `./link/app.py` can name the same inode; keying by the raw string would let them race.\n\n**The cancellation trap.** Pi is written in TypeScript, where promises cannot be cancelled, so a simple chain of promises is enough there. An `asyncio` task can be cancelled while waiting; if its slot in the chain is released at that moment, the next caller starts while an earlier edit is still running, and if it is never released, every later caller hangs.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Same file serializes, different files overlap",
+          "code": "\nimport asyncio, os, tempfile, time\nasync def main():\n    q = {fn}()\n    d = tempfile.mkdtemp()\n    a, b = os.path.join(d, \"a.txt\"), os.path.join(d, \"b.txt\")\n    log = []\n    async def work(tag):\n        log.append(tag + \"+\"); await asyncio.sleep(0.1); log.append(tag + \"-\"); return tag\n    start = time.perf_counter()\n    res = await asyncio.wait_for(asyncio.gather(q.run(a, lambda: work(\"a1\")), q.run(a, lambda: work(\"a2\")), q.run(b, lambda: work(\"b1\"))), timeout=5)\n    elapsed = time.perf_counter() - start\n    assert res == [\"a1\", \"a2\", \"b1\"], res\n    assert log.index(\"a1-\") < log.index(\"a2+\"), log\n    assert log.index(\"b1+\") < log.index(\"a1-\"), log\n    assert elapsed < 0.3, elapsed\n    assert q.active_keys() == set()\nasyncio.run(main())\n",
+          "behavior": "scheduler.concurrency"
+        },
+        {
+          "name": "Symlinks and relative paths share one key",
+          "visibility": "unshown",
+          "behavior": "scheduler.concurrency",
+          "failureMessage": "Resolve the path with realpath so every alias of one file uses the same queue.",
+          "hiddenCode": "\nimport asyncio, os, tempfile\nasync def main():\n    q = {fn}()\n    d = os.path.realpath(tempfile.mkdtemp())\n    target = os.path.join(d, \"real.py\")\n    open(target, \"w\").close()\n    link = os.path.join(d, \"alias.py\")\n    os.symlink(target, link)\n    running, peak = [0], [0]\n    async def work():\n        running[0] += 1; peak[0] = max(peak[0], running[0])\n        await asyncio.sleep(0.03)\n        running[0] -= 1\n    cwd = os.getcwd()\n    os.chdir(d)\n    try:\n        await asyncio.wait_for(asyncio.gather(q.run(target, work), q.run(link, work), q.run(\"real.py\", work), q.run(os.path.join(d, \".\", \"real.py\"), work)), timeout=5)\n    finally:\n        os.chdir(cwd)\n    assert peak[0] == 1, peak\n    assert q.active_keys() == set()\nasyncio.run(main())\n"
+        },
+        {
+          "name": "Order, failures and key cleanup under a seeded load",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "Run same-key calls in call order, release the key after a failure, and forget keys once idle.",
+          "hiddenCode": "\nimport asyncio, os, random, tempfile\nasync def main():\n    for seed in (1, 12, 45):\n        rng = random.Random(seed)\n        q = {fn}()\n        d = tempfile.mkdtemp()\n        paths = [os.path.join(d, f\"f{i}\") for i in range(3)]\n        started = {p: [] for p in paths}\n        active = {p: 0 for p in paths}\n        async def job(p, i, fail):\n            active[p] += 1\n            assert active[p] == 1, \"two calls ran at once for one key\"\n            started[p].append(i)\n            await asyncio.sleep(rng.random() * 0.01)\n            active[p] -= 1\n            if fail:\n                raise RuntimeError(i)\n            return i\n        calls = []\n        for i in range(30):\n            p = rng.choice(paths)\n            fail = rng.random() < 0.2\n            calls.append((p, i, fail))\n        results = await asyncio.wait_for(asyncio.gather(*(q.run(p, (lambda p=p, i=i, f=fail: job(p, i, f))) for p, i, fail in calls), return_exceptions=True), timeout=5)\n        for (p, i, fail), r in zip(calls, results):\n            assert (isinstance(r, RuntimeError) and r.args == (i,)) if fail else r == i, (seed, i, r)\n        for p in paths:\n            assert started[p] == [i for pp, i, _ in calls if pp == p], (seed, started[p])\n        assert q.active_keys() == set(), q.active_keys()\n    q = {fn}()\n    path = os.path.join(tempfile.mkdtemp(), \"late\")\n    log = []\n    async def step(tag, delay):\n        log.append(tag + \"+\"); await asyncio.sleep(delay); log.append(tag + \"-\")\n    t1 = asyncio.create_task(q.run(path, lambda: step(\"a\", 0.03)))\n    await asyncio.sleep(0)\n    t2 = asyncio.create_task(q.run(path, lambda: step(\"b\", 0.1)))\n    await asyncio.sleep(0.06)\n    t3 = asyncio.create_task(q.run(path, lambda: step(\"c\", 0.0)))\n    await asyncio.wait_for(asyncio.gather(t1, t2, t3), timeout=5)\n    assert log == [\"a+\", \"a-\", \"b+\", \"b-\", \"c+\", \"c-\"], log\nasyncio.run(main())\n"
+        },
+        {
+          "name": "Cancelling a waiting call neither deadlocks nor lets the next call jump ahead",
+          "visibility": "unshown",
+          "behavior": "scheduler.concurrency",
+          "failureMessage": "A caller cancelled while waiting must hand its turn on only after every earlier call finishes.",
+          "hiddenCode": "\nimport asyncio, os, tempfile\nasync def main():\n    q = {fn}()\n    path = os.path.join(tempfile.mkdtemp(), \"x\")\n    log = []\n    first_started = asyncio.Event()\n    async def first():\n        log.append(\"first+\"); first_started.set(); await asyncio.sleep(0.1); log.append(\"first-\")\n    async def second():\n        log.append(\"second ran\")\n    async def third():\n        log.append(\"third+\")\n    t1 = asyncio.create_task(q.run(path, first))\n    await first_started.wait()\n    t2 = asyncio.create_task(q.run(path, second))\n    await asyncio.sleep(0.01)\n    t3 = asyncio.create_task(q.run(path, third))\n    await asyncio.sleep(0.01)\n    t2.cancel()\n    await asyncio.sleep(0.01)\n    assert \"third+\" not in log, log\n    await asyncio.wait_for(asyncio.gather(t1, t3), timeout=1.0)\n    assert log == [\"first+\", \"first-\", \"third+\"], log\n    assert t2.cancelled()\n    await asyncio.sleep(0.01)\n    assert q.active_keys() == set(), q.active_keys()\nasyncio.run(main())\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "What does each caller need to wait for, and what does it need to signal? If a waiting caller is cancelled, when is it safe to signal the caller behind it? How do you know you are the last caller for a key?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Keep key -> the Event of the most recent caller. Each run records prev = tails.get(key), stores its own Event as the new tail, awaits prev.wait(), runs fn in try/finally and sets its Event. If cancelled while waiting, schedule a task that waits for prev and then sets its own Event. Delete the key only if the tail is still your Event."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "async_agent_rollout"
+      ],
+      "modelConnections": [
+        "Pi's withFileMutationQueue guards its write and edit tools when tool calls run in parallel; Claude Code and Codex similarly serialize conflicting file operations."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Keeps parallel tool execution fast while making same-file edits sequential and deterministic."
+        ],
+        "cons": [
+          "It only protects writes that go through the queue; a shell command can still modify the file concurrently, and one slow edit blocks every later edit to that file."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why do parallel tool calls in a coding agent need a per-file lock, and what goes wrong without one?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why key the queue by the resolved real path rather than the path string the model sent?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through how each caller waits for the previous one and signals the next. Why does the key get deleted only if you are still the tail?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What happens in asyncio if a caller is cancelled while waiting, and how do you hand its turn on safely?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why must a failing edit still release the key?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "A per-file queue versus one global lock versus optimistic concurrency that re-reads and retries on conflict: throughput and correctness?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Should read operations also go through the queue? What anomalies can a model observe if they do not?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/badlogic/pi-mono",
+          "commit": "6f7551516b84278eb9da1c340c8e7bc66be1a6ba",
+          "path": "packages/coding-agent/src/core/tools/file-mutation-queue.ts",
+          "symbol": "withFileMutationQueue and getMutationQueueKey",
+          "license": "MIT",
+          "adapted": "Realpath-keyed per-file chaining, release in finally, and deleting the key only when this caller is still the tail.",
+          "simplifications": "Adds asyncio cancellation handling that the promise-based original does not need; no async key registration queue because realpath is synchronous here."
+        }
+      ]
+    },
+    {
+      "id": "pi_multi_edit",
+      "title": "Agent Edit Tool with Fuzzy Matching",
+      "titleZh": "Agent Edit Tool with Fuzzy Matching",
+      "difficulty": "Hard",
+      "functionName": "apply_edits",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Implement the core of the Pi coding agent's `edit` tool: apply several `old_text -> new_text` replacements that the model wrote from memory, tolerating the small differences models typically introduce.\n\n**Signature:** `apply_edits(content, edits) -> str`\n\n**Parameters:**\n- `content` — the file text. It may use `\\n` or `\\r\\n` line endings.\n- `edits` — list of dicts `{\"old_text\": str, \"new_text\": str}`.\n\n**Line endings.** The file uses `\\r\\n` when its first `\\n` is directly preceded by `\\r`, otherwise `\\n`. Convert `content` and every `old_text` and `new_text` to `\\n` (replace `\\r\\n`, then any lone `\\r`, with `\\n`), do all work below in that form, and convert the result's `\\n` back to `\\r\\n` if the file used `\\r\\n`.\n\n**Fuzzy normalization** `norm(text)`, applied in this order: Unicode NFKC; strip trailing whitespace (`str.rstrip()`) from every line; map `‘ ’ ‚ ‛` to `'`; map `“ ” „ ‟` to `\"`; map the dashes U+2010 to U+2015 and U+2212 to `-`; map U+00A0, U+2002 to U+200A, U+202F, U+205F and U+3000 to a space.\n\n**Matching.**\n- If any `old_text` is empty, raise `ValueError` with a message containing `must not be empty`.\n- If some `old_text` does not occur exactly in the content but `norm(old_text)` occurs in `norm(content)`, fuzzy mode is on for the whole call. The *base* is `norm(content)` in fuzzy mode and the content itself otherwise.\n- For every edit, find `old_text` in the base, first exactly and otherwise as `norm(old_text)`. If neither is found, raise `ValueError` containing `could not find`. If `norm(old_text)` occurs more than once in `norm(base)` (non-overlapping count), raise `ValueError` containing `must be unique`.\n- All edits match against the same base, not against each other's output. If two matched ranges overlap, raise `ValueError` containing `overlap`.\n\n**Replacement.**\n- Normal mode: replace every matched range of the base with its `new_text`.\n- Fuzzy mode: split the original content and the base into lines, keeping line endings. Group the edits by the base lines their ranges touch, merging groups whose line ranges overlap. Each group's lines are rewritten from the base with the edits applied; every line outside a group is copied unchanged from the original content.\n- If the result equals the content, raise `ValueError` containing `no changes`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why exact first.** A unique exact match is unambiguous; fuzzy matching is a fallback for the typographic noise models add, such as curly quotes, en dashes, non-breaking spaces and trailing spaces.\n\n**Why uniqueness.** If `old_text` matches twice, the tool cannot know which one the model meant. Asking for more context is safer than guessing.\n\n**Why one base for all edits.** Matching every edit against the original lets the model describe several changes from one reading of the file; applying replacements from the end backwards keeps earlier offsets valid.\n\n**Why preserve untouched lines in fuzzy mode.** Writing back the normalized text would silently change quotes and trailing whitespace across the whole file, producing a huge diff. Only the lines an edit touches are taken from the normalized view.",
+      "descriptionZh": "Implement the core of the Pi coding agent's `edit` tool: apply several `old_text -> new_text` replacements that the model wrote from memory, tolerating the small differences models typically introduce.\n\n**Signature:** `apply_edits(content, edits) -> str`\n\n**Parameters:**\n- `content` — the file text. It may use `\\n` or `\\r\\n` line endings.\n- `edits` — list of dicts `{\"old_text\": str, \"new_text\": str}`.\n\n**Line endings.** The file uses `\\r\\n` when its first `\\n` is directly preceded by `\\r`, otherwise `\\n`. Convert `content` and every `old_text` and `new_text` to `\\n` (replace `\\r\\n`, then any lone `\\r`, with `\\n`), do all work below in that form, and convert the result's `\\n` back to `\\r\\n` if the file used `\\r\\n`.\n\n**Fuzzy normalization** `norm(text)`, applied in this order: Unicode NFKC; strip trailing whitespace (`str.rstrip()`) from every line; map `‘ ’ ‚ ‛` to `'`; map `“ ” „ ‟` to `\"`; map the dashes U+2010 to U+2015 and U+2212 to `-`; map U+00A0, U+2002 to U+200A, U+202F, U+205F and U+3000 to a space.\n\n**Matching.**\n- If any `old_text` is empty, raise `ValueError` with a message containing `must not be empty`.\n- If some `old_text` does not occur exactly in the content but `norm(old_text)` occurs in `norm(content)`, fuzzy mode is on for the whole call. The *base* is `norm(content)` in fuzzy mode and the content itself otherwise.\n- For every edit, find `old_text` in the base, first exactly and otherwise as `norm(old_text)`. If neither is found, raise `ValueError` containing `could not find`. If `norm(old_text)` occurs more than once in `norm(base)` (non-overlapping count), raise `ValueError` containing `must be unique`.\n- All edits match against the same base, not against each other's output. If two matched ranges overlap, raise `ValueError` containing `overlap`.\n\n**Replacement.**\n- Normal mode: replace every matched range of the base with its `new_text`.\n- Fuzzy mode: split the original content and the base into lines, keeping line endings. Group the edits by the base lines their ranges touch, merging groups whose line ranges overlap. Each group's lines are rewritten from the base with the edits applied; every line outside a group is copied unchanged from the original content.\n- If the result equals the content, raise `ValueError` containing `no changes`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why exact first.** A unique exact match is unambiguous; fuzzy matching is a fallback for the typographic noise models add, such as curly quotes, en dashes, non-breaking spaces and trailing spaces.\n\n**Why uniqueness.** If `old_text` matches twice, the tool cannot know which one the model meant. Asking for more context is safer than guessing.\n\n**Why one base for all edits.** Matching every edit against the original lets the model describe several changes from one reading of the file; applying replacements from the end backwards keeps earlier offsets valid.\n\n**Why preserve untouched lines in fuzzy mode.** Writing back the normalized text would silently change quotes and trailing whitespace across the whole file, producing a huge diff. Only the lines an edit touches are taken from the normalized view.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Two exact edits against one reading of the file",
+          "code": "\nsrc = \"def f():\\n    return 1\\n\\ndef g():\\n    return 2\\n\"\nout = {fn}(src, [{\"old_text\": \"return 2\", \"new_text\": \"return 20\"}, {\"old_text\": \"return 1\", \"new_text\": \"return 10\"}])\nassert out == \"def f():\\n    return 10\\n\\ndef g():\\n    return 20\\n\", out\n",
+          "behavior": "protocol.validation"
+        },
+        {
+          "name": "Fuzzy match rewrites only the touched lines",
+          "code": "\nsrc = \"a = “x”   \\nb = 1  \\nc = ‘y’\\n\"\nout = {fn}(src, [{\"old_text\": \"c = 'y'\", \"new_text\": \"c = 'z'\"}])\nassert out == \"a = “x”   \\nb = 1  \\nc = 'z'\\n\", repr(out)\n",
+          "behavior": "protocol.validation"
+        },
+        {
+          "name": "Matches a seeded replacement oracle in exact mode",
+          "visibility": "unshown",
+          "behavior": "protocol.validation",
+          "failureMessage": "Match every edit against the original, apply all replacements, and keep CRLF files CRLF.",
+          "hiddenCode": "\nimport random\nfor seed in (4, 19, 88):\n    rng = random.Random(seed)\n    for trial in range(40):\n        words = [f\"w{i}_{rng.randint(0, 999)}\" for i in range(rng.randint(4, 9))]\n        lines = [f\"line {w} = {rng.randint(0, 9)}\" for w in words]\n        crlf = rng.random() < 0.4\n        content = (\"\\r\\n\" if crlf else \"\\n\").join(lines) + (\"\\r\\n\" if crlf else \"\\n\")\n        picks = rng.sample(range(len(lines)), rng.randint(1, 3))\n        edits = [{\"old_text\": lines[i], \"new_text\": lines[i].upper() + \"!\"} for i in picks]\n        rng.shuffle(edits)\n        want_lines = [l.upper() + \"!\" if i in picks else l for i, l in enumerate(lines)]\n        want = (\"\\r\\n\" if crlf else \"\\n\").join(want_lines) + (\"\\r\\n\" if crlf else \"\\n\")\n        assert {fn}(content, edits) == want, (seed, trial)\n"
+        },
+        {
+          "name": "Errors for ambiguous, missing, overlapping, empty and no-op edits",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Reject empty old text, missing or non-unique matches, overlapping ranges and edits that change nothing, with the required wording.",
+          "hiddenCode": "\nsrc = \"x = 1\\ny = 1\\nz = 2\\n\"\ncases = [\n    ([{\"old_text\": \"\", \"new_text\": \"a\"}], \"must not be empty\"),\n    ([{\"old_text\": \"= 1\", \"new_text\": \"= 3\"}], \"must be unique\"),\n    ([{\"old_text\": \"q = 9\", \"new_text\": \"q\"}], \"could not find\"),\n    ([{\"old_text\": \"x = 1\\ny\", \"new_text\": \"a\"}, {\"old_text\": \"y = 1\", \"new_text\": \"b\"}], \"overlap\"),\n    ([{\"old_text\": \"z = 2\", \"new_text\": \"z = 2\"}], \"no changes\"),\n    ([{\"old_text\": \"z = 2 \", \"new_text\": \"z = 3\"}, {\"old_text\": \"x = 1\", \"new_text\": \"x = 1\"}], None),\n]\nfor edits, word in cases:\n    try:\n        out = {fn}(src, edits)\n    except ValueError as e:\n        assert word is not None and word in str(e).lower(), (edits, e)\n    else:\n        assert word is None and out == \"x = 1\\ny = 1\\nz = 3\\n\", (edits, out)\ndup = \"a  \\na\\n\"\ntry:\n    {fn}(dup, [{\"old_text\": \"a\", \"new_text\": \"b\"}])\nexcept ValueError as e:\n    assert \"must be unique\" in str(e).lower()\nelse:\n    raise AssertionError(\"exact single occurrence but two normalized occurrences must be ambiguous\")\ntry:\n    {fn}(\"x = \\u20181\\u2019\\nx = '1'\\n\", [{\"old_text\": \"x = '1'\", \"new_text\": \"x = 2\"}])\nexcept ValueError as e:\n    assert \"must be unique\" in str(e).lower()\nelse:\n    raise AssertionError(\"uniqueness must be checked in normalized space\")\n"
+        },
+        {
+          "name": "Fuzzy mode keeps untouched lines byte for byte",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "In fuzzy mode rewrite only lines an edit touches; copy every other line from the original, including its trailing spaces and curly quotes.",
+          "hiddenCode": "\nimport random\nfor seed in (6, 50, 93):\n    rng = random.Random(seed)\n    for trial in range(30):\n        n = rng.randint(4, 10)\n        lines = []\n        for i in range(n):\n            body = f\"v{i} = “{rng.randint(0, 99)}” – k{i}\"\n            lines.append(body + \" \" * rng.randint(0, 3))\n        crlf = rng.random() < 0.3\n        eol = \"\\r\\n\" if crlf else \"\\n\"\n        content = eol.join(lines) + eol\n        i, j = sorted(rng.sample(range(n), 2))\n        span = rng.random() < 0.5 and j == i + 1\n        def plain(k):\n            return f\"v{k} = \\\"\" + lines[k].split(\"“\")[1].split(\"”\")[0] + f\"\\\" - k{k}\"\n        if span:\n            edits = [{\"old_text\": plain(i) + \"\\n\" + plain(j), \"new_text\": \"MERGED\"}]\n            want = [l for k, l in enumerate(lines) if k not in (i, j)]\n            want.insert(i, \"MERGED\")\n        else:\n            edits = [{\"old_text\": plain(i), \"new_text\": f\"NEW{i}\"}, {\"old_text\": plain(j), \"new_text\": f\"NEW{j}\"}]\n            want = [f\"NEW{k}\" if k in (i, j) else l for k, l in enumerate(lines)]\n        got = {fn}(content, edits)\n        assert got == eol.join(want) + eol, (seed, trial, repr(got), repr(eol.join(want) + eol))\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "How do you decide once whether the whole call runs in fuzzy mode? Why does uniqueness need to be checked in normalized space even for exact matches? In fuzzy mode, how do you know which original lines an edit touched?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Normalize endings, reject empty old texts, decide fuzzy mode, build the base, and collect (start, length, new_text) per edit with an index search. Sort by start, check overlaps, and apply from the end. In fuzzy mode compute line spans of the base with re.findall(r'[^\\n]*\\n|[^\\n]+'), map each range to its first and last touched line, merge overlapping line groups, and rebuild the file from original lines plus rewritten group slices."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "tool_registry"
+      ],
+      "modelConnections": [
+        "Pi's edit tool, Claude Code's Edit tool and Aider's search/replace blocks all require a unique old string; Pi adds typographic normalization with line-preserving write-back."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "String replacement is robust to line-number drift and cheap for the model to produce; fuzzy fallback rescues most typographic mismatches."
+        ],
+        "cons": [
+          "The model must quote enough context to be unique, and normalization can still match a different region than intended when the file has near-duplicate lines."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why do coding agents edit files by string replacement instead of line numbers or full rewrites?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why must old_text be unique, and what should the tool tell the model when it is not?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through exact-then-fuzzy matching. Which differences does the normalization forgive, and why is fuzzy mode decided once for the whole call?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why match all edits against the original content, and why apply replacements from the end of the file backwards?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "In fuzzy mode, how do you write back only the touched lines? What would go wrong if you wrote back the normalized file?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "String replacement versus unified diffs versus whole-file rewrites as the edit format for an LLM: token cost, failure modes and model accuracy?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How far would you take fuzzy matching (indentation, whitespace inside lines, edit distance) before the risk of editing the wrong place outweighs the benefit?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/badlogic/pi-mono",
+          "commit": "6f7551516b84278eb9da1c340c8e7bc66be1a6ba",
+          "path": "packages/coding-agent/src/core/tools/edit-diff.ts",
+          "symbol": "applyEditsToNormalizedContent, fuzzyFindText, normalizeForFuzzyMatch, applyReplacementsPreservingUnchangedLines, detectLineEnding",
+          "license": "MIT",
+          "adapted": "Exact-then-fuzzy matching, whole-call fuzzy mode, uniqueness and overlap checks, reverse application, and line-preserving write-back.",
+          "simplifications": "No file IO, BOM handling, diff rendering or per-edit error wording; errors are ValueError with required keywords."
+        }
+      ]
+    },
+    {
+      "id": "pi_transform_messages",
+      "title": "Cross-Model Transcript Handoff",
+      "titleZh": "Cross-Model Transcript Handoff",
+      "difficulty": "Hard",
+      "functionName": "transform_messages",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Rewrite a conversation so a different model, possibly from another provider, can continue it. This is what the Pi agent does every time the user switches models mid-session.\n\n**Signature:** `transform_messages(messages, model, normalize_tool_call_id=None) -> list[dict]`\n\n**Messages** are dicts with a `role`:\n- `system` and `user` — `content` is a string or a list of blocks `{\"type\": \"text\", \"text\"}` / `{\"type\": \"image\", ...}`.\n- `assistant` — `provider`, `api`, `model`, `stop_reason`, and `content`: a list of `{\"type\": \"thinking\", \"thinking\", \"signature\"?, \"redacted\"?}`, `{\"type\": \"text\", \"text\", ...}` and `{\"type\": \"toolCall\", \"id\", \"name\", \"arguments\", \"thought_signature\"?}` blocks.\n- `toolResult` — `tool_call_id`, `tool_name`, `is_error`, and `content`: a list of text and image blocks.\n\n`model` is a dict with `provider`, `api`, `id` and `input`, a list such as `[\"text\", \"image\"]`. An assistant message is from the *same model* when its `provider`, `api` and `model` equal the target's `provider`, `api` and `id`.\n\n**Pass 1 — rewrite each message in order.**\n- A message whose `content` is `None` gets `content = []`.\n- If `\"image\"` is not in `model[\"input\"]`: in a `user` message whose content is a list and in every `toolResult`, replace each image with a text block, `\"(image omitted: model does not support images)\"` for users and `\"(tool image omitted: model does not support images)\"` for tool results. Do not add a placeholder when the previous block is already that same placeholder text.\n- `assistant` blocks, when the message is from another model:\n  - `thinking` with `redacted` true is dropped; other thinking with empty or whitespace-only text is dropped; the rest becomes `{\"type\": \"text\", \"text\": thinking}`;\n  - `text` becomes `{\"type\": \"text\", \"text\": text}`, dropping every other key;\n  - `toolCall` loses its `thought_signature` key, and if `normalize_tool_call_id` is given its `id` becomes `normalize_tool_call_id(id, model, message)`; remember the mapping from old to new id when they differ.\n- `assistant` blocks, when the message is from the same model: a thinking block that has a non-empty `signature` or is `redacted` is kept as is; otherwise a thinking block with empty or whitespace-only text is dropped; all other blocks are kept.\n- A `toolResult` whose `tool_call_id` has a remembered mapping gets the new id.\n\n**Pass 2 — repair tool-call pairing.** Walk the rewritten messages with a list of *pending* tool calls, the set of ids answered since they were requested, and a list of *held* system messages. To *close* pending calls: append, for every pending call not yet answered, `{\"role\": \"toolResult\", \"tool_call_id\": id, \"tool_name\": name, \"content\": [{\"type\": \"text\", \"text\": \"No result provided\"}], \"is_error\": True}`; clear the pending calls and answered ids; then append the held system messages and clear them.\n- `assistant`: close pending calls. Then, if its `stop_reason` is `\"error\"` or `\"aborted\"`, skip the message. Otherwise append it, and if it has tool calls, they become the pending calls with an empty answered set.\n- `toolResult`: add its id to the answered set and append it.\n- `system`: hold it if calls are pending, otherwise append it.\n- `user`: close pending calls, then append it.\n- After the last message, close pending calls.\n\n**Constraints:** Do not modify `messages` or anything inside it.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why thinking becomes text.** Reasoning blocks carry provider-specific signatures that only the model that produced them can verify. Another provider would reject them, so their content is kept as plain text, while redacted reasoning, which is opaque ciphertext, is dropped.\n\n**Why tool-call ids are rewritten.** OpenAI Responses ids can be hundreds of characters long and contain `|`, while Anthropic requires ids that match `^[a-zA-Z0-9_-]+$` with at most 64 characters. The result that answers a call must follow the call's new id.\n\n**Why synthetic results.** Every provider rejects an assistant tool call without a result. A user can interrupt mid-tool-call, and an errored or aborted assistant turn should not be replayed at all, so the transcript is repaired before it is sent.",
+      "descriptionZh": "Rewrite a conversation so a different model, possibly from another provider, can continue it. This is what the Pi agent does every time the user switches models mid-session.\n\n**Signature:** `transform_messages(messages, model, normalize_tool_call_id=None) -> list[dict]`\n\n**Messages** are dicts with a `role`:\n- `system` and `user` — `content` is a string or a list of blocks `{\"type\": \"text\", \"text\"}` / `{\"type\": \"image\", ...}`.\n- `assistant` — `provider`, `api`, `model`, `stop_reason`, and `content`: a list of `{\"type\": \"thinking\", \"thinking\", \"signature\"?, \"redacted\"?}`, `{\"type\": \"text\", \"text\", ...}` and `{\"type\": \"toolCall\", \"id\", \"name\", \"arguments\", \"thought_signature\"?}` blocks.\n- `toolResult` — `tool_call_id`, `tool_name`, `is_error`, and `content`: a list of text and image blocks.\n\n`model` is a dict with `provider`, `api`, `id` and `input`, a list such as `[\"text\", \"image\"]`. An assistant message is from the *same model* when its `provider`, `api` and `model` equal the target's `provider`, `api` and `id`.\n\n**Pass 1 — rewrite each message in order.**\n- A message whose `content` is `None` gets `content = []`.\n- If `\"image\"` is not in `model[\"input\"]`: in a `user` message whose content is a list and in every `toolResult`, replace each image with a text block, `\"(image omitted: model does not support images)\"` for users and `\"(tool image omitted: model does not support images)\"` for tool results. Do not add a placeholder when the previous block is already that same placeholder text.\n- `assistant` blocks, when the message is from another model:\n  - `thinking` with `redacted` true is dropped; other thinking with empty or whitespace-only text is dropped; the rest becomes `{\"type\": \"text\", \"text\": thinking}`;\n  - `text` becomes `{\"type\": \"text\", \"text\": text}`, dropping every other key;\n  - `toolCall` loses its `thought_signature` key, and if `normalize_tool_call_id` is given its `id` becomes `normalize_tool_call_id(id, model, message)`; remember the mapping from old to new id when they differ.\n- `assistant` blocks, when the message is from the same model: a thinking block that has a non-empty `signature` or is `redacted` is kept as is; otherwise a thinking block with empty or whitespace-only text is dropped; all other blocks are kept.\n- A `toolResult` whose `tool_call_id` has a remembered mapping gets the new id.\n\n**Pass 2 — repair tool-call pairing.** Walk the rewritten messages with a list of *pending* tool calls, the set of ids answered since they were requested, and a list of *held* system messages. To *close* pending calls: append, for every pending call not yet answered, `{\"role\": \"toolResult\", \"tool_call_id\": id, \"tool_name\": name, \"content\": [{\"type\": \"text\", \"text\": \"No result provided\"}], \"is_error\": True}`; clear the pending calls and answered ids; then append the held system messages and clear them.\n- `assistant`: close pending calls. Then, if its `stop_reason` is `\"error\"` or `\"aborted\"`, skip the message. Otherwise append it, and if it has tool calls, they become the pending calls with an empty answered set.\n- `toolResult`: add its id to the answered set and append it.\n- `system`: hold it if calls are pending, otherwise append it.\n- `user`: close pending calls, then append it.\n- After the last message, close pending calls.\n\n**Constraints:** Do not modify `messages` or anything inside it.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why thinking becomes text.** Reasoning blocks carry provider-specific signatures that only the model that produced them can verify. Another provider would reject them, so their content is kept as plain text, while redacted reasoning, which is opaque ciphertext, is dropped.\n\n**Why tool-call ids are rewritten.** OpenAI Responses ids can be hundreds of characters long and contain `|`, while Anthropic requires ids that match `^[a-zA-Z0-9_-]+$` with at most 64 characters. The result that answers a call must follow the call's new id.\n\n**Why synthetic results.** Every provider rejects an assistant tool call without a result. A user can interrupt mid-tool-call, and an errored or aborted assistant turn should not be replayed at all, so the transcript is repaired before it is sent.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Switching providers converts thinking and repairs an interrupted call",
+          "code": "\ntarget = {\"provider\": \"anthropic\", \"api\": \"messages\", \"id\": \"claude\", \"input\": [\"text\", \"image\"]}\nmsgs = [\n    {\"role\": \"user\", \"content\": \"fix the bug\"},\n    {\"role\": \"assistant\", \"provider\": \"openai\", \"api\": \"responses\", \"model\": \"gpt\", \"stop_reason\": \"toolUse\", \"content\": [\n        {\"type\": \"thinking\", \"thinking\": \"look at main.py\", \"signature\": \"sig\"},\n        {\"type\": \"thinking\", \"thinking\": \"enc\", \"redacted\": True},\n        {\"type\": \"text\", \"text\": \"Reading.\", \"signature\": \"t\"},\n        {\"type\": \"toolCall\", \"id\": \"call|1\", \"name\": \"read\", \"arguments\": {\"path\": \"main.py\"}, \"thought_signature\": \"x\"}]},\n    {\"role\": \"user\", \"content\": \"stop, use utils.py\"},\n]\nout = {fn}(msgs, target, lambda i, m, src: i.replace(\"|\", \"_\"))\nassert out == [\n    {\"role\": \"user\", \"content\": \"fix the bug\"},\n    {\"role\": \"assistant\", \"provider\": \"openai\", \"api\": \"responses\", \"model\": \"gpt\", \"stop_reason\": \"toolUse\", \"content\": [\n        {\"type\": \"text\", \"text\": \"look at main.py\"}, {\"type\": \"text\", \"text\": \"Reading.\"},\n        {\"type\": \"toolCall\", \"id\": \"call_1\", \"name\": \"read\", \"arguments\": {\"path\": \"main.py\"}}]},\n    {\"role\": \"toolResult\", \"tool_call_id\": \"call_1\", \"tool_name\": \"read\", \"content\": [{\"type\": \"text\", \"text\": \"No result provided\"}], \"is_error\": True},\n    {\"role\": \"user\", \"content\": \"stop, use utils.py\"},\n], out\n",
+          "behavior": "protocol.validation"
+        },
+        {
+          "name": "Same-model messages keep signed reasoning",
+          "visibility": "unshown",
+          "behavior": "protocol.validation",
+          "failureMessage": "For the same model keep signed or redacted thinking and every other block; drop only unsigned empty thinking.",
+          "hiddenCode": "\ntarget = {\"provider\": \"openai\", \"api\": \"responses\", \"id\": \"gpt\", \"input\": [\"text\"]}\nblocks = [{\"type\": \"thinking\", \"thinking\": \"\", \"signature\": \"enc\"}, {\"type\": \"thinking\", \"thinking\": \"  \"},\n          {\"type\": \"thinking\", \"thinking\": \"x\", \"redacted\": True}, {\"type\": \"thinking\", \"thinking\": \"plan\"},\n          {\"type\": \"text\", \"text\": \"hi\", \"signature\": \"s\"},\n          {\"type\": \"toolCall\", \"id\": \"c|1\", \"name\": \"ls\", \"arguments\": {}, \"thought_signature\": \"keep\"}]\nmsg = {\"role\": \"assistant\", \"provider\": \"openai\", \"api\": \"responses\", \"model\": \"gpt\", \"stop_reason\": \"toolUse\", \"content\": blocks}\nres = {\"role\": \"toolResult\", \"tool_call_id\": \"c|1\", \"tool_name\": \"ls\", \"is_error\": False, \"content\": [{\"type\": \"text\", \"text\": \"a\"}]}\nout = {fn}([msg, res], target, lambda i, m, s: \"renamed\")\nassert out[0][\"content\"] == [blocks[0], blocks[2], blocks[3], blocks[4], blocks[5]], out[0]\nassert out[1] == res and len(out) == 2, out\nother = dict(msg, api=\"completions\")\nout = {fn}([other, res], target, lambda i, m, s: \"renamed\")\nassert out[0][\"content\"] == [{\"type\": \"text\", \"text\": \"plan\"}, {\"type\": \"text\", \"text\": \"hi\"}, {\"type\": \"toolCall\", \"id\": \"renamed\", \"name\": \"ls\", \"arguments\": {}}], out\nassert out[1][\"tool_call_id\"] == \"renamed\", out\nassert other[\"content\"] is blocks and msg[\"content\"] is blocks and len(blocks) == 6, \"input messages were modified\"\n"
+        },
+        {
+          "name": "Matches a seeded pairing oracle",
+          "visibility": "unshown",
+          "behavior": "protocol.validation",
+          "failureMessage": "Close pending calls on assistant, user and at the end; hold system messages while calls are pending; skip errored or aborted assistants.",
+          "hiddenCode": "\nimport copy, random\nNO = {\"type\": \"text\", \"text\": \"No result provided\"}\ndef pairing(msgs):\n    out, pending, answered, held = [], [], set(), []\n    def close():\n        nonlocal pending, answered\n        for c in pending:\n            if c[\"id\"] not in answered:\n                out.append({\"role\": \"toolResult\", \"tool_call_id\": c[\"id\"], \"tool_name\": c[\"name\"], \"content\": [NO], \"is_error\": True})\n        pending, answered = [], set()\n        out.extend(held); held.clear()\n    for m in msgs:\n        if m[\"role\"] == \"assistant\":\n            close()\n            if m[\"stop_reason\"] in (\"error\", \"aborted\"):\n                continue\n            calls = [b for b in m[\"content\"] if b[\"type\"] == \"toolCall\"]\n            if calls:\n                pending, answered = calls, set()\n            out.append(m)\n        elif m[\"role\"] == \"toolResult\":\n            answered.add(m[\"tool_call_id\"]); out.append(m)\n        elif m[\"role\"] == \"system\":\n            (held if pending else out).append(m)\n        else:\n            close(); out.append(m)\n    close()\n    return out\ntarget = {\"provider\": \"p\", \"api\": \"a\", \"id\": \"m\", \"input\": [\"text\", \"image\"]}\nfor seed in (2, 40, 77):\n    rng = random.Random(seed)\n    for trial in range(50):\n        msgs, n = [], 0\n        for _ in range(rng.randint(1, 10)):\n            kind = rng.choice([\"user\", \"system\", \"assistant\", \"assistant\", \"toolResult\"])\n            if kind == \"assistant\":\n                calls = []\n                for _ in range(rng.randint(0, 3)):\n                    n += 1; calls.append({\"type\": \"toolCall\", \"id\": f\"t{n}\", \"name\": rng.choice([\"a\", \"b\"]), \"arguments\": {}})\n                msgs.append({\"role\": \"assistant\", \"provider\": \"p\", \"api\": \"a\", \"model\": \"m\", \"content\": [{\"type\": \"text\", \"text\": \"ok\"}] + calls,\n                             \"stop_reason\": rng.choice([\"stop\", \"toolUse\", \"toolUse\", \"error\", \"aborted\"])})\n            elif kind == \"toolResult\":\n                ids = [b[\"id\"] for m in msgs if m[\"role\"] == \"assistant\" for b in m[\"content\"] if b[\"type\"] == \"toolCall\"] or [\"ghost\"]\n                cid = rng.choice(ids)\n                msgs.append({\"role\": \"toolResult\", \"tool_call_id\": cid, \"tool_name\": \"a\", \"is_error\": False, \"content\": [{\"type\": \"text\", \"text\": cid}]})\n            else:\n                msgs.append({\"role\": kind, \"content\": f\"{kind}-{len(msgs)}\"})\n        frozen = copy.deepcopy(msgs)\n        got = {fn}(msgs, target)\n        assert msgs == frozen, \"input was modified\"\n        assert got == pairing(copy.deepcopy(msgs)), (seed, trial, msgs, got)\n"
+        },
+        {
+          "name": "Images downgrade to one placeholder per run",
+          "visibility": "unshown",
+          "behavior": "protocol.validation",
+          "failureMessage": "For a text-only model replace images in user lists and tool results with the matching placeholder, never twice in a row.",
+          "hiddenCode": "\nU = \"(image omitted: model does not support images)\"\nT = \"(tool image omitted: model does not support images)\"\nimg = {\"type\": \"image\", \"data\": \"...\"}\ntarget = {\"provider\": \"x\", \"api\": \"y\", \"id\": \"z\", \"input\": [\"text\"]}\nmsgs = [\n    {\"role\": \"user\", \"content\": [img, img, {\"type\": \"text\", \"text\": \"see\"}, img, {\"type\": \"text\", \"text\": U}, img]},\n    {\"role\": \"user\", \"content\": \"plain string\"},\n    {\"role\": \"user\", \"content\": None},\n    {\"role\": \"toolResult\", \"tool_call_id\": \"q\", \"tool_name\": \"shot\", \"is_error\": False, \"content\": [{\"type\": \"text\", \"text\": \"a\"}, img, img]},\n]\nout = {fn}(msgs, target)\nassert out[0][\"content\"] == [{\"type\": \"text\", \"text\": U}, {\"type\": \"text\", \"text\": \"see\"}, {\"type\": \"text\", \"text\": U}, {\"type\": \"text\", \"text\": U}], out[0]\nassert out[1] == msgs[1] and out[2] == {\"role\": \"user\", \"content\": []}, out\nassert out[3][\"content\"] == [{\"type\": \"text\", \"text\": \"a\"}, {\"type\": \"text\", \"text\": T}], out[3]\nvision = dict(target, input=[\"text\", \"image\"])\nassert {fn}(msgs[:1], vision)[0][\"content\"] == msgs[0][\"content\"]\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which fields decide whether an assistant message is from the same model? Why must the id mapping be built before the tool results that use it are rewritten? When is a pending tool call considered orphaned?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Deep-copy nothing; build new dicts with {**msg, ...}. Pass 1 is a single loop that fills an id map as it rewrites assistant messages, so later tool results find their new ids. Pass 2 is a small state machine with pending, answered and held lists and one close() helper called on assistant, user and at the end."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "tool_call_stream_parser"
+      ],
+      "modelConnections": [
+        "Pi's transformMessages runs before every provider request, which lets a session hop between Anthropic, OpenAI, Google and local models mid-conversation.",
+        "LiteLLM and OpenRouter face the same problem when routing one conversation across providers."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Users can switch models mid-task without losing context, and malformed histories are repaired instead of failing the request."
+        ],
+        "cons": [
+          "Converted reasoning loses its signature, so the new model sees it as ordinary text, and synthetic results hide what really happened to interrupted calls."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What has to change in a conversation history when you switch from one LLM provider to another mid-session?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why can reasoning blocks from one model not simply be replayed to another?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through how tool-call ids are normalized and how the matching tool results follow them. Why must the mapping be built while scanning in order?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "When is a tool call orphaned, and what does the repair insert? Why are system messages held back while calls are pending?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why skip errored or aborted assistant messages entirely instead of repairing them?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Converting foreign reasoning to text versus dropping it: context quality, token cost and the risk of the new model imitating another model's style?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Repairing malformed histories silently versus failing loudly: when does each help or hurt debugging?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/badlogic/pi-mono",
+          "commit": "6f7551516b84278eb9da1c340c8e7bc66be1a6ba",
+          "path": "packages/ai/src/api/transform-messages.ts",
+          "symbol": "transformMessages, downgradeUnsupportedImages and replaceImagesWithPlaceholder",
+          "license": "MIT",
+          "adapted": "Same-model detection, thinking and text conversion, signature stripping, id normalization with result remapping, image placeholders, orphaned-call repair, held system messages and skipping errored turns.",
+          "simplifications": "Snake_case field names, no timestamps on synthetic results, and plain dicts instead of typed messages."
+        }
+      ]
     }
   ]
 }

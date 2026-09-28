@@ -159,6 +159,26 @@
       "icon": "Zap",
       "problems": ["mixed_precision", "gradient_accumulation", "activation_checkpointing", "packed_sequence_mask", "chunked_cross_entropy", "flash_attention", "lora", "qlora", "fsdp_step", "tensor_parallel", "kv_cache", "gqa", "paged_attention", "int8_quantization", "speculative_decoding"],
       "prerequisites": ["train-gpt-from-scratch"]
+    },
+    {
+      "id": "deepseek-harness",
+      "titleEn": "DeepSeek Harness",
+      "titleZh": "DeepSeek Harness",
+      "descriptionEn": "Mechanisms from DeepSeek's plugin-first agent harness: an event bus with five dispatch modes, advisory loop guards, replay-safe tool-output pruning and crash recovery for an append-only session log.",
+      "descriptionZh": "Mechanisms from DeepSeek's plugin-first agent harness: an event bus with five dispatch modes, advisory loop guards, replay-safe tool-output pruning and crash recovery for an append-only session log.",
+      "icon": "Network",
+      "problems": ["tool_registry", "dsh_event_bus", "dsh_repeat_tool_reminder", "dsh_tool_result_pruner", "context_compaction", "dsh_open_turn_closers"],
+      "prerequisites": ["agent-runtime-system-design"]
+    },
+    {
+      "id": "pi-agent",
+      "titleEn": "Pi Coding Agent",
+      "titleZh": "Pi Coding Agent",
+      "descriptionEn": "Mechanisms from the Pi coding agent: the agent loop with steering and follow-ups, cross-provider transcript handoff, the fuzzy multi-edit tool, per-file mutation queues and compaction cut points.",
+      "descriptionZh": "Mechanisms from the Pi coding agent: the agent loop with steering and follow-ups, cross-provider transcript handoff, the fuzzy multi-edit tool, per-file mutation queues and compaction cut points.",
+      "icon": "Workflow",
+      "problems": ["pi_agent_loop", "pi_transform_messages", "pi_multi_edit", "pi_file_mutation_queue", "pi_compaction_cut_point"],
+      "prerequisites": ["agent-runtime-system-design"]
     }
   ]
 }

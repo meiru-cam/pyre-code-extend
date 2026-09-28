@@ -144,5 +144,14 @@
   "chunked_cross_entropy": "def chunked_cross_entropy(hidden, weight, targets, chunk_size, ignore_index=-100):\n    pass",
   "logits_processors": "def process_logits(logits, generated_ids, temperature=1.0, top_k=0, top_p=1.0, repetition_penalty=1.0):\n    pass",
   "manual_backprop_mlp": "def mlp_forward_backward(x, W1, b1, W2, b2, y):\n    pass",
-  "muon_newton_schulz": "def muon_update(grad, momentum, beta=0.95, nesterov=True, ns_steps=5, eps=1e-7):\n    pass"
+  "muon_newton_schulz": "def muon_update(grad, momentum, beta=0.95, nesterov=True, ns_steps=5, eps=1e-7):\n    pass",
+  "dsh_event_bus": "class EventBus:\n    def on(self, name, listener, prepend=False):\n        pass\n\n    def once(self, name, listener, prepend=False):\n        pass\n\n    def emit(self, name, *args):\n        pass\n\n    def bail(self, name, *args):\n        pass\n\n    async def serial(self, name, *args):\n        pass\n\n    async def parallel(self, name, *args):\n        pass\n\n    def waterfall(self, name, *args, inner):\n        pass",
+  "dsh_repeat_tool_reminder": "class RepeatToolReminder:\n    def __init__(self, thresholds=(3, 5, 8), include=(), exclude=(), arguments_preview_chars=500):\n        pass\n\n    def post_execute(self, agent, tool_name, arguments, next):\n        pass\n\n    def on_user_message(self, agent):\n        pass",
+  "dsh_tool_result_pruner": "MARKER = \"\\n\\n[... tool result middle pruned ...]\\n\\n\"\n\n\ndef prune_content(blocks, threshold_chars=8192, head_chars=4096, tail_chars=1024):\n    pass",
+  "dsh_open_turn_closers": "def open_turn_closers(events, cause=\"interrupted\"):\n    pass",
+  "pi_agent_loop": "def agent_loop(prompts, model, execute_tool, get_steering, get_follow_up):\n    pass",
+  "pi_transform_messages": "def transform_messages(messages, model, normalize_tool_call_id=None):\n    pass",
+  "pi_multi_edit": "def apply_edits(content, edits):\n    pass",
+  "pi_file_mutation_queue": "import asyncio\nimport os\n\n\nclass FileMutationQueue:\n    async def run(self, path, fn):\n        pass\n\n    def active_keys(self):\n        pass",
+  "pi_compaction_cut_point": "def find_cut_point(entries, keep_recent_tokens):\n    pass"
 }
