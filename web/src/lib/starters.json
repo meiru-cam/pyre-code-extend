@@ -134,5 +134,15 @@
   "weight_regularization": "def regularized_loss(data_loss, named_parameters, l1=0.0, l2=0.0):\n    pass",
   "sgd_momentum": "class SGDMomentum:\n    def __init__(self, params, lr, momentum=0.0, weight_decay=0.0, nesterov=False):\n        pass\n\n    def step(self):\n        pass\n\n    def zero_grad(self):\n        pass",
   "precision_recall_f1": "def precision_recall_f1(preds, targets, average=\"macro\"):\n    pass",
-  "roc_auc": "def roc_auc(scores, labels):\n    pass"
+  "roc_auc": "def roc_auc(scores, labels):\n    pass",
+  "rloo_advantage": "def rloo_advantage(rewards, group_size):\n    pass",
+  "loss_aggregation_modes": "def aggregate_loss(per_token_loss, mask, mode):\n    pass",
+  "truncated_importance_sampling": "def truncated_is_weights(train_logprobs, rollout_logprobs, mask, cap=2.0, level=\"token\"):\n    pass",
+  "simpo_ipo_loss": "def preference_loss(chosen_logps, rejected_logps, loss_type, beta, chosen_lengths=None, rejected_lengths=None,\n                    gamma=0.0, ref_chosen_logps=None, ref_rejected_logps=None):\n    pass",
+  "pass_at_k": "def pass_at_k(num_samples, num_correct, k):\n    pass",
+  "packed_sequence_mask": "def packed_attention_mask(seq_lens, total_len):\n    pass",
+  "chunked_cross_entropy": "def chunked_cross_entropy(hidden, weight, targets, chunk_size, ignore_index=-100):\n    pass",
+  "logits_processors": "def process_logits(logits, generated_ids, temperature=1.0, top_k=0, top_p=1.0, repetition_penalty=1.0):\n    pass",
+  "manual_backprop_mlp": "def mlp_forward_backward(x, W1, b1, W2, b2, y):\n    pass",
+  "muon_newton_schulz": "def muon_update(grad, momentum, beta=0.95, nesterov=True, ns_steps=5, eps=1e-7):\n    pass"
 }

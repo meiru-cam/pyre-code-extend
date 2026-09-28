@@ -37,7 +37,7 @@
       "descriptionEn": "Speed up inference with KV cache, quantization, and decoding strategies. Scale training with tensor parallelism, FSDP, and ring attention.",
       "descriptionZh": "通过 KV Cache、量化和解码策略加速推理。用张量并行、FSDP 和环形注意力扩展训练规模。",
       "icon": "Zap",
-      "problems": ["kv_cache", "int8_quantization", "topk_sampling", "beam_search", "speculative_decoding", "mixed_precision", "tensor_parallel", "fsdp_step", "ring_attention"],
+      "problems": ["kv_cache", "int8_quantization", "topk_sampling", "logits_processors", "beam_search", "speculative_decoding", "mixed_precision", "tensor_parallel", "fsdp_step", "ring_attention"],
       "prerequisites": ["transformer-internals"]
     },
     {
@@ -47,7 +47,7 @@
       "descriptionEn": "Implement the loss functions and search algorithms behind modern AI alignment — from reward modeling to PPO and MCTS.",
       "descriptionZh": "实现现代 AI 对齐背后的损失函数和搜索算法——从奖励建模到 PPO 和 MCTS。",
       "icon": "Target",
-      "problems": ["cross_entropy", "reward_model", "dpo_loss", "grpo_loss", "ppo_loss", "mcts_search"],
+      "problems": ["cross_entropy", "reward_model", "dpo_loss", "simpo_ipo_loss", "grpo_loss", "ppo_loss", "mcts_search"],
       "prerequisites": []
     },
     {
@@ -107,7 +107,7 @@
       "descriptionEn": "Build REINFORCE, GRPO, and DAPO foundations, then complete agentic and asynchronous rollouts. Audit RL data, perplexity, confidence, embedding diversity, and gradient orthogonality before implementing KD, sampled-token OPD, and privileged-context OPSD.",
       "descriptionZh": "从 REINFORCE、GRPO、DAPO 到 agentic 异步 rollout；再练习数据审计、困惑度、置信度、两种正交性，以及 KD、OPD 和 OPSD 蒸馏。",
       "icon": "Trophy",
-      "problems": ["per_token_logprobs", "group_relative_advantage", "k3_kl_penalty", "response_token_mask", "rlvr_format_reward", "reinforce_discounted_returns", "reinforce_policy_loss", "grpo_token_loss", "ppo_clipped_policy_loss", "ppo_value_loss", "gae_advantage", "gspo_sequence_ratio", "dapo_dynamic_sampling", "dapo_clip_higher_loss", "vineppo_mc_value", "rollout_batch_assembly", "verl_dataproto_filter_chunk", "grpo_train_step", "agentic_rollout_loop", "agent_rollout_truncation", "rl_eval_loop", "async_agent_rollout", "agent_env_adapter", "slime_custom_generate_hook", "rollout_train_boundary", "fully_async_rollout_buffer", "rollout_weight_sync_staleness", "rl_data_audit", "masked_perplexity", "confidence_calibration", "embedding_diversity_selection", "gradient_orthogonality_audit", "masked_kd_kl", "opd_sampled_kl_advantage", "opsd_privileged_context_kl"],
+      "problems": ["per_token_logprobs", "group_relative_advantage", "rloo_advantage", "k3_kl_penalty", "response_token_mask", "rlvr_format_reward", "reinforce_discounted_returns", "reinforce_policy_loss", "grpo_token_loss", "loss_aggregation_modes", "ppo_clipped_policy_loss", "ppo_value_loss", "gae_advantage", "gspo_sequence_ratio", "dapo_dynamic_sampling", "dapo_clip_higher_loss", "vineppo_mc_value", "rollout_batch_assembly", "verl_dataproto_filter_chunk", "grpo_train_step", "agentic_rollout_loop", "agent_rollout_truncation", "rl_eval_loop", "pass_at_k", "async_agent_rollout", "agent_env_adapter", "slime_custom_generate_hook", "rollout_train_boundary", "fully_async_rollout_buffer", "rollout_weight_sync_staleness", "truncated_importance_sampling", "rl_data_audit", "masked_perplexity", "confidence_calibration", "embedding_diversity_selection", "gradient_orthogonality_audit", "masked_kd_kl", "opd_sampled_kl_advantage", "opsd_privileged_context_kl"],
       "prerequisites": ["transformer-internals"]
     },
     {
@@ -147,8 +147,18 @@
       "descriptionEn": "Classic machine-learning interview staples: losses, regularization, optimizers and evaluation metrics, each implemented and explained from first principles.",
       "descriptionZh": "Classic machine-learning interview staples: losses, regularization, optimizers and evaluation metrics, each implemented and explained from first principles.",
       "icon": "BarChart3",
-      "problems": ["linear_regression", "binary_cross_entropy", "cross_entropy", "focal_loss", "weight_regularization", "dropout", "sgd_momentum", "adam", "precision_recall_f1", "roc_auc"],
+      "problems": ["linear_regression", "binary_cross_entropy", "cross_entropy", "focal_loss", "weight_regularization", "dropout", "sgd_momentum", "adam", "muon_newton_schulz", "manual_backprop_mlp", "precision_recall_f1", "roc_auc"],
       "prerequisites": []
+    },
+    {
+      "id": "training-inference-efficiency",
+      "titleEn": "Training and Inference Efficiency",
+      "titleZh": "Training and Inference Efficiency",
+      "descriptionEn": "Where the time and memory go in LLM training and serving, and the standard fixes: precision, recomputation, packing, fused losses, sharding and parallelism for training; KV caching, paging, quantization and speculative decoding for inference.",
+      "descriptionZh": "Where the time and memory go in LLM training and serving, and the standard fixes: precision, recomputation, packing, fused losses, sharding and parallelism for training; KV caching, paging, quantization and speculative decoding for inference.",
+      "icon": "Zap",
+      "problems": ["mixed_precision", "gradient_accumulation", "activation_checkpointing", "packed_sequence_mask", "chunked_cross_entropy", "flash_attention", "lora", "qlora", "fsdp_step", "tensor_parallel", "kv_cache", "gqa", "paged_attention", "int8_quantization", "speculative_decoding"],
+      "prerequisites": ["train-gpt-from-scratch"]
     }
   ]
 }

@@ -194,6 +194,15 @@
       }
     ]
   },
+  "pass_at_k": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def pass_at_k(num_samples, num_correct, k):\n    if not num_samples or len(num_samples) != len(num_correct):\n        raise ValueError(\"need one correct count per problem\")\n    if k < 1:\n        raise ValueError(\"k must be at least 1\")\n    total = 0.0\n    for n, c in zip(num_samples, num_correct):\n        if n < k or c < 0 or c > n:\n            raise ValueError(\"need k <= n and 0 <= c <= n\")\n        if n - c < k:\n            total += 1.0\n            continue\n        miss = 1.0\n        for i in range(n - c + 1, n + 1):\n            miss *= 1.0 - k / i\n        total += 1.0 - miss\n    return total / len(num_samples)",
+        "role": "solution"
+      }
+    ]
+  },
   "per_token_logprobs": {
     "cells": [
       {
@@ -222,6 +231,15 @@
       {
         "type": "code",
         "source": "import torch\n\n\ndef response_token_mask(prompt_lens, total_lens, max_len):\n    if prompt_lens.shape != total_lens.shape:\n        raise ValueError(\n            f\"shape mismatch: {tuple(prompt_lens.shape)} vs {tuple(total_lens.shape)}\"\n        )\n    if not isinstance(max_len, int) or max_len <= 0:\n        raise ValueError(f\"max_len must be a positive integer, got {max_len!r}\")\n    if (prompt_lens < 0).any() or (total_lens < prompt_lens).any() or (total_lens > max_len).any():\n        raise ValueError(\"every row must satisfy 0 <= prompt_lens <= total_lens <= max_len\")\n    positions = torch.arange(max_len, device=prompt_lens.device).unsqueeze(0)\n    return (positions >= prompt_lens.unsqueeze(-1)) & (positions < total_lens.unsqueeze(-1))",
+        "role": "solution"
+      }
+    ]
+  },
+  "rloo_advantage": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\n\ndef rloo_advantage(rewards, group_size):\n    if rewards.ndim != 1 or group_size < 2 or rewards.numel() % group_size != 0:\n        raise ValueError(\"rewards must be 1-D and group_size >= 2 must divide its length\")\n    grouped = rewards.reshape(-1, group_size)\n    baseline = (grouped.sum(dim=1, keepdim=True) - grouped) / (group_size - 1)\n    return (grouped - baseline).reshape(-1)",
         "role": "solution"
       }
     ]
@@ -629,6 +647,15 @@
       }
     ]
   },
+  "logits_processors": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\n\ndef process_logits(logits, generated_ids, temperature=1.0, top_k=0, top_p=1.0, repetition_penalty=1.0):\n    if temperature <= 0 or top_k < 0 or not 0 < top_p <= 1 or repetition_penalty < 1:\n        raise ValueError(\"invalid sampling settings\")\n    if len(generated_ids) != logits.shape[0]:\n        raise ValueError(\"need one id list per row\")\n    out = logits.clone()\n    if repetition_penalty != 1.0:\n        for b, ids in enumerate(generated_ids):\n            if not ids:\n                continue\n            idx = torch.tensor(sorted(set(ids)), dtype=torch.long)\n            seen = out[b, idx]\n            out[b, idx] = torch.where(seen > 0, seen / repetition_penalty, seen * repetition_penalty)\n    out = out / temperature\n    if top_k:\n        kth = torch.topk(out, min(top_k, out.shape[-1]), dim=-1).values[:, -1:]\n        out = out.masked_fill(out < kth, float(\"-inf\"))\n    if top_p < 1.0:\n        sorted_logits, order = torch.sort(out, dim=-1, descending=True)\n        probs = torch.softmax(sorted_logits, dim=-1)\n        before = torch.cumsum(probs, dim=-1) - probs\n        remove_sorted = before >= top_p\n        remove_sorted[:, 0] = False\n        remove = torch.zeros_like(remove_sorted).scatter(-1, order, remove_sorted)\n        out = out.masked_fill(remove, float(\"-inf\"))\n    return out",
+        "role": "solution"
+      }
+    ]
+  },
   "lora": {
     "cells": [
       {
@@ -640,6 +667,24 @@
         "type": "code",
         "source": "layer = LoRALinear(16, 8, rank=4)\nx = torch.randn(2, 16)\nprint('Output:', layer(x).shape)\ntrainable = sum(p.numel() for p in layer.parameters() if p.requires_grad)\ntotal = sum(p.numel() for p in layer.parameters())\nprint(f'Trainable: {trainable}/{total} ({100*trainable/total:.1f}%)')",
         "role": "demo"
+      }
+    ]
+  },
+  "loss_aggregation_modes": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\n\nMODES = (\"token-mean\", \"seq-mean-token-mean\", \"seq-mean-token-sum\", \"seq-mean-token-sum-norm\")\n\ndef aggregate_loss(per_token_loss, mask, mode):\n    if mode not in MODES:\n        raise ValueError(f\"unknown mode {mode!r}\")\n    if per_token_loss.ndim != 2 or per_token_loss.shape != mask.shape:\n        raise ValueError(\"per_token_loss and mask must share one (B, T) shape\")\n    mask = mask.bool()\n    if not bool(mask.any()):\n        raise ValueError(\"mask has no valid tokens\")\n    masked = torch.where(mask, per_token_loss, torch.zeros_like(per_token_loss))\n    seq_sum = masked.sum(dim=1)\n    seq_len = mask.sum(dim=1)\n    if mode == \"token-mean\":\n        return seq_sum.sum() / seq_len.sum()\n    valid = seq_len > 0\n    if mode == \"seq-mean-token-mean\":\n        per_seq = seq_sum[valid] / seq_len[valid]\n    elif mode == \"seq-mean-token-sum\":\n        per_seq = seq_sum[valid]\n    else:\n        per_seq = seq_sum[valid] / mask.shape[1]\n    return per_seq.mean()",
+        "role": "solution"
+      }
+    ]
+  },
+  "manual_backprop_mlp": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\n\ndef mlp_forward_backward(x, W1, b1, W2, b2, y):\n    N, D = x.shape\n    H, C = W1.shape[0], W2.shape[0]\n    if W1.shape != (H, D) or b1.shape != (H,) or W2.shape != (C, H) or b2.shape != (C,) or y.shape != (N,):\n        raise ValueError(\"parameter shapes do not line up\")\n    if bool((y < 0).any()) or bool((y >= C).any()):\n        raise ValueError(\"labels must lie in [0, C)\")\n\n    z1 = x @ W1.T + b1\n    a1 = z1.clamp(min=0)\n    logits = a1 @ W2.T + b2\n    shifted = logits - logits.max(dim=1, keepdim=True).values\n    log_probs = shifted - torch.log(torch.exp(shifted).sum(dim=1, keepdim=True))\n    rows = torch.arange(N)\n    loss = -log_probs[rows, y].mean()\n\n    dlogits = torch.exp(log_probs)\n    dlogits[rows, y] -= 1\n    dlogits /= N\n    dW2 = dlogits.T @ a1\n    db2 = dlogits.sum(dim=0)\n    da1 = dlogits @ W2\n    dz1 = da1 * (z1 > 0).to(da1.dtype)\n    dW1 = dz1.T @ x\n    db1 = dz1.sum(dim=0)\n    return loss, {\"W1\": dW1, \"b1\": db1, \"W2\": dW2, \"b2\": db2}",
+        "role": "solution"
       }
     ]
   },
@@ -779,6 +824,15 @@
         "type": "code",
         "source": "torch.manual_seed(0)\nB, S, D, V = 2, 5, 16, 10\n\nhidden = torch.randn(B, S, D)\nhead_single = torch.randn(D, V)\ntargets_single = torch.randint(0, V, (B, S, 1))\n\nmtp_loss = multi_token_prediction_loss(hidden, [head_single], targets_single)\n\nlogits = hidden @ head_single\nce_loss = torch.nn.functional.cross_entropy(logits.reshape(-1, V), targets_single[:, :, 0].reshape(-1))\n\nprint(f\"MTP loss (N=1):  {mtp_loss.item():.6f}\")\nprint(f\"Standard CE:     {ce_loss.item():.6f}\")\nprint(f\"N=1 matches CE:  {torch.allclose(mtp_loss, ce_loss, atol=1e-5)}\")\n\nheads_3 = [torch.randn(D, V) for _ in range(3)]\ntargets_3 = torch.randint(0, V, (B, S, 3))\nloss_3 = multi_token_prediction_loss(hidden, heads_3, targets_3)\nprint(f\"MTP loss (N=3):  {loss_3.item():.6f}\")",
         "role": "demo"
+      }
+    ]
+  },
+  "packed_sequence_mask": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\n\ndef packed_attention_mask(seq_lens, total_len):\n    if not seq_lens or any(n <= 0 for n in seq_lens) or sum(seq_lens) > total_len:\n        raise ValueError(\"seq_lens must be positive and fit in total_len\")\n    used = sum(seq_lens)\n    lengths = torch.tensor(seq_lens)\n    doc_id = torch.repeat_interleave(torch.arange(len(seq_lens)), lengths)\n    pad_ids = torch.arange(len(seq_lens), len(seq_lens) + total_len - used)\n    doc_id = torch.cat([doc_id, pad_ids])\n    causal = torch.ones(total_len, total_len, dtype=torch.bool).tril()\n    mask = (doc_id[:, None] == doc_id[None, :]) & causal\n\n    cu_seqlens = torch.cat([torch.zeros(1, dtype=torch.long), torch.cumsum(lengths, 0)])\n    starts = torch.repeat_interleave(cu_seqlens[:-1], lengths)\n    position_ids = torch.zeros(total_len, dtype=torch.long)\n    position_ids[:used] = torch.arange(used) - starts\n    return mask, position_ids, cu_seqlens.to(torch.int32)",
+        "role": "solution"
       }
     ]
   },
@@ -947,6 +1001,15 @@
       }
     ]
   },
+  "simpo_ipo_loss": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\nimport torch.nn.functional as F\n\ndef preference_loss(chosen_logps, rejected_logps, loss_type, beta, chosen_lengths=None, rejected_lengths=None,\n                    gamma=0.0, ref_chosen_logps=None, ref_rejected_logps=None):\n    if beta <= 0:\n        raise ValueError(\"beta must be positive\")\n    if loss_type == \"simpo\":\n        if chosen_lengths is None or rejected_lengths is None:\n            raise ValueError(\"SimPO needs response lengths\")\n        if bool((chosen_lengths <= 0).any()) or bool((rejected_lengths <= 0).any()):\n            raise ValueError(\"lengths must be positive\")\n        margin = beta * (chosen_logps / chosen_lengths - rejected_logps / rejected_lengths) - gamma\n        return F.softplus(-margin).mean()\n    if loss_type == \"ipo\":\n        if ref_chosen_logps is None or ref_rejected_logps is None:\n            raise ValueError(\"IPO needs reference log-probabilities\")\n        gap = (chosen_logps - ref_chosen_logps) - (rejected_logps - ref_rejected_logps)\n        return ((gap - 1 / (2 * beta)) ** 2).mean()\n    raise ValueError(f\"unknown loss_type {loss_type!r}\")",
+        "role": "solution"
+      }
+    ]
+  },
   "sliding_window": {
     "cells": [
       {
@@ -1009,6 +1072,15 @@
         "type": "code",
         "source": "logits = torch.tensor([1.0, 5.0, 2.0, 0.5])\nprint('top_k=1:', sample_top_k_top_p(logits.clone(), top_k=1))\nprint('top_p=0.5:', sample_top_k_top_p(logits.clone(), top_p=0.5))",
         "role": "demo"
+      }
+    ]
+  },
+  "truncated_importance_sampling": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import math\nimport torch\n\ndef truncated_is_weights(train_logprobs, rollout_logprobs, mask, cap=2.0, level=\"token\"):\n    if cap <= 0:\n        raise ValueError(\"cap must be positive\")\n    if level not in (\"token\", \"sequence\"):\n        raise ValueError(f\"unknown level {level!r}\")\n    if train_logprobs.ndim != 2 or train_logprobs.shape != rollout_logprobs.shape or train_logprobs.shape != mask.shape:\n        raise ValueError(\"inputs must share one (B, T) shape\")\n    mask = mask.bool()\n    delta = torch.where(mask, train_logprobs.detach() - rollout_logprobs.detach(), torch.zeros_like(train_logprobs))\n    if level == \"sequence\":\n        delta = delta.sum(dim=1, keepdim=True).expand_as(delta)\n    weights = torch.exp(torch.clamp(delta, max=math.log(cap)))\n    return torch.where(mask, weights, torch.zeros_like(weights))",
+        "role": "solution"
       }
     ]
   },
@@ -1092,6 +1164,15 @@
         "type": "code",
         "source": "from torch_judge.harness.agents import FakeTool,ScriptedModel,TraceRecorder,VirtualClock\nclass Registry:\n    def __init__(self,tool): self.tool=tool\n    def invoke(self,name,arguments,idempotency_key=None): return self.tool.invoke(arguments,idempotency_key)\ntool=FakeTool('lookup','lookup',{'id':str},outcomes=[{'value':'Ada'}])\nmodel=ScriptedModel([\n {'type':'tool_call','call_id':'1','name':'lookup','arguments':{'id':'42'},'usage':{'tokens':3,'cost':0}},\n {'type':'final','content':'Ada','usage':{'tokens':2,'cost':0}},\n])\nresult=budgeted_agent_loop(model,Registry(tool),[],{'max_iterations':3,'max_tool_calls':2,'max_tokens':10,'max_time':5,'max_cost':1},{'max_attempts':2,'base_delay':1},VirtualClock(),TraceRecorder())\nprint(result.status,result.content)",
         "role": "demo"
+      }
+    ]
+  },
+  "chunked_cross_entropy": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\nimport torch.nn.functional as F\nfrom torch.utils.checkpoint import checkpoint\n\ndef chunked_cross_entropy(hidden, weight, targets, chunk_size, ignore_index=-100):\n    if chunk_size < 1:\n        raise ValueError(\"chunk_size must be positive\")\n    if hidden.ndim != 2 or weight.ndim != 2 or hidden.shape[1] != weight.shape[1] or targets.shape != hidden.shape[:1]:\n        raise ValueError(\"expected hidden (N, D), weight (V, D) and targets (N,)\")\n    valid = int((targets != ignore_index).sum())\n    if valid == 0:\n        raise ValueError(\"no target to score\")\n\n    def chunk_loss(h, w, t):\n        return F.cross_entropy(h @ w.T, t, ignore_index=ignore_index, reduction=\"sum\")\n\n    total = hidden.new_zeros(())\n    for start in range(0, hidden.shape[0], chunk_size):\n        end = start + chunk_size\n        total = total + checkpoint(chunk_loss, hidden[start:end], weight, targets[start:end], use_reentrant=False)\n    return total / valid",
+        "role": "solution"
       }
     ]
   },
@@ -1429,6 +1510,15 @@
         "type": "code",
         "source": "experts=[nn.Linear(4,4,bias=False) for _ in range(3)]\nx=torch.randn(5,4)\nindices=torch.tensor([[0,1],[0,2],[1,2],[0,1],[2,0]])\nweights=torch.full((5,2),.5)\noutput,stats=moe_capacity_dispatch(x,indices,weights,experts,capacity=2)\nprint(output.shape,stats)",
         "role": "demo"
+      }
+    ]
+  },
+  "muon_newton_schulz": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import math\nimport torch\n\ndef muon_update(grad, momentum, beta=0.95, nesterov=True, ns_steps=5, eps=1e-7):\n    if grad.ndim != 2 or momentum.shape != grad.shape:\n        raise ValueError(\"grad and momentum must share one 2-D shape\")\n    if not 0 <= beta < 1 or ns_steps < 1:\n        raise ValueError(\"need 0 <= beta < 1 and ns_steps >= 1\")\n    momentum.mul_(beta).add_(grad, alpha=1 - beta)\n    G = (1 - beta) * grad + beta * momentum if nesterov else momentum.clone()\n\n    a, b, c = 3.4445, -4.7750, 2.0315\n    rows, cols = G.shape\n    X = G / (G.norm() + eps)\n    tall = rows > cols\n    if tall:\n        X = X.T\n    for _ in range(ns_steps):\n        A = X @ X.T\n        B = b * A + c * A @ A\n        X = a * X + B @ X\n    if tall:\n        X = X.T\n    return X * math.sqrt(max(1.0, rows / cols))",
+        "role": "solution"
       }
     ]
   },

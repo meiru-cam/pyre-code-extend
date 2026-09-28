@@ -13281,6 +13281,987 @@
           "question": "How do momentum and learning rate interact, and why do schedules sometimes change both?"
         }
       ]
+    },
+    {
+      "id": "pass_at_k",
+      "title": "Unbiased pass@k",
+      "titleZh": "Unbiased pass@k",
+      "difficulty": "Easy",
+      "functionName": "pass_at_k",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Estimate pass@k from `n` sampled solutions per problem, of which `c` are correct.\n\n**Signature:** `pass_at_k(num_samples, num_correct, k) -> float`\n\n**Parameters:**\n- `num_samples` — list of integers, `n_i` samples drawn for problem `i`.\n- `num_correct` — list of integers of the same length, `c_i` correct samples for problem `i`.\n- `k` — positive integer.\n\n**Returns:** Python float, the mean over problems of the unbiased estimator\n\n    pass@k_i = 1 - C(n_i - c_i, k) / C(n_i, k)\n\nwhere `C(a, k)` is the binomial coefficient and `C(a, k) = 0` when `a < k`.\n\n**Constraints:**\n- Stay accurate for `n` in the thousands. Do not evaluate large binomial coefficients as floats; use the product form `C(n - c, k) / C(n, k) = prod over i from n - c + 1 to n of (1 - k / i)`.\n- Raise `ValueError` for empty or mismatched inputs, `k < 1`, any `n_i < k`, or any `c_i` outside `[0, n_i]`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why not just sample k times.** Drawing exactly k samples and checking for any success has high variance. Drawing n larger than k and counting successes gives a lower-variance estimate of the same quantity.\n\n**Why not 1 - (1 - c / n) ** k.** Plugging the empirical success rate into the formula for independent draws is biased, because it samples with replacement from the n generations. The combinatorial form counts subsets of size k drawn without replacement and is unbiased. This is the estimator from the Codex paper.",
+      "descriptionZh": "Estimate pass@k from `n` sampled solutions per problem, of which `c` are correct.\n\n**Signature:** `pass_at_k(num_samples, num_correct, k) -> float`\n\n**Parameters:**\n- `num_samples` — list of integers, `n_i` samples drawn for problem `i`.\n- `num_correct` — list of integers of the same length, `c_i` correct samples for problem `i`.\n- `k` — positive integer.\n\n**Returns:** Python float, the mean over problems of the unbiased estimator\n\n    pass@k_i = 1 - C(n_i - c_i, k) / C(n_i, k)\n\nwhere `C(a, k)` is the binomial coefficient and `C(a, k) = 0` when `a < k`.\n\n**Constraints:**\n- Stay accurate for `n` in the thousands. Do not evaluate large binomial coefficients as floats; use the product form `C(n - c, k) / C(n, k) = prod over i from n - c + 1 to n of (1 - k / i)`.\n- Raise `ValueError` for empty or mismatched inputs, `k < 1`, any `n_i < k`, or any `c_i` outside `[0, n_i]`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why not just sample k times.** Drawing exactly k samples and checking for any success has high variance. Drawing n larger than k and counting successes gives a lower-variance estimate of the same quantity.\n\n**Why not 1 - (1 - c / n) ** k.** Plugging the empirical success rate into the formula for independent draws is biased, because it samples with replacement from the n generations. The combinatorial form counts subsets of size k drawn without replacement and is unbiased. This is the estimator from the Codex paper.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Small cases by hand",
+          "code": "\nout = {fn}([5, 4], [2, 0], 2)\nwant = ((1 - 3 / 10) + 0.0) / 2\nassert isinstance(out, float) and abs(out - want) < 1e-12, (out, want)\nassert abs({fn}([10], [3], 1) - 0.3) < 1e-12\n",
+          "behavior": "metrics.averaging"
+        },
+        {
+          "name": "Matches exact rational arithmetic on seeded inputs",
+          "visibility": "unshown",
+          "behavior": "metrics.averaging",
+          "failureMessage": "Use the combinatorial estimator without replacement, averaged over problems.",
+          "hiddenCode": "\nimport random\nfrom fractions import Fraction\nfrom math import comb\nfor seed in (7, 23, 91):\n    rng = random.Random(seed)\n    k = rng.randint(1, 8)\n    ns = [rng.randint(k, 40) for _ in range(rng.randint(3, 8))]\n    cs = [rng.randint(0, n) for n in ns]\n    want = sum(1 - Fraction(comb(n - c, k), comb(n, k)) for n, c in zip(ns, cs)) / len(ns)\n    out = {fn}(ns, cs, k)\n    assert abs(out - float(want)) < 1e-12, (seed, out, float(want))\n"
+        },
+        {
+          "name": "Accurate for thousands of samples",
+          "visibility": "unshown",
+          "behavior": "numerics.stability",
+          "failureMessage": "Large binomial coefficients overflow floats; use the product form.",
+          "hiddenCode": "\nfrom fractions import Fraction\nfrom math import comb\nfor n, c, k in ((2000, 3, 100), (5000, 10, 500), (400, 395, 20), (3000, 0, 50)):\n    want = 1 - Fraction(comb(n - c, k), comb(n, k))\n    out = {fn}([n], [c], k)\n    assert abs(out - float(want)) < 1e-10, (n, c, k, out, float(want))\n"
+        },
+        {
+          "name": "Rejects invalid counts",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Empty or mismatched inputs, k < 1, n < k and c outside [0, n] must raise ValueError.",
+          "hiddenCode": "\ncases = [([], [], 1), ([5], [1, 2], 1), ([5], [1], 0), ([3], [1], 4), ([5], [6], 1), ([5], [-1], 1)]\nfor args in cases:\n    try:\n        {fn}(*args)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"accepted {args}\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "What is the probability that a random size-k subset of the n samples contains no correct sample? What happens when fewer than k samples are wrong?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Validate first. For each problem, if n - c < k the estimate is 1.0; otherwise compute 1 - prod(1 - k / i for i in range(n - c + 1, n + 1)). Return the mean over problems."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "rl_eval_loop"
+      ],
+      "modelConnections": [
+        "HumanEval, MBPP and RLVR evaluation harnesses report pass@1 and pass@k with this estimator from the Codex paper."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Unbiased and lower variance than drawing exactly k samples, and one set of n samples gives every k up to n."
+        ],
+        "cons": [
+          "Measures only whether any sample is correct; it hides how often the model is right, which pass@1 and majority voting capture."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What does pass@k measure, and why is it the usual metric for code and math generation?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why is 1 - (1 - c / n) ** k a biased estimate of pass@k?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Derive the unbiased estimator by counting size-k subsets of the n samples."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why does evaluating C(n, k) directly fail for large n, and how does the product form avoid it?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What should the estimate be when fewer than k samples are wrong?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "RL often raises pass@1 while pass@k at large k stays flat or drops. What does that say about what RL is learning?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "pass@k versus majority voting versus a verifier-reranked best-of-n: what does each reward, and which matches deployment?"
+        }
+      ]
+    },
+    {
+      "id": "rloo_advantage",
+      "title": "RLOO Leave-One-Out Advantage",
+      "titleZh": "RLOO Leave-One-Out Advantage",
+      "difficulty": "Easy",
+      "functionName": "rloo_advantage",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Compute REINFORCE leave-one-out (RLOO) advantages for grouped completions.\n\n**Signature:** `rloo_advantage(rewards, group_size) -> Tensor`\n\n**Parameters:**\n- `rewards` — 1-D float tensor of shape `(N,)`, laid out group-major: the first `group_size` entries are the completions of prompt 0, the next `group_size` belong to prompt 1, and so on.\n- `group_size` — integer `k >= 2` that divides `N`.\n\n**Returns:** float tensor of shape `(N,)`. Each reward minus the mean reward of the *other* completions in its group:\n\n    A_i = r_i - (sum of rewards in the group of i  -  r_i) / (k - 1)\n\n**Constraints:**\n- The baseline for sample `i` must exclude `r_i` itself.\n- Do not divide by a standard deviation.\n- Compute groups independently; never mix rewards across prompts.\n- Raise `ValueError` when `rewards` is not 1-D, when `group_size < 2`, or when `group_size` does not divide `N`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why leave one out.** A baseline that includes the sample's own reward is correlated with that sample, which biases the policy gradient. Excluding it keeps the estimator unbiased while still reducing variance.\n\n**Relation to GRPO.** Algebraically `A_i = k / (k - 1) * (r_i - mean(group))`, so RLOO is a rescaled mean-centering. GRPO additionally divides by the group standard deviation, which reweights prompts by how spread out their rewards are.",
+      "descriptionZh": "Compute REINFORCE leave-one-out (RLOO) advantages for grouped completions.\n\n**Signature:** `rloo_advantage(rewards, group_size) -> Tensor`\n\n**Parameters:**\n- `rewards` — 1-D float tensor of shape `(N,)`, laid out group-major: the first `group_size` entries are the completions of prompt 0, the next `group_size` belong to prompt 1, and so on.\n- `group_size` — integer `k >= 2` that divides `N`.\n\n**Returns:** float tensor of shape `(N,)`. Each reward minus the mean reward of the *other* completions in its group:\n\n    A_i = r_i - (sum of rewards in the group of i  -  r_i) / (k - 1)\n\n**Constraints:**\n- The baseline for sample `i` must exclude `r_i` itself.\n- Do not divide by a standard deviation.\n- Compute groups independently; never mix rewards across prompts.\n- Raise `ValueError` when `rewards` is not 1-D, when `group_size < 2`, or when `group_size` does not divide `N`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why leave one out.** A baseline that includes the sample's own reward is correlated with that sample, which biases the policy gradient. Excluding it keeps the estimator unbiased while still reducing variance.\n\n**Relation to GRPO.** Algebraically `A_i = k / (k - 1) * (r_i - mean(group))`, so RLOO is a rescaled mean-centering. GRPO additionally divides by the group standard deviation, which reweights prompts by how spread out their rewards are.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Leave-one-out baseline on two groups",
+          "code": "\nimport torch\nrewards = torch.tensor([1.0, 0.0, 0.0, 2.0, 2.0, 5.0])\nout = {fn}(rewards, 3)\nwant = torch.tensor([1.0, -0.5, -0.5, -1.5, -1.5, 3.0])\nassert out.shape == (6,) and torch.allclose(out, want), out\n",
+          "behavior": "rl.advantage"
+        },
+        {
+          "name": "Matches a seeded per-sample oracle",
+          "visibility": "unshown",
+          "behavior": "rl.advantage",
+          "failureMessage": "Each baseline must be the mean of the other completions of the same prompt.",
+          "hiddenCode": "\nimport random, torch\nfor seed in (4, 19, 33):\n    rng = random.Random(seed)\n    k = rng.randint(2, 6)\n    groups = rng.randint(2, 5)\n    rewards = [rng.uniform(-2, 3) for _ in range(k * groups)]\n    out = {fn}(torch.tensor(rewards, dtype=torch.float64), k)\n    for i, r in enumerate(rewards):\n        start = (i // k) * k\n        peers = [rewards[j] for j in range(start, start + k) if j != i]\n        want = r - sum(peers) / len(peers)\n        assert abs(out[i].item() - want) < 1e-10, (seed, i, out[i], want)\n"
+        },
+        {
+          "name": "Group advantages sum to zero and are not standardized",
+          "visibility": "unshown",
+          "behavior": "rl.advantage",
+          "failureMessage": "RLOO advantages are mean-centred per group but not divided by a standard deviation.",
+          "hiddenCode": "\nimport torch\nrewards = torch.tensor([10.0, 20.0, 30.0, 40.0], dtype=torch.float64)\nout = {fn}(rewards, 4)\nassert abs(out.sum().item()) < 1e-10, out\nassert torch.allclose(out, torch.tensor([-20.0, -20.0 / 3, 20.0 / 3, 20.0], dtype=torch.float64)), out\n"
+        },
+        {
+          "name": "Keeps groups independent in group-major layout",
+          "visibility": "unshown",
+          "behavior": "rl.advantage",
+          "failureMessage": "Consecutive blocks of group_size entries form one group; do not group by stride.",
+          "hiddenCode": "\nimport torch\nrewards = torch.tensor([0.0, 0.0, 100.0, 100.0])\nout = {fn}(rewards, 2)\nassert torch.allclose(out, torch.zeros(4)), out\n"
+        },
+        {
+          "name": "Rejects invalid group sizes",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "group_size must be at least 2 and divide the number of rewards.",
+          "hiddenCode": "\nimport torch\nfor rewards, k in ((torch.ones(4), 1), (torch.ones(5), 2), (torch.ones(2, 2), 2)):\n    try:\n        {fn}(rewards, k)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"accepted k={k} for shape {tuple(rewards.shape)}\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "How can you get every sample's leave-one-out mean from one group sum instead of a loop? Why must k be at least 2?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Reshape to (N // k, k), take the row sum, compute (row_sum - r) / (k - 1) as the baseline, subtract it from r, and flatten back. Validate the shape and group size first."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "group_relative_advantage"
+      ],
+      "modelConnections": [
+        "TRL's RLOOTrainer and OpenRLHF's rloo advantage estimator both use this leave-one-out baseline over k samples per prompt."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Unbiased baseline without a value network, using samples you already drew."
+        ],
+        "cons": [
+          "Needs at least two samples per prompt, and groups where every reward is equal give zero advantage everywhere."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is RLOO, and what baseline does it use for each sample?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why does including a sample's own reward in its baseline bias the policy gradient?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you compute every leave-one-out mean in one vectorized step?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Show that the RLOO advantage equals k / (k - 1) times the mean-centred reward."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why must the group size be at least 2, and what happens when all rewards in a group are equal?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "RLOO versus GRPO: what does dividing by the group standard deviation add, and what bias does it introduce?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "RLOO versus PPO with a learned critic: sample cost, variance and stability?"
+        }
+      ]
+    },
+    {
+      "id": "logits_processors",
+      "title": "Logits Processor Pipeline",
+      "titleZh": "Logits Processor Pipeline",
+      "difficulty": "Medium",
+      "functionName": "process_logits",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Apply the standard decoding-time logits processors in a fixed order.\n\n**Signature:** `process_logits(logits, generated_ids, temperature=1.0, top_k=0, top_p=1.0, repetition_penalty=1.0) -> Tensor`\n\n**Parameters:**\n- `logits` — float tensor `(B, V)` for the next token.\n- `generated_ids` — list of B lists of token ids already in each sequence (prompt plus generated).\n- `temperature` — positive float.\n- `top_k` — integer; 0 disables it.\n- `top_p` — float in `(0, 1]`; 1.0 disables it.\n- `repetition_penalty` — float `>= 1`; 1.0 disables it.\n\n**Returns:** a new float tensor `(B, V)`. Removed tokens are `-inf`. Apply these steps in order:\n\n- **Repetition penalty.** For each distinct token id in `generated_ids[b]`, divide its logit by `repetition_penalty` if the logit is positive, otherwise multiply by it.\n- **Temperature.** Divide all logits by `temperature`.\n- **Top-k.** Keep every token whose logit is `>=` the k-th largest logit in its row, so tied tokens are all kept.\n- **Top-p.** Over the surviving tokens, sort by probability in descending order and keep the smallest prefix whose cumulative probability reaches `top_p`. Always keep the most likely token.\n\n**Constraints:**\n- Do not modify `logits` in place.\n- Each row is processed independently.\n- Raise `ValueError` for `temperature <= 0`, `top_k < 0`, `top_p` outside `(0, 1]`, `repetition_penalty < 1`, or `len(generated_ids) != B`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why the order matters.** Temperature changes the probabilities that top-p thresholds, so top-p after temperature keeps a different set than top-p before it. The order above matches Hugging Face `generate` and most serving engines.\n\n**Why the sign rule in the repetition penalty.** Dividing a negative logit by a number greater than one would raise it and make the token more likely. Multiplying negatives and dividing positives always lowers the token's score.",
+      "descriptionZh": "Apply the standard decoding-time logits processors in a fixed order.\n\n**Signature:** `process_logits(logits, generated_ids, temperature=1.0, top_k=0, top_p=1.0, repetition_penalty=1.0) -> Tensor`\n\n**Parameters:**\n- `logits` — float tensor `(B, V)` for the next token.\n- `generated_ids` — list of B lists of token ids already in each sequence (prompt plus generated).\n- `temperature` — positive float.\n- `top_k` — integer; 0 disables it.\n- `top_p` — float in `(0, 1]`; 1.0 disables it.\n- `repetition_penalty` — float `>= 1`; 1.0 disables it.\n\n**Returns:** a new float tensor `(B, V)`. Removed tokens are `-inf`. Apply these steps in order:\n\n- **Repetition penalty.** For each distinct token id in `generated_ids[b]`, divide its logit by `repetition_penalty` if the logit is positive, otherwise multiply by it.\n- **Temperature.** Divide all logits by `temperature`.\n- **Top-k.** Keep every token whose logit is `>=` the k-th largest logit in its row, so tied tokens are all kept.\n- **Top-p.** Over the surviving tokens, sort by probability in descending order and keep the smallest prefix whose cumulative probability reaches `top_p`. Always keep the most likely token.\n\n**Constraints:**\n- Do not modify `logits` in place.\n- Each row is processed independently.\n- Raise `ValueError` for `temperature <= 0`, `top_k < 0`, `top_p` outside `(0, 1]`, `repetition_penalty < 1`, or `len(generated_ids) != B`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why the order matters.** Temperature changes the probabilities that top-p thresholds, so top-p after temperature keeps a different set than top-p before it. The order above matches Hugging Face `generate` and most serving engines.\n\n**Why the sign rule in the repetition penalty.** Dividing a negative logit by a number greater than one would raise it and make the token more likely. Multiplying negatives and dividing positives always lowers the token's score.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Each processor on a small row",
+          "code": "\nimport math, torch\nlogits = torch.tensor([[2.0, -1.0, 1.0, 0.5]])\nout = {fn}(logits, [[0, 1]], repetition_penalty=2.0)\nassert torch.allclose(out, torch.tensor([[1.0, -2.0, 1.0, 0.5]])), out\nout = {fn}(logits, [[]], temperature=0.5, top_k=2)\nassert out[0, 0] == 4.0 and out[0, 2] == 2.0 and math.isinf(out[0, 1]) and math.isinf(out[0, 3]), out\nout = {fn}(torch.log(torch.tensor([[0.5, 0.3, 0.15, 0.05]])), [[]], top_p=0.7)\nassert torch.isfinite(out[0, :2]).all() and torch.isinf(out[0, 2:]).all(), out\n",
+          "behavior": "tensor.shape"
+        },
+        {
+          "name": "Matches a seeded loop-based oracle",
+          "visibility": "unshown",
+          "behavior": "tensor.shape",
+          "failureMessage": "Apply penalty, temperature, top-k with ties kept, then top-p over the survivors, in that order.",
+          "hiddenCode": "\nimport math, random, torch\ndef oracle(row, ids, temperature, top_k, top_p, penalty):\n    row = list(row)\n    for i in set(ids):\n        row[i] = row[i] / penalty if row[i] > 0 else row[i] * penalty\n    row = [x / temperature for x in row]\n    if top_k:\n        kth = sorted(row, reverse=True)[top_k - 1]\n        row = [x if x >= kth else -math.inf for x in row]\n    if top_p < 1.0:\n        m = max(row); exps = [math.exp(x - m) for x in row]; z = sum(exps)\n        order = sorted(range(len(row)), key=lambda i: -row[i])\n        keep, cum = set(), 0.0\n        for i in order:\n            keep.add(i); cum += exps[i] / z\n            if cum >= top_p:\n                break\n        row = [x if i in keep else -math.inf for i, x in enumerate(row)]\n    return row\nfor seed in (9, 26, 83):\n    rng = random.Random(seed)\n    B, V = rng.randint(2, 4), rng.randint(6, 12)\n    rows = [[rng.gauss(0, 2) for _ in range(V)] for _ in range(B)]\n    ids = [[rng.randrange(V) for _ in range(rng.randint(0, 5))] for _ in range(B)]\n    for temperature, top_k, top_p, penalty in ((0.7, 0, 0.8, 1.3), (1.5, 4, 1.0, 1.0), (1.0, 5, 0.6, 2.0), (0.4, 0, 1.0, 1.7)):\n        x = torch.tensor(rows, dtype=torch.float64)\n        out = {fn}(x, ids, temperature=temperature, top_k=top_k, top_p=top_p, repetition_penalty=penalty)\n        assert torch.equal(x, torch.tensor(rows, dtype=torch.float64)), \"modified logits in place\"\n        for b in range(B):\n            want = oracle(rows[b], ids[b], temperature, top_k, top_p, penalty)\n            for v in range(V):\n                got = out[b, v].item()\n                assert (math.isinf(got) and math.isinf(want[v])) or abs(got - want[v]) < 1e-9, (seed, b, v, got, want[v])\n"
+        },
+        {
+          "name": "Top-k keeps ties and top-p keeps the best token",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "Tokens tied with the k-th logit stay; top-p always keeps at least the most likely token.",
+          "hiddenCode": "\nimport torch\nout = {fn}(torch.tensor([[3.0, 1.0, 1.0, 0.0]]), [[]], top_k=2)\nassert torch.isfinite(out[0, :3]).all() and torch.isinf(out[0, 3]), out\nout = {fn}(torch.tensor([[5.0, 0.0, -1.0]]), [[]], top_p=0.01)\nassert torch.isfinite(out[0, 0]) and torch.isinf(out[0, 1:]).all(), out\n"
+        },
+        {
+          "name": "Rejects invalid settings",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Out-of-range settings and a generated_ids list of the wrong length must raise ValueError.",
+          "hiddenCode": "\nimport torch\nx = torch.zeros(2, 5)\ncases = [dict(temperature=0.0), dict(top_k=-1), dict(top_p=0.0), dict(top_p=1.5), dict(repetition_penalty=0.5)]\nfor kwargs in cases:\n    try:\n        {fn}(x, [[], []], **kwargs)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"accepted {kwargs}\")\ntry:\n    {fn}(x, [[]])\nexcept ValueError:\n    pass\nelse:\n    raise AssertionError(\"accepted one id list for two rows\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Why does the repetition penalty treat positive and negative logits differently? In top-p, is the token that pushes the cumulative sum past p kept or removed?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Clone the logits. Loop over rows for the penalty using a set of ids. Divide by temperature. For top-k compare against torch.topk(x, k).values[:, -1:]. For top-p sort descending, softmax, cumsum, and remove positions where cumsum minus the token's own probability is already >= top_p; scatter the removal mask back to vocabulary order."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "topk_sampling",
+        "softmax"
+      ],
+      "modelConnections": [
+        "Hugging Face's LogitsProcessorList, vLLM's sampler and llama.cpp's sampler chain all apply these processors, with configurable order in llama.cpp."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Cheap, model-agnostic control over diversity and repetition at inference time."
+        ],
+        "cons": [
+          "The knobs interact, and the repetition penalty also punishes tokens that should repeat, such as code syntax or names."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What do temperature, top-k and top-p each do to the next-token distribution?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why does the repetition penalty divide positive logits but multiply negative ones?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through implementing top-p on a batch. Is the token that crosses the threshold kept, and how do you map the mask back from sorted order?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why does the order of temperature and top-p matter? Give a concrete example."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How should top-k treat ties, and what does torch.topk do with them?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Top-p versus top-k versus min-p for creative writing and for code: which would you use and why?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Repetition penalty versus frequency and presence penalties: what does each punish, and when do they hurt quality?"
+        }
+      ]
+    },
+    {
+      "id": "loss_aggregation_modes",
+      "title": "Policy Loss Aggregation Modes",
+      "titleZh": "Policy Loss Aggregation Modes",
+      "difficulty": "Medium",
+      "functionName": "aggregate_loss",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Reduce a per-token policy loss to a scalar under four aggregation modes.\n\n**Signature:** `aggregate_loss(per_token_loss, mask, mode) -> Tensor`\n\n**Parameters:**\n- `per_token_loss` — float tensor of shape `(B, T)`.\n- `mask` — boolean tensor of shape `(B, T)`. True on response tokens.\n- `mode` — one of the four strings below.\n\n**Returns:** scalar tensor. Let `L[b] = sum_t per_token_loss[b, t] * mask[b, t]` and `n[b] = sum_t mask[b, t]`. A sequence is *valid* when `n[b] > 0`; the seq means below run over valid sequences only.\n\n    \"token-mean\"               sum_b L[b] / sum_b n[b]\n    \"seq-mean-token-mean\"      mean over valid b of  L[b] / n[b]\n    \"seq-mean-token-sum\"       mean over valid b of  L[b]\n    \"seq-mean-token-sum-norm\"  mean over valid b of  L[b] / T\n\n**Constraints:**\n- Masked positions contribute neither value nor gradient, even when they hold NaN or infinity.\n- Keep the result differentiable with respect to `per_token_loss`.\n- Raise `ValueError` for an unknown mode, mismatched shapes, a non-2-D input, or a mask with no True entry.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why the choice matters.** With `seq-mean-token-mean` every sequence gets equal total weight, so each token of a long response gets less gradient than each token of a short one. For a negative advantage that makes long wrong answers cheap, which is one reason GRPO responses grow in length. `token-mean` weights every token equally across the batch, as DAPO recommends. `seq-mean-token-sum-norm` divides by a constant horizon `T` instead of the response length, the unbiased form proposed by Dr. GRPO.\n\n**Masked NaN.** Multiplying a NaN by zero still gives NaN, so select valid tokens with `torch.where` or boolean indexing rather than multiplying by the mask.",
+      "descriptionZh": "Reduce a per-token policy loss to a scalar under four aggregation modes.\n\n**Signature:** `aggregate_loss(per_token_loss, mask, mode) -> Tensor`\n\n**Parameters:**\n- `per_token_loss` — float tensor of shape `(B, T)`.\n- `mask` — boolean tensor of shape `(B, T)`. True on response tokens.\n- `mode` — one of the four strings below.\n\n**Returns:** scalar tensor. Let `L[b] = sum_t per_token_loss[b, t] * mask[b, t]` and `n[b] = sum_t mask[b, t]`. A sequence is *valid* when `n[b] > 0`; the seq means below run over valid sequences only.\n\n    \"token-mean\"               sum_b L[b] / sum_b n[b]\n    \"seq-mean-token-mean\"      mean over valid b of  L[b] / n[b]\n    \"seq-mean-token-sum\"       mean over valid b of  L[b]\n    \"seq-mean-token-sum-norm\"  mean over valid b of  L[b] / T\n\n**Constraints:**\n- Masked positions contribute neither value nor gradient, even when they hold NaN or infinity.\n- Keep the result differentiable with respect to `per_token_loss`.\n- Raise `ValueError` for an unknown mode, mismatched shapes, a non-2-D input, or a mask with no True entry.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why the choice matters.** With `seq-mean-token-mean` every sequence gets equal total weight, so each token of a long response gets less gradient than each token of a short one. For a negative advantage that makes long wrong answers cheap, which is one reason GRPO responses grow in length. `token-mean` weights every token equally across the batch, as DAPO recommends. `seq-mean-token-sum-norm` divides by a constant horizon `T` instead of the response length, the unbiased form proposed by Dr. GRPO.\n\n**Masked NaN.** Multiplying a NaN by zero still gives NaN, so select valid tokens with `torch.where` or boolean indexing rather than multiplying by the mask.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "All four modes on a ragged batch",
+          "code": "\nimport torch\nloss = torch.tensor([[1.0, 3.0, 0.0, 0.0], [2.0, 2.0, 2.0, 6.0]])\nmask = torch.tensor([[True, True, False, False], [True, True, True, True]])\nwant = {\n    \"token-mean\": 16.0 / 6,\n    \"seq-mean-token-mean\": (2.0 + 3.0) / 2,\n    \"seq-mean-token-sum\": (4.0 + 12.0) / 2,\n    \"seq-mean-token-sum-norm\": (4.0 / 4 + 12.0 / 4) / 2,\n}\nfor mode, value in want.items():\n    out = {fn}(loss, mask, mode)\n    assert out.ndim == 0 and abs(out.item() - value) < 1e-6, (mode, out, value)\n",
+          "behavior": "rl.masking"
+        },
+        {
+          "name": "Matches a seeded oracle and gradient for every mode",
+          "visibility": "unshown",
+          "behavior": "rl.masking",
+          "failureMessage": "Each mode must use its stated numerator, denominator and set of valid sequences.",
+          "hiddenCode": "\nimport random, torch\nfor seed in (6, 21, 40):\n    rng = random.Random(seed)\n    B, T = rng.randint(3, 5), rng.randint(3, 7)\n    values = [[rng.uniform(-2, 2) for _ in range(T)] for _ in range(B)]\n    mask = [[rng.random() < 0.6 for _ in range(T)] for _ in range(B)]\n    mask[0] = [True] + [False] * (T - 1)\n    mask[1] = [True] * T\n    mask[-1] = [False] * T\n    valid = [b for b in range(B) if any(mask[b])]\n    L = {b: sum(v for v, m in zip(values[b], mask[b]) if m) for b in valid}\n    n = {b: sum(mask[b]) for b in valid}\n    oracle = {\n        \"token-mean\": sum(L.values()) / sum(n.values()),\n        \"seq-mean-token-mean\": sum(L[b] / n[b] for b in valid) / len(valid),\n        \"seq-mean-token-sum\": sum(L.values()) / len(valid),\n        \"seq-mean-token-sum-norm\": sum(L[b] / T for b in valid) / len(valid),\n    }\n    grads = {\n        \"token-mean\": lambda b: 1 / sum(n.values()),\n        \"seq-mean-token-mean\": lambda b: 1 / (n[b] * len(valid)),\n        \"seq-mean-token-sum\": lambda b: 1 / len(valid),\n        \"seq-mean-token-sum-norm\": lambda b: 1 / (T * len(valid)),\n    }\n    for mode, want in oracle.items():\n        x = torch.tensor(values, dtype=torch.float64, requires_grad=True)\n        out = {fn}(x, torch.tensor(mask), mode)\n        assert abs(out.item() - want) < 1e-10, (seed, mode, out, want)\n        out.backward()\n        expected = [[grads[mode](b) if mask[b][t] else 0.0 for t in range(T)] for b in range(B)]\n        assert torch.allclose(x.grad, torch.tensor(expected, dtype=torch.float64), atol=1e-12), (seed, mode)\n"
+        },
+        {
+          "name": "Ignores NaN and infinity at masked positions",
+          "visibility": "unshown",
+          "behavior": "numerics.stability",
+          "failureMessage": "Masked positions must not leak NaN or infinity; select valid tokens instead of multiplying by the mask.",
+          "hiddenCode": "\nimport torch\nloss = torch.tensor([[1.0, float(\"nan\")], [2.0, float(\"inf\")]], requires_grad=True)\nmask = torch.tensor([[True, False], [True, False]])\nfor mode in (\"token-mean\", \"seq-mean-token-mean\", \"seq-mean-token-sum\", \"seq-mean-token-sum-norm\"):\n    out = {fn}(loss, mask, mode)\n    assert torch.isfinite(out), (mode, out)\n    out.backward()\n    assert torch.isfinite(loss.grad).all() and loss.grad[:, 1].abs().sum() == 0, (mode, loss.grad)\n    loss.grad = None\n"
+        },
+        {
+          "name": "Rejects invalid modes, shapes and empty masks",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Unknown modes, misaligned or non-2-D inputs, and an all-false mask must raise ValueError.",
+          "hiddenCode": "\nimport torch\ncases = [\n    (torch.ones(2, 3), torch.ones(2, 3, dtype=torch.bool), \"seq-mean\"),\n    (torch.ones(2, 3), torch.ones(2, 2, dtype=torch.bool), \"token-mean\"),\n    (torch.ones(3), torch.ones(3, dtype=torch.bool), \"token-mean\"),\n    (torch.ones(2, 3), torch.zeros(2, 3, dtype=torch.bool), \"token-mean\"),\n]\nfor loss, mask, mode in cases:\n    try:\n        {fn}(loss, mask, mode)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"accepted {tuple(loss.shape)} {tuple(mask.shape)} {mode}\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which quantity does each mode divide by: total tokens, each sequence's own length, or a constant? Which sequences take part in a seq mean? Why can loss * mask still be NaN?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Replace masked entries with zero via torch.where(mask, loss, 0). Compute per-sequence sums L and counts n, keep rows with n > 0, then apply the mode's formula. Validate shapes, mode and an all-false mask first."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "grpo_token_loss",
+        "response_token_mask"
+      ],
+      "modelConnections": [
+        "verl exposes exactly these choices as `loss_agg_mode` in `agg_loss`; DAPO uses token-mean and Dr. GRPO argues for a constant normalizer."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Making aggregation explicit exposes a hidden length bias that changes what the policy learns."
+        ],
+        "cons": [
+          "No mode is best everywhere; token-mean lets long responses dominate the batch and constant normalization needs a fixed horizon."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "In GRPO-style training, how can the way you average the per-token loss change what the policy learns?"
+        },
+        {
+          "stage": "concept",
+          "question": "What is the length bias that Dr. GRPO points out in the original GRPO objective?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Write the four aggregation modes. For each, how much gradient does one token of a long response get compared with one token of a short response?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Which sequences should take part in a sequence mean, and what goes wrong with sequences that have no valid tokens?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why can loss * mask still produce NaN, and how do you avoid it?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Token-mean versus sequence-mean: which one would you use for long chain-of-thought RL, and why?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How does the aggregation mode interact with gradient accumulation and data-parallel batch splits?"
+        }
+      ]
+    },
+    {
+      "id": "manual_backprop_mlp",
+      "title": "Manual Backprop Through an MLP",
+      "titleZh": "Manual Backprop Through an MLP",
+      "difficulty": "Medium",
+      "functionName": "mlp_forward_backward",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Compute the loss and all parameter gradients of a two-layer ReLU classifier by hand, without autograd.\n\n**Signature:** `mlp_forward_backward(x, W1, b1, W2, b2, y) -> tuple[Tensor, dict]`\n\n**Parameters:**\n- `x` — float tensor `(N, D)`.\n- `W1` — `(H, D)`, `b1` — `(H,)`, `W2` — `(C, H)`, `b2` — `(C,)`.\n- `y` — int64 tensor `(N,)` of class ids in `[0, C)`.\n\n**Forward pass:**\n\n    z1 = x @ W1.T + b1\n    a1 = relu(z1)\n    logits = a1 @ W2.T + b2\n    loss = mean over n of cross_entropy(logits[n], y[n])\n\n**Returns:** `(loss, grads)` where `loss` is a scalar tensor and `grads` has keys `\"W1\"`, `\"b1\"`, `\"W2\"`, `\"b2\"`, each a tensor with the same shape as its parameter.\n\n**Constraints:**\n- Do not use autograd: no `backward`, `torch.autograd.grad` or `requires_grad`.\n- Use the convention that the ReLU derivative at exactly 0 is 0.\n- Compute the softmax stably; logits as large as 1000 must not produce NaN.\n- Raise `ValueError` for shapes that do not line up or labels outside `[0, C)`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**The key identity.** For mean cross-entropy, the gradient with respect to the logits is `(softmax(logits) - onehot(y)) / N`. Everything else is the chain rule through two matmuls and an elementwise ReLU.\n\n**Shapes as a check.** Each weight gradient is an outer product summed over the batch, so `dW2 = dlogits.T @ a1` has shape `(C, H)`. Each bias gradient sums its upstream gradient over the batch dimension.",
+      "descriptionZh": "Compute the loss and all parameter gradients of a two-layer ReLU classifier by hand, without autograd.\n\n**Signature:** `mlp_forward_backward(x, W1, b1, W2, b2, y) -> tuple[Tensor, dict]`\n\n**Parameters:**\n- `x` — float tensor `(N, D)`.\n- `W1` — `(H, D)`, `b1` — `(H,)`, `W2` — `(C, H)`, `b2` — `(C,)`.\n- `y` — int64 tensor `(N,)` of class ids in `[0, C)`.\n\n**Forward pass:**\n\n    z1 = x @ W1.T + b1\n    a1 = relu(z1)\n    logits = a1 @ W2.T + b2\n    loss = mean over n of cross_entropy(logits[n], y[n])\n\n**Returns:** `(loss, grads)` where `loss` is a scalar tensor and `grads` has keys `\"W1\"`, `\"b1\"`, `\"W2\"`, `\"b2\"`, each a tensor with the same shape as its parameter.\n\n**Constraints:**\n- Do not use autograd: no `backward`, `torch.autograd.grad` or `requires_grad`.\n- Use the convention that the ReLU derivative at exactly 0 is 0.\n- Compute the softmax stably; logits as large as 1000 must not produce NaN.\n- Raise `ValueError` for shapes that do not line up or labels outside `[0, C)`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**The key identity.** For mean cross-entropy, the gradient with respect to the logits is `(softmax(logits) - onehot(y)) / N`. Everything else is the chain rule through two matmuls and an elementwise ReLU.\n\n**Shapes as a check.** Each weight gradient is an outer product summed over the batch, so `dW2 = dlogits.T @ a1` has shape `(C, H)`. Each bias gradient sums its upstream gradient over the batch dimension.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Matches autograd on a small batch",
+          "code": "\nimport torch, torch.nn.functional as F\ng = torch.Generator().manual_seed(0)\nx = torch.randn(4, 3, generator=g, dtype=torch.float64)\nW1 = torch.randn(5, 3, generator=g, dtype=torch.float64); b1 = torch.randn(5, generator=g, dtype=torch.float64)\nW2 = torch.randn(2, 5, generator=g, dtype=torch.float64); b2 = torch.randn(2, generator=g, dtype=torch.float64)\ny = torch.tensor([0, 1, 1, 0])\nloss, grads = {fn}(x, W1, b1, W2, b2, y)\nparams = {k: v.clone().requires_grad_() for k, v in dict(W1=W1, b1=b1, W2=W2, b2=b2).items()}\nref = F.cross_entropy(F.relu(x @ params[\"W1\"].T + params[\"b1\"]) @ params[\"W2\"].T + params[\"b2\"], y)\nref.backward()\nassert abs(loss.item() - ref.item()) < 1e-10, (loss, ref)\nfor k in params:\n    assert grads[k].shape == params[k].shape and torch.allclose(grads[k], params[k].grad, atol=1e-10), k\n",
+          "behavior": "gradient.flow"
+        },
+        {
+          "name": "Matches autograd on seeded shapes without using autograd",
+          "visibility": "unshown",
+          "behavior": "gradient.flow",
+          "failureMessage": "Every gradient must match autograd, and the solution itself must not call autograd.",
+          "hiddenCode": "\nimport torch, torch.nn.functional as F\nfor seed in (5, 18, 60):\n    g = torch.Generator().manual_seed(seed)\n    N, D, H, C = (int(v) for v in torch.randint(2, 9, (4,), generator=g))\n    x = torch.randn(N, D, generator=g, dtype=torch.float64)\n    W1 = torch.randn(H, D, generator=g, dtype=torch.float64); b1 = torch.randn(H, generator=g, dtype=torch.float64)\n    W2 = torch.randn(C, H, generator=g, dtype=torch.float64); b2 = torch.randn(C, generator=g, dtype=torch.float64)\n    y = torch.randint(0, C, (N,), generator=g)\n    real_backward, real_grad = torch.Tensor.backward, torch.autograd.grad\n    def banned(*args, **kwargs):\n        raise AssertionError(\"autograd is not allowed\")\n    torch.Tensor.backward = banned; torch.autograd.grad = banned\n    try:\n        loss, grads = {fn}(x, W1, b1, W2, b2, y)\n    finally:\n        torch.Tensor.backward, torch.autograd.grad = real_backward, real_grad\n    assert not loss.requires_grad and not any(v.requires_grad for v in grads.values())\n    params = {k: v.clone().requires_grad_() for k, v in dict(W1=W1, b1=b1, W2=W2, b2=b2).items()}\n    ref = F.cross_entropy(F.relu(x @ params[\"W1\"].T + params[\"b1\"]) @ params[\"W2\"].T + params[\"b2\"], y)\n    ref.backward()\n    assert abs(loss.item() - ref.item()) < 1e-10, (seed, loss, ref)\n    for k in params:\n        assert grads[k].shape == params[k].shape and torch.allclose(grads[k], params[k].grad, atol=1e-10), (seed, k)\n"
+        },
+        {
+          "name": "ReLU derivative at zero and large logits",
+          "visibility": "unshown",
+          "behavior": "numerics.stability",
+          "failureMessage": "Use derivative 0 at z1 == 0 and a max-subtracted softmax.",
+          "hiddenCode": "\nimport torch\nx = torch.tensor([[1.0, 0.0], [0.0, 1.0]], dtype=torch.float64)\nW1 = torch.tensor([[1.0, -1.0], [0.0, 0.0], [2.0, 1.0]], dtype=torch.float64)\nb1 = torch.tensor([-1.0, 0.0, 0.0], dtype=torch.float64)\nW2 = torch.tensor([[1.0, 5.0, 400.0], [-1.0, 5.0, -400.0]], dtype=torch.float64)\nb2 = torch.zeros(2, dtype=torch.float64)\ny = torch.tensor([1, 0])\nloss, grads = {fn}(x, W1, b1, W2, b2, y)\nassert torch.isfinite(loss) and all(torch.isfinite(v).all() for v in grads.values()), (loss, grads)\nassert abs(loss.item() - (1600.0 + 0.0) / 2) < 1e-6, loss\nassert torch.all(grads[\"W1\"][0] == 0) and grads[\"b1\"][0] == 0, grads[\"W1\"]\nassert torch.all(grads[\"W1\"][1] == 0) and grads[\"b1\"][1] == 0, grads[\"W1\"]\n"
+        },
+        {
+          "name": "Rejects mismatched shapes and bad labels",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Parameter shapes must chain together and labels must lie in [0, C).",
+          "hiddenCode": "\nimport torch\nx = torch.randn(3, 4); W1 = torch.randn(5, 4); b1 = torch.randn(5); W2 = torch.randn(2, 5); b2 = torch.randn(2)\ny = torch.tensor([0, 1, 1])\ncases = [\n    (x, torch.randn(5, 3), b1, W2, b2, y),\n    (x, W1, torch.randn(4), W2, b2, y),\n    (x, W1, b1, torch.randn(2, 4), b2, y),\n    (x, W1, b1, W2, torch.randn(3), y),\n    (x, W1, b1, W2, b2, torch.tensor([0, 1])),\n    (x, W1, b1, W2, b2, torch.tensor([0, 2, 1])),\n]\nfor args in cases:\n    try:\n        {fn}(*args)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(\"accepted invalid input\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "What is the gradient of mean cross-entropy with respect to the logits? How do you push a gradient back through y = a @ W.T + b to W, b and a? What does ReLU do to the gradient?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Forward with a max-subtracted softmax. dlogits = (probs - onehot) / N. dW2 = dlogits.T @ a1, db2 = dlogits.sum(0), da1 = dlogits @ W2. dz1 = da1 * (z1 > 0). dW1 = dz1.T @ x, db1 = dz1.sum(0)."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "mlp",
+        "cross_entropy"
+      ],
+      "modelConnections": [
+        "Karpathy's micrograd and makemore lectures and CS231n assignments derive exactly these gradients; autograd engines implement the same rules per operator."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Deriving gradients by hand makes shape bugs, missing batch averaging and dead-ReLU behaviour obvious."
+        ],
+        "cons": [
+          "Manual gradients do not scale to large graphs and are easy to get subtly wrong; autograd plus a gradient check is the practical workflow."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is backpropagation, and why is it much cheaper than computing each gradient separately?"
+        },
+        {
+          "stage": "concept",
+          "question": "Derive the gradient of softmax cross-entropy with respect to the logits."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through the backward pass of y = x @ W.T + b. Why is dW an outer product summed over the batch?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What does the ReLU do to the gradient, what is a dead ReLU, and how does the derivative convention at 0 matter?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How would you verify hand-written gradients with a finite-difference check, and why use float64 for it?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Reverse-mode versus forward-mode automatic differentiation: when is each cheaper?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Which intermediate activations must be stored for this backward pass, and how does activation checkpointing trade compute for that memory?"
+        }
+      ]
+    },
+    {
+      "id": "packed_sequence_mask",
+      "title": "Packed Sequence Attention Mask",
+      "titleZh": "Packed Sequence Attention Mask",
+      "difficulty": "Medium",
+      "functionName": "packed_attention_mask",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Build the attention metadata for several documents packed into one row of length `total_len`.\n\n**Signature:** `packed_attention_mask(seq_lens, total_len) -> tuple[Tensor, Tensor, Tensor]`\n\n**Parameters:**\n- `seq_lens` — list of positive integers, the document lengths in packing order.\n- `total_len` — integer, the row length. Positions after `sum(seq_lens)` are padding.\n\n**Returns:** `(mask, position_ids, cu_seqlens)`\n- `mask` — bool tensor `(total_len, total_len)`. `mask[q, k]` is True when query `q` may attend to key `k`: both belong to the same document and `k <= q`. A padding position attends only to itself.\n- `position_ids` — int64 tensor `(total_len,)`. Positions restart at 0 at the start of every document; padding positions are 0.\n- `cu_seqlens` — int32 tensor `(len(seq_lens) + 1,)` of cumulative document boundaries, starting at 0. Padding is not included.\n\n**Constraints:**\n- No token may attend across a document boundary.\n- Every row of `mask` has at least one True entry.\n- Raise `ValueError` when `seq_lens` is empty, contains a non-positive length, or sums to more than `total_len`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why pack.** Padding every sample to the longest one wastes compute on pad tokens. Packing concatenates short documents into full rows so every position does useful work, which often speeds SFT up by 2x or more.\n\n**Why the mask matters.** A plain causal mask lets the second document attend to the first, which leaks unrelated context and changes the loss. The block-diagonal causal mask, together with position ids that restart per document, makes a packed row compute exactly what the separate documents would.\n\n**cu_seqlens.** FlashAttention's variable-length kernels never build the dense mask. They take the cumulative boundaries instead and run attention per segment, which is why packing is nearly free there.",
+      "descriptionZh": "Build the attention metadata for several documents packed into one row of length `total_len`.\n\n**Signature:** `packed_attention_mask(seq_lens, total_len) -> tuple[Tensor, Tensor, Tensor]`\n\n**Parameters:**\n- `seq_lens` — list of positive integers, the document lengths in packing order.\n- `total_len` — integer, the row length. Positions after `sum(seq_lens)` are padding.\n\n**Returns:** `(mask, position_ids, cu_seqlens)`\n- `mask` — bool tensor `(total_len, total_len)`. `mask[q, k]` is True when query `q` may attend to key `k`: both belong to the same document and `k <= q`. A padding position attends only to itself.\n- `position_ids` — int64 tensor `(total_len,)`. Positions restart at 0 at the start of every document; padding positions are 0.\n- `cu_seqlens` — int32 tensor `(len(seq_lens) + 1,)` of cumulative document boundaries, starting at 0. Padding is not included.\n\n**Constraints:**\n- No token may attend across a document boundary.\n- Every row of `mask` has at least one True entry.\n- Raise `ValueError` when `seq_lens` is empty, contains a non-positive length, or sums to more than `total_len`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why pack.** Padding every sample to the longest one wastes compute on pad tokens. Packing concatenates short documents into full rows so every position does useful work, which often speeds SFT up by 2x or more.\n\n**Why the mask matters.** A plain causal mask lets the second document attend to the first, which leaks unrelated context and changes the loss. The block-diagonal causal mask, together with position ids that restart per document, makes a packed row compute exactly what the separate documents would.\n\n**cu_seqlens.** FlashAttention's variable-length kernels never build the dense mask. They take the cumulative boundaries instead and run attention per segment, which is why packing is nearly free there.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Two documents and padding",
+          "code": "\nimport torch\nmask, pos, cu = {fn}([2, 3], 6)\nwant = torch.tensor([\n    [1, 0, 0, 0, 0, 0],\n    [1, 1, 0, 0, 0, 0],\n    [0, 0, 1, 0, 0, 0],\n    [0, 0, 1, 1, 0, 0],\n    [0, 0, 1, 1, 1, 0],\n    [0, 0, 0, 0, 0, 1],\n], dtype=torch.bool)\nassert mask.dtype == torch.bool and torch.equal(mask, want), mask\nassert pos.dtype == torch.int64 and pos.tolist() == [0, 1, 0, 1, 2, 0], pos\nassert cu.dtype == torch.int32 and cu.tolist() == [0, 2, 5], cu\n",
+          "behavior": "attention.masking"
+        },
+        {
+          "name": "Matches a seeded element-wise oracle",
+          "visibility": "unshown",
+          "behavior": "attention.masking",
+          "failureMessage": "Queries may only see earlier keys of the same document; padding sees only itself; positions restart per document.",
+          "hiddenCode": "\nimport random\nfor seed in (2, 31, 77):\n    rng = random.Random(seed)\n    lens = [rng.randint(1, 6) for _ in range(rng.randint(1, 5))]\n    total = sum(lens) + rng.randint(2, 4)\n    mask, pos, cu = {fn}(lens, total)\n    doc, start, starts = [], 0, []\n    for d, n in enumerate(lens):\n        doc += [d] * n; starts += [start] * n; start += n\n    for q in range(total):\n        for k in range(total):\n            if q >= start:\n                want = q == k\n            else:\n                want = k < start and doc[q] == doc[k] and k <= q\n            assert bool(mask[q, k]) == want, (seed, lens, q, k)\n        want_pos = 0 if q >= start else q - starts[q]\n        assert pos[q].item() == want_pos, (seed, q, pos)\n    running = [0]\n    for n in lens:\n        running.append(running[-1] + n)\n    assert cu.tolist() == running, (seed, cu, running)\n"
+        },
+        {
+          "name": "Packed attention equals attention on each document alone",
+          "visibility": "unshown",
+          "behavior": "attention.masking",
+          "failureMessage": "With the mask applied, each document's outputs must match running attention on that document separately.",
+          "hiddenCode": "\nimport math, torch\ng = torch.Generator().manual_seed(8)\nlens = [3, 1, 4]\ntotal = 9\nd = 5\nq = torch.randn(total, d, generator=g); k = torch.randn(total, d, generator=g); v = torch.randn(total, d, generator=g)\nmask, _, _ = {fn}(lens, total)\nscores = (q @ k.T / math.sqrt(d)).masked_fill(~mask, float(\"-inf\"))\npacked = torch.softmax(scores, dim=-1) @ v\nassert torch.isfinite(packed).all()\nstart = 0\nfor n in lens:\n    sl = slice(start, start + n)\n    s = q[sl] @ k[sl].T / math.sqrt(d)\n    s = s.masked_fill(torch.triu(torch.ones(n, n, dtype=torch.bool), 1), float(\"-inf\"))\n    alone = torch.softmax(s, dim=-1) @ v[sl]\n    assert torch.allclose(packed[sl], alone, atol=1e-6), (n, packed[sl], alone)\n    start += n\n"
+        },
+        {
+          "name": "Rejects invalid lengths",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Empty lists, non-positive lengths and overflowing rows must raise ValueError.",
+          "hiddenCode": "\nfor lens, total in (([], 4), ([2, 0], 4), ([3, -1], 4), ([3, 3], 5)):\n    try:\n        {fn}(lens, total)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"accepted {lens} {total}\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "How can you label each position with its document id? Given those ids, what two conditions make mask[q, k] True? What should a padding row contain so softmax does not produce NaN?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Build a doc_id vector with torch.repeat_interleave, giving each padding position its own unique id. Then mask = (doc_id[:, None] == doc_id[None, :]) & causal. position_ids = arange minus each document's start offset. cu_seqlens = cumsum of [0] + seq_lens as int32."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "causal_attention",
+        "rope"
+      ],
+      "modelConnections": [
+        "Hugging Face's DataCollatorWithFlattening, TRL's packing=True and Megatron's packed datasets pass cu_seqlens and reset position ids to FlashAttention varlen kernels."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Removes padding waste while keeping each document's computation identical to training it alone."
+        ],
+        "cons": [
+          "The dense mask is quadratic in row length; real systems rely on varlen kernels, and packing changes per-document loss weighting unless the loss is normalized carefully."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is sequence packing, and why does it speed up SFT and pretraining?"
+        },
+        {
+          "stage": "concept",
+          "question": "What goes wrong if you pack documents but keep a plain causal mask and continuous position ids?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Build the block-diagonal causal mask from the document lengths. What must a padding row contain, and why?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What is cu_seqlens, and how do FlashAttention varlen kernels use it instead of a dense mask?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "With RoPE, why must position ids restart at each document boundary?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Packing changes how many tokens each document contributes to a batch. How does that interact with per-sequence versus per-token loss averaging?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Greedy bin packing versus sorting by length versus truncation: effects on throughput, padding and data distribution?"
+        }
+      ]
+    },
+    {
+      "id": "simpo_ipo_loss",
+      "title": "SimPO and IPO Losses",
+      "titleZh": "SimPO and IPO Losses",
+      "difficulty": "Medium",
+      "functionName": "preference_loss",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Implement the SimPO and IPO preference losses.\n\n**Signature:** `preference_loss(chosen_logps, rejected_logps, loss_type, beta, chosen_lengths=None, rejected_lengths=None, gamma=0.0, ref_chosen_logps=None, ref_rejected_logps=None) -> Tensor`\n\n**Parameters:**\n- `chosen_logps`, `rejected_logps` — float tensors `(B,)`: the policy's summed log-probability of each response.\n- `loss_type` — `\"simpo\"` or `\"ipo\"`.\n- `beta` — positive float.\n- `chosen_lengths`, `rejected_lengths` — integer tensors `(B,)` of response token counts. Required for SimPO.\n- `gamma` — SimPO target reward margin.\n- `ref_chosen_logps`, `ref_rejected_logps` — float tensors `(B,)` from the reference model. Required for IPO.\n\n**Returns:** scalar tensor, the mean over the batch of the per-pair loss:\n\n    simpo:  x = beta * (chosen_logps / chosen_lengths - rejected_logps / rejected_lengths) - gamma\n            loss = -log(sigmoid(x))\n    ipo:    h = (chosen_logps - ref_chosen_logps) - (rejected_logps - ref_rejected_logps)\n            loss = (h - 1 / (2 * beta)) ** 2\n\n**Constraints:**\n- SimPO uses no reference model. IPO uses no sigmoid.\n- The SimPO loss must stay finite for margins as large as 1000 in either direction.\n- Keep the result differentiable with respect to the policy log-probabilities.\n- Raise `ValueError` for an unknown `loss_type`, `beta <= 0`, a missing required argument, or a length that is not positive.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**SimPO.** DPO's implicit reward is a log-ratio against a frozen reference, which costs a second model and does not match how generation ranks sequences. SimPO replaces it with the length-normalized average log-probability, the same score beam search uses, and asks the chosen response to win by at least `gamma / beta`.\n\n**IPO.** With deterministic preferences DPO keeps pushing the log-ratio gap toward infinity, which overfits and ignores the KL regularizer. IPO regresses the gap toward a finite target `1 / (2 * beta)` with a squared loss, so a larger `beta` means a smaller target and stronger regularization.",
+      "descriptionZh": "Implement the SimPO and IPO preference losses.\n\n**Signature:** `preference_loss(chosen_logps, rejected_logps, loss_type, beta, chosen_lengths=None, rejected_lengths=None, gamma=0.0, ref_chosen_logps=None, ref_rejected_logps=None) -> Tensor`\n\n**Parameters:**\n- `chosen_logps`, `rejected_logps` — float tensors `(B,)`: the policy's summed log-probability of each response.\n- `loss_type` — `\"simpo\"` or `\"ipo\"`.\n- `beta` — positive float.\n- `chosen_lengths`, `rejected_lengths` — integer tensors `(B,)` of response token counts. Required for SimPO.\n- `gamma` — SimPO target reward margin.\n- `ref_chosen_logps`, `ref_rejected_logps` — float tensors `(B,)` from the reference model. Required for IPO.\n\n**Returns:** scalar tensor, the mean over the batch of the per-pair loss:\n\n    simpo:  x = beta * (chosen_logps / chosen_lengths - rejected_logps / rejected_lengths) - gamma\n            loss = -log(sigmoid(x))\n    ipo:    h = (chosen_logps - ref_chosen_logps) - (rejected_logps - ref_rejected_logps)\n            loss = (h - 1 / (2 * beta)) ** 2\n\n**Constraints:**\n- SimPO uses no reference model. IPO uses no sigmoid.\n- The SimPO loss must stay finite for margins as large as 1000 in either direction.\n- Keep the result differentiable with respect to the policy log-probabilities.\n- Raise `ValueError` for an unknown `loss_type`, `beta <= 0`, a missing required argument, or a length that is not positive.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**SimPO.** DPO's implicit reward is a log-ratio against a frozen reference, which costs a second model and does not match how generation ranks sequences. SimPO replaces it with the length-normalized average log-probability, the same score beam search uses, and asks the chosen response to win by at least `gamma / beta`.\n\n**IPO.** With deterministic preferences DPO keeps pushing the log-ratio gap toward infinity, which overfits and ignores the KL regularizer. IPO regresses the gap toward a finite target `1 / (2 * beta)` with a squared loss, so a larger `beta` means a smaller target and stronger regularization.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "SimPO and IPO on a small batch",
+          "code": "\nimport math, torch\nchosen = torch.tensor([-4.0, -6.0]); rejected = torch.tensor([-9.0, -4.0])\nout = {fn}(chosen, rejected, \"simpo\", beta=2.0, chosen_lengths=torch.tensor([2, 3]), rejected_lengths=torch.tensor([3, 2]), gamma=0.5)\nxs = [2.0 * (-2.0 + 3.0) - 0.5, 2.0 * (-2.0 + 2.0) - 0.5]\nwant = sum(math.log1p(math.exp(-x)) for x in xs) / 2\nassert out.ndim == 0 and abs(out.item() - want) < 1e-6, (out, want)\nout = {fn}(chosen, rejected, \"ipo\", beta=0.5, ref_chosen_logps=torch.tensor([-5.0, -5.0]), ref_rejected_logps=torch.tensor([-8.0, -5.0]))\nhs = [(-4.0 + 5.0) - (-9.0 + 8.0), (-6.0 + 5.0) - (-4.0 + 5.0)]\nwant = sum((h - 1.0) ** 2 for h in hs) / 2\nassert abs(out.item() - want) < 1e-6, (out, want)\n",
+          "behavior": "rl.logprob"
+        },
+        {
+          "name": "Matches a seeded oracle and gradient for both losses",
+          "visibility": "unshown",
+          "behavior": "rl.logprob",
+          "failureMessage": "SimPO length-normalizes and subtracts gamma; IPO squares the log-ratio gap minus 1 / (2 * beta).",
+          "hiddenCode": "\nimport math, random, torch\nfor seed in (5, 29, 64):\n    rng = random.Random(seed)\n    B = rng.randint(2, 5)\n    beta = rng.choice([0.1, 0.5, 2.0]); gamma = rng.uniform(0, 1.5)\n    c = [rng.uniform(-40, -1) for _ in range(B)]; r = [rng.uniform(-40, -1) for _ in range(B)]\n    lc = [rng.randint(1, 20) for _ in range(B)]; lr = [rng.randint(1, 20) for _ in range(B)]\n    rc = [rng.uniform(-40, -1) for _ in range(B)]; rr = [rng.uniform(-40, -1) for _ in range(B)]\n    x = torch.tensor(c, dtype=torch.float64, requires_grad=True)\n    out = {fn}(x, torch.tensor(r, dtype=torch.float64), \"simpo\", beta=beta,\n               chosen_lengths=torch.tensor(lc), rejected_lengths=torch.tensor(lr), gamma=gamma)\n    margins = [beta * (c[i] / lc[i] - r[i] / lr[i]) - gamma for i in range(B)]\n    want = sum(math.log1p(math.exp(-m)) for m in margins) / B\n    assert abs(out.item() - want) < 1e-9, (seed, \"simpo\", out, want)\n    out.backward()\n    grad = [-(1 / (1 + math.exp(m))) * beta / lc[i] / B for i, m in enumerate(margins)]\n    assert torch.allclose(x.grad, torch.tensor(grad, dtype=torch.float64), atol=1e-12), (seed, x.grad, grad)\n    x = torch.tensor(c, dtype=torch.float64, requires_grad=True)\n    out = {fn}(x, torch.tensor(r, dtype=torch.float64), \"ipo\", beta=beta,\n               ref_chosen_logps=torch.tensor(rc, dtype=torch.float64), ref_rejected_logps=torch.tensor(rr, dtype=torch.float64))\n    hs = [(c[i] - rc[i]) - (r[i] - rr[i]) for i in range(B)]\n    want = sum((h - 1 / (2 * beta)) ** 2 for h in hs) / B\n    assert abs(out.item() - want) < 1e-8 * max(1.0, want), (seed, \"ipo\", out, want)\n    out.backward()\n    grad = [2 * (h - 1 / (2 * beta)) / B for h in hs]\n    assert torch.allclose(x.grad, torch.tensor(grad, dtype=torch.float64), atol=1e-10), (seed, x.grad, grad)\n"
+        },
+        {
+          "name": "SimPO stays finite for extreme margins",
+          "visibility": "unshown",
+          "behavior": "numerics.stability",
+          "failureMessage": "Use a stable form such as softplus(-x) instead of -log(sigmoid(x)).",
+          "hiddenCode": "\nimport torch\nchosen = torch.tensor([-2000.0, 0.0], dtype=torch.float64, requires_grad=True)\nrejected = torch.tensor([0.0, -2000.0], dtype=torch.float64)\nones = torch.tensor([1, 1])\nout = {fn}(chosen, rejected, \"simpo\", beta=0.5, chosen_lengths=ones, rejected_lengths=ones)\nassert torch.isfinite(out) and abs(out.item() - 500.0) < 1e-6, out\nout.backward()\nassert torch.isfinite(chosen.grad).all(), chosen.grad\n"
+        },
+        {
+          "name": "Rejects invalid or missing arguments",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "SimPO needs positive lengths, IPO needs reference log-probabilities, and beta must be positive.",
+          "hiddenCode": "\nimport torch\nx = torch.zeros(2); ones = torch.tensor([1, 1])\ncases = [\n    dict(loss_type=\"dpo\", beta=1.0),\n    dict(loss_type=\"simpo\", beta=1.0),\n    dict(loss_type=\"simpo\", beta=1.0, chosen_lengths=torch.tensor([0, 1]), rejected_lengths=ones),\n    dict(loss_type=\"simpo\", beta=0.0, chosen_lengths=ones, rejected_lengths=ones),\n    dict(loss_type=\"ipo\", beta=1.0),\n    dict(loss_type=\"ipo\", beta=-1.0, ref_chosen_logps=x, ref_rejected_logps=x),\n]\nfor kwargs in cases:\n    try:\n        {fn}(x, x, **kwargs)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"accepted {kwargs}\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which loss uses the reference model and which uses response lengths? What is -log(sigmoid(x)) as a stable function? What target does IPO regress the gap toward?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Validate arguments per loss_type first. SimPO: divide summed logps by lengths, form x, and use F.softplus(-x) instead of -log(sigmoid(x)). IPO: form h from the two log-ratios and square h - 1 / (2 * beta). Return the batch mean."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "dpo_loss"
+      ],
+      "modelConnections": [
+        "TRL's DPOTrainer and CPOTrainer expose `loss_type=\"ipo\"` and `loss_type=\"simpo\"`; SimPO was used to train strong Gemma and Llama chat models without a reference model."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "SimPO drops the reference model and aligns the training score with generation; IPO bounds the gap and resists overfitting on deterministic preferences."
+        ],
+        "cons": [
+          "SimPO loses the KL anchor to the reference and needs careful tuning of beta and gamma; IPO's squared loss is sensitive to beta and to label noise."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What problem with DPO does SimPO address, and what does it use instead of the reference log-ratio?"
+        },
+        {
+          "stage": "concept",
+          "question": "What problem with DPO does IPO address, and why does a finite target help?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Write both losses. Why does SimPO divide by the response length, and what does gamma do?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Derive the IPO gradient with respect to the chosen log-probability. What happens once the gap reaches 1 / (2 * beta)?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why can -log(sigmoid(x)) overflow, and what stable form avoids it?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Without a reference model, what stops SimPO from drifting far from the SFT model? How would you detect drift?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "DPO, IPO and SimPO on noisy human labels versus clean verifiable labels: which would you pick for each?"
+        }
+      ]
+    },
+    {
+      "id": "truncated_importance_sampling",
+      "title": "Truncated Importance Sampling",
+      "titleZh": "Truncated Importance Sampling",
+      "difficulty": "Medium",
+      "functionName": "truncated_is_weights",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Compute truncated importance-sampling (TIS) weights that correct for the gap between the rollout engine's log-probabilities and the trainer's.\n\n**Signature:** `truncated_is_weights(train_logprobs, rollout_logprobs, mask, cap=2.0, level=\"token\") -> Tensor`\n\n**Parameters:**\n- `train_logprobs` — float tensor `(B, T)`: log-probabilities of the sampled tokens under the trainer's forward pass (for example FSDP).\n- `rollout_logprobs` — float tensor `(B, T)`: log-probabilities of the same tokens reported by the rollout engine (for example vLLM).\n- `mask` — boolean tensor `(B, T)`, True on response tokens.\n- `cap` — positive float, the truncation threshold.\n- `level` — `\"token\"` or `\"sequence\"`.\n\n**Returns:** float tensor `(B, T)` of weights, detached from autograd.\n- `\"token\"`: `w[b, t] = min(exp(train[b, t] - rollout[b, t]), cap)` on valid tokens.\n- `\"sequence\"`: `w_seq[b] = min(exp(sum over valid t of (train[b, t] - rollout[b, t])), cap)`, written to every valid token of sequence `b`.\n- Masked positions are exactly 0.\n\n**Constraints:**\n- The weights must not carry gradient, even when `train_logprobs` requires grad.\n- Masked positions must not affect any output, even when they hold NaN or infinity.\n- Stay finite when a log-ratio is very large: truncate in log space before exponentiating.\n- Raise `ValueError` for `cap <= 0`, an unknown `level`, or shapes that differ or are not 2-D.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why the mismatch exists.** Rollout engines use different kernels, precisions and batching from the trainer, so the same token gets a slightly different probability in each. Training on vLLM samples as if they came from the trainer's policy makes on-policy RL quietly off-policy.\n\n**Why truncate.** The unbiased correction multiplies the loss by the ratio of trainer to rollout probability, but rare tokens can produce huge ratios and explode the variance. Capping the ratio trades a little bias for bounded variance. Sequence-level weights are more faithful to the true ratio of whole trajectories but hit the cap far more often.\n\n**How the weight is used.** The loss becomes `w * per_token_policy_loss`. The weight is a constant with respect to the parameters, which is why it is detached.",
+      "descriptionZh": "Compute truncated importance-sampling (TIS) weights that correct for the gap between the rollout engine's log-probabilities and the trainer's.\n\n**Signature:** `truncated_is_weights(train_logprobs, rollout_logprobs, mask, cap=2.0, level=\"token\") -> Tensor`\n\n**Parameters:**\n- `train_logprobs` — float tensor `(B, T)`: log-probabilities of the sampled tokens under the trainer's forward pass (for example FSDP).\n- `rollout_logprobs` — float tensor `(B, T)`: log-probabilities of the same tokens reported by the rollout engine (for example vLLM).\n- `mask` — boolean tensor `(B, T)`, True on response tokens.\n- `cap` — positive float, the truncation threshold.\n- `level` — `\"token\"` or `\"sequence\"`.\n\n**Returns:** float tensor `(B, T)` of weights, detached from autograd.\n- `\"token\"`: `w[b, t] = min(exp(train[b, t] - rollout[b, t]), cap)` on valid tokens.\n- `\"sequence\"`: `w_seq[b] = min(exp(sum over valid t of (train[b, t] - rollout[b, t])), cap)`, written to every valid token of sequence `b`.\n- Masked positions are exactly 0.\n\n**Constraints:**\n- The weights must not carry gradient, even when `train_logprobs` requires grad.\n- Masked positions must not affect any output, even when they hold NaN or infinity.\n- Stay finite when a log-ratio is very large: truncate in log space before exponentiating.\n- Raise `ValueError` for `cap <= 0`, an unknown `level`, or shapes that differ or are not 2-D.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why the mismatch exists.** Rollout engines use different kernels, precisions and batching from the trainer, so the same token gets a slightly different probability in each. Training on vLLM samples as if they came from the trainer's policy makes on-policy RL quietly off-policy.\n\n**Why truncate.** The unbiased correction multiplies the loss by the ratio of trainer to rollout probability, but rare tokens can produce huge ratios and explode the variance. Capping the ratio trades a little bias for bounded variance. Sequence-level weights are more faithful to the true ratio of whole trajectories but hit the cap far more often.\n\n**How the weight is used.** The loss becomes `w * per_token_policy_loss`. The weight is a constant with respect to the parameters, which is why it is detached.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Token-level weights with a cap",
+          "code": "\nimport math, torch\ntrain = torch.tensor([[0.0, -1.0, -0.5]])\nrollout = torch.tensor([[-0.5, -1.0, -2.0]])\nmask = torch.tensor([[True, True, True]])\nout = {fn}(train, rollout, mask, cap=2.0, level=\"token\")\nwant = torch.tensor([[math.exp(0.5), 1.0, 2.0]])\nassert out.shape == (1, 3) and torch.allclose(out, want), out\n",
+          "behavior": "rl.clipping"
+        },
+        {
+          "name": "Matches a seeded oracle at both levels",
+          "visibility": "unshown",
+          "behavior": "rl.clipping",
+          "failureMessage": "Use the trainer-over-rollout ratio, sum log-ratios over valid tokens for the sequence level, and cap the result.",
+          "hiddenCode": "\nimport math, random, torch\nfor seed in (3, 17, 58):\n    rng = random.Random(seed)\n    B, T = rng.randint(2, 4), rng.randint(3, 6)\n    cap = rng.choice([1.5, 2.0, 5.0])\n    train = [[rng.uniform(-3, 0) for _ in range(T)] for _ in range(B)]\n    rollout = [[x + rng.gauss(0, 0.6) for x in row] for row in train]\n    mask = [[rng.random() < 0.7 for _ in range(T)] for _ in range(B)]\n    mask[0][0] = True\n    for level in (\"token\", \"sequence\"):\n        out = {fn}(torch.tensor(train, dtype=torch.float64), torch.tensor(rollout, dtype=torch.float64), torch.tensor(mask), cap=cap, level=level)\n        for b in range(B):\n            seq_delta = sum(train[b][t] - rollout[b][t] for t in range(T) if mask[b][t])\n            for t in range(T):\n                if not mask[b][t]:\n                    want = 0.0\n                elif level == \"token\":\n                    want = min(math.exp(train[b][t] - rollout[b][t]), cap)\n                else:\n                    want = min(math.exp(seq_delta), cap)\n                assert abs(out[b, t].item() - want) < 1e-9, (seed, level, b, t, out[b, t], want)\n"
+        },
+        {
+          "name": "Weights are detached from autograd",
+          "visibility": "unshown",
+          "behavior": "gradient.flow",
+          "failureMessage": "The importance weight is a constant multiplier; detach it so it does not receive gradient.",
+          "hiddenCode": "\nimport torch\ntrain = torch.tensor([[-1.0, -2.0]], requires_grad=True)\nrollout = torch.tensor([[-1.2, -1.5]])\nfor level in (\"token\", \"sequence\"):\n    out = {fn}(train, rollout, torch.tensor([[True, True]]), cap=3.0, level=level)\n    assert not out.requires_grad, level\n"
+        },
+        {
+          "name": "Stays finite for huge ratios and ignores masked NaN",
+          "visibility": "unshown",
+          "behavior": "numerics.stability",
+          "failureMessage": "Truncate in log space and exclude masked positions before any arithmetic.",
+          "hiddenCode": "\nimport torch\ntrain = torch.tensor([[0.0, 0.0, float(\"nan\")], [1000.0, 0.0, 0.0]])\nrollout = torch.tensor([[-0.1, 0.0, 0.0], [0.0, 0.0, float(\"inf\")]])\nmask = torch.tensor([[True, True, False], [True, True, False]])\nfor level in (\"token\", \"sequence\"):\n    out = {fn}(train, rollout, mask, cap=2.0, level=level)\n    assert torch.isfinite(out).all(), (level, out)\n    assert out[0, 2] == 0 and out[1, 2] == 0, (level, out)\n    assert out[1, 0] == 2.0, (level, out)\n"
+        },
+        {
+          "name": "Rejects invalid arguments",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Non-positive caps, unknown levels and misaligned shapes must raise ValueError.",
+          "hiddenCode": "\nimport torch\nx = torch.zeros(2, 3); m = torch.ones(2, 3, dtype=torch.bool)\ncases = [\n    dict(train_logprobs=x, rollout_logprobs=x, mask=m, cap=0.0),\n    dict(train_logprobs=x, rollout_logprobs=x, mask=m, level=\"batch\"),\n    dict(train_logprobs=x, rollout_logprobs=torch.zeros(2, 2), mask=m),\n    dict(train_logprobs=torch.zeros(3), rollout_logprobs=torch.zeros(3), mask=torch.ones(3, dtype=torch.bool)),\n]\nfor kwargs in cases:\n    try:\n        {fn}(**kwargs)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"accepted {kwargs.keys()}\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which direction is the ratio: trainer over rollout, or the reverse? Why must the weight be detached? What happens to exp(1000) if you clamp after exponentiating?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Compute delta = train - rollout, replace masked entries with 0 via torch.where, and detach. For token level use exp(clamp(delta, max=log(cap))). For sequence level sum delta over T first, clamp, exponentiate, and broadcast. Finally zero the masked positions with torch.where."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "per_token_logprobs",
+        "ppo_clipped_policy_loss"
+      ],
+      "modelConnections": [
+        "verl and slime expose TIS for vLLM or SGLang rollouts; the Fengyao blog post on off-policy RL from the inference-training mismatch popularized the token-level cap."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Cheap correction for a real source of off-policy drift that needs no extra forward pass beyond the logprobs you already compute."
+        ],
+        "cons": [
+          "Truncation biases the gradient, and a cap that is too low hides a broken rollout engine instead of fixing it."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why do the rollout engine and the trainer assign different probabilities to the same token, and why does that make on-policy RL off-policy?"
+        },
+        {
+          "stage": "concept",
+          "question": "What does importance sampling correct, and why truncate the ratio instead of using it directly?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Write the token-level and sequence-level weights. Which one is closer to the true trajectory ratio, and which one hits the cap more often?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why must the weight be detached, and where does it enter the loss?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you keep the weight finite when a log-ratio is huge, and why must masked positions be excluded before arithmetic?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How do you choose the cap? What do you monitor to detect that the rollout engine itself is broken?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Truncated IS versus fixing the mismatch at the source (same kernels, fp32 logits, batch-invariant ops): costs and benefits?"
+        }
+      ]
+    },
+    {
+      "id": "chunked_cross_entropy",
+      "title": "Chunked Cross-Entropy",
+      "titleZh": "Chunked Cross-Entropy",
+      "difficulty": "Hard",
+      "functionName": "chunked_cross_entropy",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Compute the language-model loss `cross_entropy(hidden @ weight.T, targets)` without keeping the full `(N, V)` logits in memory for the backward pass.\n\n**Signature:** `chunked_cross_entropy(hidden, weight, targets, chunk_size, ignore_index=-100) -> Tensor`\n\n**Parameters:**\n- `hidden` — float tensor `(N, D)`, final hidden states for N tokens.\n- `weight` — float tensor `(V, D)`, the LM head (unembedding) matrix.\n- `targets` — int64 tensor `(N,)`. Entries equal to `ignore_index` are excluded.\n- `chunk_size` — positive integer, the number of tokens per chunk.\n\n**Returns:** scalar tensor, the mean cross-entropy over non-ignored tokens. Value and gradients with respect to `hidden` and `weight` must match the unchunked computation.\n\n**Constraints:**\n- The tensors that autograd saves for backward must total less than one quarter of the size of the full `(N, V)` logits. Materializing one chunk of logits at a time is not enough on its own, because autograd would keep every chunk alive; recompute each chunk during backward, for example with `torch.utils.checkpoint.checkpoint(..., use_reentrant=False)`.\n- Divide by the number of non-ignored tokens across all chunks, not by a per-chunk count.\n- Raise `ValueError` for `chunk_size < 1`, mismatched shapes, or no non-ignored token.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why the LM head dominates memory.** With a 128k vocabulary and 16k tokens per micro-batch, fp32 logits take 8 GB, and autograd keeps them plus the softmax for backward. That single tensor can exceed all the activations of the transformer body.\n\n**Two fixes.** Chunking plus recomputation, as here, trades one extra matmul per chunk for memory. Fused kernels such as Liger's fused linear cross-entropy go further and compute the gradient during the forward pass, so the logits never need to be recomputed.",
+      "descriptionZh": "Compute the language-model loss `cross_entropy(hidden @ weight.T, targets)` without keeping the full `(N, V)` logits in memory for the backward pass.\n\n**Signature:** `chunked_cross_entropy(hidden, weight, targets, chunk_size, ignore_index=-100) -> Tensor`\n\n**Parameters:**\n- `hidden` — float tensor `(N, D)`, final hidden states for N tokens.\n- `weight` — float tensor `(V, D)`, the LM head (unembedding) matrix.\n- `targets` — int64 tensor `(N,)`. Entries equal to `ignore_index` are excluded.\n- `chunk_size` — positive integer, the number of tokens per chunk.\n\n**Returns:** scalar tensor, the mean cross-entropy over non-ignored tokens. Value and gradients with respect to `hidden` and `weight` must match the unchunked computation.\n\n**Constraints:**\n- The tensors that autograd saves for backward must total less than one quarter of the size of the full `(N, V)` logits. Materializing one chunk of logits at a time is not enough on its own, because autograd would keep every chunk alive; recompute each chunk during backward, for example with `torch.utils.checkpoint.checkpoint(..., use_reentrant=False)`.\n- Divide by the number of non-ignored tokens across all chunks, not by a per-chunk count.\n- Raise `ValueError` for `chunk_size < 1`, mismatched shapes, or no non-ignored token.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why the LM head dominates memory.** With a 128k vocabulary and 16k tokens per micro-batch, fp32 logits take 8 GB, and autograd keeps them plus the softmax for backward. That single tensor can exceed all the activations of the transformer body.\n\n**Two fixes.** Chunking plus recomputation, as here, trades one extra matmul per chunk for memory. Fused kernels such as Liger's fused linear cross-entropy go further and compute the gradient during the forward pass, so the logits never need to be recomputed.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Matches the full loss on a small batch",
+          "code": "\nimport torch, torch.nn.functional as F\ng = torch.Generator().manual_seed(0)\nhidden = torch.randn(10, 4, generator=g); weight = torch.randn(7, 4, generator=g)\ntargets = torch.tensor([1, 2, -100, 3, 4, 5, 6, -100, 0, 1])\nout = {fn}(hidden, weight, targets, chunk_size=3)\nwant = F.cross_entropy(hidden @ weight.T, targets)\nassert out.ndim == 0 and torch.allclose(out, want, atol=1e-6), (out, want)\n",
+          "behavior": "numerics.stability"
+        },
+        {
+          "name": "Matches values and gradients on seeded inputs",
+          "visibility": "unshown",
+          "behavior": "gradient.flow",
+          "failureMessage": "Loss and gradients must equal the unchunked mean cross-entropy over all non-ignored tokens.",
+          "hiddenCode": "\nimport torch, torch.nn.functional as F\nfor seed in (1, 12, 47):\n    g = torch.Generator().manual_seed(seed)\n    N = int(torch.randint(5, 40, (1,), generator=g)); D = 6; V = 11\n    chunk = int(torch.randint(1, 9, (1,), generator=g))\n    h0 = torch.randn(N, D, generator=g, dtype=torch.float64); w0 = torch.randn(V, D, generator=g, dtype=torch.float64)\n    targets = torch.randint(0, V, (N,), generator=g)\n    targets[torch.rand(N, generator=g) < 0.3] = -1\n    targets[0] = 2\n    h1, w1 = h0.clone().requires_grad_(), w0.clone().requires_grad_()\n    out = {fn}(h1, w1, targets, chunk_size=chunk, ignore_index=-1)\n    out.backward()\n    logits = torch.einsum(\"nd,vd->nv\", h0, w0)\n    valid = targets != -1\n    logp = logits[valid] - torch.logsumexp(logits[valid], dim=-1, keepdim=True)\n    want = -logp.gather(1, targets[valid][:, None]).mean()\n    assert abs(out.item() - want.item()) < 1e-10, (seed, out, want)\n    p = torch.softmax(logits, dim=-1)\n    dlogits = p.clone(); dlogits[valid, targets[valid]] -= 1; dlogits[~valid] = 0\n    dlogits /= valid.sum()\n    assert torch.allclose(h1.grad, dlogits @ w0, atol=1e-10), seed\n    assert torch.allclose(w1.grad, dlogits.T @ h0, atol=1e-10), seed\n"
+        },
+        {
+          "name": "Saves far less than the full logits for backward",
+          "visibility": "unshown",
+          "behavior": "tensor.shape",
+          "failureMessage": "Autograd kept chunk logits alive; recompute each chunk in backward with torch.utils.checkpoint.",
+          "hiddenCode": "\nimport torch\nN, D, V = 512, 32, 4000\ng = torch.Generator().manual_seed(3)\nhidden = torch.randn(N, D, generator=g, requires_grad=True)\nweight = torch.randn(V, D, generator=g, requires_grad=True)\ntargets = torch.randint(0, V, (N,), generator=g)\nstorages = {}\ndef pack(t):\n    storages[t.untyped_storage().data_ptr()] = t.untyped_storage().nbytes()\n    return t\nwith torch.autograd.graph.saved_tensors_hooks(pack, lambda t: t):\n    out = {fn}(hidden, weight, targets, chunk_size=64)\nsaved = sum(storages.values())\nassert saved < N * V * 4 / 4, (saved, N * V * 4)\nout.backward()\nassert hidden.grad is not None and weight.grad is not None\n"
+        },
+        {
+          "name": "Rejects invalid arguments",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Bad chunk sizes, mismatched shapes and batches with no valid token must raise ValueError.",
+          "hiddenCode": "\nimport torch\nh = torch.randn(4, 3); w = torch.randn(5, 3)\ncases = [\n    (h, w, torch.tensor([0, 1, 2, 3]), 0),\n    (h, torch.randn(5, 2), torch.tensor([0, 1, 2, 3]), 2),\n    (h, w, torch.tensor([0, 1, 2]), 2),\n    (h, w, torch.full((4,), -100), 2),\n]\nfor hidden, weight, targets, chunk in cases:\n    try:\n        {fn}(hidden, weight, targets, chunk)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"accepted chunk={chunk} {tuple(weight.shape)} {targets.tolist()}\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "If you loop over chunks and sum their losses, which tensors does autograd keep? How do you make it keep only the inputs of each chunk? What should you divide the summed loss by?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Count valid = (targets != ignore_index).sum() first. Define a function chunk_loss(h, w, t) that returns F.cross_entropy(h @ w.T, t, ignore_index=ignore_index, reduction='sum'). Loop over chunks, wrap each call in checkpoint(chunk_loss, ..., use_reentrant=False), sum the results and divide by valid."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "cross_entropy",
+        "activation_checkpointing"
+      ],
+      "modelConnections": [
+        "Liger Kernel's FusedLinearCrossEntropy, torchtune's chunked output loss and Apple's Cut Cross-Entropy all avoid materializing full LM-head logits."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Cuts peak memory from the LM head by the number of chunks, which allows longer sequences or larger micro-batches."
+        ],
+        "cons": [
+          "Recomputation adds one extra LM-head matmul per chunk, and the Python loop launches more kernels than a fused implementation."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why can the LM-head logits be the largest single tensor in LLM training? Estimate their size for a 128k vocabulary and 16k tokens."
+        },
+        {
+          "stage": "concept",
+          "question": "What does chunking the cross-entropy save, and why does chunking alone not save memory under autograd?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through which tensors autograd saves with and without checkpointing each chunk."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you keep the mean correct when chunks contain different numbers of ignored tokens?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Write the gradient of cross-entropy with respect to the logits. How does a fused kernel use it to avoid recomputing the logits?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Chunk-and-recompute versus a fused linear cross-entropy kernel versus vocabulary parallelism: memory, speed and complexity?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How do you choose the chunk size, and what happens at the extremes?"
+        }
+      ]
+    },
+    {
+      "id": "muon_newton_schulz",
+      "title": "Muon Newton-Schulz Update",
+      "titleZh": "Muon Newton-Schulz Update",
+      "difficulty": "Hard",
+      "functionName": "muon_update",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Compute one Muon update direction for a 2-D weight matrix.\n\n**Signature:** `muon_update(grad, momentum, beta=0.95, nesterov=True, ns_steps=5, eps=1e-7) -> Tensor`\n\n**Parameters:**\n- `grad` — float tensor `(R, K)`, the current gradient.\n- `momentum` — float tensor `(R, K)`, the momentum buffer. Update it in place.\n- `beta` — momentum coefficient in `[0, 1)`.\n- `nesterov` — whether to use the Nesterov look-ahead.\n- `ns_steps` — number of Newton-Schulz iterations.\n\n**Steps:**\n- Momentum: `momentum = beta * momentum + (1 - beta) * grad`, in place.\n- Direction: `G = (1 - beta) * grad + beta * momentum` if `nesterov`, otherwise `G = momentum`.\n- Newton-Schulz: let `X = G / (frobenius_norm(G) + eps)`. If `R > K`, work on `X.T` and transpose back at the end. Repeat `ns_steps` times with `a, b, c = 3.4445, -4.7750, 2.0315`:\n\n    A = X @ X.T\n    B = b * A + c * A @ A\n    X = a * X + B @ X\n\n- Scale: return `X * sqrt(max(1, R / K))`.\n\n**Returns:** tensor with the same shape and dtype as `grad`.\n\n**Constraints:**\n- Do not modify `grad`.\n- Compute in the input dtype; do not use an SVD or matrix inverse.\n- Raise `ValueError` when `grad` is not 2-D, `momentum` has a different shape, `beta` is outside `[0, 1)`, or `ns_steps < 1`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**What Muon does.** For a gradient with SVD `U S V.T`, the ideal Muon step is the orthogonal factor `U V.T`: every singular direction moves by the same amount, so rare but important directions are not drowned out by a few dominant ones. Dividing by the Frobenius norm puts all singular values in `[0, 1]`, and the quintic iteration pushes them toward 1 without an SVD.\n\n**Why these coefficients.** They make the iteration grow small singular values as fast as possible. The price is that the result is only approximately orthogonal: singular values land roughly between 0.7 and 1.2 instead of exactly 1, which works just as well in practice and runs stably in bfloat16.\n\n**Where it is used.** Muon updates hidden 2-D weight matrices. Embeddings, the LM head, biases and norm gains still use AdamW. Kimi's Moonlight and K2 scaled it to large language models.",
+      "descriptionZh": "Compute one Muon update direction for a 2-D weight matrix.\n\n**Signature:** `muon_update(grad, momentum, beta=0.95, nesterov=True, ns_steps=5, eps=1e-7) -> Tensor`\n\n**Parameters:**\n- `grad` — float tensor `(R, K)`, the current gradient.\n- `momentum` — float tensor `(R, K)`, the momentum buffer. Update it in place.\n- `beta` — momentum coefficient in `[0, 1)`.\n- `nesterov` — whether to use the Nesterov look-ahead.\n- `ns_steps` — number of Newton-Schulz iterations.\n\n**Steps:**\n- Momentum: `momentum = beta * momentum + (1 - beta) * grad`, in place.\n- Direction: `G = (1 - beta) * grad + beta * momentum` if `nesterov`, otherwise `G = momentum`.\n- Newton-Schulz: let `X = G / (frobenius_norm(G) + eps)`. If `R > K`, work on `X.T` and transpose back at the end. Repeat `ns_steps` times with `a, b, c = 3.4445, -4.7750, 2.0315`:\n\n    A = X @ X.T\n    B = b * A + c * A @ A\n    X = a * X + B @ X\n\n- Scale: return `X * sqrt(max(1, R / K))`.\n\n**Returns:** tensor with the same shape and dtype as `grad`.\n\n**Constraints:**\n- Do not modify `grad`.\n- Compute in the input dtype; do not use an SVD or matrix inverse.\n- Raise `ValueError` when `grad` is not 2-D, `momentum` has a different shape, `beta` is outside `[0, 1)`, or `ns_steps < 1`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**What Muon does.** For a gradient with SVD `U S V.T`, the ideal Muon step is the orthogonal factor `U V.T`: every singular direction moves by the same amount, so rare but important directions are not drowned out by a few dominant ones. Dividing by the Frobenius norm puts all singular values in `[0, 1]`, and the quintic iteration pushes them toward 1 without an SVD.\n\n**Why these coefficients.** They make the iteration grow small singular values as fast as possible. The price is that the result is only approximately orthogonal: singular values land roughly between 0.7 and 1.2 instead of exactly 1, which works just as well in practice and runs stably in bfloat16.\n\n**Where it is used.** Muon updates hidden 2-D weight matrices. Embeddings, the LM head, biases and norm gains still use AdamW. Kimi's Moonlight and K2 scaled it to large language models.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Update of a diagonal gradient",
+          "code": "\nimport torch\ngrad = torch.tensor([[2.0, 0.0], [0.0, 1.0]], dtype=torch.float64)\nmomentum = torch.zeros(2, 2, dtype=torch.float64)\nout = {fn}(grad, momentum, beta=0.5, nesterov=False, ns_steps=5)\nassert torch.allclose(momentum, 0.5 * grad), momentum\nx = torch.tensor([2.0, 1.0], dtype=torch.float64) * 0.5\nx = x / (x.norm() + 1e-7)\nfor _ in range(5):\n    x = 3.4445 * x - 4.7750 * x ** 3 + 2.0315 * x ** 5\nassert out.shape == (2, 2) and torch.allclose(out, torch.diag(x), atol=1e-12), (out, x)\nassert out[0, 1] == 0 and out[1, 0] == 0\n",
+          "behavior": "optim.state"
+        },
+        {
+          "name": "Matches a seeded reference iteration",
+          "visibility": "unshown",
+          "behavior": "optim.state",
+          "failureMessage": "Follow the stated momentum, Nesterov, normalization, transpose, iteration and scaling steps exactly.",
+          "hiddenCode": "\nimport math, torch\ndef oracle(grad, buf, beta, nesterov, steps):\n    buf = beta * buf + (1 - beta) * grad\n    G = (1 - beta) * grad + beta * buf if nesterov else buf\n    R, K = G.shape\n    X = G / (torch.sqrt((G * G).sum()) + 1e-7)\n    tall = R > K\n    if tall:\n        X = X.T\n    for _ in range(steps):\n        A = X @ X.T\n        X = 3.4445 * X + (-4.7750 * A + 2.0315 * A @ A) @ X\n    if tall:\n        X = X.T\n    return X * math.sqrt(max(1.0, R / K)), buf\nfor seed in (4, 36, 90):\n    g = torch.Generator().manual_seed(seed)\n    R, K = (int(v) for v in torch.randint(2, 9, (2,), generator=g))\n    buf = torch.randn(R, K, generator=g, dtype=torch.float64)\n    for nesterov, beta, steps in ((True, 0.95, 5), (False, 0.8, 3)):\n        grad = torch.randn(R, K, generator=g, dtype=torch.float64)\n        grad_copy = grad.clone(); state = buf.clone()\n        want, want_buf = oracle(grad, buf.clone(), beta, nesterov, steps)\n        out = {fn}(grad, state, beta=beta, nesterov=nesterov, ns_steps=steps)\n        assert torch.equal(grad, grad_copy), \"grad was modified\"\n        assert torch.allclose(state, want_buf, atol=1e-12), (seed, \"momentum\")\n        assert out.shape == (R, K) and out.dtype == torch.float64, out.shape\n        assert torch.allclose(out, want, atol=1e-9), (seed, nesterov, (out - want).abs().max())\n"
+        },
+        {
+          "name": "Approximately orthogonalizes a well-conditioned matrix",
+          "visibility": "unshown",
+          "behavior": "numerics.stability",
+          "failureMessage": "The result should share the gradient's singular vectors with singular values pushed toward 1.",
+          "hiddenCode": "\nimport torch\ng = torch.Generator().manual_seed(11)\nU, _ = torch.linalg.qr(torch.randn(6, 6, generator=g, dtype=torch.float64))\nV, _ = torch.linalg.qr(torch.randn(4, 4, generator=g, dtype=torch.float64))\nS = torch.tensor([3.0, 2.0, 1.5, 1.0], dtype=torch.float64)\ngrad = U[:, :4] @ torch.diag(S) @ V.T\nout = {fn}(grad, torch.zeros_like(grad), beta=0.0, nesterov=False, ns_steps=5) / (6 / 4) ** 0.5\ncore = U[:, :4].T @ out @ V\noff = core - torch.diag(torch.diagonal(core))\nassert off.abs().max() < 1e-9, off\nsv = torch.diagonal(core)\nassert torch.all(sv > 0.6) and torch.all(sv < 1.25), sv\n"
+        },
+        {
+          "name": "Rejects invalid arguments",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Non-2-D gradients, mismatched buffers, beta outside [0, 1) and ns_steps < 1 must raise ValueError.",
+          "hiddenCode": "\nimport torch\ncases = [\n    (torch.zeros(3), torch.zeros(3), {}),\n    (torch.zeros(2, 3), torch.zeros(3, 2), {}),\n    (torch.zeros(2, 3), torch.zeros(2, 3), {\"beta\": 1.0}),\n    (torch.zeros(2, 3), torch.zeros(2, 3), {\"ns_steps\": 0}),\n]\nfor grad, buf, kwargs in cases:\n    try:\n        {fn}(grad, buf, **kwargs)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"accepted {tuple(grad.shape)} {tuple(buf.shape)} {kwargs}\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Why normalize by the Frobenius norm before iterating? Why transpose when R > K? What happens to each singular value under the polynomial a*s + b*s^3 + c*s^5?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Validate, then momentum.mul_(beta).add_(grad, alpha=1 - beta). Form G without touching grad. Normalize, transpose if tall, loop ns_steps times with A = X @ X.T, B = b*A + c*A@A, X = a*X + B@X, transpose back, and scale by sqrt(max(1, R / K))."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "sgd_momentum",
+        "adam"
+      ],
+      "modelConnections": [
+        "Keller Jordan's Muon set NanoGPT speedrun records; Moonshot's Moonlight and Kimi K2 trained with Muon on hidden matrices and AdamW elsewhere."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Faster convergence than AdamW per step at similar cost, one momentum buffer instead of two, and a well-conditioned update direction."
+        ],
+        "cons": [
+          "Only for 2-D hidden weights, extra matmuls per step, and the orthogonalization needs the full matrix, which complicates sharding under FSDP or tensor parallelism."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What does Muon do differently from Adam, and what is the ideal update it approximates?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why would equalizing the singular values of an update help training?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through the Newton-Schulz iteration. Why normalize by the Frobenius norm first, and why transpose tall matrices?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What happens to one singular value under the quintic polynomial, and why do the tuned coefficients not converge exactly to 1?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why is Muon applied only to hidden 2-D weights, and what optimizes embeddings, the LM head and norm gains?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Muon versus AdamW: memory, compute per step and behaviour under distributed sharding?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Newton-Schulz versus an exact SVD or polar decomposition: speed, numerical precision and bfloat16 stability?"
+        }
+      ]
     }
   ]
 }
