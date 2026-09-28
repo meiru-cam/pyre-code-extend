@@ -21,7 +21,7 @@
     "What is depthwise separable convolution?": "A per-channel spatial convolution (depthwise) followed by a 1x1 convolution that mixes channels (pointwise).",
     "Why did MobileNet use it?": "It cuts parameters and FLOPs by about the kernel area, for phones.",
     "How do you implement the depthwise step using groups equal to channels?": "Use conv2d with groups=C_in, so each channel gets its own k x k filter.",
-    "Compute the parameter and FLOP savings versus a standard convolution.": "The standard cost is C_in * C_out * k^2. Separable is C_in * k^2 + C_in * C_out. Take the ratio.",
+    "Compute the parameter and FLOP savings versus a standard convolution.": "The standard cost is C_in * C_out * k^2 and the separable cost is C_in * k^2 + C_in * C_out. Take the ratio.",
     "What does the pointwise 1x1 convolution do?": "It mixes information across channels at each position, which the depthwise step never does.",
     "What accuracy does the factorization cost?": "A little accuracy at equal width, usually recovered by making the network wider or deeper.",
     "Why are depthwise convolutions often memory-bound on GPUs?": "Few FLOPs per byte loaded, so bandwidth, not compute, limits the speed."
@@ -42,6 +42,6 @@
     "What MLP expansion ratio and activation are used?": "4x expansion with GELU, as in the original ViT.",
     "How do shapes flow from tokens in to tokens out?": "(B, N + 1, D) in and (B, N + 1, D) out. Attention scores are (B, H, N + 1, N + 1).",
     "Why do ViTs need more data than CNNs?": "No locality or translation-equivariance bias, so these must be learned from data. Mention DeiT's augmentation and distillation.",
-    "What changed in later ViT variants, such as layer scale or register tokens?": "LayerScale scales the residual branches for depth. Registers absorb the high-norm artifact tokens. Also mention QK-norm and better position schemes."
+    "What changed in later ViT variants, such as layer scale or register tokens?": "LayerScale scales the residual branches for depth, and registers absorb the high-norm artifact tokens. Also mention QK-norm and better position schemes."
   }
 }

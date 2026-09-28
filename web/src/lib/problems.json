@@ -441,7 +441,7 @@
         {
           "stage": "deep_dive",
           "question": "What is the gradient of ReLU at zero, and what does PyTorch do there?",
-          "hint": "The true derivative is undefined at 0. Pick a subgradient; PyTorch returns 0 there. Say why the choice rarely matters in practice."
+          "hint": "The true derivative is undefined at 0, so pick a subgradient; PyTorch returns 0 there. Say why the choice rarely matters in practice."
         },
         {
           "stage": "deep_dive",
@@ -934,7 +934,7 @@
         {
           "stage": "tradeoffs",
           "question": "How does the schedule interact with the total token budget if you extend training?",
-          "hint": "Cosine is tied to a fixed total. Extending it means rewarming or restarting. WSD lets you continue from the stable phase."
+          "hint": "Cosine is tied to a fixed total, so extending it means rewarming or restarting. WSD lets you continue from the stable phase."
         }
       ]
     },
@@ -1490,7 +1490,7 @@
         {
           "stage": "tradeoffs",
           "question": "Top-p versus min-p versus typical sampling?",
-          "hint": "Top-p uses a fixed probability mass. Min-p keeps tokens above a fraction of the top probability, adapting to confidence. Typical sampling targets expected information content."
+          "hint": "Top-p keeps a fixed probability mass, while min-p keeps tokens above a fraction of the top probability, adapting to confidence. Typical sampling targets expected information content."
         },
         {
           "stage": "tradeoffs",
@@ -1784,7 +1784,7 @@
         {
           "stage": "tradeoffs",
           "question": "Causal versus bidirectional attention: what does each do better?",
-          "hint": "Bidirectional gives richer representations for understanding tasks (BERT). Causal enables generation and caching. Mention prefix-LM hybrids."
+          "hint": "Bidirectional attention gives richer representations for understanding tasks (BERT), while causal attention enables generation and caching. Mention prefix-LM hybrids."
         }
       ]
     },
@@ -1998,7 +1998,7 @@
         {
           "stage": "tradeoffs",
           "question": "Why do very deep transformers need special initialization or residual scaling?",
-          "hint": "Residual variance grows with depth. GPT-2 scaled residual projections by 1/sqrt(N). Mention DeepNet and similar schemes."
+          "hint": "Residual variance grows with depth, so GPT-2 scaled residual projections by 1/sqrt(N). Mention DeepNet and similar schemes."
         }
       ]
     },
@@ -2551,7 +2551,7 @@
         {
           "stage": "deep_dive",
           "question": "Walk through the four cases of positive or negative advantage with ratio above or below the clip range.",
-          "hint": "A > 0 with ratio > 1 + eps: clipped, no gradient. A > 0 with ratio < 1 - eps: unclipped. Mirror both for A < 0."
+          "hint": "A > 0 with ratio > 1 + eps is clipped and gets no gradient; A > 0 with ratio < 1 - eps stays unclipped. Mirror both for A < 0."
         },
         {
           "stage": "deep_dive",
@@ -2898,7 +2898,7 @@
         {
           "stage": "deep_dive",
           "question": "Does the smoothing mass go to all classes or only the wrong ones? How does it change the formula?",
-          "hint": "PyTorch spreads eps uniformly over all K classes, including the true one. The alternative is eps / (K - 1) over wrong ones only. Check the constant."
+          "hint": "PyTorch spreads eps uniformly over all K classes, including the true one; the alternative is eps / (K - 1) over the wrong ones only. Check the constant."
         },
         {
           "stage": "deep_dive",
@@ -2971,7 +2971,7 @@
         {
           "stage": "tradeoffs",
           "question": "What does gating buy you empirically, and is there a good theoretical explanation?",
-          "hint": "Empirically it gives lower loss at equal FLOPs. Theory is thin: Shazeer attributed it to \"divine benevolence\". Mention multiplicative interactions."
+          "hint": "Empirically it gives lower loss at equal FLOPs, but theory is thin: Shazeer attributed it to \"divine benevolence\". Mention multiplicative interactions."
         },
         {
           "stage": "tradeoffs",
@@ -3109,12 +3109,12 @@
         {
           "stage": "tradeoffs",
           "question": "NTK scaling versus YaRN versus fine-tuning on long data: trade-offs?",
-          "hint": "NTK needs no training but is imperfect. YaRN adds per-band ramps and an attention temperature. Fine-tuning is best but costs compute and data."
+          "hint": "NTK needs no training but is imperfect, and YaRN adds per-band ramps and an attention temperature. Fine-tuning is best but costs compute and data."
         },
         {
           "stage": "tradeoffs",
           "question": "What quality regressions do you see on short contexts after scaling?",
-          "hint": "Changed frequencies slightly shift short-range behavior. Look for perplexity increases at the original length. Dynamic NTK avoids scaling short inputs."
+          "hint": "Changed frequencies slightly shift short-range behavior, so look for perplexity increases at the original length. Dynamic NTK avoids scaling short inputs."
         }
       ]
     },
@@ -3453,7 +3453,7 @@
         {
           "stage": "tradeoffs",
           "question": "FSDP versus tensor parallelism versus pipeline parallelism: when each?",
-          "hint": "FSDP when memory is the problem and the interconnect is good. TP for huge layers within a node. PP for very deep models across slow links."
+          "hint": "FSDP when memory is the problem and the interconnect is good, and TP for huge layers within a node. PP for very deep models across slow links."
         }
       ]
     },
@@ -3582,7 +3582,7 @@
         {
           "stage": "tradeoffs",
           "question": "Focal loss versus class reweighting versus resampling?",
-          "hint": "Focal loss adapts per example by difficulty. Reweighting is a fixed per-class factor. Resampling changes the data seen."
+          "hint": "Focal loss adapts per example by difficulty, while reweighting is a fixed per-class factor. Resampling changes the data seen."
         },
         {
           "stage": "tradeoffs",
@@ -3923,7 +3923,7 @@
         {
           "stage": "deep_dive",
           "question": "Compute the parameter and FLOP savings versus a standard convolution.",
-          "hint": "The standard cost is C_in * C_out * k^2. Separable is C_in * k^2 + C_in * C_out. Take the ratio."
+          "hint": "The standard cost is C_in * C_out * k^2 and the separable cost is C_in * k^2 + C_in * C_out. Take the ratio."
         },
         {
           "stage": "deep_dive",
@@ -4013,7 +4013,7 @@
         {
           "stage": "tradeoffs",
           "question": "What changed in later ViT variants, such as layer scale or register tokens?",
-          "hint": "LayerScale scales the residual branches for depth. Registers absorb the high-norm artifact tokens. Also mention QK-norm and better position schemes."
+          "hint": "LayerScale scales the residual branches for depth, and registers absorb the high-norm artifact tokens. Also mention QK-norm and better position schemes."
         }
       ]
     },
@@ -4270,7 +4270,7 @@
         {
           "stage": "deep_dive",
           "question": "Why multiply the fraction by the mean probability instead of using either alone?",
-          "hint": "f is non-differentiable (from the argmax). P is differentiable but alone could be gamed. The product is minimized by a uniform distribution."
+          "hint": "f is non-differentiable (from the argmax), and P is differentiable but could be gamed on its own. The product is minimized by a uniform distribution."
         },
         {
           "stage": "deep_dive",
@@ -4489,7 +4489,7 @@
         {
           "stage": "tradeoffs",
           "question": "adaLN versus cross-attention conditioning versus in-context tokens: trade-offs?",
-          "hint": "adaLN is cheap and suits a global condition. Cross-attention handles token sequences such as text. In-context tokens are simplest but cost sequence length."
+          "hint": "adaLN is cheap and suits a global condition, while cross-attention handles token sequences such as text. In-context tokens are simplest but cost sequence length."
         },
         {
           "stage": "tradeoffs",
@@ -4869,7 +4869,7 @@
         {
           "stage": "tradeoffs",
           "question": "Spectral versus spatial views of GCN?",
-          "hint": "Spectral: a first-order approximation of graph Fourier filters. Spatial: neighbor averaging. Both give the same formula."
+          "hint": "Spectral: a first-order approximation of graph Fourier filters; spatial: neighbor averaging. Both give the same formula."
         }
       ]
     },
@@ -5169,7 +5169,7 @@
         {
           "stage": "tradeoffs",
           "question": "How does MPNN relate to GCN, GAT and GIN as special cases?",
-          "hint": "GCN: fixed normalized messages. GAT: attention-weighted messages. GIN: sum with an MLP. Each is a choice of message and update function."
+          "hint": "Each is a choice of message and update function: GCN uses fixed normalized messages, GAT attention-weighted ones, and GIN a sum followed by an MLP. Name which part each one changes."
         }
       ]
     },
@@ -5953,7 +5953,7 @@
         {
           "stage": "deep_dive",
           "question": "Softmax before or after top-k: how do the weights differ?",
-          "hint": "Softmax over all experts then topk gives weights that do not sum to 1 unless renormalized. Softmax over only the top-k logits sums to 1. Compare the magnitudes."
+          "hint": "Softmax over all experts then topk gives weights that do not sum to 1 unless renormalized, while softmax over only the top-k logits sums to 1. Compare the magnitudes."
         },
         {
           "stage": "deep_dive",
@@ -7853,7 +7853,7 @@
         {
           "stage": "tradeoffs",
           "question": "Z-loss versus clipping or normalizing router logits?",
-          "hint": "Clipping is a hard cutoff with no gradient beyond it. Normalizing changes the scale directly. Z-loss is a soft penalty."
+          "hint": "Clipping is a hard cutoff with no gradient beyond it, and normalizing changes the scale directly. Z-loss is a soft penalty."
         },
         {
           "stage": "tradeoffs",
@@ -7985,7 +7985,7 @@
         {
           "stage": "tradeoffs",
           "question": "Noise for exploration versus a load-balancing loss?",
-          "hint": "Noise is implicit and indirect. A balancing loss directly targets the imbalance. Modern models mostly use losses or bias updates."
+          "hint": "Noise works implicitly and indirectly, while a balancing loss directly targets the imbalance. Modern models mostly use losses or bias updates."
         },
         {
           "stage": "tradeoffs",
@@ -8442,7 +8442,7 @@
         {
           "stage": "deep_dive",
           "question": "What are the edge cases: an empty generation, a row that fills max_len exactly, prompt length zero?",
-          "hint": "An empty generation gives an all-false row. A full row has no padding. With prompt length 0 everything up to the length is response."
+          "hint": "An empty generation gives an all-false row, and a full row has no padding. With prompt length 0, everything up to the length is response."
         },
         {
           "stage": "tradeoffs",
@@ -9079,7 +9079,7 @@
         {
           "stage": "concept",
           "question": "Walk me through the GRPO objective end to end: which pieces come from the policy, the reference and the reward?",
-          "hint": "Policy: current log-probs. Old policy: the ratio for clipping. Reference: the KL term. Reward: group-relative advantages broadcast to tokens."
+          "hint": "Policy: current log-probs; old policy: the ratio for clipping; reference: the KL term. Reward: group-relative advantages broadcast to tokens."
         },
         {
           "stage": "concept",
@@ -9099,7 +9099,7 @@
         {
           "stage": "deep_dive",
           "question": "What is the role of beta, and what happens to training when it is too large or zero?",
-          "hint": "beta weights the KL to the reference. Too large and the policy barely moves. Zero lets it drift, which risks hacking but is common for verifiable rewards."
+          "hint": "beta weights the KL to the reference; too large and the policy barely moves. Zero lets it drift, which risks hacking but is common for verifiable rewards."
         },
         {
           "stage": "tradeoffs",
@@ -9435,7 +9435,7 @@
         {
           "stage": "tradeoffs",
           "question": "Value clipping has been reported to hurt in some settings. When would you turn it off?",
-          "hint": "When returns change a lot between updates, or with reward scaling changes. Clipping then slows needed updates. Andrychowicz et al. found it can hurt."
+          "hint": "When returns change a lot between updates, or reward scaling changes, clipping slows needed updates. Andrychowicz et al. found it can hurt."
         },
         {
           "stage": "tradeoffs",
@@ -10407,7 +10407,7 @@
         {
           "stage": "concept",
           "question": "Which model is frozen, which receives gradients, and how do you guarantee it?",
-          "hint": "The reference is frozen (requires_grad False, eval mode, no_grad). The policy trains. Assert that the reference has no gradients after backward."
+          "hint": "The reference is frozen (requires_grad False, eval mode, no_grad) and only the policy trains. Assert that the reference has no gradients after backward."
         },
         {
           "stage": "deep_dive",
@@ -10747,7 +10747,7 @@
         {
           "stage": "tradeoffs",
           "question": "Summarization versus truncation versus retrieval?",
-          "hint": "A summary keeps meaning but is lossy. Truncation is cheap but blind. Retrieval keeps everything but needs a search step."
+          "hint": "A summary keeps meaning but is lossy, and truncation is cheap but blind. Retrieval keeps everything but needs a search step."
         },
         {
           "stage": "tradeoffs",
@@ -12761,7 +12761,7 @@
         {
           "stage": "concept",
           "question": "How do accuracy, Brier score and ECE differ?",
-          "hint": "Accuracy: fraction correct. Brier: mean squared error of the probabilities. ECE: the weighted average gap between confidence and accuracy per bin."
+          "hint": "Accuracy: fraction correct; Brier: mean squared error of the probabilities. ECE: the count-weighted average gap between confidence and accuracy per bin."
         },
         {
           "stage": "deep_dive",
@@ -12912,7 +12912,7 @@
         {
           "stage": "tradeoffs",
           "question": "Temperature KD is teacher-forced distillation. What are its limits for autoregressive generation, for example exposure bias or distribution shift?",
-          "hint": "The student trains on teacher-forced prefixes but generates from its own. Errors compound. On-policy distillation addresses this."
+          "hint": "The student trains on teacher-forced prefixes but generates from its own, so errors compound. On-policy distillation addresses this."
         },
         {
           "stage": "tradeoffs",
@@ -13239,7 +13239,7 @@
         {
           "stage": "deep_dive",
           "question": "How do you maintain each row's distance to its nearest selected row efficiently?",
-          "hint": "Keep min_dist per row. After each pick, update it with the minimum of the old value and the distance to the new pick. That is O(N) per step."
+          "hint": "Keep min_dist per row, and after each pick lower it to the distance to the new pick where that is smaller. That is O(N) per step."
         },
         {
           "stage": "deep_dive",
@@ -13980,7 +13980,7 @@
         {
           "stage": "concept",
           "question": "Define precision and recall in words. Give an application where each one matters more.",
-          "hint": "Precision: of the predicted positives, how many are right. Recall: of the actual positives, how many are found. Spam filtering versus cancer screening."
+          "hint": "Precision: of the predicted positives, how many are right; recall: of the actual positives, how many are found. Contrast spam filtering with cancer screening."
         },
         {
           "stage": "concept",
@@ -14520,7 +14520,7 @@
         {
           "stage": "tradeoffs",
           "question": "RLOO versus PPO with a learned critic: sample cost, variance and stability?",
-          "hint": "RLOO needs several samples per prompt but no critic. It is simple and stable, with variance depending on k. A critic is cheaper per sample but can be wrong."
+          "hint": "RLOO needs several samples per prompt but no critic, and it is simple and stable, with variance depending on k. A critic is cheaper per sample but can be wrong."
         }
       ],
       "sources": [
@@ -14642,7 +14642,7 @@
         {
           "stage": "tradeoffs",
           "question": "Repetition penalty versus frequency and presence penalties: what does each punish, and when do they hurt quality?",
-          "hint": "Repetition penalty scales logits of any seen token once. Frequency penalty grows with count; presence penalty is a flat one-time subtraction. They can suppress needed repeats such as names or code."
+          "hint": "Repetition penalty scales the logit of any seen token once, frequency penalty grows with the count, and presence penalty is a flat one-time subtraction. All can suppress needed repeats such as names or code."
         }
       ],
       "sources": [
@@ -14865,7 +14865,7 @@
         {
           "stage": "deep_dive",
           "question": "What does the ReLU do to the gradient, what is a dead ReLU, and how does the derivative convention at 0 matter?",
-          "hint": "It passes the gradient where the input was > 0 and zeroes it elsewhere. A dead unit's gradient is always 0. Pick the convention at exactly 0 to match autograd."
+          "hint": "It passes the gradient where the input was > 0 and zeroes it elsewhere, so a dead unit's gradient is always 0. Pick the convention at exactly 0 to match autograd."
         },
         {
           "stage": "deep_dive",
@@ -14992,7 +14992,7 @@
         {
           "stage": "tradeoffs",
           "question": "Greedy bin packing versus sorting by length versus truncation: effects on throughput, padding and data distribution?",
-          "hint": "Greedy packing minimizes padding but mixes lengths. Sorting creates length-biased batches. Truncation discards data."
+          "hint": "Greedy packing minimizes padding but mixes lengths, and sorting creates length-biased batches. Truncation discards data."
         }
       ],
       "sources": [
@@ -15087,7 +15087,7 @@
         {
           "stage": "deep_dive",
           "question": "Write both losses. Why does SimPO divide by the response length, and what does gamma do?",
-          "hint": "SimPO: -logsigmoid(beta * (avg_c - avg_r) - gamma). IPO: (margin - 1/(2 beta))^2. Averaging removes the bias toward longer responses; gamma demands a minimum gap."
+          "hint": "SimPO: -logsigmoid(beta * (avg_c - avg_r) - gamma); IPO: (margin - 1/(2 beta))^2. Averaging removes the bias toward longer responses, and gamma demands a minimum gap."
         },
         {
           "stage": "deep_dive",
@@ -15107,7 +15107,7 @@
         {
           "stage": "tradeoffs",
           "question": "DPO, IPO and SimPO on noisy human labels versus clean verifiable labels: which would you pick for each?",
-          "hint": "With noisy labels, IPO's bounded target avoids overfitting. With clean verifiable labels, DPO or SimPO can push harder. Consider the reference model's cost."
+          "hint": "With noisy labels, IPO's bounded target avoids overfitting, while clean verifiable labels let DPO or SimPO push harder. Also weigh the cost of a reference model."
         }
       ],
       "sources": [
@@ -15232,7 +15232,7 @@
         {
           "stage": "deep_dive",
           "question": "Write the token-level and sequence-level weights. Which one is closer to the true trajectory ratio, and which one hits the cap more often?",
-          "hint": "Token: exp(train - rollout) per token, capped. Sequence: exp of the summed log-ratios, capped. Sequence is the true trajectory ratio but explodes and hits the cap much more often."
+          "hint": "Token: exp(train - rollout) per token, capped; sequence: exp of the summed log-ratios, capped. Sequence is the true trajectory ratio but explodes and hits the cap much more often."
         },
         {
           "stage": "deep_dive",
@@ -15363,7 +15363,7 @@
         {
           "stage": "tradeoffs",
           "question": "Chunk-and-recompute versus a fused linear cross-entropy kernel versus vocabulary parallelism: memory, speed and complexity?",
-          "hint": "Chunking is simple but recomputes. A fused kernel is fastest but custom. Vocabulary parallelism shards the vocabulary across GPUs and needs communication."
+          "hint": "Chunking is simple but recomputes, and a fused kernel is fastest but custom. Vocabulary parallelism shards the vocabulary across GPUs and needs communication."
         },
         {
           "stage": "tradeoffs",
@@ -15607,7 +15607,7 @@
         {
           "stage": "tradeoffs",
           "question": "Should a failing emit listener stop the others, or should the dispatcher contain the exception? What does each choice cost?",
-          "hint": "Stopping makes a buggy plugin break everything. Containing the error keeps the others running but can hide the failure. Log it either way."
+          "hint": "Stopping lets one buggy plugin break everything, while containing the error keeps the others running but can hide the failure. Log it either way."
         },
         {
           "stage": "tradeoffs",
@@ -15707,7 +15707,7 @@
         {
           "stage": "deep_dive",
           "question": "Walk through which events forget pending calls and which answer them. Why must an answering result be an append from the same turn and step?",
-          "hint": "turn/start, turn/end and step/end forget pending calls. A tool/result with surface_op append and the same turn and step answers one. A replace only rewrites an older result, and a result from another step answers a different request."
+          "hint": "turn/start, turn/end and step/end forget pending calls; a tool/result with surface_op append and the same turn and step answers one. A replace only rewrites an older result, and a result from another step answers a different request."
         },
         {
           "stage": "deep_dive",
@@ -15972,7 +15972,7 @@
         {
           "stage": "tradeoffs",
           "question": "Head-and-tail pruning versus letting the model page through output with an offset and limit, or spilling the full output to a file: when would you pick each?",
-          "hint": "Head and tail is simple. Paging with offset and limit lets the model read what it needs. Spilling to a file keeps everything available."
+          "hint": "Head and tail is simple, and paging with offset and limit lets the model read what it needs. Spilling to a file keeps everything available."
         }
       ],
       "sources": [
@@ -16202,7 +16202,7 @@
         {
           "stage": "tradeoffs",
           "question": "Cut-and-summarize compaction versus pruning tool outputs versus retrieval over the full log: what does each lose?",
-          "hint": "Compaction loses detail. Pruning loses tool output but keeps structure. Retrieval keeps everything but needs search to find it."
+          "hint": "Compaction loses detail, and pruning loses tool output but keeps structure. Retrieval keeps everything but needs search to find it."
         }
       ],
       "sources": [
@@ -16312,7 +16312,7 @@
         {
           "stage": "tradeoffs",
           "question": "A per-file queue versus one global lock versus optimistic concurrency that re-reads and retries on conflict: throughput and correctness?",
-          "hint": "Per-file allows parallel work on different files. A global lock is simple but serial. Optimistic retries are fast but complex."
+          "hint": "A per-file queue allows parallel work on different files, and a global lock is simple but serial. Optimistic retries are fast but complex."
         },
         {
           "stage": "tradeoffs",
@@ -16417,7 +16417,7 @@
         {
           "stage": "deep_dive",
           "question": "Walk through exact-then-fuzzy matching. Which differences does the normalization forgive, and why is fuzzy mode decided once for the whole call?",
-          "hint": "Try each old_text exactly. If one is missing but its normalized form matches, turn fuzzy mode on for every edit. Normalization forgives NFKC differences, trailing whitespace, curly quotes, Unicode dashes and special spaces; line endings are unified separately."
+          "hint": "Try each old_text exactly; if one is missing but its normalized form matches, fuzzy mode turns on for every edit. Normalization forgives NFKC differences, trailing whitespace, curly quotes, Unicode dashes and special spaces; line endings are unified apart."
         },
         {
           "stage": "deep_dive",
@@ -16432,7 +16432,7 @@
         {
           "stage": "tradeoffs",
           "question": "String replacement versus unified diffs versus whole-file rewrites as the edit format for an LLM: token cost, failure modes and model accuracy?",
-          "hint": "Replacement is cheap and precise but needs unique anchors. Diffs are compact but models get the line counts wrong. Rewrites are simple but expensive."
+          "hint": "Replacement is cheap and precise but needs unique anchors, and diffs are compact but models get the line counts wrong. Rewrites are simple but expensive."
         },
         {
           "stage": "tradeoffs",
@@ -16538,12 +16538,12 @@
         {
           "stage": "deep_dive",
           "question": "When is a tool call orphaned, and what does the repair insert? Why are system messages held back while calls are pending?",
-          "hint": "A call with no result before the next user or assistant message. Insert a synthetic error result. Holding system messages back keeps the call and its result adjacent."
+          "hint": "A call is orphaned when no result arrives before the next user or assistant message; insert a synthetic error result. Holding system messages back keeps the call and its result adjacent."
         },
         {
           "stage": "deep_dive",
           "question": "Why skip errored or aborted assistant messages entirely instead of repairing them?",
-          "hint": "They may contain partial or invalid tool calls. Repairing could invent content. Dropping them is safer."
+          "hint": "They may contain partial or invalid tool calls, and repairing them could invent content. Dropping them is safer."
         },
         {
           "stage": "tradeoffs",
@@ -16649,7 +16649,7 @@
         {
           "stage": "deep_dive",
           "question": "Walk through folding append and replace operations. Why must a replace reference nodes that are still on the surface?",
-          "hint": "Append adds nodes. Replace swaps a range of nodes currently on the surface. Referencing removed nodes would mean editing text the model never sees."
+          "hint": "Append adds nodes; replace swaps a range of nodes currently on the surface. Referencing removed nodes would mean editing text the model never sees."
         },
         {
           "stage": "deep_dive",
@@ -16664,7 +16664,7 @@
         {
           "stage": "tradeoffs",
           "question": "Replaying the full log versus maintaining the surface incrementally versus snapshotting it: cost, correctness and crash safety?",
-          "hint": "Full replay is simple and correct but slow. Incremental is fast but risks drift. Snapshots make restarts fast but must stay consistent."
+          "hint": "Full replay is simple and correct but slow, and incremental folding is fast but risks drift. Snapshots make restarts fast but must stay consistent."
         },
         {
           "stage": "tradeoffs",
@@ -16764,7 +16764,7 @@
         {
           "stage": "deep_dive",
           "question": "Walk through the four cases: no system node, empty rendering, continuing capable route, and consolidation. What does each cost in cache misses?",
-          "hint": "No node: append, one change. Empty rendering: blank every non-empty node. Continuing capable route: append only if the effective prompt changed, so the cached prefix survives. Otherwise consolidate: blank later nodes and rewrite the head, one cache miss."
+          "hint": "No node: append; empty rendering: blank every non-empty node; continuing capable route: append only if the effective prompt changed, so the cached prefix survives. Otherwise consolidate: blank later nodes and rewrite the head, one cache miss."
         },
         {
           "stage": "deep_dive",
@@ -16895,7 +16895,7 @@
         {
           "stage": "tradeoffs",
           "question": "Unbounded parallelism versus a bounded pool versus fully sequential execution: latency, rate limits and resource contention?",
-          "hint": "Unbounded is fastest until rate limits or resource contention hit. A pool bounds them. Sequential is safest and slowest."
+          "hint": "Unbounded is fastest until rate limits or resource contention hit, and a pool bounds them. Sequential is safest and slowest."
         },
         {
           "stage": "tradeoffs",
@@ -17122,7 +17122,7 @@
         {
           "stage": "deep_dive",
           "question": "Which failures go through post-execute and which skip it? Why does a denied call still go through post-execute?",
-          "hint": "Denied and cancelled calls go through post-execute. Crashes in the harness itself skip it. Loop detection needs to see denials."
+          "hint": "Denied and cancelled calls go through post-execute, because loop detection needs to see denials. Crashes in the harness itself skip it."
         },
         {
           "stage": "deep_dive",
@@ -17223,7 +17223,7 @@
         {
           "stage": "concept",
           "question": "What is the difference between cooperative and preemptive cancellation? Why does an agent harness prefer cooperative cancellation for tools?",
-          "hint": "Cooperative: the tool checks a signal and stops itself. Preemptive: it is killed from outside. Killing can leave files or processes half-changed."
+          "hint": "Cooperative: the tool checks a signal and stops itself; preemptive: it is killed from outside. Killing can leave files or processes half-changed."
         },
         {
           "stage": "concept",
@@ -17248,7 +17248,7 @@
         {
           "stage": "tradeoffs",
           "question": "What do you do about a tool that ignores its signal? Compare a hard kill after a grace period, process isolation and just waiting.",
-          "hint": "Grace then kill is simple but can corrupt state. Process isolation makes killing safe but costs overhead. Waiting risks hanging."
+          "hint": "Grace then kill is simple but can corrupt state, and process isolation makes killing safe but costs overhead. Waiting risks hanging."
         },
         {
           "stage": "tradeoffs",
@@ -17358,7 +17358,7 @@
         {
           "stage": "deep_dive",
           "question": "Walk through parsing '{\"path\": \"src/ma' and '{\"force\": tr'. How does your parser report that it ran out of input inside a value?",
-          "hint": "The path gives a partial string \"src/ma\", which is safe to show. For \"tr\", a literal is unfinished, so drop the key. The parser reports running out inside a value."
+          "hint": "The path gives a partial string \"src/ma\", which is safe to show. For \"tr\" the literal is unfinished, so the parser reports running out inside a value and the key is dropped."
         },
         {
           "stage": "deep_dive",
@@ -17490,7 +17490,7 @@
         {
           "stage": "tradeoffs",
           "question": "Approval per call versus per session versus allow-lists: user friction, safety and prompt-injection risk?",
-          "hint": "Per-call approval is safest but tiring. Per-session is convenient but a prompt injection can abuse it. Allow-lists are fast but need maintenance."
+          "hint": "Per-call approval is safest but tiring, and per-session is convenient but a prompt injection can abuse it. Allow-lists are fast but need maintenance."
         },
         {
           "stage": "tradeoffs",
@@ -17589,7 +17589,7 @@
         {
           "stage": "deep_dive",
           "question": "Walk through accept versus block. Why does a blocked result drop the contexts the tool attached?",
-          "hint": "Accept keeps or edits the result. Block replaces it with feedback. The tool's own contexts no longer apply to a result it did not produce."
+          "hint": "Accept keeps or edits the result, while block replaces it with feedback. The tool's own contexts no longer apply to a result it did not produce."
         },
         {
           "stage": "deep_dive",
@@ -17917,7 +17917,7 @@
         {
           "stage": "deep_dive",
           "question": "Walk through prefix_offset and read_offset over three steps where the second token is an incomplete byte. What is decoded at each step and what is returned?",
-          "hint": "Step 1 emits the text. Step 2 decodes to something ending in the replacement character, so it returns \"\" and keeps the offsets. Step 3 completes the character and emits it."
+          "hint": "Step 1 emits the text; step 2 decodes to something ending in the replacement character, so it returns \"\" and keeps the offsets. Step 3 completes the character and emits it."
         },
         {
           "stage": "deep_dive",
@@ -18039,12 +18039,12 @@
         {
           "stage": "tradeoffs",
           "question": "Retrieval by pose heuristics versus learned retrieval over frame embeddings versus an explicit 3D representation (Gaussian splats): consistency, cost and generality?",
-          "hint": "Pose heuristics are cheap but miss occlusion. Learned retrieval adapts but costs more. Explicit 3D is consistent but less general."
+          "hint": "Pose heuristics are cheap but miss occlusion, and learned retrieval adapts but costs more. Explicit 3D is consistent but less general."
         },
         {
           "stage": "tradeoffs",
           "question": "Spending the real-time frame budget on more context frames versus more diffusion steps per frame: quality, latency and memory?",
-          "hint": "More context improves consistency. More steps improve quality. Both cost latency."
+          "hint": "More context improves consistency and more steps improve quality. Both cost latency."
         }
       ],
       "sources": [
@@ -18143,12 +18143,12 @@
         {
           "stage": "tradeoffs",
           "question": "One-slot merging versus a bounded queue that blocks the producer versus an unbounded queue: memory, fairness and latency?",
-          "hint": "One slot never blocks the engine and keeps memory bounded. A bounded queue blocks the producer. Unbounded risks running out of memory."
+          "hint": "One slot never blocks the engine and keeps memory bounded, while a bounded queue blocks the producer. An unbounded queue risks running out of memory."
         },
         {
           "stage": "tradeoffs",
           "question": "Detecting client disconnects and aborting the request versus finishing generation anyway: GPU cost, caching and idempotency?",
-          "hint": "Aborting saves GPU work. Finishing may help caching or retries. Consider idempotency when the client reconnects."
+          "hint": "Aborting saves GPU work, while finishing may help caching or retries. Consider idempotency when the client reconnects."
         }
       ],
       "sources": [
@@ -18257,7 +18257,7 @@
         {
           "stage": "deep_dive",
           "question": "Why does the last event id persist across events while the event name and data reset? How is it used on reconnect?",
-          "hint": "The id identifies the resume point. The client sends it as Last-Event-ID when reconnecting. The name and data belong to one event only."
+          "hint": "The id identifies the resume point, and the client sends it as Last-Event-ID when reconnecting. The name and data belong to one event only."
         },
         {
           "stage": "deep_dive",
@@ -18506,7 +18506,7 @@
         {
           "stage": "tradeoffs",
           "question": "Attention sinks plus a recent window versus H2O-style importance-based eviction versus a learned sink logit (gpt-oss): quality, cost and implementation complexity?",
-          "hint": "Sinks and a window are simple and work with standard kernels. H2O adapts to content but needs attention scores. A learned sink is built into training."
+          "hint": "Sinks and a window are simple and work with standard kernels, while H2O adapts to content but needs attention scores. A learned sink is built into training."
         },
         {
           "stage": "tradeoffs",
@@ -18754,7 +18754,7 @@
         {
           "stage": "tradeoffs",
           "question": "H2O's accumulated scores versus SnapKV's observation-window scores versus fixed sinks plus a window: accuracy, overhead and compatibility with FlashAttention?",
-          "hint": "H2O needs attention weights that FlashAttention does not output. SnapKV scores once from a window. Sinks need nothing."
+          "hint": "H2O needs attention weights that FlashAttention does not output, and SnapKV scores once from a window. Sinks need nothing."
         },
         {
           "stage": "tradeoffs",

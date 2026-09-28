@@ -21,11 +21,11 @@
   "simpo_ipo_loss": {
     "What problem with DPO does SimPO address, and what does it use instead of the reference log-ratio?": "DPO's reward is not length-normalized and needs a reference model. SimPO uses the average log-prob per token as the reward, plus a margin.",
     "What problem with DPO does IPO address, and why does a finite target help?": "DPO can push the preference probability toward 1 and the margin toward infinity on deterministic labels. IPO regresses the margin to a finite target.",
-    "Write both losses. Why does SimPO divide by the response length, and what does gamma do?": "SimPO: -logsigmoid(beta * (avg_c - avg_r) - gamma). IPO: (margin - 1/(2 beta))^2. Averaging removes the bias toward longer responses; gamma demands a minimum gap.",
+    "Write both losses. Why does SimPO divide by the response length, and what does gamma do?": "SimPO: -logsigmoid(beta * (avg_c - avg_r) - gamma); IPO: (margin - 1/(2 beta))^2. Averaging removes the bias toward longer responses, and gamma demands a minimum gap.",
     "Derive the IPO gradient with respect to the chosen log-probability. What happens once the gap reaches 1 / (2 * beta)?": "The gradient is 2 * (margin - 1/(2 beta)) times the derivative of the margin. It becomes zero at the target, so the gap stops growing.",
     "Why can -log(sigmoid(x)) overflow, and what stable form avoids it?": "For very negative x, exp(-x) overflows. Use softplus(-x) or F.logsigmoid, which handle both signs.",
     "Without a reference model, what stops SimPO from drifting far from the SFT model? How would you detect drift?": "Nothing explicit: only the margin and the length normalization. Track KL to the SFT model, the chosen log-probs and output length.",
-    "DPO, IPO and SimPO on noisy human labels versus clean verifiable labels: which would you pick for each?": "With noisy labels, IPO's bounded target avoids overfitting. With clean verifiable labels, DPO or SimPO can push harder. Consider the reference model's cost."
+    "DPO, IPO and SimPO on noisy human labels versus clean verifiable labels: which would you pick for each?": "With noisy labels, IPO's bounded target avoids overfitting, while clean verifiable labels let DPO or SimPO push harder. Also weigh the cost of a reference model."
   },
   "grpo_loss": {
     "How does GRPO compute advantages without a critic?": "Sample a group of completions per prompt and use each reward minus the group mean (divided by the group std) as its advantage.",
@@ -40,7 +40,7 @@
     "What problem does PPO solve compared with vanilla policy gradient?": "Vanilla policy gradient can take destructive steps and can only use each batch once. PPO allows several epochs while limiting how far the policy moves.",
     "Explain the clipped surrogate objective in plain words.": "Take the smaller of the ratio times the advantage and the clipped ratio times the advantage, so pushing further than the clip range brings no extra reward.",
     "Why compute the ratio as exp(new_logps - old_logps)?": "Log-probs are stable to subtract. A ratio of tiny probabilities would underflow.",
-    "Walk through the four cases of positive or negative advantage with ratio above or below the clip range.": "A > 0 with ratio > 1 + eps: clipped, no gradient. A > 0 with ratio < 1 - eps: unclipped. Mirror both for A < 0.",
+    "Walk through the four cases of positive or negative advantage with ratio above or below the clip range.": "A > 0 with ratio > 1 + eps is clipped and gets no gradient; A > 0 with ratio < 1 - eps stays unclipped. Mirror both for A < 0.",
     "Why are old_logps and advantages constants, and what bug appears if they are not?": "They are data from the rollout. If gradients flow through them, the ratio's gradient is wrong and the advantage becomes something to optimize.",
     "PPO clipping versus a KL penalty on the policy update: what are the trade-offs?": "Clipping is simple but only approximates a trust region. An adaptive KL penalty is smoother but needs a target KL and coefficient tuning.",
     "What hyperparameters matter most in PPO for LLMs, and what signs of instability do you watch?": "Learning rate, clip range, KL coefficient, batch size and epochs. Watch KL spikes, the clip fraction, entropy collapse and reward hacking."

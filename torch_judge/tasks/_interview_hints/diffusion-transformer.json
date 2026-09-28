@@ -32,7 +32,7 @@
     "Which parameters does the conditioning projection regress, and where does each apply in the block?": "Shift and scale for the norms before attention and before the MLP, and a gate on each residual branch. Six vectors per block.",
     "Why zero-initialize the final projection rather than the whole block?": "Zeroing only the modulation output gives gates of 0, which makes the block the identity while its internal layers still start with normal random weights.",
     "How do the shapes broadcast from a per-sample condition to every token?": "The condition is (B, D) and is unsqueezed to (B, 1, D) so it broadcasts across all N tokens.",
-    "adaLN versus cross-attention conditioning versus in-context tokens: trade-offs?": "adaLN is cheap and suits a global condition. Cross-attention handles token sequences such as text. In-context tokens are simplest but cost sequence length.",
+    "adaLN versus cross-attention conditioning versus in-context tokens: trade-offs?": "adaLN is cheap and suits a global condition, while cross-attention handles token sequences such as text. In-context tokens are simplest but cost sequence length.",
     "What does zero initialization buy for very deep diffusion transformers?": "Stable training at large depth without warmup tricks, and each block starts as the identity. It was DiT's best-performing variant."
   }
 }
