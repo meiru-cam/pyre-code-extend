@@ -15268,6 +15268,782 @@
           "simplifications": "Snake_case field names, no timestamps on synthetic results, and plain dicts instead of typed messages."
         }
       ]
+    },
+    {
+      "id": "dsh_fold_surface",
+      "title": "Fold the Session Surface",
+      "titleZh": "Fold the Session Surface",
+      "difficulty": "Medium",
+      "functionName": "fold_surface",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "In DeepSeek Harness the session log never changes; compaction and pruning append *replacement* events instead. Replay the log to find which messages the model currently sees.\n\n**Signature:** `fold_surface(events) -> dict`\n\n**Events.** Each event is a dict with `type`, `seq`, `data` and, for message events, `surface_op`. The *message types* are `system/message`, `user/message`, `assistant/message` and `tool/result`; their `data` holds a `message` dict. Every other type (for example `turn/start` or `assistant/attempt`) is invisible to the model.\n\n**Surface operations:**\n- `\"append\"` — add this event's `seq` at the end of the surface.\n- `{\"op\": \"replace\", \"start_seq\": a, \"end_seq\": b}` — the surface nodes from `a` through `b`, inclusive, are removed and this event's `seq` takes their place.\n\n**Validation.** Raise `ValueError` when:\n- the `seq` values are not exactly `0, 1, 2, ...` in order;\n- a message event has no `surface_op`, or a non-message event has one, or `surface_op` is neither `\"append\"` nor a valid replace dict;\n- a replace refers to a `seq` that is not earlier than the event itself, or that is not currently on the surface, or whose start comes after its end on the surface;\n- a `tool/result` replace does not cover exactly one node that is a `tool/result`, or changes anything other than `message[\"content\"]` (compare `data` with `message[\"content\"]` removed on both sides);\n- a replace starts at surface position 0 while that node is a `system/message`, unless the replacing event is a `system/message` that covers exactly that one node.\n\n**Returns:** `{\"nodes\": [...], \"messages\": [...], \"replacements\": [...]}`: the final surface as a list of seqs, the `data[\"message\"]` of each node in order, and one `{\"seq\", \"start\", \"end\", \"shadowed\"}` dict per replace event in log order, where `shadowed` lists the seqs it removed.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Model-visible means logged.** Everything the model sees must be reconstructable from the log. Compaction does not delete old messages; it appends a summary that replaces a range, so replay, forking and audit still have the originals.\n\n**Why tool-result rewrites are narrow.** A pruned tool result may shorten its content but must keep its call id, turn and step; otherwise it would stop answering its tool call.\n\n**Why protect node 0.** The system prompt sits at the head of the surface. Letting a compaction summary swallow it would silently drop the agent's instructions.",
+      "descriptionZh": "In DeepSeek Harness the session log never changes; compaction and pruning append *replacement* events instead. Replay the log to find which messages the model currently sees.\n\n**Signature:** `fold_surface(events) -> dict`\n\n**Events.** Each event is a dict with `type`, `seq`, `data` and, for message events, `surface_op`. The *message types* are `system/message`, `user/message`, `assistant/message` and `tool/result`; their `data` holds a `message` dict. Every other type (for example `turn/start` or `assistant/attempt`) is invisible to the model.\n\n**Surface operations:**\n- `\"append\"` — add this event's `seq` at the end of the surface.\n- `{\"op\": \"replace\", \"start_seq\": a, \"end_seq\": b}` — the surface nodes from `a` through `b`, inclusive, are removed and this event's `seq` takes their place.\n\n**Validation.** Raise `ValueError` when:\n- the `seq` values are not exactly `0, 1, 2, ...` in order;\n- a message event has no `surface_op`, or a non-message event has one, or `surface_op` is neither `\"append\"` nor a valid replace dict;\n- a replace refers to a `seq` that is not earlier than the event itself, or that is not currently on the surface, or whose start comes after its end on the surface;\n- a `tool/result` replace does not cover exactly one node that is a `tool/result`, or changes anything other than `message[\"content\"]` (compare `data` with `message[\"content\"]` removed on both sides);\n- a replace starts at surface position 0 while that node is a `system/message`, unless the replacing event is a `system/message` that covers exactly that one node.\n\n**Returns:** `{\"nodes\": [...], \"messages\": [...], \"replacements\": [...]}`: the final surface as a list of seqs, the `data[\"message\"]` of each node in order, and one `{\"seq\", \"start\", \"end\", \"shadowed\"}` dict per replace event in log order, where `shadowed` lists the seqs it removed.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Model-visible means logged.** Everything the model sees must be reconstructable from the log. Compaction does not delete old messages; it appends a summary that replaces a range, so replay, forking and audit still have the originals.\n\n**Why tool-result rewrites are narrow.** A pruned tool result may shorten its content but must keep its call id, turn and step; otherwise it would stop answering its tool call.\n\n**Why protect node 0.** The system prompt sits at the head of the surface. Letting a compaction summary swallow it would silently drop the agent's instructions.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Compaction replaces a range with a summary",
+          "code": "\ndef msg(seq, t, text, op=\"append\"):\n    return {\"type\": t, \"seq\": seq, \"data\": {\"message\": {\"text\": text}}, \"surface_op\": op}\nevents = [\n    msg(0, \"system/message\", \"sys\"),\n    {\"type\": \"turn/start\", \"seq\": 1, \"data\": {\"turn\": 1}},\n    msg(2, \"user/message\", \"u1\"),\n    msg(3, \"assistant/message\", \"a1\"),\n    {\"type\": \"assistant/attempt\", \"seq\": 4, \"data\": {\"failed\": True}},\n    msg(5, \"user/message\", \"u2\"),\n    msg(6, \"user/message\", \"summary of u1 and a1\", {\"op\": \"replace\", \"start_seq\": 2, \"end_seq\": 3}),\n]\nout = {fn}(events)\nassert out[\"nodes\"] == [0, 6, 5], out\nassert [m[\"text\"] for m in out[\"messages\"]] == [\"sys\", \"summary of u1 and a1\", \"u2\"]\nassert out[\"replacements\"] == [{\"seq\": 6, \"start\": 2, \"end\": 3, \"shadowed\": [2, 3]}]\n",
+          "behavior": "checkpoint.recovery"
+        },
+        {
+          "name": "Matches a seeded fold oracle",
+          "visibility": "unshown",
+          "behavior": "checkpoint.recovery",
+          "failureMessage": "Append adds the seq at the end; replace swaps the inclusive range on the current surface for the new seq.",
+          "hiddenCode": "\nimport random\nfor seed in (9, 48, 83):\n    rng = random.Random(seed)\n    for trial in range(60):\n        events, surface, reps = [], [], []\n        events.append({\"type\": \"system/message\", \"seq\": 0, \"data\": {\"message\": {\"k\": 0}}, \"surface_op\": \"append\"}); surface.append(0)\n        for seq in range(1, rng.randint(2, 25)):\n            kind = rng.random()\n            if kind < 0.15:\n                events.append({\"type\": rng.choice([\"turn/start\", \"step/end\", \"assistant/attempt\"]), \"seq\": seq, \"data\": {}})\n                continue\n            t = rng.choice([\"user/message\", \"assistant/message\"])\n            if kind < 0.35 and len(surface) > 2:\n                i = rng.randint(1, len(surface) - 1)\n                j = rng.randint(i, len(surface) - 1)\n                op = {\"op\": \"replace\", \"start_seq\": surface[i], \"end_seq\": surface[j]}\n                reps.append({\"seq\": seq, \"start\": surface[i], \"end\": surface[j], \"shadowed\": surface[i:j + 1]})\n                surface[i:j + 1] = [seq]\n            else:\n                op = \"append\"; surface.append(seq)\n            events.append({\"type\": t, \"seq\": seq, \"data\": {\"message\": {\"k\": seq}}, \"surface_op\": op})\n        out = {fn}(events)\n        assert out[\"nodes\"] == surface and out[\"replacements\"] == reps, (seed, trial, out, surface)\n        assert out[\"messages\"] == [{\"k\": s} for s in surface]\n"
+        },
+        {
+          "name": "Tool results may only change content, and the system head is protected",
+          "visibility": "unshown",
+          "behavior": "protocol.validation",
+          "failureMessage": "A tool/result replace must cover exactly one tool/result and change only its content; node 0 system prompts may only be replaced by one system/message.",
+          "hiddenCode": "\ndef base():\n    return [\n        {\"type\": \"system/message\", \"seq\": 0, \"data\": {\"message\": {\"text\": \"sys\"}}, \"surface_op\": \"append\"},\n        {\"type\": \"user/message\", \"seq\": 1, \"data\": {\"message\": {\"text\": \"u\"}}, \"surface_op\": \"append\"},\n        {\"type\": \"tool/result\", \"seq\": 2, \"data\": {\"turn\": 1, \"step\": 1, \"message\": {\"call_id\": \"c1\", \"content\": \"x\" * 50}}, \"surface_op\": \"append\"},\n    ]\nok = base() + [{\"type\": \"tool/result\", \"seq\": 3, \"data\": {\"turn\": 1, \"step\": 1, \"message\": {\"call_id\": \"c1\", \"content\": \"x...\"}}, \"surface_op\": {\"op\": \"replace\", \"start_seq\": 2, \"end_seq\": 2}}]\nassert {fn}(ok)[\"nodes\"] == [0, 1, 3]\nbad_cases = [\n    base() + [{\"type\": \"tool/result\", \"seq\": 3, \"data\": {\"turn\": 1, \"step\": 1, \"message\": {\"call_id\": \"c2\", \"content\": \"x\"}}, \"surface_op\": {\"op\": \"replace\", \"start_seq\": 2, \"end_seq\": 2}}],\n    base() + [{\"type\": \"tool/result\", \"seq\": 3, \"data\": {\"turn\": 1, \"step\": 2, \"message\": {\"call_id\": \"c1\", \"content\": \"x\"}}, \"surface_op\": {\"op\": \"replace\", \"start_seq\": 2, \"end_seq\": 2}}],\n    base() + [{\"type\": \"tool/result\", \"seq\": 3, \"data\": {\"turn\": 1, \"step\": 1, \"message\": {\"call_id\": \"c1\", \"content\": \"x\"}}, \"surface_op\": {\"op\": \"replace\", \"start_seq\": 1, \"end_seq\": 2}}],\n    base() + [{\"type\": \"tool/result\", \"seq\": 3, \"data\": {\"turn\": 1, \"step\": 1, \"message\": {\"call_id\": \"c1\", \"content\": \"x\"}}, \"surface_op\": {\"op\": \"replace\", \"start_seq\": 1, \"end_seq\": 1}}],\n    base() + [{\"type\": \"user/message\", \"seq\": 3, \"data\": {\"message\": {\"text\": \"summary\"}}, \"surface_op\": {\"op\": \"replace\", \"start_seq\": 0, \"end_seq\": 1}}],\n    base() + [{\"type\": \"system/message\", \"seq\": 3, \"data\": {\"message\": {\"text\": \"new sys\"}}, \"surface_op\": {\"op\": \"replace\", \"start_seq\": 0, \"end_seq\": 1}}],\n]\nfor events in bad_cases:\n    try:\n        {fn}(events)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"accepted {events[-1]}\")\nsys_ok = base() + [{\"type\": \"system/message\", \"seq\": 3, \"data\": {\"message\": {\"text\": \"new sys\"}}, \"surface_op\": {\"op\": \"replace\", \"start_seq\": 0, \"end_seq\": 0}}]\nassert {fn}(sys_ok)[\"nodes\"] == [3, 1, 2]\nno_sys_head = base()[1:]\nfor e in no_sys_head:\n    e[\"seq\"] -= 1\nno_sys_head.append({\"type\": \"user/message\", \"seq\": 2, \"data\": {\"message\": {\"text\": \"s\"}}, \"surface_op\": {\"op\": \"replace\", \"start_seq\": 0, \"end_seq\": 0}})\nassert {fn}(no_sys_head)[\"nodes\"] == [2, 1]\n"
+        },
+        {
+          "name": "Rejects malformed logs",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Seqs must be contiguous from 0, message events need a surface_op and others must not have one, and replaces must reference earlier seqs on the current surface in order.",
+          "hiddenCode": "\nu = lambda seq, op=\"append\": {\"type\": \"user/message\", \"seq\": seq, \"data\": {\"message\": {}}, \"surface_op\": op}\nbad = [\n    [u(1)],\n    [u(0), u(2)],\n    [{\"type\": \"user/message\", \"seq\": 0, \"data\": {\"message\": {}}}],\n    [{\"type\": \"turn/start\", \"seq\": 0, \"data\": {}, \"surface_op\": \"append\"}],\n    [u(0, \"prepend\")],\n    [u(0, {\"op\": \"replace\", \"start_seq\": 0, \"end_seq\": 0})],\n    [u(0), u(1), u(2, {\"op\": \"replace\", \"start_seq\": 1, \"end_seq\": 0})],\n    [u(0), u(1), u(2, {\"op\": \"replace\", \"start_seq\": 0, \"end_seq\": 0}), u(3, {\"op\": \"replace\", \"start_seq\": 0, \"end_seq\": 0})],\n    [u(0), u(1, {\"op\": \"replace\", \"start_seq\": 0})],\n]\nfor events in bad:\n    try:\n        {fn}(events)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"accepted {events}\")\nassert {fn}([]) == {\"nodes\": [], \"messages\": [], \"replacements\": []}\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "What is the surface before the first event, and how does each operation change it? Which checks need the surface state as it is right before the event, and which need the original events?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Keep nodes as a list of seqs and events indexed by seq. For a replace, find start and end with nodes.index, check start_idx <= end_idx, run the tool/result and system-head checks against the shadowed slice, then do nodes[start_idx:end_idx + 1] = [seq]. Build messages from the final nodes."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "dsh_open_turn_closers",
+        "dsh_tool_result_pruner"
+      ],
+      "modelConnections": [
+        "DeepSeek Harness's foldSurface replays every session through these rules; compaction-basic and the tool-result pruner append replace events rather than rewriting history."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "History is never lost: replay, fork and audit work from the same log, and every model request is reproducible."
+        ],
+        "cons": [
+          "The log grows without bound and deriving the current view costs a replay or an incrementally maintained index."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why would an agent keep an append-only event log and derive the model's context from it, instead of storing the message list directly?"
+        },
+        {
+          "stage": "concept",
+          "question": "What does 'model-visible means logged' buy you for debugging and reproducibility?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through folding append and replace operations. Why must a replace reference nodes that are still on the surface?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why is a tool-result rewrite allowed to change only content? What breaks if it changes the call id?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why protect the system prompt at node 0 from range replacements?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Replaying the full log versus maintaining the surface incrementally versus snapshotting it: cost, correctness and crash safety?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Replacing ranges in place versus appending a summary at the end: which keeps the provider's KV cache prefix, and which keeps the conversation coherent?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/deepseek-ai/deepseek-harness",
+          "commit": "21638c56315ae6a2b552d6091945d3144c9af32e",
+          "path": "packages/core/session/src/surface.ts",
+          "symbol": "foldSurface, planSurfaceEvent, replacementRange, assertToolResultRewrite and assertSystemHeadRewrite",
+          "license": "MIT",
+          "adapted": "Contiguous seq check, append and replace folding, range validation, content-only tool-result rewrites and system-head protection.",
+          "simplifications": "No developer messages, plugin message projections, source-event citations or content generations; message types are fixed."
+        }
+      ]
+    },
+    {
+      "id": "dsh_system_prompt_reconcile",
+      "title": "System Prompt Reconciliation",
+      "titleZh": "System Prompt Reconciliation",
+      "difficulty": "Medium",
+      "functionName": "reconcile_system_prompt",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Before every model request, DeepSeek Harness re-renders the system prompt (skills, tools and settings may have changed) and decides how to record the change in the session history. Compute that decision.\n\n**Signature:** `reconcile_system_prompt(system_nodes, rendered, in_history_capable, new_series) -> list`\n\n**Parameters:**\n- `system_nodes` — the `system/message` nodes currently on the surface, in order, as `(seq, text)` tuples. The first one is the *head*; the rest are *later* nodes.\n- `rendered` — the newly rendered prompt string, possibly empty.\n- `in_history_capable` — True when the model route accepts a system-prompt update appended later in the history.\n- `new_series` — True when this request starts a new request series (for example right after compaction replaced part of the history).\n\n**Returns** a list of operations, applied in order: `(\"append\", text)` adds a new system node at the end of the history; `(\"replace\", seq, text)` rewrites one existing node. The *effective prompt* is the text of the last node with non-empty text, or none.\n- **No system node.** Return `[(\"append\", rendered)]`, even when `rendered` is empty.\n- **Empty rendering.** Replace every later node with non-empty text by `\"\"`, in order, then replace the head by `\"\"` if its text is non-empty. The route and series do not matter.\n- **Continuing capable route** (`in_history_capable` and not `new_series`) with a non-empty rendering: return `[]` if the effective prompt equals `rendered`, otherwise `[(\"append\", rendered)]`.\n- **Otherwise** (incapable route or new series) with a non-empty rendering, *consolidate at the head*: replace every later node with non-empty text by `\"\"`, in order, then replace the head by `rendered` if its text differs. Do this even when the effective prompt already equals `rendered`.\n\n**Constraints:** Raise `ValueError` if `system_nodes` has duplicate seqs.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this matters for cost.** Providers cache the key-value states of a request prefix. Rewriting the head system prompt changes the very first tokens, so the whole cached prefix is lost. Appending the new prompt after the cached history keeps everything before it reusable.\n\n**Why not always append.** Some routes only honor a system prompt at the start, and a new request series (after compaction rewrote history) has no cache to protect, so the prompt is folded back into the head and older versions are blanked.\n\n**Why blank instead of delete.** The log is append-only; a per-node replacement with empty text removes old instructions from what the model sees while keeping the history reconstructable. No older instructions may remain model-visible.",
+      "descriptionZh": "Before every model request, DeepSeek Harness re-renders the system prompt (skills, tools and settings may have changed) and decides how to record the change in the session history. Compute that decision.\n\n**Signature:** `reconcile_system_prompt(system_nodes, rendered, in_history_capable, new_series) -> list`\n\n**Parameters:**\n- `system_nodes` — the `system/message` nodes currently on the surface, in order, as `(seq, text)` tuples. The first one is the *head*; the rest are *later* nodes.\n- `rendered` — the newly rendered prompt string, possibly empty.\n- `in_history_capable` — True when the model route accepts a system-prompt update appended later in the history.\n- `new_series` — True when this request starts a new request series (for example right after compaction replaced part of the history).\n\n**Returns** a list of operations, applied in order: `(\"append\", text)` adds a new system node at the end of the history; `(\"replace\", seq, text)` rewrites one existing node. The *effective prompt* is the text of the last node with non-empty text, or none.\n- **No system node.** Return `[(\"append\", rendered)]`, even when `rendered` is empty.\n- **Empty rendering.** Replace every later node with non-empty text by `\"\"`, in order, then replace the head by `\"\"` if its text is non-empty. The route and series do not matter.\n- **Continuing capable route** (`in_history_capable` and not `new_series`) with a non-empty rendering: return `[]` if the effective prompt equals `rendered`, otherwise `[(\"append\", rendered)]`.\n- **Otherwise** (incapable route or new series) with a non-empty rendering, *consolidate at the head*: replace every later node with non-empty text by `\"\"`, in order, then replace the head by `rendered` if its text differs. Do this even when the effective prompt already equals `rendered`.\n\n**Constraints:** Raise `ValueError` if `system_nodes` has duplicate seqs.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this matters for cost.** Providers cache the key-value states of a request prefix. Rewriting the head system prompt changes the very first tokens, so the whole cached prefix is lost. Appending the new prompt after the cached history keeps everything before it reusable.\n\n**Why not always append.** Some routes only honor a system prompt at the start, and a new request series (after compaction rewrote history) has no cache to protect, so the prompt is folded back into the head and older versions are blanked.\n\n**Why blank instead of delete.** The log is append-only; a per-node replacement with empty text removes old instructions from what the model sees while keeping the history reconstructable. No older instructions may remain model-visible.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Capable route appends, new series consolidates",
+          "code": "\nnodes = [(0, \"v1\")]\nassert {fn}(nodes, \"v1\", True, False) == []\nassert {fn}(nodes, \"v2\", True, False) == [(\"append\", \"v2\")]\nnodes = [(0, \"v1\"), (9, \"v2\")]\nassert {fn}(nodes, \"v2\", True, False) == []\nassert {fn}(nodes, \"v3\", False, False) == [(\"replace\", 9, \"\"), (\"replace\", 0, \"v3\")]\nassert {fn}(nodes, \"v2\", True, True) == [(\"replace\", 9, \"\"), (\"replace\", 0, \"v2\")]\n",
+          "behavior": "state.invariant"
+        },
+        {
+          "name": "Applying the operations always leaves exactly the rendered prompt visible",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "After the operations the effective prompt must be the rendered text (or none when empty), with no older non-empty instruction left anywhere.",
+          "hiddenCode": "\nimport random\nfor seed in (4, 29, 66):\n    rng = random.Random(seed)\n    for trial in range(300):\n        texts = [rng.choice([\"\", \"a\", \"b\", \"c\"]) for _ in range(rng.randint(0, 5))]\n        nodes = [(i * 10, t) for i, t in enumerate(texts)]\n        rendered = rng.choice([\"\", \"a\", \"b\", \"c\", \"d\"])\n        capable, new = rng.random() < 0.5, rng.random() < 0.3\n        ops = {fn}(nodes, rendered, capable, new)\n        state = dict(nodes); order = [s for s, _ in nodes]\n        for op in ops:\n            if op[0] == \"append\":\n                seq = 1000 + len(order); state[seq] = op[1]; order.append(seq)\n            else:\n                assert op[1] in state, (op, nodes)\n                state[op[1]] = op[2]\n        visible = [state[s] for s in order if state[s]]\n        if not nodes:\n            assert ops == [(\"append\", rendered)], (nodes, ops)\n        elif rendered == \"\":\n            assert visible == [], (nodes, ops, visible)\n            assert all(op[0] == \"replace\" for op in ops)\n        else:\n            assert visible[-1] == rendered, (nodes, rendered, ops, visible)\n            if capable and not new:\n                effective = next((t for t in reversed(texts) if t), None)\n                assert ops == ([] if effective == rendered else [(\"append\", rendered)]), (nodes, rendered, ops)\n            else:\n                assert visible == [rendered], (nodes, rendered, ops, visible)\n                assert all(op[0] == \"replace\" for op in ops)\n                assert [op for op in ops if op[1] != 0] == [(\"replace\", s, \"\") for s, t in nodes[1:] if t], ops\n                head_ops = [op for op in ops if op[1] == 0]\n                assert head_ops == ([(\"replace\", 0, rendered)] if texts[0] != rendered else []), ops\n                assert not head_ops or ops[-1] == head_ops[0], ops\n"
+        },
+        {
+          "name": "Empty renderings clear everything and consolidation ignores unchanged text",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "An empty rendering blanks every non-empty node regardless of route; consolidation blanks later nodes even when the effective text is unchanged; no nodes means append even when empty.",
+          "hiddenCode": "\nassert {fn}([], \"\", True, False) == [(\"append\", \"\")]\nassert {fn}([], \"p\", False, True) == [(\"append\", \"p\")]\nnodes = [(0, \"old\"), (3, \"\"), (5, \"mid\"), (8, \"new\")]\nassert {fn}(nodes, \"\", True, False) == [(\"replace\", 5, \"\"), (\"replace\", 8, \"\"), (\"replace\", 0, \"\")]\nassert {fn}([(0, \"\"), (4, \"\")], \"\", False, True) == []\nassert {fn}([(0, \"new\"), (7, \"new\")], \"new\", False, False) == [(\"replace\", 7, \"\")]\nassert {fn}([(0, \"\"), (2, \"x\")], \"x\", True, False) == []\nassert {fn}([(0, \"\")], \"x\", True, False) == [(\"append\", \"x\")]\n"
+        },
+        {
+          "name": "Rejects duplicate node seqs",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Duplicate seqs in system_nodes must raise ValueError.",
+          "hiddenCode": "\ntry:\n    {fn}([(1, \"a\"), (1, \"b\")], \"c\", True, False)\nexcept ValueError:\n    pass\nelse:\n    raise AssertionError(\"accepted duplicate seqs\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "What is the effective prompt when several system nodes exist? When is appending safe for the cache, and when must the prompt be folded back into the head? Why blank later nodes before touching the head?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Handle the no-node case first. Compute the list of later nodes with non-empty text. For an empty rendering or a consolidation, emit a blanking replace for each of them, then a head replace if the head text differs from the target ('' or rendered). For a continuing capable route compare against the effective prompt."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "dsh_fold_surface"
+      ],
+      "modelConnections": [
+        "DeepSeek Harness's agent loop applies this rule on every request; Anthropic prompt caching and DeepSeek's context caching both reward stable prefixes."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Prompt changes cost only the new tokens on capable routes, and the model never sees two conflicting versions of its instructions."
+        ],
+        "cons": [
+          "A prompt that drifts through many appended updates is harder to read than one consolidated prompt, and the rule depends on accurately knowing each route's capabilities."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is prompt caching (KV cache prefix reuse) at the provider, and why does editing the system prompt at the start of the conversation invalidate it?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why do agent harnesses need to change the system prompt mid-session at all?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through the four cases: no system node, empty rendering, continuing capable route, and consolidation. What does each cost in cache misses?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why blank older system nodes with empty replacements instead of deleting them?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why does a new request series, for example right after compaction, consolidate at the head even if the prompt did not change?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Appending prompt updates versus consolidating them: cache cost versus clarity of the instructions the model reads?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Putting volatile context (time, open files, git status) in the system prompt versus in user messages: cache behavior and model attention?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/deepseek-ai/deepseek-harness",
+          "commit": "21638c56315ae6a2b552d6091945d3144c9af32e",
+          "path": "packages/core/agent-loop/README.md",
+          "symbol": "Understand the implementation: prompt admission and prefix reuse",
+          "license": "MIT",
+          "adapted": "No-node append, empty-rendering clearing, append on a continuing in-history route, and head consolidation with per-node blanking otherwise.",
+          "simplifications": "Series detection, tool-schema updates and developer messages are left to the caller; the decision returns operations instead of appending session events."
+        }
+      ]
+    },
+    {
+      "id": "pi_parallel_tool_batch",
+      "title": "Parallel Tool Call Batch",
+      "titleZh": "Parallel Tool Call Batch",
+      "difficulty": "Medium",
+      "functionName": "execute_tool_batch",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "When the model asks for several tools in one message, the Pi agent runs them concurrently but reports results in the order the model asked. Implement that batch executor.\n\n**Signature:** `async execute_tool_batch(calls, tools, mode=\"parallel\", before_tool_call=None, is_aborted=lambda: False, emit=lambda event: None) -> dict`\n\n**Parameters:**\n- `calls` — list of `{\"id\", \"name\", \"arguments\"}`.\n- `tools` — dict from name to `{\"execute\": async fn(arguments) -> {\"content\": [...], \"terminate\"?: bool}, \"sequential\"?: bool}`. `execute` may raise.\n- `before_tool_call` — optional async function `(call) -> None | {\"block\": True, \"reason\"?: str, \"terminate\"?: bool}`.\n- `is_aborted()` — whether the user cancelled.\n- `emit(event)` — receives `{\"type\": \"start\", \"id\"}` and `{\"type\": \"end\", \"id\"}` events.\n\n**Preparing one call:** emit `start`. If the tool is unknown, the outcome is an error with text `f\"Tool {name} not found\"`. Otherwise await `before_tool_call` if given; if `is_aborted()` is then true, the outcome is an error `\"Operation aborted\"`; if it returned a block, the outcome is an error with its `reason` or `\"Tool execution was blocked\"`, carrying `terminate` when the block says so. Otherwise the call is *prepared* and still has to run. Outcomes decided here count as finished: emit `end` right away.\n\n**Running a prepared call:** await `execute(arguments)`. If it raises `e`, the outcome is an error with text `str(e)`; otherwise use its `content` and `terminate`. Emit `end` when it finishes.\n\nAn error outcome has `content = [{\"type\": \"text\", \"text\": ...}]`. Each outcome becomes `{\"role\": \"toolResult\", \"tool_call_id\", \"tool_name\", \"content\", \"is_error\"}`.\n\n**Modes:**\n- **Sequential** — used when `mode == \"sequential\"` or any call names a known tool with `\"sequential\": True`. For each call in order: prepare it, run it if prepared, record the outcome; then stop if `is_aborted()`.\n- **Parallel** — first prepare every call in order, stopping after the current call if `is_aborted()`. Only then start running all prepared calls concurrently. A prepared call that starts running while `is_aborted()` is true does not execute; its outcome is an error `\"Operation aborted\"`.\n\n**Returns** `{\"messages\": [...], \"terminate\": bool}` with one message per recorded call, in call order. `terminate` is True when there is at least one message and every outcome has `terminate` true.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why parallel.** Models often request several independent reads or searches at once. Running them concurrently cuts latency roughly to that of the slowest call.\n\n**Why results stay in call order.** Each result must follow its call, and a deterministic order keeps the transcript reproducible even though completion order varies.\n\n**Why prepare first.** Approval prompts and policy hooks run in `before_tool_call`. Doing all of them before any tool starts means the user answers every prompt for the batch up front, and a block cannot race with an already running sibling.\n\n**Why a sequential escape hatch.** Some tools, such as an interactive shell, must never overlap with others; declaring one forces the whole batch to run in order.",
+      "descriptionZh": "When the model asks for several tools in one message, the Pi agent runs them concurrently but reports results in the order the model asked. Implement that batch executor.\n\n**Signature:** `async execute_tool_batch(calls, tools, mode=\"parallel\", before_tool_call=None, is_aborted=lambda: False, emit=lambda event: None) -> dict`\n\n**Parameters:**\n- `calls` — list of `{\"id\", \"name\", \"arguments\"}`.\n- `tools` — dict from name to `{\"execute\": async fn(arguments) -> {\"content\": [...], \"terminate\"?: bool}, \"sequential\"?: bool}`. `execute` may raise.\n- `before_tool_call` — optional async function `(call) -> None | {\"block\": True, \"reason\"?: str, \"terminate\"?: bool}`.\n- `is_aborted()` — whether the user cancelled.\n- `emit(event)` — receives `{\"type\": \"start\", \"id\"}` and `{\"type\": \"end\", \"id\"}` events.\n\n**Preparing one call:** emit `start`. If the tool is unknown, the outcome is an error with text `f\"Tool {name} not found\"`. Otherwise await `before_tool_call` if given; if `is_aborted()` is then true, the outcome is an error `\"Operation aborted\"`; if it returned a block, the outcome is an error with its `reason` or `\"Tool execution was blocked\"`, carrying `terminate` when the block says so. Otherwise the call is *prepared* and still has to run. Outcomes decided here count as finished: emit `end` right away.\n\n**Running a prepared call:** await `execute(arguments)`. If it raises `e`, the outcome is an error with text `str(e)`; otherwise use its `content` and `terminate`. Emit `end` when it finishes.\n\nAn error outcome has `content = [{\"type\": \"text\", \"text\": ...}]`. Each outcome becomes `{\"role\": \"toolResult\", \"tool_call_id\", \"tool_name\", \"content\", \"is_error\"}`.\n\n**Modes:**\n- **Sequential** — used when `mode == \"sequential\"` or any call names a known tool with `\"sequential\": True`. For each call in order: prepare it, run it if prepared, record the outcome; then stop if `is_aborted()`.\n- **Parallel** — first prepare every call in order, stopping after the current call if `is_aborted()`. Only then start running all prepared calls concurrently. A prepared call that starts running while `is_aborted()` is true does not execute; its outcome is an error `\"Operation aborted\"`.\n\n**Returns** `{\"messages\": [...], \"terminate\": bool}` with one message per recorded call, in call order. `terminate` is True when there is at least one message and every outcome has `terminate` true.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why parallel.** Models often request several independent reads or searches at once. Running them concurrently cuts latency roughly to that of the slowest call.\n\n**Why results stay in call order.** Each result must follow its call, and a deterministic order keeps the transcript reproducible even though completion order varies.\n\n**Why prepare first.** Approval prompts and policy hooks run in `before_tool_call`. Doing all of them before any tool starts means the user answers every prompt for the batch up front, and a block cannot race with an already running sibling.\n\n**Why a sequential escape hatch.** Some tools, such as an interactive shell, must never overlap with others; declaring one forces the whole batch to run in order.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Runs concurrently and returns results in call order",
+          "code": "\nimport asyncio, time\nasync def main():\n    async def slow(args):\n        await asyncio.sleep(args[\"t\"]); return {\"content\": [{\"type\": \"text\", \"text\": str(args[\"t\"])}]}\n    tools = {\"sleep\": {\"execute\": slow}}\n    calls = [{\"id\": \"a\", \"name\": \"sleep\", \"arguments\": {\"t\": 0.2}}, {\"id\": \"b\", \"name\": \"sleep\", \"arguments\": {\"t\": 0.05}}]\n    events = []\n    start = time.perf_counter()\n    out = await {fn}(calls, tools, emit=events.append)\n    assert time.perf_counter() - start < 0.35\n    assert [m[\"tool_call_id\"] for m in out[\"messages\"]] == [\"a\", \"b\"] and out[\"terminate\"] is False, out\n    assert out[\"messages\"][1] == {\"role\": \"toolResult\", \"tool_call_id\": \"b\", \"tool_name\": \"sleep\", \"content\": [{\"type\": \"text\", \"text\": \"0.05\"}], \"is_error\": False}\n    assert events == [{\"type\": \"start\", \"id\": \"a\"}, {\"type\": \"start\", \"id\": \"b\"}, {\"type\": \"end\", \"id\": \"b\"}, {\"type\": \"end\", \"id\": \"a\"}], events\nasyncio.run(main())\n",
+          "behavior": "scheduler.concurrency"
+        },
+        {
+          "name": "Prepares every call before any runs, and unknown or blocked calls finish early",
+          "visibility": "unshown",
+          "behavior": "events.ordering",
+          "failureMessage": "In parallel mode run every before_tool_call first, emit end at once for calls decided during preparation, and only then start the prepared calls.",
+          "hiddenCode": "\nimport asyncio\nasync def main():\n    log = []\n    async def run(args):\n        log.append((\"run\", args[\"i\"])); await asyncio.sleep(0.01); return {\"content\": []}\n    async def before(call):\n        log.append((\"before\", call[\"id\"]))\n        if call[\"id\"] == \"c\":\n            return {\"block\": True}\n        if call[\"id\"] == \"d\":\n            return {\"block\": True, \"reason\": \"no network\", \"terminate\": True}\n        return None\n    calls = [{\"id\": x, \"name\": \"ghost\" if x == \"g\" else \"t\", \"arguments\": {\"i\": x}} for x in [\"a\", \"g\", \"c\", \"d\", \"e\"]]\n    events = []\n    out = await {fn}(calls, {\"t\": {\"execute\": run}}, before_tool_call=before, emit=events.append)\n    assert log[:4] == [(\"before\", \"a\"), (\"before\", \"c\"), (\"before\", \"d\"), (\"before\", \"e\")], log\n    assert sorted(log[4:]) == [(\"run\", \"a\"), (\"run\", \"e\")], log\n    texts = [m[\"content\"][0][\"text\"] if m[\"is_error\"] else None for m in out[\"messages\"]]\n    assert texts == [None, \"Tool ghost not found\", \"Tool execution was blocked\", \"no network\", None], out\n    ends = [e[\"id\"] for e in events if e[\"type\"] == \"end\"]\n    assert ends[:3] == [\"g\", \"c\", \"d\"] and sorted(ends[3:]) == [\"a\", \"e\"], events\nasyncio.run(main())\n"
+        },
+        {
+          "name": "Sequential tools force ordered execution and abort stops the batch",
+          "visibility": "unshown",
+          "behavior": "scheduler.concurrency",
+          "failureMessage": "One sequential tool makes the whole batch sequential; abort stops after the current call, and a prepared call that starts after abort is not executed.",
+          "hiddenCode": "\nimport asyncio\nasync def main():\n    active, peak, ran = [0], [0], []\n    async def work(args):\n        active[0] += 1; peak[0] = max(peak[0], active[0]); ran.append(args[\"i\"])\n        await asyncio.sleep(0.02); active[0] -= 1\n        return {\"content\": [], \"terminate\": True}\n    tools = {\"fast\": {\"execute\": work}, \"shell\": {\"execute\": work, \"sequential\": True}}\n    calls = [{\"id\": str(i), \"name\": \"shell\" if i == 1 else \"fast\", \"arguments\": {\"i\": i}} for i in range(3)]\n    out = await {fn}(calls, tools)\n    assert peak[0] == 1 and ran == [0, 1, 2] and out[\"terminate\"] is True, (peak, ran, out)\n    peak[0] = 0\n    await {fn}([calls[0], calls[2]], tools)\n    assert peak[0] == 2, \"prepared calls must run concurrently in parallel mode\"\n    ran.clear()\n    out = await {fn}(calls[:1] + calls[2:], tools, mode=\"sequential\")\n    assert ran == [0, 2]\n    aborted = [False]\n    async def aborting(args):\n        ran.append(args[\"i\"]); aborted[0] = True; return {\"content\": []}\n    ran.clear()\n    tools2 = {\"t\": {\"execute\": aborting, \"sequential\": True}}\n    calls2 = [{\"id\": str(i), \"name\": \"t\", \"arguments\": {\"i\": i}} for i in range(3)]\n    out = await {fn}(calls2, tools2, is_aborted=lambda: aborted[0])\n    assert ran == [0] and len(out[\"messages\"]) == 1, (ran, out)\n    ran.clear(); aborted[0] = False\n    async def before(call):\n        if call[\"id\"] == \"1\":\n            aborted[0] = True\n        return None\n    out = await {fn}(calls2, {\"t\": {\"execute\": aborting}}, before_tool_call=before, is_aborted=lambda: aborted[0])\n    assert ran == [] and [m[\"content\"][0][\"text\"] for m in out[\"messages\"]] == [\"Operation aborted\", \"Operation aborted\"], (ran, out)\nasyncio.run(main())\n"
+        },
+        {
+          "name": "Seeded batches match an ordering oracle",
+          "visibility": "unshown",
+          "behavior": "scheduler.concurrency",
+          "failureMessage": "Every recorded call yields one message in call order, errors carry the stated text, and terminate needs every outcome to terminate.",
+          "hiddenCode": "\nimport asyncio, random\nasync def main():\n    for seed in (5, 26, 74):\n        rng = random.Random(seed)\n        for trial in range(40):\n            async def ex(args):\n                await asyncio.sleep(args[\"d\"])\n                if args[\"kind\"] == \"raise\":\n                    raise RuntimeError(\"fail \" + args[\"id\"])\n                return {\"content\": [{\"type\": \"text\", \"text\": args[\"id\"]}], \"terminate\": args[\"kind\"] == \"term\"}\n            async def before(call):\n                return {\"block\": True, \"terminate\": call[\"arguments\"][\"bterm\"]} if call[\"arguments\"][\"block\"] else None\n            calls, want = [], []\n            for i in range(rng.randint(1, 5)):\n                cid = f\"c{i}\"\n                name = rng.choice([\"t\", \"t\", \"t\", \"nope\"])\n                kind = rng.choice([\"ok\", \"term\", \"term\", \"raise\"])\n                block = rng.random() < 0.2\n                bterm = rng.random() < 0.5\n                calls.append({\"id\": cid, \"name\": name, \"arguments\": {\"id\": cid, \"d\": rng.random() * 0.01, \"kind\": kind, \"block\": block, \"bterm\": bterm}})\n                if name == \"nope\":\n                    want.append((cid, True, f\"Tool nope not found\", False))\n                elif block:\n                    want.append((cid, True, \"Tool execution was blocked\", bterm))\n                elif kind == \"raise\":\n                    want.append((cid, True, \"fail \" + cid, False))\n                else:\n                    want.append((cid, False, cid, kind == \"term\"))\n            out = await {fn}(calls, {\"t\": {\"execute\": ex}}, mode=rng.choice([\"parallel\", \"sequential\"]), before_tool_call=before)\n            got = [(m[\"tool_call_id\"], m[\"is_error\"], m[\"content\"][0][\"text\"]) for m in out[\"messages\"]]\n            assert got == [w[:3] for w in want], (seed, trial, got, want)\n            assert out[\"terminate\"] == all(w[3] for w in want), (seed, trial, out, want)\nasyncio.run(main())\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which work happens before any tool starts in parallel mode? How do you keep results in call order when they finish in a different order? When is the abort flag checked?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Write prepare(call) returning either a finished outcome or a marker that the call is ready, and run(call) that executes and catches exceptions. Sequential mode loops over both. Parallel mode builds a list of finished outcomes or coroutines while preparing, then awaits asyncio.gather over them, which preserves order."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "pi_agent_loop",
+        "pi_file_mutation_queue"
+      ],
+      "modelConnections": [
+        "Pi's executeToolCallsParallel and executeToolCallsSequential; Claude Code and the OpenAI Agents SDK also run independent tool calls concurrently and return results in call order."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Lower latency for independent calls, deterministic transcripts and up-front policy decisions."
+        ],
+        "cons": [
+          "Concurrent tools can conflict on shared state such as files, and one slow tool still delays the whole batch's results."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why do agent harnesses run a model's tool calls in parallel, and what must stay deterministic when they do?"
+        },
+        {
+          "stage": "concept",
+          "question": "What kinds of tools must never run concurrently with others?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why run every before_tool_call hook before any tool starts? What race would appear otherwise?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you return results in call order when calls finish in a different order?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Where is the abort flag checked, and what result does each skipped or aborted call get?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Unbounded parallelism versus a bounded pool versus fully sequential execution: latency, rate limits and resource contention?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Declaring sequential per tool versus detecting conflicts from arguments (same file, same process): precision and complexity?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/badlogic/pi-mono",
+          "commit": "6f7551516b84278eb9da1c340c8e7bc66be1a6ba",
+          "path": "packages/agent/src/agent-loop.ts",
+          "symbol": "executeToolCalls, executeToolCallsParallel, executeToolCallsSequential, prepareToolCall and shouldTerminateToolBatch",
+          "license": "MIT",
+          "adapted": "Mode selection, prepare-then-run ordering, immediate outcomes for unknown or blocked calls, abort checks, ordered results and the all-terminate rule.",
+          "simplifications": "No argument validation, afterToolCall hook, update streaming or result events beyond start and end."
+        }
+      ]
+    },
+    {
+      "id": "pi_truncate_output",
+      "title": "Tool Output Truncation",
+      "titleZh": "Tool Output Truncation",
+      "difficulty": "Medium",
+      "functionName": "truncate_output",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Implement the truncation the Pi coding agent applies to every `read` and `bash` result before the model sees it. Two limits apply at once; whichever is hit first wins.\n\n**Signature:** `truncate_output(content, mode, max_lines=2000, max_bytes=51200) -> dict`\n\n**Definitions.** Bytes are UTF-8 bytes. The *lines* of `content` are `content.split(\"\\n\")`, except that an empty string has no lines and a single trailing `\"\\n\"` does not start an extra empty line. The output joins kept lines with `\"\\n\"`.\n\n**Returns** a dict with `content`, `truncated`, `truncated_by` (`\"lines\"`, `\"bytes\"` or None), `total_lines`, `total_bytes`, `output_lines`, `output_bytes` (UTF-8 size of the output `content`), `last_line_partial` and `first_line_exceeds_limit`.\n- If `total_lines <= max_lines` and `total_bytes <= max_bytes`, return `content` unchanged with `truncated` False, `truncated_by` None, output counts equal to the totals and both flags False.\n- Otherwise `truncated` is True, and:\n\n**`mode=\"head\"`** keeps whole lines from the start.\n- If the first line alone is larger than `max_bytes`, return empty content, `truncated_by=\"bytes\"`, zero output counts and `first_line_exceeds_limit=True`.\n- Otherwise take lines in order while fewer than `max_lines` are kept. A line costs its bytes plus 1 for the joining newline if it is not the first kept line. Stop with `truncated_by=\"bytes\"` before the first line that would push the total over `max_bytes`. If the loop ended for any other reason, `truncated_by=\"lines\"`.\n\n**`mode=\"tail\"`** keeps whole lines from the end.\n- Take lines from the last one backwards while fewer than `max_lines` are kept, with the same cost rule (the newline is counted for every line except the first one taken). If a line does not fit, set `truncated_by=\"bytes\"`; if no line has been kept yet, keep the longest suffix of that line whose UTF-8 encoding fits in `max_bytes` without splitting a character, and set `last_line_partial=True`. Then stop. If the loop ended for any other reason, `truncated_by=\"lines\"`.\n\n**Constraints:** Raise `ValueError` for an unknown `mode` or for `max_lines` or `max_bytes` below 1.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why head for files and tail for commands.** A file's beginning shows its structure; a command's end shows the error or the final result. Pi truncates `read` from the head and `bash` from the tail.\n\n**Why whole lines.** A half line is easy for the model to misread as real content. The only exception is a single enormous last line of command output, where a partial line beats nothing.\n\n**Why two limits.** Line limits bound what the model must scan; byte limits bound tokens when lines are very long, such as minified files. The reported counts let the tool tell the model how to page through the rest.",
+      "descriptionZh": "Implement the truncation the Pi coding agent applies to every `read` and `bash` result before the model sees it. Two limits apply at once; whichever is hit first wins.\n\n**Signature:** `truncate_output(content, mode, max_lines=2000, max_bytes=51200) -> dict`\n\n**Definitions.** Bytes are UTF-8 bytes. The *lines* of `content` are `content.split(\"\\n\")`, except that an empty string has no lines and a single trailing `\"\\n\"` does not start an extra empty line. The output joins kept lines with `\"\\n\"`.\n\n**Returns** a dict with `content`, `truncated`, `truncated_by` (`\"lines\"`, `\"bytes\"` or None), `total_lines`, `total_bytes`, `output_lines`, `output_bytes` (UTF-8 size of the output `content`), `last_line_partial` and `first_line_exceeds_limit`.\n- If `total_lines <= max_lines` and `total_bytes <= max_bytes`, return `content` unchanged with `truncated` False, `truncated_by` None, output counts equal to the totals and both flags False.\n- Otherwise `truncated` is True, and:\n\n**`mode=\"head\"`** keeps whole lines from the start.\n- If the first line alone is larger than `max_bytes`, return empty content, `truncated_by=\"bytes\"`, zero output counts and `first_line_exceeds_limit=True`.\n- Otherwise take lines in order while fewer than `max_lines` are kept. A line costs its bytes plus 1 for the joining newline if it is not the first kept line. Stop with `truncated_by=\"bytes\"` before the first line that would push the total over `max_bytes`. If the loop ended for any other reason, `truncated_by=\"lines\"`.\n\n**`mode=\"tail\"`** keeps whole lines from the end.\n- Take lines from the last one backwards while fewer than `max_lines` are kept, with the same cost rule (the newline is counted for every line except the first one taken). If a line does not fit, set `truncated_by=\"bytes\"`; if no line has been kept yet, keep the longest suffix of that line whose UTF-8 encoding fits in `max_bytes` without splitting a character, and set `last_line_partial=True`. Then stop. If the loop ended for any other reason, `truncated_by=\"lines\"`.\n\n**Constraints:** Raise `ValueError` for an unknown `mode` or for `max_lines` or `max_bytes` below 1.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why head for files and tail for commands.** A file's beginning shows its structure; a command's end shows the error or the final result. Pi truncates `read` from the head and `bash` from the tail.\n\n**Why whole lines.** A half line is easy for the model to misread as real content. The only exception is a single enormous last line of command output, where a partial line beats nothing.\n\n**Why two limits.** Line limits bound what the model must scan; byte limits bound tokens when lines are very long, such as minified files. The reported counts let the tool tell the model how to page through the rest.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Head and tail by lines",
+          "code": "\ntext = \"l1\\nl2\\nl3\\nl4\\n\"\nhead = {fn}(text, \"head\", max_lines=2)\nassert head[\"content\"] == \"l1\\nl2\" and head[\"truncated_by\"] == \"lines\" and head[\"total_lines\"] == 4 and head[\"output_lines\"] == 2, head\ntail = {fn}(text, \"tail\", max_lines=3)\nassert tail[\"content\"] == \"l2\\nl3\\nl4\" and tail[\"output_bytes\"] == 8 and tail[\"total_bytes\"] == 12, tail\nsame = {fn}(text, \"head\")\nassert same[\"content\"] == text and same[\"truncated\"] is False and same[\"truncated_by\"] is None and same[\"output_lines\"] == 4, same\n",
+          "behavior": "budget.enforcement"
+        },
+        {
+          "name": "Matches a seeded reference on random text",
+          "visibility": "unshown",
+          "behavior": "budget.enforcement",
+          "failureMessage": "Count lines with the trailing-newline rule, charge a newline for every kept line but the first, and classify truncated_by as stated.",
+          "hiddenCode": "\nimport random\ndef lines_of(s):\n    if s == \"\":\n        return []\n    parts = s.split(\"\\n\")\n    if s.endswith(\"\\n\"):\n        parts.pop()\n    return parts\ndef nb(s):\n    return len(s.encode(\"utf-8\"))\ndef ref(content, mode, ml, mb):\n    lines = lines_of(content); tb = nb(content)\n    base = {\"total_lines\": len(lines), \"total_bytes\": tb, \"last_line_partial\": False, \"first_line_exceeds_limit\": False}\n    if len(lines) <= ml and tb <= mb:\n        return {**base, \"content\": content, \"truncated\": False, \"truncated_by\": None, \"output_lines\": len(lines), \"output_bytes\": tb}\n    kept, used, by, partial = [], 0, \"lines\", False\n    if mode == \"head\":\n        if nb(lines[0]) > mb:\n            return {**base, \"content\": \"\", \"truncated\": True, \"truncated_by\": \"bytes\", \"output_lines\": 0, \"output_bytes\": 0, \"first_line_exceeds_limit\": True}\n        for i, line in enumerate(lines[:ml]):\n            cost = nb(line) + (1 if i else 0)\n            if used + cost > mb:\n                by = \"bytes\"; break\n            kept.append(line); used += cost\n    else:\n        for line in reversed(lines):\n            if len(kept) >= ml:\n                break\n            cost = nb(line) + (1 if kept else 0)\n            if used + cost > mb:\n                by = \"bytes\"\n                if not kept:\n                    raw = line.encode(\"utf-8\"); start = len(raw) - mb\n                    while start < len(raw) and raw[start] & 0xC0 == 0x80:\n                        start += 1\n                    kept.insert(0, raw[start:].decode(\"utf-8\")); partial = True\n                break\n            kept.insert(0, line); used += cost\n    out = \"\\n\".join(kept)\n    return {**base, \"content\": out, \"truncated\": True, \"truncated_by\": by, \"output_lines\": len(kept), \"output_bytes\": nb(out), \"last_line_partial\": partial}\nfor seed in (2, 31, 80):\n    rng = random.Random(seed)\n    for trial in range(400):\n        n = rng.randint(0, 12)\n        words = [\"\", \"a\", \"héllo\", \"日本語\", \"x\" * 30, \"😀😀\", \"tab\\there\"]\n        content = \"\\n\".join(rng.choice(words) + rng.choice(words) for _ in range(n))\n        if rng.random() < 0.5 and content:\n            content += \"\\n\"\n        mode = rng.choice([\"head\", \"tail\"])\n        ml, mb = rng.randint(1, 8), rng.randint(1, 60)\n        got = {fn}(content, mode, max_lines=ml, max_bytes=mb)\n        assert got == ref(content, mode, ml, mb), (seed, trial, repr(content), mode, ml, mb, got)\n"
+        },
+        {
+          "name": "Oversized lines at either end",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "Head returns nothing when the first line is too big; tail keeps a partial last line cut on a character boundary.",
+          "hiddenCode": "\nbig = \"x\" * 100 + \"\\nshort\\n\"\nhead = {fn}(big, \"head\", max_bytes=50)\nassert head[\"content\"] == \"\" and head[\"first_line_exceeds_limit\"] is True and head[\"truncated_by\"] == \"bytes\" and head[\"output_lines\"] == 0, head\ntail = {fn}(\"ok\\n\" + \"é\" * 30, \"tail\", max_bytes=7)\nassert tail[\"content\"] == \"é\" * 3 and tail[\"last_line_partial\"] is True and tail[\"output_bytes\"] == 6 and tail[\"output_lines\"] == 1, tail\nassert tail[\"truncated_by\"] == \"bytes\"\nempty = {fn}(\"\", \"tail\", max_lines=1, max_bytes=1)\nassert empty[\"content\"] == \"\" and empty[\"truncated\"] is False and empty[\"total_lines\"] == 0, empty\n"
+        },
+        {
+          "name": "Rejects invalid arguments",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Unknown modes and limits below 1 must raise ValueError.",
+          "hiddenCode": "\nfor args in ((\"x\", \"middle\"), (\"x\", \"head\", 0, 10), (\"x\", \"tail\", 10, 0)):\n    try:\n        {fn}(*args)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"accepted {args}\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "How many lines does 'a\\nb\\n' have? What does one kept line cost in bytes, and when is the newline counted? How do you cut a UTF-8 string from the end without splitting a character?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Split with the trailing-newline rule and measure with len(s.encode()). Loop with a running byte count and a kept list; break on the byte limit. For the partial tail line encode it, start at len(b) - max_bytes, advance while the byte is a continuation byte (b & 0xC0 == 0x80), and decode the rest."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "dsh_tool_result_pruner"
+      ],
+      "modelConnections": [
+        "Pi's read and bash tools use truncateHead and truncateTail with 2000 lines and 50 KB; Claude Code and Codex cap tool output the same way and tell the model how to read more."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Predictable, cheap bounds on context usage, with exact counts the model can use to request the next page."
+        ],
+        "cons": [
+          "Byte limits approximate tokens only roughly, and the middle of long output is invisible unless the model asks for it."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why must a coding agent truncate tool output before it reaches the model, and why cap both lines and bytes?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why truncate file reads from the head but command output from the tail?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through the head loop: what does each kept line cost, and how do you decide whether lines or bytes caused the truncation?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you cut a UTF-8 string to at most N bytes from the end without producing an invalid character?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What should the tool tell the model after truncating so it can read the rest?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Byte limits versus token limits for tool output: accuracy, speed and tokenizer dependence?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Truncating with a note versus spilling the full output to a file the model can grep: context cost and model behavior?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/badlogic/pi-mono",
+          "commit": "6f7551516b84278eb9da1c340c8e7bc66be1a6ba",
+          "path": "packages/coding-agent/src/core/tools/truncate.ts",
+          "symbol": "truncateHead, truncateTail, splitLinesForCounting and truncateStringToBytesFromEnd",
+          "license": "MIT",
+          "adapted": "Line counting with the trailing-newline rule, head and tail loops with the newline cost, first-line overflow, partial last line on a UTF-8 boundary and the truncated_by classification.",
+          "simplifications": "One function with a mode argument; max_lines and max_bytes are not echoed back; a partial tail line always reports truncated_by bytes, whereas the original reports lines when max_lines is 1."
+        }
+      ]
+    },
+    {
+      "id": "dsh_tool_pipeline",
+      "title": "Guarded Tool Execution Pipeline",
+      "titleZh": "Guarded Tool Execution Pipeline",
+      "difficulty": "Hard",
+      "functionName": "ToolRuntime",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Implement the pipeline every tool call in DeepSeek Harness goes through, from the model's request to the single result the model sees.\n\n**Signature:** `ToolRuntime(tools, approve=None)` with attributes `pre_execute`, `guards`, `around`, `post_execute`, `observers` (lists you may append to) and method `execute(call) -> dict`.\n\n**Parameters:**\n- `tools` — dict from tool name to a function `body(arguments) -> list` of content blocks. It may raise.\n- `approve` — optional function `approve(call, reason) -> \"allowed-once\" | \"rejected\" | \"cancelled\"`; `None` means no approval channel.\n- `call` — dict with `name` and `arguments`.\n\n**Results.** Every result is a dict. Success: `{\"is_error\": False, \"content\": blocks}`. An *error result for message `m` with code `c`* is `{\"is_error\": True, \"content\": [{\"type\": \"text\", \"text\": f\"Error: {m}\"}], \"error\": {\"message\": m, \"code\": c}}`, where `c` may be `None`. A raised exception `e` gives the error result for `str(e)` with code `None`. A result may also carry `additional_contexts`, a list, which is present only when non-empty.\n\n**Stages, in order:**\n- **Pre-execute.** Run `pre_execute` as middleware: each is `f(call, next)` and `next()` continues to the next one; after the last, `next()` returns `{\"kind\": \"allow\"}`. The decision is `allow`, `deny` with `reason`, `cancel`, or `ask` with optional `reason`.\n- **Ask.** Resolve `ask` to `allow` or `deny`. With no approval channel: deny with the ask's `reason`, or `f'tool \"{name}\" requires approval (not yet supported)'` when it has none. Otherwise call `approve(call, reason)` once: `\"allowed-once\"` allows, `\"rejected\"` denies with `f'the user rejected tool \"{name}\"'`, `\"cancelled\"` denies with `f'approval for tool \"{name}\" was cancelled'`.\n- **Cancel** becomes the error result for `\"tool call aborted before dispatch\"` with code `\"ABORTED_BEFORE_DISPATCH\"`.\n- **Guards.** Only when the decision is `allow`: call each `guard(call)` in order; the first one that returns a string denies with that reason.\n- **Deny** becomes the error result for the reason with code `None`.\n- **Dispatch.** Only when allowed: run `around` as middleware, each `f(call, next)`; after the last, `next()` runs the tool body. The body step returns the success result, or the error result for `f'unknown tool \"{name}\"'` with code `\"UNKNOWN_TOOL\"` if the name is not in `tools`, or the exception's error result if the body raises.\n- **Post-execute.** The cancel, deny and dispatch results all go through `post_execute` middleware, each `f(call, result, next)`; after the last, `next()` returns `{\"kind\": \"accept\"}`. `accept` keeps the result, replaces its `content` if the decision has `content`, and sets `additional_contexts` to the result's contexts followed by the decision's. `block` produces `{\"is_error\": True, \"content\": feedback, \"error\": {\"message\": text, \"code\": None}}` where `text` joins the `text` of the feedback's text blocks with newlines, and `additional_contexts` holds only the decision's contexts.\n- **Pipeline failures.** If a `pre_execute`, guard, `approve`, `around` or `post_execute` function raises, stop right there: the result is that exception's error result, and later stages, including post-execute, are skipped.\n- **Observers.** Call every `observers` function with `(call, result)` on the final result. An observer that raises is ignored and does not stop the others. Return the final result.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**One result per call.** Model APIs require exactly one result per tool call, so every failure, including a crash in a policy plugin, is converted into an error result instead of propagating.\n\n**Why guards are separate.** Pre-execute listeners are extensible middleware, so one listener can override another. Guards run after all of them and can only deny, never allow, so a security rule cannot be undone by a later plugin.\n\n**Why denials still reach post-execute.** Post-execute listeners see denied calls too; the repeat-call reminder counts them, because a model hammering a denied call is a loop.\n\n**Why observers are contained.** A logging or telemetry observer must never change or break the result the model receives.",
+      "descriptionZh": "Implement the pipeline every tool call in DeepSeek Harness goes through, from the model's request to the single result the model sees.\n\n**Signature:** `ToolRuntime(tools, approve=None)` with attributes `pre_execute`, `guards`, `around`, `post_execute`, `observers` (lists you may append to) and method `execute(call) -> dict`.\n\n**Parameters:**\n- `tools` — dict from tool name to a function `body(arguments) -> list` of content blocks. It may raise.\n- `approve` — optional function `approve(call, reason) -> \"allowed-once\" | \"rejected\" | \"cancelled\"`; `None` means no approval channel.\n- `call` — dict with `name` and `arguments`.\n\n**Results.** Every result is a dict. Success: `{\"is_error\": False, \"content\": blocks}`. An *error result for message `m` with code `c`* is `{\"is_error\": True, \"content\": [{\"type\": \"text\", \"text\": f\"Error: {m}\"}], \"error\": {\"message\": m, \"code\": c}}`, where `c` may be `None`. A raised exception `e` gives the error result for `str(e)` with code `None`. A result may also carry `additional_contexts`, a list, which is present only when non-empty.\n\n**Stages, in order:**\n- **Pre-execute.** Run `pre_execute` as middleware: each is `f(call, next)` and `next()` continues to the next one; after the last, `next()` returns `{\"kind\": \"allow\"}`. The decision is `allow`, `deny` with `reason`, `cancel`, or `ask` with optional `reason`.\n- **Ask.** Resolve `ask` to `allow` or `deny`. With no approval channel: deny with the ask's `reason`, or `f'tool \"{name}\" requires approval (not yet supported)'` when it has none. Otherwise call `approve(call, reason)` once: `\"allowed-once\"` allows, `\"rejected\"` denies with `f'the user rejected tool \"{name}\"'`, `\"cancelled\"` denies with `f'approval for tool \"{name}\" was cancelled'`.\n- **Cancel** becomes the error result for `\"tool call aborted before dispatch\"` with code `\"ABORTED_BEFORE_DISPATCH\"`.\n- **Guards.** Only when the decision is `allow`: call each `guard(call)` in order; the first one that returns a string denies with that reason.\n- **Deny** becomes the error result for the reason with code `None`.\n- **Dispatch.** Only when allowed: run `around` as middleware, each `f(call, next)`; after the last, `next()` runs the tool body. The body step returns the success result, or the error result for `f'unknown tool \"{name}\"'` with code `\"UNKNOWN_TOOL\"` if the name is not in `tools`, or the exception's error result if the body raises.\n- **Post-execute.** The cancel, deny and dispatch results all go through `post_execute` middleware, each `f(call, result, next)`; after the last, `next()` returns `{\"kind\": \"accept\"}`. `accept` keeps the result, replaces its `content` if the decision has `content`, and sets `additional_contexts` to the result's contexts followed by the decision's. `block` produces `{\"is_error\": True, \"content\": feedback, \"error\": {\"message\": text, \"code\": None}}` where `text` joins the `text` of the feedback's text blocks with newlines, and `additional_contexts` holds only the decision's contexts.\n- **Pipeline failures.** If a `pre_execute`, guard, `approve`, `around` or `post_execute` function raises, stop right there: the result is that exception's error result, and later stages, including post-execute, are skipped.\n- **Observers.** Call every `observers` function with `(call, result)` on the final result. An observer that raises is ignored and does not stop the others. Return the final result.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**One result per call.** Model APIs require exactly one result per tool call, so every failure, including a crash in a policy plugin, is converted into an error result instead of propagating.\n\n**Why guards are separate.** Pre-execute listeners are extensible middleware, so one listener can override another. Guards run after all of them and can only deny, never allow, so a security rule cannot be undone by a later plugin.\n\n**Why denials still reach post-execute.** Post-execute listeners see denied calls too; the repeat-call reminder counts them, because a model hammering a denied call is a loop.\n\n**Why observers are contained.** A logging or telemetry observer must never change or break the result the model receives.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Allowed call runs and post-execute adds context",
+          "code": "\nrt = {fn}({\"read\": lambda args: [{\"type\": \"text\", \"text\": \"file:\" + args[\"path\"]}]})\nrt.post_execute.append(lambda call, result, next: {**next(), \"additional_contexts\": [\"note\"]})\nout = rt.execute({\"name\": \"read\", \"arguments\": {\"path\": \"a.py\"}})\nassert out == {\"is_error\": False, \"content\": [{\"type\": \"text\", \"text\": \"file:a.py\"}], \"additional_contexts\": [\"note\"]}, out\n",
+          "behavior": "protocol.validation"
+        },
+        {
+          "name": "Guards deny after policy allows and denials reach post-execute",
+          "code": "\nrt = {fn}({\"rm\": lambda args: [{\"type\": \"text\", \"text\": \"deleted\"}]})\nrt.pre_execute.append(lambda call, next: {\"kind\": \"allow\"})\nrt.guards.append(lambda call: None)\nrt.guards.append(lambda call: \"rm is forbidden\" if call[\"name\"] == \"rm\" else None)\nseen = []\nrt.post_execute.append(lambda call, result, next: seen.append(result[\"is_error\"]) or next())\nout = rt.execute({\"name\": \"rm\", \"arguments\": {}})\nassert out == {\"is_error\": True, \"content\": [{\"type\": \"text\", \"text\": \"Error: rm is forbidden\"}], \"error\": {\"message\": \"rm is forbidden\", \"code\": None}}, out\nassert seen == [True]\n",
+          "behavior": "security.permission"
+        },
+        {
+          "name": "Ask resolution covers every approval outcome",
+          "visibility": "unshown",
+          "behavior": "security.permission",
+          "failureMessage": "Resolve ask through the approval channel exactly once, with the stated denial wording, and deny when no channel exists.",
+          "hiddenCode": "\ndef run(approve, reason=None):\n    calls = []\n    body_runs = []\n    def ap(call, r):\n        calls.append(r); return approve\n    rt = {fn}({\"pay\": lambda args: body_runs.append(1) or [{\"type\": \"text\", \"text\": \"paid\"}]}, approve=None if approve is None else ap)\n    decision = {\"kind\": \"ask\"} if reason is None else {\"kind\": \"ask\", \"reason\": reason}\n    rt.pre_execute.append(lambda call, next: decision)\n    return rt.execute({\"name\": \"pay\", \"arguments\": {}}), calls, body_runs\nout, calls, runs = run(\"allowed-once\", \"costs money\")\nassert out[\"is_error\"] is False and calls == [\"costs money\"] and runs == [1], (out, calls)\nout, calls, runs = run(\"rejected\")\nassert out[\"error\"][\"message\"] == 'the user rejected tool \"pay\"' and runs == [], out\nout, calls, runs = run(\"cancelled\")\nassert out[\"error\"][\"message\"] == 'approval for tool \"pay\" was cancelled' and runs == [], out\nout, _, runs = run(None)\nassert out[\"error\"][\"message\"] == 'tool \"pay\" requires approval (not yet supported)' and runs == [], out\nout, _, _ = run(None, \"needs a human\")\nassert out[\"error\"][\"message\"] == \"needs a human\", out\nrt = {fn}({\"pay\": lambda a: []}, approve=lambda c, r: \"allowed-once\")\nrt.pre_execute.append(lambda call, next: {\"kind\": \"ask\"})\nrt.guards.append(lambda call: \"blocked by guard\")\nassert rt.execute({\"name\": \"pay\", \"arguments\": {}})[\"error\"][\"message\"] == \"blocked by guard\"\n"
+        },
+        {
+          "name": "Seeded pipelines match a stage oracle",
+          "visibility": "unshown",
+          "behavior": "protocol.validation",
+          "failureMessage": "Follow the stage order exactly: middleware chaining, guards only after allow, cancel and deny through post-execute, pipeline failures skipping it.",
+          "hiddenCode": "\nimport random\ndef err(m, c=None):\n    return {\"is_error\": True, \"content\": [{\"type\": \"text\", \"text\": f\"Error: {m}\"}], \"error\": {\"message\": m, \"code\": c}}\nclass Boom(Exception):\n    pass\nfor seed in (11, 37, 70):\n    rng = random.Random(seed)\n    for trial in range(80):\n        name = rng.choice([\"ok\", \"bad\", \"ghost\"])\n        tools = {\"ok\": lambda a: [{\"type\": \"text\", \"text\": \"ok\"}], \"bad\": lambda a: (_ for _ in ()).throw(ValueError(\"tool broke\"))}\n        pre_kind = rng.choice([\"pass\", \"allow\", \"deny\", \"cancel\", \"raise\"])\n        guard_kind = rng.choice([\"none\", \"none\", \"deny\", \"raise\"])\n        around_kind = rng.choice([\"pass\", \"wrap\", \"raise\"])\n        post_kind = rng.choice([\"pass\", \"accept_content\", \"block\", \"raise\"])\n        rt = {fn}(tools)\n        if pre_kind == \"allow\":\n            rt.pre_execute.append(lambda c, n: {\"kind\": \"allow\"})\n        elif pre_kind == \"deny\":\n            rt.pre_execute.append(lambda c, n: {\"kind\": \"deny\", \"reason\": \"policy says no\"})\n        elif pre_kind == \"cancel\":\n            rt.pre_execute.append(lambda c, n: {\"kind\": \"cancel\"})\n        elif pre_kind == \"raise\":\n            rt.pre_execute.append(lambda c, n: (_ for _ in ()).throw(Boom(\"pre crashed\")))\n        else:\n            rt.pre_execute.append(lambda c, n: n())\n        if guard_kind == \"deny\":\n            rt.guards.append(lambda c: \"guard says no\")\n        elif guard_kind == \"raise\":\n            rt.guards.append(lambda c: (_ for _ in ()).throw(Boom(\"guard crashed\")))\n        if around_kind == \"wrap\":\n            rt.around.append(lambda c, n: {**n(), \"wrapped\": True})\n        elif around_kind == \"raise\":\n            rt.around.append(lambda c, n: (_ for _ in ()).throw(Boom(\"around crashed\")))\n        else:\n            rt.around.append(lambda c, n: n())\n        if post_kind == \"accept_content\":\n            rt.post_execute.append(lambda c, r, n: {\"kind\": \"accept\", \"content\": [{\"type\": \"text\", \"text\": \"replaced\"}], \"additional_contexts\": [\"ctx\"]})\n        elif post_kind == \"block\":\n            rt.post_execute.append(lambda c, r, n: {\"kind\": \"block\", \"feedback\": [{\"type\": \"text\", \"text\": \"line1\"}, {\"type\": \"image\"}, {\"type\": \"text\", \"text\": \"line2\"}]})\n        elif post_kind == \"raise\":\n            rt.post_execute.append(lambda c, r, n: (_ for _ in ()).throw(Boom(\"post crashed\")))\n        seen = []\n        rt.observers.append(lambda c, r: (_ for _ in ()).throw(RuntimeError(\"observer broke\")))\n        rt.observers.append(lambda c, r: seen.append(r))\n        got = rt.execute({\"name\": name, \"arguments\": {}})\n        def expected():\n            if pre_kind == \"raise\":\n                return err(\"pre crashed\")\n            if pre_kind == \"cancel\":\n                result = err(\"tool call aborted before dispatch\", \"ABORTED_BEFORE_DISPATCH\")\n            elif pre_kind == \"deny\":\n                result = err(\"policy says no\")\n            else:\n                if guard_kind == \"raise\":\n                    return err(\"guard crashed\")\n                if guard_kind == \"deny\":\n                    result = err(\"guard says no\")\n                else:\n                    if around_kind == \"raise\":\n                        return err(\"around crashed\")\n                    if name == \"ok\":\n                        result = {\"is_error\": False, \"content\": [{\"type\": \"text\", \"text\": \"ok\"}]}\n                    elif name == \"bad\":\n                        result = err(\"tool broke\")\n                    else:\n                        result = err('unknown tool \"ghost\"', \"UNKNOWN_TOOL\")\n                    if around_kind == \"wrap\":\n                        result = {**result, \"wrapped\": True}\n            if post_kind == \"raise\":\n                return err(\"post crashed\")\n            if post_kind == \"block\":\n                return {\"is_error\": True, \"content\": [{\"type\": \"text\", \"text\": \"line1\"}, {\"type\": \"image\"}, {\"type\": \"text\", \"text\": \"line2\"}], \"error\": {\"message\": \"line1\\nline2\", \"code\": None}}\n            if post_kind == \"accept_content\":\n                return {**result, \"content\": [{\"type\": \"text\", \"text\": \"replaced\"}], \"additional_contexts\": [\"ctx\"]}\n            return result\n        want = expected()\n        assert got == want, (seed, trial, name, pre_kind, guard_kind, around_kind, post_kind, got, want)\n        assert seen == [got], \"observers must see the final result and one failing observer must not stop the others\"\n"
+        },
+        {
+          "name": "Middleware order and context merging",
+          "visibility": "unshown",
+          "behavior": "events.ordering",
+          "failureMessage": "Run middleware in registration order, keep the tool result's contexts before the decision's, and let block keep only its own contexts.",
+          "hiddenCode": "\ntrace = []\nrt = {fn}({\"t\": lambda a: trace.append(\"body\") or [{\"type\": \"text\", \"text\": \"x\"}]})\nrt.pre_execute.append(lambda c, n: trace.append(\"pre1\") or n())\nrt.pre_execute.append(lambda c, n: trace.append(\"pre2\") or n())\nrt.around.append(lambda c, n: trace.append(\"around1\") or n())\nrt.around.append(lambda c, n: {**n(), \"additional_contexts\": [\"from-tool\"]})\nrt.post_execute.append(lambda c, r, n: trace.append(\"post1\") or n())\nrt.post_execute.append(lambda c, r, n: {\"kind\": \"accept\", \"additional_contexts\": [\"from-post\"]})\nout = rt.execute({\"name\": \"t\", \"arguments\": {}})\nassert trace == [\"pre1\", \"pre2\", \"around1\", \"body\", \"post1\"], trace\nassert out[\"additional_contexts\"] == [\"from-tool\", \"from-post\"], out\nrt2 = {fn}({\"t\": lambda a: []})\nrt2.around.append(lambda c, n: {**n(), \"additional_contexts\": [\"from-tool\"]})\nrt2.post_execute.append(lambda c, r, n: {\"kind\": \"block\", \"feedback\": [{\"type\": \"text\", \"text\": \"no\"}], \"additional_contexts\": [\"why\"]})\nout = rt2.execute({\"name\": \"t\", \"arguments\": {}})\nassert out[\"additional_contexts\"] == [\"why\"] and out[\"is_error\"] is True, out\nrt3 = {fn}({\"t\": lambda a: []})\nout = rt3.execute({\"name\": \"t\", \"arguments\": {}})\nassert out == {\"is_error\": False, \"content\": []}, out\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which stages can produce a result that still goes through post-execute, and which failures skip it? Why do guards run only after an allow? How do you build next() for a list of middleware?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Write one helper that chains middleware with an innermost default. In execute: wrap everything before observers in try/except that turns an exception into an error result and jumps to observers. Compute the pre-dispatch result (None when dispatching), otherwise run the around chain whose inner step catches body errors itself. Then run post-execute and apply accept or block."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "dsh_event_bus",
+        "approval_gate"
+      ],
+      "modelConnections": [
+        "DeepSeek Harness's ToolRuntime.execute runs tools/pre-execute, approval, monotonic guards, tools/execute, tools/post-execute and tools/result exactly in this order.",
+        "Claude Code hooks (PreToolUse, PostToolUse) and permission prompts sit at the same seams."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Policies, approvals, timeouts and reminders compose without touching tools or the loop, and every call yields exactly one well-formed result."
+        ],
+        "cons": [
+          "Converting every failure into a result can hide plugin bugs from developers, and the many stages make it hard to see why a call was denied."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Walk through what happens between a model emitting a tool call and the model seeing its result in a production agent harness."
+        },
+        {
+          "stage": "concept",
+          "question": "Why must every tool call produce exactly one result, even when a policy plugin crashes?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why do guards run after all pre-execute middleware and only deny? What attack or bug does that prevent?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Which failures go through post-execute and which skip it? Why does a denied call still go through post-execute?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How is an ask decision resolved, and why deny by default when no approval channel exists?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Converting every exception into an error result versus failing the turn: what helps the model, and what hides bugs from developers?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Approval per call versus per session versus allow-lists: user friction, safety and prompt-injection risk?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/deepseek-ai/deepseek-harness",
+          "commit": "21638c56315ae6a2b552d6091945d3144c9af32e",
+          "path": "packages/core/tools/src/index.ts",
+          "symbol": "ToolRuntime.prepareExecution, serviceAsk, dispatchScheduledExecution, postExecute and notifyResult",
+          "license": "MIT",
+          "adapted": "Stage order, ask resolution wording, deny-only guards, cancel and deny results entering post-execute, pipeline failures skipping it, block and accept semantics, and contained observers.",
+          "simplifications": "Synchronous, no scopes, signals, schemas, value snapshots, content projectors or finalizers; the unavailable approval outcome is folded into approve=None."
+        }
+      ]
+    },
+    {
+      "id": "dsh_tool_timeout",
+      "title": "Cooperative Tool Timeouts",
+      "titleZh": "Cooperative Tool Timeouts",
+      "difficulty": "Hard",
+      "functionName": "tool_timeout",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Build the cancellation primitives DeepSeek Harness uses for tool timeouts, then the `tools/execute` wrapper that enforces a tool's time budget without abandoning the tool.\n\n**Signature:** `tool_timeout` is a module-level namespace; define these names at module level and set `tool_timeout = SimpleNamespace(AbortController=..., any_signal=..., deadline=..., timeout_of=..., TimeoutReason=..., with_timeout=...)` (import `SimpleNamespace` from `types`).\n\n**Signals.**\n- `AbortController()` has `.signal` and `abort(reason)`. The signal has `.aborted` (bool), `.reason` (None until aborted) and `add_listener(fn)`. The first `abort` sets the reason and calls every listener once with the reason, in registration order; later `abort` calls do nothing. A listener added to an already aborted signal is called immediately.\n- `any_signal(signals)` returns a signal that aborts with the reason of whichever input aborts first. If an input is already aborted, the result starts aborted with the first such input's reason.\n\n**Deadlines.**\n- `TimeoutReason(code, timeout)` is an `Exception` subclass with attributes `code` and `timeout`.\n- `deadline(upstream, timeout, code)` returns an object with `.signal` and `dispose()`. If `timeout <= 0`, the signal is `upstream`, or a signal that never aborts when `upstream` is None. Otherwise schedule, on the running asyncio loop, an abort with `TimeoutReason(code, timeout)` after `timeout` seconds; the signal is that timer's signal, combined with `upstream` through `any_signal` when `upstream` is not None. `dispose()` cancels the timer.\n- `timeout_of(signal, code=None)` returns the signal's reason if it is a `TimeoutReason` whose code matches `code` (any code when `code` is None), otherwise None.\n\n**The wrapper** `async with_timeout(execution, next, timeout)`:\n- `execution` is a dict holding the current `\"signal\"`; `next()` is an async function that runs the tool and returns its result dict.\n- If `timeout` is None, return `await next()` unchanged.\n- Otherwise create `deadline(execution[\"signal\"], timeout, \"TOOL_TIMEOUT\")`, put its signal into `execution[\"signal\"]` while `next()` runs, and restore the original signal afterwards even if `next()` raises. Always dispose the deadline.\n- If this wrapper's own deadline fired, as judged by `timeout_of(signal, \"TOOL_TIMEOUT\")`, return `{\"is_error\": True, \"content\": [{\"type\": \"text\", \"text\": f\"Error: tool call timed out after {timeout}s\"}], \"error\": {\"message\": f\"tool call timed out after {timeout}s\", \"code\": \"TOOL_TIMEOUT\"}}`. Otherwise return the tool's result.\n- Never stop waiting for `next()`; the tool is expected to notice the aborted signal and return.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Cooperative, not preemptive.** Killing a tool mid-write can corrupt files or leave child processes behind. The harness only asks the tool to stop, then waits for it to reach a quiet state before reporting the timeout.\n\n**Why swap and restore the signal.** Middleware after this wrapper, such as post-execute policies, must see the caller's signal, not this wrapper's possibly aborted one.\n\n**Why scope by code.** Deadlines nest: a turn deadline can fire inside a tool deadline. Only a timeout carrying this wrapper's own code is reported as a tool timeout; any other abort is an ordinary cancellation from upstream.\n\n**First reason wins.** Combining signals adopts the reason of whichever source aborts first, so a race between an upstream cancel and the timer resolves to exactly one cause.",
+      "descriptionZh": "Build the cancellation primitives DeepSeek Harness uses for tool timeouts, then the `tools/execute` wrapper that enforces a tool's time budget without abandoning the tool.\n\n**Signature:** `tool_timeout` is a module-level namespace; define these names at module level and set `tool_timeout = SimpleNamespace(AbortController=..., any_signal=..., deadline=..., timeout_of=..., TimeoutReason=..., with_timeout=...)` (import `SimpleNamespace` from `types`).\n\n**Signals.**\n- `AbortController()` has `.signal` and `abort(reason)`. The signal has `.aborted` (bool), `.reason` (None until aborted) and `add_listener(fn)`. The first `abort` sets the reason and calls every listener once with the reason, in registration order; later `abort` calls do nothing. A listener added to an already aborted signal is called immediately.\n- `any_signal(signals)` returns a signal that aborts with the reason of whichever input aborts first. If an input is already aborted, the result starts aborted with the first such input's reason.\n\n**Deadlines.**\n- `TimeoutReason(code, timeout)` is an `Exception` subclass with attributes `code` and `timeout`.\n- `deadline(upstream, timeout, code)` returns an object with `.signal` and `dispose()`. If `timeout <= 0`, the signal is `upstream`, or a signal that never aborts when `upstream` is None. Otherwise schedule, on the running asyncio loop, an abort with `TimeoutReason(code, timeout)` after `timeout` seconds; the signal is that timer's signal, combined with `upstream` through `any_signal` when `upstream` is not None. `dispose()` cancels the timer.\n- `timeout_of(signal, code=None)` returns the signal's reason if it is a `TimeoutReason` whose code matches `code` (any code when `code` is None), otherwise None.\n\n**The wrapper** `async with_timeout(execution, next, timeout)`:\n- `execution` is a dict holding the current `\"signal\"`; `next()` is an async function that runs the tool and returns its result dict.\n- If `timeout` is None, return `await next()` unchanged.\n- Otherwise create `deadline(execution[\"signal\"], timeout, \"TOOL_TIMEOUT\")`, put its signal into `execution[\"signal\"]` while `next()` runs, and restore the original signal afterwards even if `next()` raises. Always dispose the deadline.\n- If this wrapper's own deadline fired, as judged by `timeout_of(signal, \"TOOL_TIMEOUT\")`, return `{\"is_error\": True, \"content\": [{\"type\": \"text\", \"text\": f\"Error: tool call timed out after {timeout}s\"}], \"error\": {\"message\": f\"tool call timed out after {timeout}s\", \"code\": \"TOOL_TIMEOUT\"}}`. Otherwise return the tool's result.\n- Never stop waiting for `next()`; the tool is expected to notice the aborted signal and return.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Cooperative, not preemptive.** Killing a tool mid-write can corrupt files or leave child processes behind. The harness only asks the tool to stop, then waits for it to reach a quiet state before reporting the timeout.\n\n**Why swap and restore the signal.** Middleware after this wrapper, such as post-execute policies, must see the caller's signal, not this wrapper's possibly aborted one.\n\n**Why scope by code.** Deadlines nest: a turn deadline can fire inside a tool deadline. Only a timeout carrying this wrapper's own code is reported as a tool timeout; any other abort is an ordinary cancellation from upstream.\n\n**First reason wins.** Combining signals adopts the reason of whichever source aborts first, so a race between an upstream cancel and the timer resolves to exactly one cause.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Slow cooperative tool reports a timeout",
+          "code": "\nimport asyncio\nT = {fn}\nasync def main():\n    root = T.AbortController()\n    execution = {\"signal\": root.signal}\n    async def tool():\n        seen = execution[\"signal\"]\n        stopped = asyncio.Event()\n        seen.add_listener(lambda reason: stopped.set())\n        await stopped.wait()\n        return {\"is_error\": True, \"content\": [{\"type\": \"text\", \"text\": \"aborted\"}]}\n    out = await T.with_timeout(execution, tool, 0.05)\n    assert out[\"error\"] == {\"message\": \"tool call timed out after 0.05s\", \"code\": \"TOOL_TIMEOUT\"}, out\n    assert execution[\"signal\"] is root.signal and not root.signal.aborted\nasyncio.run(main())\n",
+          "behavior": "retry.classification"
+        },
+        {
+          "name": "Signals abort once and combine first-reason-wins",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "abort is idempotent, listeners fire once in order, late listeners fire immediately, and any_signal adopts the first reason.",
+          "hiddenCode": "\nT = {fn}\nc = T.AbortController()\nlog = []\nc.signal.add_listener(lambda r: log.append((\"a\", r)))\nc.signal.add_listener(lambda r: log.append((\"b\", r)))\nassert c.signal.aborted is False and c.signal.reason is None\nc.abort(\"first\"); c.abort(\"second\")\nassert log == [(\"a\", \"first\"), (\"b\", \"first\")] and c.signal.reason == \"first\", log\nc.signal.add_listener(lambda r: log.append((\"late\", r)))\nassert log[-1] == (\"late\", \"first\")\nx, y, z = T.AbortController(), T.AbortController(), T.AbortController()\ncombo = T.any_signal([x.signal, y.signal])\ny.abort(\"y wins\"); x.abort(\"x late\")\nassert combo.aborted and combo.reason == \"y wins\", combo.reason\nz.abort(\"pre\")\nw = T.AbortController()\ncombo2 = T.any_signal([w.signal, z.signal])\nassert combo2.aborted and combo2.reason == \"pre\"\nw.abort(\"after\")\nassert combo2.reason == \"pre\"\n"
+        },
+        {
+          "name": "Deadlines fire, dispose, pass through and classify by code",
+          "visibility": "unshown",
+          "behavior": "retry.classification",
+          "failureMessage": "A positive timeout aborts with TimeoutReason after the delay, dispose cancels it, timeout <= 0 passes the upstream signal through, and timeout_of filters by code.",
+          "hiddenCode": "\nimport asyncio\nT = {fn}\nasync def main():\n    d = T.deadline(None, 0.02, \"X\")\n    assert not d.signal.aborted\n    await asyncio.sleep(0.05)\n    r = T.timeout_of(d.signal, \"X\")\n    assert d.signal.aborted and isinstance(r, T.TimeoutReason) and isinstance(r, Exception) and r.code == \"X\" and r.timeout == 0.02\n    assert T.timeout_of(d.signal) is r and T.timeout_of(d.signal, \"Y\") is None\n    d2 = T.deadline(None, 0.02, \"X\"); d2.dispose()\n    await asyncio.sleep(0.05)\n    assert not d2.signal.aborted\n    up = T.AbortController()\n    assert T.deadline(up.signal, 0, \"X\").signal is up.signal\n    never = T.deadline(None, -1, \"X\").signal\n    assert never.aborted is False\n    up2 = T.AbortController()\n    d3 = T.deadline(up2.signal, 5.0, \"X\")\n    up2.abort(\"user cancel\")\n    assert d3.signal.aborted and d3.signal.reason == \"user cancel\" and T.timeout_of(d3.signal, \"X\") is None\n    d3.dispose()\n    plain = T.AbortController(); plain.abort(ValueError(\"no\"))\n    assert T.timeout_of(plain.signal) is None\nasyncio.run(main())\n"
+        },
+        {
+          "name": "Wrapper is scoped, restores the signal and waits for the tool",
+          "visibility": "unshown",
+          "behavior": "retry.classification",
+          "failureMessage": "Report TOOL_TIMEOUT only for this wrapper's own deadline, restore the caller's signal even on errors, wait for the tool to finish, and pass through when there is no budget.",
+          "hiddenCode": "\nimport asyncio\nT = {fn}\nasync def main():\n    turn = T.deadline(None, 0.03, \"TURN_TIMEOUT\")\n    execution = {\"signal\": turn.signal}\n    finished = []\n    async def tool():\n        stopped = asyncio.Event()\n        execution[\"signal\"].add_listener(lambda r: stopped.set())\n        await stopped.wait()\n        await asyncio.sleep(0.05)\n        finished.append(True)\n        return {\"is_error\": True, \"content\": [{\"type\": \"text\", \"text\": \"cancelled by turn\"}]}\n    out = await T.with_timeout(execution, tool, 1.0)\n    assert out[\"content\"][0][\"text\"] == \"cancelled by turn\", out\n    assert finished == [True] and execution[\"signal\"] is turn.signal\n    root = T.AbortController()\n    execution = {\"signal\": root.signal}\n    async def slow_but_done():\n        stopped = asyncio.Event()\n        execution[\"signal\"].add_listener(lambda r: stopped.set())\n        await stopped.wait()\n        await asyncio.sleep(0.05)\n        finished.append(\"drained\")\n        return {\"is_error\": False, \"content\": []}\n    out = await T.with_timeout(execution, slow_but_done, 0.02)\n    assert out[\"error\"][\"code\"] == \"TOOL_TIMEOUT\" and finished[-1] == \"drained\", out\n    held = []\n    async def fast():\n        held.append(execution[\"signal\"])\n        return {\"is_error\": False, \"content\": [{\"type\": \"text\", \"text\": \"fast\"}]}\n    out = await T.with_timeout(execution, fast, 0.1)\n    assert out == {\"is_error\": False, \"content\": [{\"type\": \"text\", \"text\": \"fast\"}]}\n    await asyncio.sleep(0.2)\n    assert not root.signal.aborted and not held[0].aborted, \"the deadline must be disposed once the tool returns\"\n    async def boom():\n        assert execution[\"signal\"] is not root.signal\n        raise KeyError(\"x\")\n    try:\n        await T.with_timeout(execution, boom, 0.5)\n    except KeyError:\n        pass\n    assert execution[\"signal\"] is root.signal\n    seen = []\n    async def peek():\n        seen.append(execution[\"signal\"]); return {\"is_error\": False, \"content\": []}\n    await T.with_timeout(execution, peek, None)\n    assert seen == [root.signal]\nasyncio.run(main())\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "What must happen to listeners when a signal aborts twice? How does a combined signal know which source fired first? How does the wrapper tell its own timeout from an outer one?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "A signal keeps aborted, reason and a listener list; abort is a no-op after the first call. any_signal creates a controller and adds listener lambda r: ctrl.abort(r) to each input. deadline uses asyncio.get_running_loop().call_later(timeout, ctrl.abort, TimeoutReason(...)) and returns an object whose dispose cancels the handle. The wrapper swaps execution['signal'] in try/finally and checks timeout_of on the deadline signal after next() returns."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "dsh_tool_pipeline"
+      ],
+      "modelConnections": [
+        "DeepSeek Harness's timeout-policy plugin wraps tools/execute with dsh-timeout's deadline and timeoutOf; JavaScript's AbortSignal.any provides the first-reason-wins combination.",
+        "Python's asyncio.timeout cancels the task instead, which is the preemptive alternative this design avoids."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Tools get a chance to clean up, nested deadlines report the correct cause, and downstream middleware never sees a foreign signal."
+        ],
+        "cons": [
+          "A tool that ignores its signal can block the caller forever; cooperative cancellation only works when every tool honors it."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is the difference between cooperative and preemptive cancellation? Why does an agent harness prefer cooperative cancellation for tools?"
+        },
+        {
+          "stage": "concept",
+          "question": "What does combining an upstream cancel signal with a timer signal give you, and why should the first reason win?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through the timeout wrapper: why swap the signal onto the execution, and why restore it in a finally block?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Deadlines nest: a turn deadline fires while a tool deadline is armed. How does scoping by code keep the tool from misreporting a timeout?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why must the wrapper keep waiting for the tool after the deadline fires instead of returning immediately?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What do you do about a tool that ignores its signal? Compare a hard kill after a grace period, process isolation and just waiting."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Per-tool budgets declared by the tool versus one global timeout configured by the operator: flexibility, safety and surprise?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/deepseek-ai/deepseek-harness",
+          "commit": "21638c56315ae6a2b552d6091945d3144c9af32e",
+          "path": "packages/guard/timeout-policy/src/index.ts",
+          "symbol": "apply and toolTimeoutResult",
+          "license": "MIT",
+          "adapted": "Signal swap and restore around next(), scoped TOOL_TIMEOUT classification and the structured timeout result.",
+          "simplifications": "Timeout comes as an argument instead of the tool definition's timeoutMs; seconds instead of milliseconds."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/deepseek-ai/deepseek-harness",
+          "commit": "21638c56315ae6a2b552d6091945d3144c9af32e",
+          "path": "packages/util/timeout/src/index.ts",
+          "symbol": "deadline, timeoutOf and TimeoutReason",
+          "license": "MIT",
+          "adapted": "Deadline combining an upstream signal with a timer, the no-timeout passthrough and code-scoped timeout classification.",
+          "simplifications": "AbortController and AbortSignal.any are implemented by the learner; no idle watchdog or timer-delay validation."
+        }
+      ]
+    },
+    {
+      "id": "pi_streaming_json",
+      "title": "Streaming Tool Arguments Parser",
+      "titleZh": "Streaming Tool Arguments Parser",
+      "difficulty": "Hard",
+      "functionName": "parse_streaming_json",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "While a model streams a tool call, the arguments arrive as an incomplete JSON string. Pi parses every prefix so the UI can show the file path or command before the call finishes. Implement that parser.\n\n**Signature:** `parse_streaming_json(text) -> value`\n\n**Steps, in order:**\n- If `text` is empty or only whitespace, return `{}`.\n- Return `json.loads(text)` if it succeeds.\n- Otherwise let `fixed = repair(text)`. If `fixed != text` and `json.loads(fixed)` succeeds, return it.\n- Otherwise return `partial(text)`; if that fails, `partial(fixed)`; if that fails too, `{}`.\n\n**`repair(text)`** walks the text tracking whether it is inside a string (a `\"` toggles it; inside a string a backslash escape is consumed as described next, so `\\\"` does not end the string). Outside strings every character is copied. Inside a string:\n- A raw control character (code point below 0x20) becomes its escape: `\\b \\f \\n \\r \\t`, or `\\u00XX` with lowercase hex for the others.\n- A backslash followed by `u` and four hex digits is copied. A backslash followed by one of `\" \\ / b f n r t u` is copied with that character. Any other backslash, including one at the very end, becomes `\\\\` and the next character is processed normally.\n\n**`partial(text)`** parses one JSON value that may stop anywhere. It *fails* on anything that is not valid JSON up to the point where the text ends, including trailing characters after a complete value. When the text ends inside a value:\n- **String:** keep the characters decoded so far; drop an incomplete escape at the end, and drop a final high surrogate (U+D800 to U+DBFF) whose low half has not arrived yet.\n- **Number:** remove trailing `+ - . e E`; keep the number if what remains is valid JSON, otherwise the value is *missing*.\n- **`true`, `false`, `null`:** only a complete literal counts; a prefix of one is *missing*.\n- **Array:** keep the complete elements, plus the last element if it is not missing.\n- **Object:** keep the complete members, plus the last member if its key string is complete, its colon is present and its value is not missing.\n- A missing top-level value makes the result `{}`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why parse partial JSON.** A write tool call can stream for many seconds. Showing the target path and the first lines of content as they arrive lets the user interrupt a wrong call early, and it lets the harness start preparing, for example by reading the file to diff against.\n\n**Why drop partial literals and keys.** A half key or `tru` has no safe meaning; a half string does, since it is a prefix of the final value.\n\n**Why repair.** Models often emit raw newlines inside JSON strings or escapes such as `\\d` from regular expressions. Strict parsers reject both, so a small repair pass rescues many calls that would otherwise fail.",
+      "descriptionZh": "While a model streams a tool call, the arguments arrive as an incomplete JSON string. Pi parses every prefix so the UI can show the file path or command before the call finishes. Implement that parser.\n\n**Signature:** `parse_streaming_json(text) -> value`\n\n**Steps, in order:**\n- If `text` is empty or only whitespace, return `{}`.\n- Return `json.loads(text)` if it succeeds.\n- Otherwise let `fixed = repair(text)`. If `fixed != text` and `json.loads(fixed)` succeeds, return it.\n- Otherwise return `partial(text)`; if that fails, `partial(fixed)`; if that fails too, `{}`.\n\n**`repair(text)`** walks the text tracking whether it is inside a string (a `\"` toggles it; inside a string a backslash escape is consumed as described next, so `\\\"` does not end the string). Outside strings every character is copied. Inside a string:\n- A raw control character (code point below 0x20) becomes its escape: `\\b \\f \\n \\r \\t`, or `\\u00XX` with lowercase hex for the others.\n- A backslash followed by `u` and four hex digits is copied. A backslash followed by one of `\" \\ / b f n r t u` is copied with that character. Any other backslash, including one at the very end, becomes `\\\\` and the next character is processed normally.\n\n**`partial(text)`** parses one JSON value that may stop anywhere. It *fails* on anything that is not valid JSON up to the point where the text ends, including trailing characters after a complete value. When the text ends inside a value:\n- **String:** keep the characters decoded so far; drop an incomplete escape at the end, and drop a final high surrogate (U+D800 to U+DBFF) whose low half has not arrived yet.\n- **Number:** remove trailing `+ - . e E`; keep the number if what remains is valid JSON, otherwise the value is *missing*.\n- **`true`, `false`, `null`:** only a complete literal counts; a prefix of one is *missing*.\n- **Array:** keep the complete elements, plus the last element if it is not missing.\n- **Object:** keep the complete members, plus the last member if its key string is complete, its colon is present and its value is not missing.\n- A missing top-level value makes the result `{}`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why parse partial JSON.** A write tool call can stream for many seconds. Showing the target path and the first lines of content as they arrive lets the user interrupt a wrong call early, and it lets the harness start preparing, for example by reading the file to diff against.\n\n**Why drop partial literals and keys.** A half key or `tru` has no safe meaning; a half string does, since it is a prefix of the final value.\n\n**Why repair.** Models often emit raw newlines inside JSON strings or escapes such as `\\d` from regular expressions. Strict parsers reject both, so a small repair pass rescues many calls that would otherwise fail.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Prefixes of a tool call",
+          "code": "\np = {fn}\nassert p(\"\") == {} and p(\"   \") == {}\nassert p('{\"path\": \"src/ma') == {\"path\": \"src/ma\"}\nassert p('{\"path\": \"a.py\", \"lines\": [1, 2') == {\"path\": \"a.py\", \"lines\": [1, 2]}\nassert p('{\"path\": \"a.py\", \"overwrite\": tr') == {\"path\": \"a.py\"}\nassert p('{\"path\": \"a.py\", \"mo') == {\"path\": \"a.py\"}\nassert p('{\"n\": 12.') == {\"n\": 12}\nassert p('{\"cmd\": \"ls\"}') == {\"cmd\": \"ls\"}\n",
+          "behavior": "protocol.validation"
+        },
+        {
+          "name": "Every prefix of random JSON is consistent with the final value",
+          "visibility": "unshown",
+          "behavior": "protocol.validation",
+          "failureMessage": "Each prefix must yield a value consistent with the final one: complete members kept exactly, the last one only as a valid prefix, and nothing invented.",
+          "hiddenCode": "\nimport json, random\ndef rand_value(rng, depth):\n    kind = rng.choice([\"str\", \"int\", \"float\", \"bool\", \"null\", \"list\", \"dict\"] if depth < 3 else [\"str\", \"int\", \"bool\", \"null\"])\n    if kind == \"str\":\n        return \"\".join(rng.choice('ab é\"\\\\\\n/😀\\t') for _ in range(rng.randint(0, 6)))\n    if kind == \"int\":\n        return rng.randint(-500, 500)\n    if kind == \"float\":\n        return round(rng.uniform(-50, 50), 2) or 0.5\n    if kind == \"bool\":\n        return rng.random() < 0.5\n    if kind == \"null\":\n        return None\n    if kind == \"list\":\n        return [rand_value(rng, depth + 1) for _ in range(rng.randint(0, 4))]\n    return {f\"k{i}\": rand_value(rng, depth + 1) for i in range(rng.randint(0, 4))}\ndef consistent(p, v):\n    if isinstance(v, dict):\n        if not isinstance(p, dict) or list(p) != list(v)[:len(p)]:\n            return False\n        keys = list(p)\n        return all(p[k] == v[k] for k in keys[:-1]) and (not keys or consistent(p[keys[-1]], v[keys[-1]]))\n    if isinstance(v, list):\n        if not isinstance(p, list) or len(p) > len(v):\n            return False\n        return all(a == b for a, b in zip(p[:-1], v)) and (not p or consistent(p[-1], v[len(p) - 1]))\n    if isinstance(v, str):\n        return isinstance(p, str) and v.startswith(p)\n    if isinstance(v, bool) or v is None:\n        return p is v\n    return isinstance(p, (int, float)) and not isinstance(p, bool) and abs(p) <= abs(v) + 1e-9 and (p == 0 or (p > 0) == (v > 0))\nfor seed in (3, 42, 95):\n    rng = random.Random(seed)\n    for trial in range(60):\n        v = {f\"top{i}\": rand_value(rng, 1) for i in range(rng.randint(1, 4))}\n        text = json.dumps(v, ensure_ascii=rng.random() < 0.5, separators=rng.choice([(\",\", \":\"), (\", \", \": \")]))\n        for cut in range(len(text) + 1):\n            got = {fn}(text[:cut])\n            assert consistent(got, v), (seed, trial, text[:cut], got)\n        assert {fn}(text) == v\n        keys = list(v)\n        for i in range(len(keys) - 1):\n            start = text.index('\"' + keys[i + 1] + '\"')\n            got = {fn}(text[:start])\n            assert keys[i] in got and got[keys[i]] == v[keys[i]], (text[:start], got)\n"
+        },
+        {
+          "name": "Repairs raw control characters and invalid escapes",
+          "visibility": "unshown",
+          "behavior": "protocol.validation",
+          "failureMessage": "Escape raw control characters inside strings and double backslashes before invalid escape characters, then parse.",
+          "hiddenCode": "\np = {fn}\nassert p('{\"text\": \"line1\\nline2\\ttab\"}') == {\"text\": \"line1\\nline2\\ttab\"}\nassert p('{\"re\": \"\\\\d+\\\\.py\"}') == {\"re\": \"\\\\d+\\\\.py\"}\nassert p('{\"re\": \"\\\\d+\"}') == {\"re\": \"\\\\d+\"}\nassert p('{\"bell\": \"a\\x07b\"}') == {\"bell\": \"a\\x07b\"}\nassert p('{\"u\": \"\\\\u00e9 \\\\x41\"}') == {\"u\": \"é \\\\x41\"}\nassert p('{\"code\": \"x\\ny') == {\"code\": \"x\\ny\"}\nassert p('{\"q\": \"say \\\\\"hi') == {\"q\": 'say \"hi'}\n"
+        },
+        {
+          "name": "Partial edge cases and invalid input",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "Drop incomplete escapes, partial literals and dangling keys; strip trailing number characters; return {} for anything invalid.",
+          "hiddenCode": "\np = {fn}\ncases = [\n    ('{\"a\": \"x\\\\u00', {\"a\": \"x\"}),\n    ('{\"a\": \"x\\\\', {\"a\": \"x\"}),\n    ('{\"a\": -', {}),\n    ('{\"a\": 1e', {\"a\": 1}),\n    ('{\"a\": -2.5e+', {\"a\": -2.5}),\n    ('{\"a\": [true, fal', {\"a\": [True]}),\n    ('{\"a\": [nul', {\"a\": []}),\n    ('{\"a\": {\"b\": {\"c\": 1', {\"a\": {\"b\": {\"c\": 1}}}),\n    ('{\"a\": 1,', {\"a\": 1}),\n    ('{\"a\"', {}),\n    ('{\"a\":', {}),\n    ('[1, 2, \"th', [1, 2, \"th\"]),\n    ('\"hel', \"hel\"),\n    ('tru', {}),\n    ('{\"a\": 1} x', {}),\n    ('{\"a\": 1,}', {}),\n    ('{a: 1', {}),\n    ('{\"a\": 01', {}),\n    ('{\"a\": [1 2', {}),\n]\nfor text, want in cases:\n    got = p(text)\n    assert got == want and type(got) is type(want), (text, got, want)\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "What should '{\"a\": \"hel' return, and what about '{\"a\": tr'? How can the parser report both a value and whether the input ran out inside it? How do you decode escapes without writing your own unicode logic?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Write a recursive descent parser where each parse function returns (value, next_index, complete) with a MISSING sentinel, and raises on invalid input. For strings collect the raw escaped text and decode it with json.loads('\"' + raw + '\"'), trimming an incomplete escape first. For numbers take the maximal run of number characters and validate it with a regex."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "tool_call_stream_parser"
+      ],
+      "modelConnections": [
+        "Pi's parseStreamingJson combines JSON.parse, a repair pass and the partial-json library; the Vercel AI SDK and OpenAI's streaming helpers use the same idea to render tool arguments live."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Live previews of tool calls and early interruption, plus recovery from common model formatting mistakes."
+        ],
+        "cons": [
+          "Partial values can be misleading (a path prefix may name a different file), and repair can silently change what the model meant."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why would an agent UI parse tool-call arguments before the model finishes streaming them?"
+        },
+        {
+          "stage": "concept",
+          "question": "Which partial values are safe to show, and which must be dropped? Give an example of each."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through parsing '{\"path\": \"src/ma' and '{\"force\": tr'. How does your parser report that it ran out of input inside a value?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What does the repair pass fix, and why are raw newlines and escapes like \\d so common in model output?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why try the unrepaired text before the repaired text in the partial step?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Repairing malformed tool arguments versus rejecting them and asking the model to retry: robustness versus executing something the model did not mean?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Constrained decoding (grammar-guided JSON) versus post-hoc repair: latency, provider support and failure modes?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/badlogic/pi-mono",
+          "commit": "6f7551516b84278eb9da1c340c8e7bc66be1a6ba",
+          "path": "packages/ai/src/utils/json-parse.ts",
+          "symbol": "parseStreamingJson, parseJsonWithRepair and repairJson",
+          "license": "MIT",
+          "adapted": "The parse, repair, partial, partial-of-repaired fallback order and the repair rules for control characters and invalid escapes.",
+          "simplifications": "The partial-json dependency is replaced by an explicitly specified partial parser."
+        }
+      ]
     }
   ]
 }

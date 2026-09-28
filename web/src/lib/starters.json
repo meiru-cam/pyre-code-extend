@@ -153,5 +153,12 @@
   "pi_transform_messages": "def transform_messages(messages, model, normalize_tool_call_id=None):\n    pass",
   "pi_multi_edit": "def apply_edits(content, edits):\n    pass",
   "pi_file_mutation_queue": "import asyncio\nimport os\n\n\nclass FileMutationQueue:\n    async def run(self, path, fn):\n        pass\n\n    def active_keys(self):\n        pass",
-  "pi_compaction_cut_point": "def find_cut_point(entries, keep_recent_tokens):\n    pass"
+  "pi_compaction_cut_point": "def find_cut_point(entries, keep_recent_tokens):\n    pass",
+  "dsh_tool_pipeline": "class ToolRuntime:\n    def __init__(self, tools, approve=None):\n        self.tools = tools\n        self.approve = approve\n        self.pre_execute = []\n        self.guards = []\n        self.around = []\n        self.post_execute = []\n        self.observers = []\n\n    def execute(self, call):\n        pass",
+  "dsh_tool_timeout": "import asyncio\nfrom types import SimpleNamespace\n\n\nclass AbortController:\n    pass\n\n\ndef any_signal(signals):\n    pass\n\n\nclass TimeoutReason(Exception):\n    pass\n\n\ndef deadline(upstream, timeout, code):\n    pass\n\n\ndef timeout_of(signal, code=None):\n    pass\n\n\nasync def with_timeout(execution, next, timeout):\n    pass\n\n\ntool_timeout = SimpleNamespace(AbortController=AbortController, any_signal=any_signal, deadline=deadline,\n                               timeout_of=timeout_of, TimeoutReason=TimeoutReason, with_timeout=with_timeout)",
+  "dsh_fold_surface": "def fold_surface(events):\n    pass",
+  "dsh_system_prompt_reconcile": "def reconcile_system_prompt(system_nodes, rendered, in_history_capable, new_series):\n    pass",
+  "pi_truncate_output": "def truncate_output(content, mode, max_lines=2000, max_bytes=51200):\n    pass",
+  "pi_streaming_json": "import json\n\n\ndef parse_streaming_json(text):\n    pass",
+  "pi_parallel_tool_batch": "import asyncio\n\n\nasync def execute_tool_batch(calls, tools, mode=\"parallel\", before_tool_call=None,\n                             is_aborted=lambda: False, emit=lambda event: None):\n    pass"
 }

@@ -164,20 +164,20 @@
       "id": "deepseek-harness",
       "titleEn": "DeepSeek Harness",
       "titleZh": "DeepSeek Harness",
-      "descriptionEn": "Mechanisms from DeepSeek's plugin-first agent harness: an event bus with five dispatch modes, advisory loop guards, replay-safe tool-output pruning and crash recovery for an append-only session log.",
-      "descriptionZh": "Mechanisms from DeepSeek's plugin-first agent harness: an event bus with five dispatch modes, advisory loop guards, replay-safe tool-output pruning and crash recovery for an append-only session log.",
+      "descriptionEn": "Mechanisms from DeepSeek's plugin-first agent harness: an event bus with five dispatch modes, the guarded tool pipeline and cooperative timeouts, advisory loop guards, crash recovery and replay of an append-only session log, tool-output pruning, and cache-aware system prompt updates.",
+      "descriptionZh": "Mechanisms from DeepSeek's plugin-first agent harness: an event bus with five dispatch modes, the guarded tool pipeline and cooperative timeouts, advisory loop guards, crash recovery and replay of an append-only session log, tool-output pruning, and cache-aware system prompt updates.",
       "icon": "Network",
-      "problems": ["tool_registry", "dsh_event_bus", "dsh_repeat_tool_reminder", "dsh_tool_result_pruner", "context_compaction", "dsh_open_turn_closers"],
+      "problems": ["tool_registry", "dsh_event_bus", "dsh_tool_pipeline", "dsh_tool_timeout", "dsh_repeat_tool_reminder", "dsh_open_turn_closers", "dsh_fold_surface", "dsh_tool_result_pruner", "dsh_system_prompt_reconcile", "context_compaction"],
       "prerequisites": ["agent-runtime-system-design"]
     },
     {
       "id": "pi-agent",
       "titleEn": "Pi Coding Agent",
       "titleZh": "Pi Coding Agent",
-      "descriptionEn": "Mechanisms from the Pi coding agent: the agent loop with steering and follow-ups, cross-provider transcript handoff, the fuzzy multi-edit tool, per-file mutation queues and compaction cut points.",
-      "descriptionZh": "Mechanisms from the Pi coding agent: the agent loop with steering and follow-ups, cross-provider transcript handoff, the fuzzy multi-edit tool, per-file mutation queues and compaction cut points.",
+      "descriptionEn": "Mechanisms from the Pi coding agent: the agent loop with steering and follow-ups, parallel tool batches, streaming tool arguments, cross-provider transcript handoff, the fuzzy multi-edit tool, per-file mutation queues, output truncation and compaction cut points.",
+      "descriptionZh": "Mechanisms from the Pi coding agent: the agent loop with steering and follow-ups, parallel tool batches, streaming tool arguments, cross-provider transcript handoff, the fuzzy multi-edit tool, per-file mutation queues, output truncation and compaction cut points.",
       "icon": "Workflow",
-      "problems": ["pi_agent_loop", "pi_transform_messages", "pi_multi_edit", "pi_file_mutation_queue", "pi_compaction_cut_point"],
+      "problems": ["pi_agent_loop", "pi_parallel_tool_batch", "pi_streaming_json", "pi_transform_messages", "pi_multi_edit", "pi_file_mutation_queue", "pi_truncate_output", "pi_compaction_cut_point"],
       "prerequisites": ["agent-runtime-system-design"]
     }
   ]
