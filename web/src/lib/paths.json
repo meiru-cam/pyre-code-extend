@@ -179,6 +179,16 @@
       "icon": "Workflow",
       "problems": ["pi_agent_loop", "pi_parallel_tool_batch", "pi_streaming_json", "pi_transform_messages", "pi_multi_edit", "pi_file_mutation_queue", "pi_truncate_output", "pi_compaction_cut_point"],
       "prerequisites": ["agent-runtime-system-design"]
+    },
+    {
+      "id": "streaming-llm",
+      "titleEn": "Streaming LLMs",
+      "titleZh": "Streaming LLMs",
+      "descriptionEn": "Streaming LLMs end to end. Token streams: SSE decoding, delta accumulation, streamed tool calls, incremental detokenization, stop strings and backpressure. Endless generation: attention sinks, sink-cache re-rotation and H2O eviction. Real-time interaction: full-duplex micro-turn sessions (Thinking Machines), embodied action streams (SIMA 2) and posed-frame context for world models (RTFM).",
+      "descriptionZh": "Streaming LLMs end to end. Token streams: SSE decoding, delta accumulation, streamed tool calls, incremental detokenization, stop strings and backpressure. Endless generation: attention sinks, sink-cache re-rotation and H2O eviction. Real-time interaction: full-duplex micro-turn sessions (Thinking Machines), embodied action streams (SIMA 2) and posed-frame context for world models (RTFM).",
+      "icon": "Zap",
+      "problems": ["sse_decoder", "chat_stream_accumulator", "tool_call_stream_parser", "pi_streaming_json", "incremental_detokenize", "stop_string_holdback", "request_output_collector", "kv_cache", "sliding_window", "attention_sink_cache", "sink_cache_rerotation", "h2o_kv_eviction", "duplex_streaming_session", "embodied_action_stream", "posed_frame_context"],
+      "prerequisites": ["inference-distributed"]
     }
   ]
 }

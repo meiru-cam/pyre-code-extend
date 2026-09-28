@@ -16474,6 +16474,1194 @@
           "simplifications": "Synchronous; no value snapshots, output schemas, content projectors, deferred contexts or cancellation signals."
         }
       ]
+    },
+    {
+      "id": "chat_stream_accumulator",
+      "title": "Chat Stream Delta Accumulator",
+      "titleZh": "Chat Stream Delta Accumulator",
+      "difficulty": "Medium",
+      "functionName": "accumulate_delta",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "A streamed chat completion arrives as many small deltas: a few characters of content, or a fragment of one tool call's arguments. The client merges each delta into a snapshot of the message. Implement the merge used by the OpenAI Python client.\n\n**Signature:** `accumulate_delta(acc: dict, delta: dict) -> dict` — updates `acc` in place and returns it.\n\nFor each `key, value` in `delta`, in order:\n- **New key.** If `key` is missing from `acc` or `acc[key]` is None: when `value` is an *indexed list* (a list containing at least one dict with an `\"index\"` key), set `acc[key] = []` and merge into it as below; otherwise set `acc[key] = value` and move on.\n- **Replace.** Keys `\"index\"` and `\"type\"` are replaced with `value`.\n- **Strings** concatenate. **Numbers** (int or float, not bool) add. **Dicts** merge recursively with these same rules.\n- **Lists.** If every entry already in `acc[key]` is a str, int or float, and either `acc[key]` is non-empty or `value` is not an indexed list, extend `acc[key]` with `value`. Otherwise, for each entry of `value`: it must be a dict with an int `\"index\"`, else raise `ValueError`. If `index < len(acc[key])`, merge the entry into `acc[key][index]` (raise `ValueError` if that element is not a dict); otherwise `acc[key].insert(index, entry)`.\n- **Anything else** (for example a None value, or a string delta for a dict) leaves `acc[key]` unchanged.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**How tool calls stream.** The first fragment of a call carries its `index`, `id`, `type` and `function.name`; later fragments carry only the `index` and more `function.arguments` text. With parallel tool calls, fragments of different calls interleave, and `index` says which call each belongs to.\n\n**Why `index` and `type` are replaced.** They identify an element or a union variant; concatenating them would turn `\"function\"` into `\"functionfunction\"`.\n\n**Why an empty accumulator checks the delta.** One chunk can hold two fragments of the same call. Starting from `[]` and merging by index keeps them together; copying the list as-is would leave two entries for one call.\n\n**Why None never overwrites.** Servers send `\"content\": null` alongside tool-call deltas; treating that as an update would erase text already received.",
+      "descriptionZh": "A streamed chat completion arrives as many small deltas: a few characters of content, or a fragment of one tool call's arguments. The client merges each delta into a snapshot of the message. Implement the merge used by the OpenAI Python client.\n\n**Signature:** `accumulate_delta(acc: dict, delta: dict) -> dict` — updates `acc` in place and returns it.\n\nFor each `key, value` in `delta`, in order:\n- **New key.** If `key` is missing from `acc` or `acc[key]` is None: when `value` is an *indexed list* (a list containing at least one dict with an `\"index\"` key), set `acc[key] = []` and merge into it as below; otherwise set `acc[key] = value` and move on.\n- **Replace.** Keys `\"index\"` and `\"type\"` are replaced with `value`.\n- **Strings** concatenate. **Numbers** (int or float, not bool) add. **Dicts** merge recursively with these same rules.\n- **Lists.** If every entry already in `acc[key]` is a str, int or float, and either `acc[key]` is non-empty or `value` is not an indexed list, extend `acc[key]` with `value`. Otherwise, for each entry of `value`: it must be a dict with an int `\"index\"`, else raise `ValueError`. If `index < len(acc[key])`, merge the entry into `acc[key][index]` (raise `ValueError` if that element is not a dict); otherwise `acc[key].insert(index, entry)`.\n- **Anything else** (for example a None value, or a string delta for a dict) leaves `acc[key]` unchanged.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**How tool calls stream.** The first fragment of a call carries its `index`, `id`, `type` and `function.name`; later fragments carry only the `index` and more `function.arguments` text. With parallel tool calls, fragments of different calls interleave, and `index` says which call each belongs to.\n\n**Why `index` and `type` are replaced.** They identify an element or a union variant; concatenating them would turn `\"function\"` into `\"functionfunction\"`.\n\n**Why an empty accumulator checks the delta.** One chunk can hold two fragments of the same call. Starting from `[]` and merging by index keeps them together; copying the list as-is would leave two entries for one call.\n\n**Why None never overwrites.** Servers send `\"content\": null` alongside tool-call deltas; treating that as an update would erase text already received.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Merges content and a streamed tool call",
+          "code": "\nacc = {}\nfor d in [{\"role\": \"assistant\", \"content\": \"\"}, {\"content\": \"Hel\"}, {\"content\": \"lo\"},\n          {\"content\": None, \"tool_calls\": [{\"index\": 0, \"id\": \"c1\", \"type\": \"function\", \"function\": {\"name\": \"get\", \"arguments\": \"\"}}]},\n          {\"tool_calls\": [{\"index\": 0, \"function\": {\"arguments\": '{\"q\":'}}]},\n          {\"tool_calls\": [{\"index\": 0, \"type\": \"function\", \"function\": {\"arguments\": ' 1}'}}]}]:\n    out = {fn}(acc, d)\n    assert out is acc\nassert acc == {\"role\": \"assistant\", \"content\": \"Hello\", \"tool_calls\": [\n    {\"index\": 0, \"id\": \"c1\", \"type\": \"function\", \"function\": {\"name\": \"get\", \"arguments\": '{\"q\": 1}'}}]}, acc\n",
+          "behavior": "protocol.validation"
+        },
+        {
+          "name": "Merge rules",
+          "visibility": "unshown",
+          "behavior": "protocol.validation",
+          "failureMessage": "Keep values on None or mismatched types, replace index and type, add numbers, extend primitive lists, merge a first indexed list by index, and raise ValueError on malformed entries.",
+          "hiddenCode": "\nacc = {\"a\": \"x\", \"n\": 1, \"f\": 0.5, \"type\": \"function\", \"index\": 2, \"p\": [1], \"d\": {\"k\": \"v\"}, \"z\": None}\n{fn}(acc, {\"a\": None, \"n\": 2, \"f\": 0.25, \"type\": \"function\", \"index\": 3, \"p\": [2, \"s\"], \"d\": \"oops\", \"z\": [3]})\nassert acc == {\"a\": \"x\", \"n\": 3, \"f\": 0.75, \"type\": \"function\", \"index\": 3, \"p\": [1, 2, \"s\"], \"d\": {\"k\": \"v\"}, \"z\": [3]}, acc\nacc = {}\n{fn}(acc, {\"calls\": [{\"index\": 0, \"arguments\": \"ab\"}, {\"index\": 0, \"arguments\": \"cd\"}, {\"index\": 1, \"arguments\": \"x\"}]})\nassert acc == {\"calls\": [{\"index\": 0, \"arguments\": \"abcd\"}, {\"index\": 1, \"arguments\": \"x\"}]}, acc\nacc = {\"calls\": []}\n{fn}(acc, {\"calls\": [{\"index\": 0, \"a\": \"1\"}, {\"index\": 0, \"a\": \"2\"}]})\nassert acc == {\"calls\": [{\"index\": 0, \"a\": \"12\"}]}, acc\nacc = {\"calls\": [{\"index\": 0}]}\n{fn}(acc, {\"calls\": [{\"index\": 5, \"a\": \"late\"}]})\nassert acc == {\"calls\": [{\"index\": 0}, {\"index\": 5, \"a\": \"late\"}]}, acc\nfor bad in ({\"calls\": [\"str\"]}, {\"calls\": [{\"a\": 1}]}, {\"calls\": [{\"index\": \"0\"}]}):\n    try:\n        {fn}({\"calls\": [{\"index\": 0}]}, bad)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"accepted {bad}\")\ntry:\n    {fn}({\"calls\": [7, {\"index\": 1}]}, {\"calls\": [{\"index\": 0}]})\nexcept ValueError:\n    pass\nelse:\n    raise AssertionError(\"merged into a non-dict element\")\n"
+        },
+        {
+          "name": "Seeded parallel tool-call streams rebuild the message",
+          "visibility": "unshown",
+          "behavior": "protocol.validation",
+          "failureMessage": "Interleaved fragments of parallel tool calls, several fragments per chunk and null content deltas must rebuild exactly the final message.",
+          "hiddenCode": "\nimport random\nPIECES = ['{\"', 'path', '\": \"', 'a.py', '\"}', ' ', '中', '1', ',', '[', ']']\nfor seed in (6, 38, 90):\n    rng = random.Random(seed)\n    for trial in range(150):\n        content = \"\".join(rng.choice(PIECES) for _ in range(rng.randint(0, 6)))\n        calls = [{\"index\": i, \"id\": f\"call_{i}\", \"type\": \"function\",\n                  \"function\": {\"name\": f\"tool{i}\", \"arguments\": \"\".join(rng.choice(PIECES) for _ in range(rng.randint(0, 6)))}}\n                 for i in range(rng.randint(0, 3))]\n        frags = []\n        cut = sorted(rng.sample(range(len(content) + 1), min(len(content) + 1, rng.randint(1, 3))))\n        text_parts = [content[a:b] for a, b in zip([0] + cut, cut + [len(content)])]\n        streams = []\n        for c in calls:\n            args = c[\"function\"][\"arguments\"]\n            k = rng.randint(1, 4)\n            pts = sorted(rng.randint(0, len(args)) for _ in range(k - 1))\n            parts = [args[a:b] for a, b in zip([0] + pts, pts + [len(args)])]\n            first = {\"index\": c[\"index\"], \"id\": c[\"id\"], \"type\": \"function\", \"function\": {\"name\": c[\"function\"][\"name\"], \"arguments\": parts[0]}}\n            rest = [{\"index\": c[\"index\"], \"function\": {\"arguments\": p}} for p in parts[1:]]\n            streams.append([first] + rest)\n        pending = [s for s in streams]\n        deltas = [{\"role\": \"assistant\", \"content\": text_parts[0]}] + [{\"content\": t} for t in text_parts[1:]]\n        started = [False] * len(pending)\n        while any(pending):\n            live = [i for i, s in enumerate(pending) if s and (i == 0 or started[i - 1])]\n            i = rng.choice(live)\n            frag = [pending[i].pop(0)]\n            started[i] = True\n            if pending[i] and rng.random() < 0.3:\n                frag.append(pending[i].pop(0))\n            delta = {\"tool_calls\": frag}\n            if rng.random() < 0.3:\n                delta[\"content\"] = None\n            deltas.append(delta)\n        acc = {}\n        for d in deltas:\n            {fn}(acc, d)\n        want = {\"role\": \"assistant\", \"content\": content}\n        if calls:\n            want[\"tool_calls\"] = calls\n        assert acc == want, (seed, trial, deltas, acc, want)\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which keys identify something rather than carry content? When a list first appears, how do you know whether to copy it or to merge it by index? What should a None value in a delta do?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Write a helper that tests for an indexed list. In the loop, handle the missing-or-None case first (possibly creating []), then index/type, then dispatch on the pair of types: str, number, dict (recurse), list (extend or merge by index). Fall through without changing acc."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "sse_decoder"
+      ],
+      "modelConnections": [
+        "openai-python's ChatCompletionStreamState merges every chunk with accumulate_delta, then partially parses tool arguments for strict tools.",
+        "vLLM and SGLang emit these deltas from their tool parsers, so any OpenAI-compatible client depends on the same merge rules."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "One generic merge handles content, refusals, reasoning fields and parallel tool calls without per-field code."
+        ],
+        "cons": [
+          "Relies on servers following conventions it cannot check: a server that repeats a string field in every chunk gets it concatenated."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What does a streamed chat completion chunk contain, and how does a client rebuild the full message from deltas?"
+        },
+        {
+          "stage": "concept",
+          "question": "How are parallel tool calls streamed, and what tells the client which call a fragment belongs to?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why must index and type be replaced rather than concatenated? What breaks if they are not?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "One chunk contains two fragments for the same tool call and the accumulator has no tool_calls yet. Walk through what a naive copy does versus merging by index."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why should a null content delta never overwrite text already received?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Generic recursive delta merging versus a typed per-field accumulator: robustness to new fields versus catching malformed server output?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Parsing tool arguments incrementally while they stream versus waiting for the call to finish: latency, error handling and UI?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/openai/openai-python",
+          "commit": "a380cf256abc2aa51cbf5d49437ae039b9aa9b12",
+          "path": "src/openai/lib/streaming/_deltas.py",
+          "symbol": "accumulate_delta and _has_indexed_entries",
+          "license": "Apache-2.0",
+          "adapted": "The full merge: new-key and indexed-list handling, index and type replacement, string and number accumulation, recursive dicts, primitive-list extension and merge by index.",
+          "simplifications": "Raises ValueError for every malformed list entry instead of TypeError and RuntimeError, and excludes bools from number addition."
+        }
+      ]
+    },
+    {
+      "id": "duplex_streaming_session",
+      "title": "Full-Duplex Streaming Session",
+      "titleZh": "Full-Duplex Streaming Session",
+      "difficulty": "Medium",
+      "functionName": "StreamingSession",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Thinking Machines' interaction models run in micro-turns: every 200 ms the client sends one chunk of input and the model generates up to 200 ms of output, all in one growing token sequence. Each chunk is a separate request, so the server keeps the session's history and KV cache between requests instead of prefilling the whole conversation again. Implement the session bookkeeping, following SGLang's streaming sessions.\n\n**Signature:** `StreamingSession(bos_id=None)` with `begin(input_ids, max_new_tokens) -> dict`, `finish(output_ids)` and `abort()`.\n\n**State.** The committed history (a token list, initially empty), the KV length (tokens whose KV the session holds, initially 0), and at most one request in flight.\n\n**`begin(input_ids, max_new_tokens)`:**\n- Raise `RuntimeError` if a request is in flight.\n- If the history is non-empty, `bos_id` is not None and `input_ids` starts with `bos_id`, drop that first token.\n- The request's sequence is the history followed by the (possibly trimmed) input. Raise `ValueError` if it is empty.\n- Mark the request in flight and return `{\"input_ids\": sequence, \"cached_len\": kv_len}`. The server prefills only the tokens after `cached_len`.\n- Neither the history nor the KV length changes yet.\n\n**`finish(output_ids)`** — the in-flight request completed (raise `RuntimeError` if none is in flight).\n- `out = output_ids[:max_new_tokens]`.\n- The history becomes the request's sequence followed by `out`.\n- The KV length becomes `len(sequence) + max(len(out) - 1, 0)`: the last sampled token was never run through the model.\n- Nothing is in flight afterwards.\n\n**`abort()`** — the in-flight request failed or was cancelled. Nothing is in flight afterwards and the history and KV length are unchanged. With nothing in flight it does nothing.\n\nReturned and stored lists must be copies: later changes to the caller's lists must not affect the session.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Micro-turns.** Instead of waiting for the user to finish speaking, the model sees 200 ms of input, produces 200 ms of output (possibly silence), and repeats. Overlap, interruptions and pauses stay in the context, so the model can backchannel or cut in, and it has a sense of elapsed time.\n\n**Why a session.** Five requests per second per user, each resending the whole conversation, would spend almost all compute on prefill. Appending to a persistent sequence makes each request cost only its new tokens.\n\n**Why commit only on finish.** An aborted chunk may have appended tokens and allocated KV that never completed. Keeping the last committed point lets the next chunk start from a consistent state.\n\n**Why one request in flight.** A chunk depends on the previous chunk's output, so requests in a session are strictly ordered; a second concurrent request would race on the same KV.\n\n**Why drop the BOS.** Tokenizers add a beginning-of-sequence token to every encoded chunk, but only the first one belongs in the middle of an ongoing sequence.",
+      "descriptionZh": "Thinking Machines' interaction models run in micro-turns: every 200 ms the client sends one chunk of input and the model generates up to 200 ms of output, all in one growing token sequence. Each chunk is a separate request, so the server keeps the session's history and KV cache between requests instead of prefilling the whole conversation again. Implement the session bookkeeping, following SGLang's streaming sessions.\n\n**Signature:** `StreamingSession(bos_id=None)` with `begin(input_ids, max_new_tokens) -> dict`, `finish(output_ids)` and `abort()`.\n\n**State.** The committed history (a token list, initially empty), the KV length (tokens whose KV the session holds, initially 0), and at most one request in flight.\n\n**`begin(input_ids, max_new_tokens)`:**\n- Raise `RuntimeError` if a request is in flight.\n- If the history is non-empty, `bos_id` is not None and `input_ids` starts with `bos_id`, drop that first token.\n- The request's sequence is the history followed by the (possibly trimmed) input. Raise `ValueError` if it is empty.\n- Mark the request in flight and return `{\"input_ids\": sequence, \"cached_len\": kv_len}`. The server prefills only the tokens after `cached_len`.\n- Neither the history nor the KV length changes yet.\n\n**`finish(output_ids)`** — the in-flight request completed (raise `RuntimeError` if none is in flight).\n- `out = output_ids[:max_new_tokens]`.\n- The history becomes the request's sequence followed by `out`.\n- The KV length becomes `len(sequence) + max(len(out) - 1, 0)`: the last sampled token was never run through the model.\n- Nothing is in flight afterwards.\n\n**`abort()`** — the in-flight request failed or was cancelled. Nothing is in flight afterwards and the history and KV length are unchanged. With nothing in flight it does nothing.\n\nReturned and stored lists must be copies: later changes to the caller's lists must not affect the session.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Micro-turns.** Instead of waiting for the user to finish speaking, the model sees 200 ms of input, produces 200 ms of output (possibly silence), and repeats. Overlap, interruptions and pauses stay in the context, so the model can backchannel or cut in, and it has a sense of elapsed time.\n\n**Why a session.** Five requests per second per user, each resending the whole conversation, would spend almost all compute on prefill. Appending to a persistent sequence makes each request cost only its new tokens.\n\n**Why commit only on finish.** An aborted chunk may have appended tokens and allocated KV that never completed. Keeping the last committed point lets the next chunk start from a consistent state.\n\n**Why one request in flight.** A chunk depends on the previous chunk's output, so requests in a session are strictly ordered; a second concurrent request would race on the same KV.\n\n**Why drop the BOS.** Tokenizers add a beginning-of-sequence token to every encoded chunk, but only the first one belongs in the middle of an ongoing sequence.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Appends chunks and reuses KV",
+          "code": "\ns = {fn}(bos_id=1)\nassert s.begin([1, 10, 11], max_new_tokens=4) == {\"input_ids\": [1, 10, 11], \"cached_len\": 0}\ns.finish([20, 21])\nassert s.begin([1, 12], max_new_tokens=4) == {\"input_ids\": [1, 10, 11, 20, 21, 12], \"cached_len\": 4}\ns.finish([])\nassert s.begin([13], max_new_tokens=4) == {\"input_ids\": [1, 10, 11, 20, 21, 12, 13], \"cached_len\": 6}\n",
+          "behavior": "state.invariant"
+        },
+        {
+          "name": "Aborts roll back and only one request runs",
+          "visibility": "unshown",
+          "behavior": "checkpoint.recovery",
+          "failureMessage": "Commit history only in finish, keep it on abort, reject a second begin while one is in flight, and truncate output to max_new_tokens.",
+          "hiddenCode": "\ns = {fn}()\ns.begin([5, 6], max_new_tokens=2)\ntry:\n    s.begin([7], max_new_tokens=2)\nexcept RuntimeError:\n    pass\nelse:\n    raise AssertionError(\"second request accepted while one is in flight\")\ns.finish([8, 9, 10, 11])\nassert s.begin([12], max_new_tokens=1) == {\"input_ids\": [5, 6, 8, 9, 12], \"cached_len\": 3}\ns.abort()\nassert s.begin([13], max_new_tokens=1) == {\"input_ids\": [5, 6, 8, 9, 13], \"cached_len\": 3}\ns.abort(); s.abort()\ntry:\n    s.finish([1])\nexcept RuntimeError:\n    pass\nelse:\n    raise AssertionError(\"finish accepted with nothing in flight\")\ntry:\n    {fn}().begin([], max_new_tokens=3)\nexcept ValueError:\n    pass\nelse:\n    raise AssertionError(\"empty request accepted\")\nf = {fn}(bos_id=0)\nassert f.begin([0, 4], max_new_tokens=2)[\"input_ids\"] == [0, 4]\nf.finish([0])\nassert f.begin([0, 0], max_new_tokens=2) == {\"input_ids\": [0, 4, 0, 0], \"cached_len\": 2}\n"
+        },
+        {
+          "name": "Seeded micro-turn streams match an oracle",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "Across finishes, aborts and BOS-prefixed chunks, the sequence and cached_len must follow the committed history exactly, and returned lists must be copies.",
+          "hiddenCode": "\nimport random\nfor seed in (10, 46, 88):\n    rng = random.Random(seed)\n    bos = rng.choice([None, 1])\n    s = {fn}(bos_id=bos)\n    hist, kv = [], 0\n    for turn in range(60):\n        chunk = [rng.randint(1, 9) for _ in range(rng.randint(0, 4))]\n        if bos is not None and rng.random() < 0.5:\n            chunk = [bos] + chunk\n        mnt = rng.randint(1, 4)\n        trimmed = chunk[1:] if hist and bos is not None and chunk[:1] == [bos] else chunk\n        seq = hist + trimmed\n        if not seq:\n            try:\n                s.begin(chunk, mnt)\n            except ValueError:\n                continue\n            raise AssertionError(\"empty request accepted\")\n        got = s.begin(chunk, mnt)\n        assert got == {\"input_ids\": seq, \"cached_len\": kv}, (seed, turn, got, seq, kv)\n        got[\"input_ids\"].append(-1); chunk.append(-2)\n        if rng.random() < 0.25:\n            s.abort()\n            continue\n        out = [rng.randint(1, 9) for _ in range(rng.randint(0, 6))]\n        s.finish(out)\n        out.append(-3)\n        kept = out[:-1][:mnt]\n        hist, kv = seq + kept, len(seq) + max(len(kept) - 1, 0)\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "What must survive between two chunk requests, and when may it change? After a request generated three tokens, how many of them have KV entries? What should an aborted chunk leave behind?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Keep history, kv_len and an in-flight record (sequence, max_new_tokens). begin checks the flag, trims a BOS when history exists, builds history + input, and returns copies. finish truncates the output, sets history and kv_len, and clears the flag; abort only clears the flag."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "kv_cache",
+        "request_output_collector"
+      ],
+      "modelConnections": [
+        "Thinking Machines' TML-Interaction-Small streams 200 ms micro-turns and upstreamed streaming sessions to SGLang.",
+        "SGLang's Session keeps one in-flight request per streaming session and rolls back to committed token lengths when a turn aborts; OpenAI's Realtime API and Moshi keep similar per-connection state for full-duplex speech."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Each 200 ms chunk costs only its new tokens, and aborted chunks cannot corrupt the session."
+        ],
+        "cons": [
+          "The session pins GPU memory for its whole lifetime and ties the user to one server, which complicates load balancing and failover."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is a full-duplex interaction model, and how do 200 ms micro-turns differ from turn-based voice pipelines (ASR, LLM, TTS)?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why would sending every 200 ms chunk as an independent request be too expensive, and what does a streaming session keep on the server?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "After a request with a 6-token sequence generates 3 tokens, what is the KV length and why is it not 9?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why commit history only when a request finishes? Walk through an aborted chunk followed by the next chunk."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why does a streaming session allow only one request in flight, and why strip the BOS token from appended chunks?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "One interleaved sequence of micro-turns versus separate input and output streams (as in Moshi): model simplicity, latency and context growth?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Sticky sessions that pin KV on one GPU versus stateless requests with prefix caching: latency, load balancing and failure recovery?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/sgl-project/sglang",
+          "commit": "2e7e0802f4f3edc94702933675a71d6c7ef4f24f",
+          "path": "python/sglang/srt/session/session_controller.py",
+          "symbol": "Session.create_req, Session._share_token_arrays, Session._strip_bos_token, Session.finish_req and Session.abort_req",
+          "license": "Apache-2.0",
+          "adapted": "One in-flight request per streaming session, history of previous input plus output truncated to max_new_tokens, BOS stripping on appended turns, and committing only on finish so aborts roll back.",
+          "simplifications": "Token lists instead of shared arrays; no replace, offset or drop_previous_output modes, multimodal offsets, timeouts or radix-cache locks; the KV length uses the len(origin_input_ids) + max(len(output_ids) - 1, 0) formula that SGLang falls back to in mem_cache/storage/flexkv/flexkv_radix_cache.py instead of reading it from the pool."
+        },
+        {
+          "kind": "paper",
+          "url": "https://thinkingmachines.ai/blog/interaction-models/",
+          "section": "System overview and The interaction model (micro-turns and streaming sessions)"
+        }
+      ]
+    },
+    {
+      "id": "incremental_detokenize",
+      "title": "Incremental Detokenization",
+      "titleZh": "Incremental Detokenization",
+      "difficulty": "Medium",
+      "functionName": "IncrementalDetokenizer",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "An inference server streams text, not token ids. Decoding each new token on its own gives wrong text: tokenizers drop a leading space at the start of a string, and one UTF-8 character can be spread over several byte tokens. Implement vLLM's incremental detokenizer, which decodes a small window of recent tokens and returns only the new part.\n\n**Signature:** `IncrementalDetokenizer(convert, prompt_tokens, initial_offset=5)` with `step(token: str) -> str`.\n\n**Parameters:**\n- `convert(tokens: list[str]) -> str` — the tokenizer's tokens-to-string function. Treat it as a black box; it may drop a leading space or produce `\"�\"` for incomplete bytes.\n- `prompt_tokens` — list of prompt token strings.\n\n**State.** A token list and two offsets into it, `prefix_offset <= read_offset`.\n- Start with the last `initial_offset + 2` prompt tokens (fewer if the prompt is shorter). `read_offset` is the length of that list and `prefix_offset = max(read_offset - initial_offset, 0)`.\n\n**`step(token)`:**\n1. Append `token` to the token list.\n2. `prefix_text = convert(tokens[prefix_offset:read_offset])` and `new_text = convert(tokens[prefix_offset:])`.\n3. If `len(new_text) <= len(prefix_text)` or `new_text` ends with `\"�\"`, return `\"\"` and leave both offsets unchanged.\n4. Otherwise return `new_text[len(prefix_text):]`, then set `prefix_offset = read_offset` and `read_offset = len(tokens)`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why a prefix.** SentencePiece tokenizers write a space as the marker `▁` and strip the space at the start of a decoded string. Decoding `▁world` alone gives `world`; decoding `▁Hello ▁world` and subtracting the decoding of `▁Hello` gives ` world`.\n\n**Why hold back on the replacement character.** Byte-fallback tokenizers split rare characters such as CJK or emoji into byte tokens like `<0xE4>`. Until the last byte arrives, the decoded string ends with the replacement character; emitting it would show garbage that later turns into the right character. A replacement character in the middle is a real invalid sequence and is emitted.\n\n**Why a sliding window.** Decoding the whole output every step costs time proportional to its length, so a long generation would be quadratic. The window moves forward whenever text is emitted and stays a few tokens long.\n\n**Why start from the prompt.** The first generated token needs context too: without the prompt's last tokens, a leading space on the first output token would be stripped.",
+      "descriptionZh": "An inference server streams text, not token ids. Decoding each new token on its own gives wrong text: tokenizers drop a leading space at the start of a string, and one UTF-8 character can be spread over several byte tokens. Implement vLLM's incremental detokenizer, which decodes a small window of recent tokens and returns only the new part.\n\n**Signature:** `IncrementalDetokenizer(convert, prompt_tokens, initial_offset=5)` with `step(token: str) -> str`.\n\n**Parameters:**\n- `convert(tokens: list[str]) -> str` — the tokenizer's tokens-to-string function. Treat it as a black box; it may drop a leading space or produce `\"�\"` for incomplete bytes.\n- `prompt_tokens` — list of prompt token strings.\n\n**State.** A token list and two offsets into it, `prefix_offset <= read_offset`.\n- Start with the last `initial_offset + 2` prompt tokens (fewer if the prompt is shorter). `read_offset` is the length of that list and `prefix_offset = max(read_offset - initial_offset, 0)`.\n\n**`step(token)`:**\n1. Append `token` to the token list.\n2. `prefix_text = convert(tokens[prefix_offset:read_offset])` and `new_text = convert(tokens[prefix_offset:])`.\n3. If `len(new_text) <= len(prefix_text)` or `new_text` ends with `\"�\"`, return `\"\"` and leave both offsets unchanged.\n4. Otherwise return `new_text[len(prefix_text):]`, then set `prefix_offset = read_offset` and `read_offset = len(tokens)`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why a prefix.** SentencePiece tokenizers write a space as the marker `▁` and strip the space at the start of a decoded string. Decoding `▁world` alone gives `world`; decoding `▁Hello ▁world` and subtracting the decoding of `▁Hello` gives ` world`.\n\n**Why hold back on the replacement character.** Byte-fallback tokenizers split rare characters such as CJK or emoji into byte tokens like `<0xE4>`. Until the last byte arrives, the decoded string ends with the replacement character; emitting it would show garbage that later turns into the right character. A replacement character in the middle is a real invalid sequence and is emitted.\n\n**Why a sliding window.** Decoding the whole output every step costs time proportional to its length, so a long generation would be quadratic. The window moves forward whenever text is emitted and stays a few tokens long.\n\n**Why start from the prompt.** The first generated token needs context too: without the prompt's last tokens, a leading space on the first output token would be stripped.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Keeps spaces and waits for complete characters",
+          "code": "\ndef convert(tokens):\n    out = bytearray()\n    for t in tokens:\n        out += bytes([int(t[3:-1], 16)]) if t.startswith(\"<0x\") else t.replace(\"▁\", \" \").encode()\n    s = out.decode(\"utf-8\", errors=\"replace\")\n    return s[1:] if s.startswith(\" \") else s\nd = {fn}(convert, [\"▁Say\", \"▁hi\", \":\"])\nout = [d.step(t) for t in [\"▁Hello\", \"▁world\", \"▁\", \"<0xE4>\", \"<0xB8>\", \"<0xAD>\", \"!\"]]\nassert out == [\" Hello\", \" world\", \" \", \"\", \"\", \"中\", \"!\"], out\n",
+          "behavior": "protocol.validation"
+        },
+        {
+          "name": "Offsets and window rules",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "Seed the window from the last initial_offset + 2 prompt tokens, keep offsets fixed while holding back, and slide prefix to read and read to the end after emitting.",
+          "hiddenCode": "\ncalls = []\ndef convert(tokens):\n    calls.append(tuple(tokens))\n    s = \"\".join(t.replace(\"▁\", \" \") for t in tokens)\n    return s[1:] if s.startswith(\" \") else s\nd = {fn}(convert, [\"p%d\" % i for i in range(10)], initial_offset=3)\ncalls.clear()\nassert d.step(\"▁x\") == \" x\"\nassert calls == [(\"p7\", \"p8\", \"p9\"), (\"p7\", \"p8\", \"p9\", \"▁x\")], calls\ncalls.clear()\nassert d.step(\"y\") == \"y\"\nassert calls == [(\"▁x\",), (\"▁x\", \"y\")], calls\nd = {fn}(convert, [])\nassert d.step(\"▁a\") == \"a\" and d.step(\"▁b\") == \" b\"\ndef shrink(tokens):\n    return \"\".join(t for t in tokens if t != \"DEL\")\nd = {fn}(shrink, [\"a\"])\nassert d.step(\"DEL\") == \"\" and d.step(\"b\") == \"b\"\n"
+        },
+        {
+          "name": "Seeded streams match the reference window",
+          "visibility": "unshown",
+          "behavior": "protocol.validation",
+          "failureMessage": "Emit exactly the text the prefix window adds, hold back while the decode ends in a replacement character, and advance the offsets only after emitting.",
+          "hiddenCode": "\nimport random\ndef convert(tokens):\n    out = bytearray()\n    for t in tokens:\n        out += bytes([int(t[3:-1], 16)]) if t.startswith(\"<0x\") else t.replace(\"▁\", \" \").encode()\n    s = out.decode(\"utf-8\", errors=\"replace\")\n    return s[1:] if s.startswith(\" \") else s\ndef reference(prompt, outs, k):\n    toks = list(prompt[-(k + 2):]) if prompt else []\n    r = len(toks); p = max(r - k, 0); res = []\n    for t in outs:\n        toks.append(t)\n        a, b = convert(toks[p:r]), convert(toks[p:])\n        if len(b) <= len(a) or b.endswith(\"�\"):\n            res.append(\"\"); continue\n        res.append(b[len(a):]); p, r = r, len(toks)\n    return res\nWORDS = [\"▁the\", \"▁cat\", \"ing\", \"▁\", \"s\", \".\", \"▁中\"]\nBYTES = [[\"<0xE4>\", \"<0xB8>\", \"<0xAD>\"], [\"<0xF0>\", \"<0x9F>\", \"<0x98>\", \"<0x80>\"], [\"<0xC3>\", \"<0xA9>\"]]\nfor seed in (2, 51, 84):\n    rng = random.Random(seed)\n    for trial in range(150):\n        prompt = [rng.choice(WORDS) for _ in range(rng.randint(0, 9))]\n        outs = []\n        while len(outs) < rng.randint(1, 16):\n            r = rng.random()\n            if r < 0.25:\n                outs += rng.choice(BYTES)\n            elif r < 0.3:\n                outs.append(\"<0xFF>\")\n            else:\n                outs.append(rng.choice(WORDS))\n        k = rng.randint(1, 6)\n        d = {fn}(convert, prompt, initial_offset=k)\n        got = [d.step(t) for t in outs]\n        assert got == reference(prompt, outs, k), (seed, trial, prompt, outs, k, got)\n        if not convert(outs).endswith(\"�\") and not prompt:\n            assert \"\".join(got) == convert(outs), (prompt, outs, got)\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Why is decode(token) for one token not the text that token adds? When should the detokenizer emit nothing and wait? After emitting, which tokens still need to be in the window?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Keep tokens, prefix_offset and read_offset. Each step, decode tokens[prefix:read] and tokens[prefix:]. If the second is not longer or ends with the replacement character, return ''. Otherwise return the extra suffix and move prefix to read and read to the end."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "bpe"
+      ],
+      "modelConnections": [
+        "vLLM's SlowIncrementalDetokenizer calls detokenize_incrementally for every generated token; the offsets come from Hugging Face text-generation-inference.",
+        "Hugging Face TextStreamer solves the same problem differently, by buffering until a space or a CJK character."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Works with any tokenizer through its decode function, costs a few tokens of decoding per step, and never emits text it would later change."
+        ],
+        "cons": [
+          "Holding back on a trailing replacement character delays output for byte tokens, and a stream that ends mid-character never emits those bytes."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why can't a streaming server decode each generated token id on its own and send the result?"
+        },
+        {
+          "stage": "concept",
+          "question": "What is byte-fallback tokenization, and what does a client see if the server streams a partial UTF-8 character?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through prefix_offset and read_offset over three steps where the second token is an incomplete byte. What is decoded at each step and what is returned?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why is the window seeded with the last few prompt tokens instead of starting empty?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why does the detokenizer compare lengths before slicing, and when can the new decode be shorter than the prefix?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Window-based incremental decoding (vLLM) versus buffering until a word boundary (HF TextStreamer): latency, correctness and CJK handling?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Detokenizing in the engine process versus in a separate API server process: throughput, GIL contention and failure isolation?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/vllm-project/vllm",
+          "commit": "953f90d25fea2240965878a1aca66cec519685b0",
+          "path": "vllm/tokenizers/detokenizer_utils.py",
+          "symbol": "detokenize_incrementally, convert_prompt_ids_to_tokens and INITIAL_INCREMENTAL_DETOKENIZATION_OFFSET",
+          "license": "Apache-2.0",
+          "adapted": "Prompt-seeded token window, prefix and read offsets, holding back on a shorter or replacement-terminated decode, and advancing the window after emitting.",
+          "simplifications": "Tokens arrive as strings through a given convert function; no ids, special-token skipping, added-vocabulary path or out-of-vocabulary ids."
+        }
+      ]
+    },
+    {
+      "id": "posed_frame_context",
+      "title": "Posed Frame Context Retrieval",
+      "titleZh": "Posed Frame Context Retrieval",
+      "difficulty": "Medium",
+      "functionName": "SpatialFrameMemory",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "World Labs' RTFM generates video frames in real time as the user moves through a world. Every generated frame has a camera pose, and to render the next frame the model conditions on nearby frames retrieved from this spatial memory instead of on the whole history. Implement the memory and its context selection. The blog does not publish the exact rule; this exercise uses the one below.\n\n**Signature:** `SpatialFrameMemory()` with `add(frame_id, position, yaw)` and `context(position, yaw, k, recent=2, max_angle=90.0, angle_weight=1.0) -> list`.\n\n**`add`** stores a frame with its camera `position` (a tuple of 3 floats) and `yaw` in degrees. Raise `ValueError` if `frame_id` was already added.\n\n**Angular difference** between yaws `a` and `b`: `abs((a - b + 180) % 360 - 180)`, in degrees from 0 to 180.\n\n**`context(position, yaw, k, ...)`** — the frames to condition on for a camera at `position` facing `yaw`:\n- Raise `ValueError` unless `k >= 1` and `0 <= recent <= k`.\n- Always take the `recent` most recently added frames (all of them if fewer are stored).\n- Fill the remaining slots, up to `k` frames in total, from the other frames whose angular difference to `yaw` is at most `max_angle`, best score first. Score = Euclidean distance between positions + `angle_weight * radians(angular difference)`; lower is better, and on equal scores the more recently added frame wins.\n- Return the chosen ids in the order they were added.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Frames as the world model.** RTFM has no explicit 3D representation. An autoregressive diffusion transformer predicts the next frame from previous frames, so the frames themselves, with their poses, are the memory of the world.\n\n**Why retrieve by pose.** Attending to every frame ever generated would grow cost without bound. Frames taken from nearby cameras facing a similar way show the same surfaces, so they carry what the next frame needs; World Labs calls assembling this custom context \"context juggling\".\n\n**Why always keep recent frames.** They carry motion and lighting continuity, and they keep the stream smooth even when the camera moves into a region with no stored frames.\n\n**Why this gives persistence.** When the user walks away and comes back, the old frames of that place are retrieved again, so the world looks the same instead of being re-imagined.",
+      "descriptionZh": "World Labs' RTFM generates video frames in real time as the user moves through a world. Every generated frame has a camera pose, and to render the next frame the model conditions on nearby frames retrieved from this spatial memory instead of on the whole history. Implement the memory and its context selection. The blog does not publish the exact rule; this exercise uses the one below.\n\n**Signature:** `SpatialFrameMemory()` with `add(frame_id, position, yaw)` and `context(position, yaw, k, recent=2, max_angle=90.0, angle_weight=1.0) -> list`.\n\n**`add`** stores a frame with its camera `position` (a tuple of 3 floats) and `yaw` in degrees. Raise `ValueError` if `frame_id` was already added.\n\n**Angular difference** between yaws `a` and `b`: `abs((a - b + 180) % 360 - 180)`, in degrees from 0 to 180.\n\n**`context(position, yaw, k, ...)`** — the frames to condition on for a camera at `position` facing `yaw`:\n- Raise `ValueError` unless `k >= 1` and `0 <= recent <= k`.\n- Always take the `recent` most recently added frames (all of them if fewer are stored).\n- Fill the remaining slots, up to `k` frames in total, from the other frames whose angular difference to `yaw` is at most `max_angle`, best score first. Score = Euclidean distance between positions + `angle_weight * radians(angular difference)`; lower is better, and on equal scores the more recently added frame wins.\n- Return the chosen ids in the order they were added.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Frames as the world model.** RTFM has no explicit 3D representation. An autoregressive diffusion transformer predicts the next frame from previous frames, so the frames themselves, with their poses, are the memory of the world.\n\n**Why retrieve by pose.** Attending to every frame ever generated would grow cost without bound. Frames taken from nearby cameras facing a similar way show the same surfaces, so they carry what the next frame needs; World Labs calls assembling this custom context \"context juggling\".\n\n**Why always keep recent frames.** They carry motion and lighting continuity, and they keep the stream smooth even when the camera moves into a region with no stored frames.\n\n**Why this gives persistence.** When the user walks away and comes back, the old frames of that place are retrieved again, so the world looks the same instead of being re-imagined.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Keeps recent frames and adds nearby ones facing the same way",
+          "code": "\nm = {fn}()\nm.add(\"a\", (0.0, 0.0, 0.0), 0.0)\nm.add(\"b\", (10.0, 0.0, 0.0), 0.0)\nm.add(\"c\", (1.0, 0.0, 0.0), 180.0)\nm.add(\"d\", (20.0, 0.0, 0.0), 90.0)\nm.add(\"e\", (30.0, 0.0, 0.0), 90.0)\nassert m.context((0.5, 0.0, 0.0), 10.0, k=3) == [\"a\", \"d\", \"e\"]\nassert m.context((9.0, 0.0, 0.0), 350.0, k=4, recent=1) == [\"a\", \"b\", \"e\"]\n",
+          "behavior": "routing.selection"
+        },
+        {
+          "name": "Angles wrap, ties prefer recent frames, and arguments are checked",
+          "visibility": "unshown",
+          "behavior": "routing.selection",
+          "failureMessage": "Wrap yaw differences across 0/360, rank by distance plus weighted angle with recency breaking ties, return insertion order, and validate ids and k.",
+          "hiddenCode": "\nm = {fn}()\nfor i in range(4):\n    m.add(i, (0.0, 0.0, 0.0), 0.0)\nm.add(\"far\", (5.0, 0.0, 0.0), 0.0)\nm.add(\"x\", (100.0, 0.0, 0.0), 0.0)\nassert m.context((0.0, 0.0, 0.0), 359.0, k=3, recent=1) == [2, 3, \"x\"]\nassert m.context((0.0, 0.0, 0.0), 0.0, k=2, recent=0) == [2, 3]\nn = {fn}()\nn.add(\"near_side\", (0.0, 0.0, 1.0), 80.0)\nn.add(\"far_front\", (0.0, 0.0, 2.0), 0.0)\nn.add(\"r\", (50.0, 0.0, 0.0), 0.0)\nassert n.context((0.0, 0.0, 0.0), 0.0, k=2, recent=1, angle_weight=1.0) == [\"far_front\", \"r\"]\nassert n.context((0.0, 0.0, 0.0), 0.0, k=2, recent=1, angle_weight=0.0) == [\"near_side\", \"r\"]\nassert n.context((0.0, 0.0, 0.0), 0.0, k=3, recent=1, max_angle=45.0) == [\"far_front\", \"r\"]\nassert n.context((0.0, 0.0, 0.0), 0.0, k=3, recent=1, max_angle=80.0) == [\"near_side\", \"far_front\", \"r\"]\nfor bad in ({\"k\": 0}, {\"k\": 2, \"recent\": 3}, {\"k\": 2, \"recent\": -1}):\n    try:\n        n.context((0.0, 0.0, 0.0), 0.0, **bad)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"accepted {bad}\")\ntry:\n    n.add(\"r\", (0.0, 0.0, 0.0), 0.0)\nexcept ValueError:\n    pass\nelse:\n    raise AssertionError(\"duplicate id accepted\")\nassert {fn}().context((0.0, 0.0, 0.0), 0.0, k=3) == []\n"
+        },
+        {
+          "name": "Seeded camera paths match an oracle",
+          "visibility": "unshown",
+          "behavior": "routing.selection",
+          "failureMessage": "The chosen frames must equal the recent frames plus the best-scoring direction-compatible others, returned in insertion order.",
+          "hiddenCode": "\nimport math, random\ndef oracle(frames, pos, yaw, k, recent, max_angle, w):\n    n = len(frames)\n    chosen = set(range(max(0, n - recent), n))\n    def ad(a, b):\n        return abs((a - b + 180) % 360 - 180)\n    rest = [i for i in range(n) if i not in chosen and ad(frames[i][2], yaw) <= max_angle]\n    rest.sort(key=lambda i: (math.dist(frames[i][1], pos) + w * math.radians(ad(frames[i][2], yaw)), -i))\n    chosen |= set(rest[:max(0, k - len(chosen))])\n    return [frames[i][0] for i in sorted(chosen)]\nfor seed in (1, 36, 70):\n    rng = random.Random(seed)\n    m, frames = {fn}(), []\n    x = y = 0.0\n    heading = 0.0\n    for step in range(120):\n        heading = (heading + rng.choice([0, 0, 15, -15, 90, -90, 180])) % 360\n        x += math.cos(math.radians(heading)) * rng.choice([0.0, 1.0, 1.0, 2.0])\n        y += math.sin(math.radians(heading)) * rng.choice([0.0, 1.0])\n        pos = (round(x, 3), round(y, 3), 1.5)\n        yaw = heading + rng.choice([0.0, 360.0, -360.0])\n        if step % 3 == 0 or rng.random() < 0.3:\n            k = rng.randint(1, 8)\n            recent = rng.randint(0, k)\n            max_angle = rng.choice([30.0, 60.0, 90.0, 180.0])\n            w = rng.choice([0.0, 1.0, 5.0])\n            got = m.context(pos, yaw, k, recent=recent, max_angle=max_angle, angle_weight=w)\n            assert got == oracle(frames, pos, yaw, k, recent, max_angle, w), (seed, step, got)\n        m.add(f\"f{step}\", pos, yaw)\n        frames.append((f\"f{step}\", pos, yaw))\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which frames are included no matter where the camera is? Why filter by viewing direction before ranking by distance? How do you break ties so the result is deterministic?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Keep a list of (id, position, yaw) in insertion order and a set of ids. For context, take the last `recent` indices, filter the rest by angular difference, sort by (score, -index), take what fits, then sort all chosen indices and map them to ids."
+        }
+      ],
+      "advisoryPrerequisites": [],
+      "modelConnections": [
+        "World Labs' RTFM retrieves nearby posed frames to form each frame's context and runs at interactive frame rates on a single H100.",
+        "Retrieval-conditioned world models and video generators with memory banks, such as WorldMem, pick past frames by camera pose or field-of-view overlap in the same way."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Bounded context per frame no matter how long the session runs, and revisited places stay consistent."
+        ],
+        "cons": [
+          "A pose heuristic can miss relevant frames, for example through occlusion or seen through a window, and the memory itself still grows with the session."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "How can a video model act as a world model without any explicit 3D representation? What plays the role of memory?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why can't a real-time world model condition every new frame on all frames generated so far?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through choosing context for a camera that turns around in place. Why filter by viewing direction before ranking by distance?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why always include the most recent frames, even when they are far from the query pose in some sense?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How does pose-based retrieval make the world persistent when the user leaves an area and returns?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Retrieval by pose heuristics versus learned retrieval over frame embeddings versus an explicit 3D representation (Gaussian splats): consistency, cost and generality?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Spending the real-time frame budget on more context frames versus more diffusion steps per frame: quality, latency and memory?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "paper",
+          "url": "https://www.worldlabs.ai/blog/rtfm",
+          "section": "Posed frames and spatial memory (context juggling)"
+        }
+      ]
+    },
+    {
+      "id": "request_output_collector",
+      "title": "Streaming Output Collector",
+      "titleZh": "Streaming Output Collector",
+      "difficulty": "Medium",
+      "functionName": "OutputCollector",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "In vLLM's async server, the engine loop produces an output for every request at every step, while each HTTP response is written by its own task that may fall behind. Instead of an unbounded queue, each request has a one-slot collector: when the consumer is slow, new outputs are merged into the pending one. Implement it.\n\n**Signature:** `OutputCollector(aggregate: bool)` with `put(item)`, `get_nowait()` and `async get()`.\n\n**Outputs** are dicts `{\"finished\": bool, \"outputs\": [completion, ...]}`, where a completion is `{\"index\": int, \"text\": str, \"token_ids\": list[int], \"finish_reason\": str | None}`. An item passed to `put` is an output or an `Exception`.\n\n**`put(item)`** never blocks and never modifies the dicts it is given.\n- If nothing is pending, or `item` is an Exception, `item` (a deep copy if it is an output) becomes the pending item and the consumer is woken.\n- If an output is pending and `item` is an output, merge `item` into the pending output: `finished` becomes `pending or new`. For each new completion, find the pending completion with the same `index`. If `aggregate`, append its `text` and `token_ids` to that completion and take its `finish_reason`; otherwise replace that completion with a copy of the new one. A new completion with an index not yet pending is appended.\n- If an Exception is pending and `item` is an output, drop `item`.\n\n**`get_nowait()`** returns the pending output and clears the slot, or returns None if nothing is pending. If the pending item is an Exception, clear the slot and raise it.\n\n**`async get()`** waits until something is pending, then behaves like `get_nowait()`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why merge instead of queue.** The engine must never block on a slow client: every other request shares the engine loop. With deltas, merging keeps memory constant per request and lets a slow client receive fewer, larger chunks with the same final text.\n\n**Aggregate versus replace.** In delta mode each output carries only new text, so merges append. In cumulative mode each output already carries the full text so far, so the newest one simply replaces the older.\n\n**Why merge by index.** With n > 1 samples per request, outputs for different samples arrive interleaved; merging by position would splice one sample's text into another.\n\n**Why an exception wins.** An engine error must reach the client even if outputs are pending; the partial output is useless once the request has failed.",
+      "descriptionZh": "In vLLM's async server, the engine loop produces an output for every request at every step, while each HTTP response is written by its own task that may fall behind. Instead of an unbounded queue, each request has a one-slot collector: when the consumer is slow, new outputs are merged into the pending one. Implement it.\n\n**Signature:** `OutputCollector(aggregate: bool)` with `put(item)`, `get_nowait()` and `async get()`.\n\n**Outputs** are dicts `{\"finished\": bool, \"outputs\": [completion, ...]}`, where a completion is `{\"index\": int, \"text\": str, \"token_ids\": list[int], \"finish_reason\": str | None}`. An item passed to `put` is an output or an `Exception`.\n\n**`put(item)`** never blocks and never modifies the dicts it is given.\n- If nothing is pending, or `item` is an Exception, `item` (a deep copy if it is an output) becomes the pending item and the consumer is woken.\n- If an output is pending and `item` is an output, merge `item` into the pending output: `finished` becomes `pending or new`. For each new completion, find the pending completion with the same `index`. If `aggregate`, append its `text` and `token_ids` to that completion and take its `finish_reason`; otherwise replace that completion with a copy of the new one. A new completion with an index not yet pending is appended.\n- If an Exception is pending and `item` is an output, drop `item`.\n\n**`get_nowait()`** returns the pending output and clears the slot, or returns None if nothing is pending. If the pending item is an Exception, clear the slot and raise it.\n\n**`async get()`** waits until something is pending, then behaves like `get_nowait()`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why merge instead of queue.** The engine must never block on a slow client: every other request shares the engine loop. With deltas, merging keeps memory constant per request and lets a slow client receive fewer, larger chunks with the same final text.\n\n**Aggregate versus replace.** In delta mode each output carries only new text, so merges append. In cumulative mode each output already carries the full text so far, so the newest one simply replaces the older.\n\n**Why merge by index.** With n > 1 samples per request, outputs for different samples arrive interleaved; merging by position would splice one sample's text into another.\n\n**Why an exception wins.** An engine error must reach the client even if outputs are pending; the partial output is useless once the request has failed.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Merges deltas while the consumer is behind",
+          "code": "\ndef out(text, ids, finished=False, reason=None, index=0):\n    return {\"finished\": finished, \"outputs\": [{\"index\": index, \"text\": text, \"token_ids\": ids, \"finish_reason\": reason}]}\nc = {fn}(aggregate=True)\nassert c.get_nowait() is None\nc.put(out(\"Hel\", [1])); c.put(out(\"lo\", [2])); c.put(out(\"!\", [3], True, \"stop\"))\nassert c.get_nowait() == out(\"Hello!\", [1, 2, 3], True, \"stop\")\nassert c.get_nowait() is None\n",
+          "behavior": "scheduler.concurrency"
+        },
+        {
+          "name": "Replace mode, indexes, exceptions and copies",
+          "visibility": "unshown",
+          "behavior": "protocol.validation",
+          "failureMessage": "Replace completions in cumulative mode, merge by index, let an exception override and drop later outputs, keep finished once set, and never mutate the caller's dicts.",
+          "hiddenCode": "\nimport copy\ndef out(text, ids, finished=False, reason=None, index=0):\n    return {\"finished\": finished, \"outputs\": [{\"index\": index, \"text\": text, \"token_ids\": ids, \"finish_reason\": reason}]}\nc = {fn}(aggregate=False)\nc.put(out(\"He\", [1])); c.put(out(\"Hello\", [1, 2]))\nassert c.get_nowait() == out(\"Hello\", [1, 2])\nc = {fn}(aggregate=True)\nfirst, second, third = out(\"a\", [1], index=1), out(\"x\", [9], index=0), out(\"b\", [2], True, \"length\", index=1)\nsnap = copy.deepcopy([first, second, third])\nc.put(first); c.put(second); c.put(third)\ngot = c.get_nowait()\nassert got == {\"finished\": True, \"outputs\": [{\"index\": 1, \"text\": \"ab\", \"token_ids\": [1, 2], \"finish_reason\": \"length\"},\n                                             {\"index\": 0, \"text\": \"x\", \"token_ids\": [9], \"finish_reason\": None}]}, got\nassert [first, second, third] == snap, \"put modified its input\"\nc.put(out(\"late\", [5])); got[\"outputs\"][0][\"text\"] = \"zz\"\nassert c.get_nowait() == out(\"late\", [5])\nc = {fn}(aggregate=True)\nc.put(out(\"a\", [1], True, \"stop\")); c.put(out(\"\", []))\nassert c.get_nowait()[\"finished\"] is True\nc.put(out(\"a\", [1])); c.put(RuntimeError(\"engine died\")); c.put(out(\"b\", [2]))\ntry:\n    c.get_nowait()\nexcept RuntimeError as e:\n    assert str(e) == \"engine died\"\nelse:\n    raise AssertionError(\"exception not raised\")\nassert c.get_nowait() is None\n"
+        },
+        {
+          "name": "Async consumer receives everything in order",
+          "visibility": "unshown",
+          "behavior": "scheduler.concurrency",
+          "failureMessage": "get must wait for a put without busy-waiting, clear the slot, and together with merging deliver the exact concatenated text.",
+          "hiddenCode": "\nimport asyncio, random\nasync def main(seed):\n    rng = random.Random(seed)\n    c = {fn}(aggregate=True)\n    pieces = [\"t%d \" % i for i in range(60)]\n    async def producer():\n        for i, p in enumerate(pieces):\n            c.put({\"finished\": i == len(pieces) - 1, \"outputs\": [{\"index\": 0, \"text\": p, \"token_ids\": [i], \"finish_reason\": \"stop\" if i == len(pieces) - 1 else None}]})\n            if rng.random() < 0.5:\n                await asyncio.sleep(0)\n    async def consumer():\n        text, ids, gets = \"\", [], 0\n        while True:\n            o = await c.get()\n            gets += 1\n            text += o[\"outputs\"][0][\"text\"]; ids += o[\"outputs\"][0][\"token_ids\"]\n            if o[\"finished\"]:\n                return text, ids, gets\n            for _ in range(rng.randint(0, 3)):\n                await asyncio.sleep(0)\n    (text, ids, gets), _ = await asyncio.wait_for(asyncio.gather(consumer(), producer()), timeout=5)\n    assert text == \"\".join(pieces) and ids == list(range(60)), (text, ids)\n    assert gets < 60, gets\n    waiter = asyncio.ensure_future(c.get())\n    await asyncio.sleep(0.01)\n    assert not waiter.done(), \"get returned without a put\"\n    c.put(ValueError(\"x\"))\n    try:\n        await asyncio.wait_for(waiter, timeout=5)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(\"get did not raise the pending exception\")\nfor seed in (7, 33, 61):\n    asyncio.run(main(seed))\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "What should happen to memory if the engine produces 1000 outputs while the client is stalled? How does merging differ between delta and cumulative outputs? How does an async get wait without busy-looping?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Keep one pending slot and an asyncio.Event. put stores a deep copy when the slot is empty or the item is an exception, else merges completions by index. get loops: while the slot is empty, await the event; then take the slot, clear the event, and raise if it holds an exception."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "chat_stream_accumulator"
+      ],
+      "modelConnections": [
+        "vLLM's AsyncLLM gives every request a RequestOutputCollector; the output handler loop puts, and the request's generate() coroutine gets.",
+        "SGLang's tokenizer manager and TGI's router use similar per-request channels between the scheduler and the HTTP layer."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Constant memory per request, the producer never blocks, and a slow client still receives complete text."
+        ],
+        "cons": [
+          "Chunks lose their timing, so per-token latency metrics and token-level streaming effects are hidden from a slow client."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "In an async LLM server, what sits between the engine loop that produces tokens and the HTTP handler that streams them? Why not call the handler directly?"
+        },
+        {
+          "stage": "concept",
+          "question": "What is backpressure, and what happens to an LLM server if one client reads its stream very slowly?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why does the collector merge outputs instead of queueing them? What stays the same and what changes for a slow client?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Delta mode appends and cumulative mode replaces. Walk through three puts in each mode before one get."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why must merging match completions by index when n > 1, and why does an exception override pending output?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "One-slot merging versus a bounded queue that blocks the producer versus an unbounded queue: memory, fairness and latency?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Detecting client disconnects and aborting the request versus finishing generation anyway: GPU cost, caching and idempotency?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/vllm-project/vllm",
+          "commit": "953f90d25fea2240965878a1aca66cec519685b0",
+          "path": "vllm/v1/engine/output_processor.py",
+          "symbol": "RequestOutputCollector.put, get and get_nowait",
+          "license": "Apache-2.0",
+          "adapted": "One-slot hand-off woken by an event, exceptions overriding pending output, and merging when the consumer falls behind.",
+          "simplifications": "Outputs are dicts; no pooling outputs or input-stream task; put copies its input instead of mutating the first output."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/vllm-project/vllm",
+          "commit": "953f90d25fea2240965878a1aca66cec519685b0",
+          "path": "vllm/outputs.py",
+          "symbol": "RequestOutput.add",
+          "license": "Apache-2.0",
+          "adapted": "OR of finished and per-index aggregate or replace of completions.",
+          "simplifications": "Only text, token_ids and finish_reason are merged; no logprobs, stop_reason or transfer parameters."
+        }
+      ]
+    },
+    {
+      "id": "sse_decoder",
+      "title": "SSE Stream Decoder",
+      "titleZh": "SSE Stream Decoder",
+      "difficulty": "Medium",
+      "functionName": "SSEDecoder",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Streaming LLM APIs send tokens as server-sent events (SSE) over HTTP. The client receives arbitrary byte chunks and must turn them into events as soon as each one is complete. Implement the decoder.\n\n**Signature:** `SSEDecoder()` with `feed(chunk: bytes) -> list[dict]` and a `done` attribute.\n\n**Events** are dicts `{\"event\": str | None, \"data\": str, \"id\": str | None, \"retry\": int | None}`.\n\n**Lines.**\n- A line ends at `\\r\\n`, `\\r` or `\\n`. A `\\r` at the end of one chunk followed by `\\n` at the start of the next is one line ending.\n- Decode a line as UTF-8 only once it is complete; a multi-byte character may be split across chunks.\n- Bytes after the last line ending wait for the next chunk.\n\n**Fields.** For each complete line:\n- An empty line dispatches an event if at least one field below was applied since the last dispatch; otherwise it does nothing.\n- A line starting with `:` is a comment and is ignored.\n- Otherwise split at the first `:` into field and value (no colon: the whole line is the field and the value is `\"\"`), and remove one leading space from the value.\n- `event` sets the event name. `data` appends the value to the data lines. `id` sets the last event id, unless the value contains `\"\\0\"`, in which case the line is ignored. `retry` sets retry to `int(value)` if the value is non-empty and only ASCII digits; otherwise the line is ignored. Other fields are ignored.\n\n**Dispatch.** The event gets the current name, the data lines joined with `\"\\n\"`, the last event id and retry. Then name, data lines and retry reset; the last event id persists into later events.\n\n**End of stream.** If a dispatched event's data starts with `\"[DONE]\"`, do not return it, set `done = True`, and ignore the rest of that chunk and every later chunk. `done` starts False.\n\n`feed` returns the events completed by that chunk, in order.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why SSE.** It is plain HTTP, one direction, text framed by blank lines. Browsers, proxies and load balancers already handle it, so OpenAI-compatible servers (vLLM, SGLang, llama.cpp) all stream this way.\n\n**Why chunks do not align with events.** TCP and HTTP chunked encoding cut the body wherever buffers fill. One chunk can carry half a line, three events, or half a UTF-8 character; decoding each chunk on its own corrupts CJK text and emoji.\n\n**Why the id persists.** After a dropped connection the client reconnects with `Last-Event-ID`, so the server can resume from the last event it knows was received.\n\n**Why `[DONE]`.** The OpenAI protocol ends the stream with a sentinel data line rather than relying on the connection closing, so a client can tell a finished stream from a cut one.",
+      "descriptionZh": "Streaming LLM APIs send tokens as server-sent events (SSE) over HTTP. The client receives arbitrary byte chunks and must turn them into events as soon as each one is complete. Implement the decoder.\n\n**Signature:** `SSEDecoder()` with `feed(chunk: bytes) -> list[dict]` and a `done` attribute.\n\n**Events** are dicts `{\"event\": str | None, \"data\": str, \"id\": str | None, \"retry\": int | None}`.\n\n**Lines.**\n- A line ends at `\\r\\n`, `\\r` or `\\n`. A `\\r` at the end of one chunk followed by `\\n` at the start of the next is one line ending.\n- Decode a line as UTF-8 only once it is complete; a multi-byte character may be split across chunks.\n- Bytes after the last line ending wait for the next chunk.\n\n**Fields.** For each complete line:\n- An empty line dispatches an event if at least one field below was applied since the last dispatch; otherwise it does nothing.\n- A line starting with `:` is a comment and is ignored.\n- Otherwise split at the first `:` into field and value (no colon: the whole line is the field and the value is `\"\"`), and remove one leading space from the value.\n- `event` sets the event name. `data` appends the value to the data lines. `id` sets the last event id, unless the value contains `\"\\0\"`, in which case the line is ignored. `retry` sets retry to `int(value)` if the value is non-empty and only ASCII digits; otherwise the line is ignored. Other fields are ignored.\n\n**Dispatch.** The event gets the current name, the data lines joined with `\"\\n\"`, the last event id and retry. Then name, data lines and retry reset; the last event id persists into later events.\n\n**End of stream.** If a dispatched event's data starts with `\"[DONE]\"`, do not return it, set `done = True`, and ignore the rest of that chunk and every later chunk. `done` starts False.\n\n`feed` returns the events completed by that chunk, in order.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why SSE.** It is plain HTTP, one direction, text framed by blank lines. Browsers, proxies and load balancers already handle it, so OpenAI-compatible servers (vLLM, SGLang, llama.cpp) all stream this way.\n\n**Why chunks do not align with events.** TCP and HTTP chunked encoding cut the body wherever buffers fill. One chunk can carry half a line, three events, or half a UTF-8 character; decoding each chunk on its own corrupts CJK text and emoji.\n\n**Why the id persists.** After a dropped connection the client reconnects with `Last-Event-ID`, so the server can resume from the last event it knows was received.\n\n**Why `[DONE]`.** The OpenAI protocol ends the stream with a sentinel data line rather than relying on the connection closing, so a client can tell a finished stream from a cut one.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Decodes events split across chunks",
+          "code": "\ndec = {fn}()\nassert dec.feed(b'data: {\"t\": \"Hel') == []\nassert dec.feed(b'lo\"}\\n\\nevent: ping\\ndata: a\\ndata: b\\n') == [\n    {\"event\": None, \"data\": '{\"t\": \"Hello\"}', \"id\": None, \"retry\": None}]\nassert dec.feed(b'\\ndata: [DONE]\\n\\ndata: late\\n\\n') == [{\"event\": \"ping\", \"data\": \"a\\nb\", \"id\": None, \"retry\": None}]\nassert dec.done is True and dec.feed(b'data: x\\n\\n') == []\n",
+          "behavior": "protocol.validation"
+        },
+        {
+          "name": "Line endings and UTF-8 across chunk boundaries",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "A carriage return at the end of a chunk plus a newline at the start of the next is one line ending, two carriage returns are two, and characters split across chunks must decode intact.",
+          "hiddenCode": "\ndec = {fn}()\nassert dec.feed(b\"data: x\\r\") == []\nassert dec.feed(b\"\\n\\r\\n\") == [{\"event\": None, \"data\": \"x\", \"id\": None, \"retry\": None}]\ndec = {fn}()\nassert dec.feed(b\"data: a\\r\") == []\nassert dec.feed(b\"\\rdata: b\\r\\r\") == [{\"event\": None, \"data\": \"a\", \"id\": None, \"retry\": None},\n                                      {\"event\": None, \"data\": \"b\", \"id\": None, \"retry\": None}]\ndec = {fn}()\nraw = \"data: 中文😀\\n\\n\".encode()\nout = []\nfor i in range(len(raw)):\n    out += dec.feed(raw[i:i + 1])\nassert out == [{\"event\": None, \"data\": \"中文😀\", \"id\": None, \"retry\": None}], out\n"
+        },
+        {
+          "name": "Field rules",
+          "visibility": "unshown",
+          "behavior": "protocol.validation",
+          "failureMessage": "Ignore comments, strip only one leading space, keep the last id across events, reject ids with NUL and non-digit retry values, and dispatch only when a field was applied.",
+          "hiddenCode": "\ndec = {fn}()\ngot = dec.feed(b\": keepalive\\n\\n\\ndata:  two spaces\\nid: 7\\nretry: 3000\\n\\n\"\n               b\"data\\n\\n\"\n               b\"id: bad\\0id\\nretry: 12a\\nretry: -5\\nevent\\ndata: z\\n\\n\"\n               b\"retry: 5\\n\\n\"\n               b\"id\\n\\n\")\nassert got == [\n    {\"event\": None, \"data\": \" two spaces\", \"id\": \"7\", \"retry\": 3000},\n    {\"event\": None, \"data\": \"\", \"id\": \"7\", \"retry\": None},\n    {\"event\": \"\", \"data\": \"z\", \"id\": \"7\", \"retry\": None},\n    {\"event\": None, \"data\": \"\", \"id\": \"7\", \"retry\": 5},\n    {\"event\": None, \"data\": \"\", \"id\": \"\", \"retry\": None},\n], got\n"
+        },
+        {
+          "name": "Seeded streams match a whole-body oracle",
+          "visibility": "unshown",
+          "behavior": "protocol.validation",
+          "failureMessage": "Chunking must not change the decoded events: carry partial lines, pending carriage returns and event fields between feed calls.",
+          "hiddenCode": "\nimport random, re\ndef oracle(body):\n    lines = re.split(rb\"\\r\\n|\\r|\\n\", body)[:-1]\n    out, ev, data, rid, retry, pending = [], None, [], None, None, False\n    for raw in lines:\n        line = raw.decode()\n        if line == \"\":\n            if pending:\n                e = {\"event\": ev, \"data\": \"\\n\".join(data), \"id\": rid, \"retry\": retry}\n                if e[\"data\"].startswith(\"[DONE]\"):\n                    return out\n                out.append(e)\n            ev, data, retry, pending = None, [], None, False\n            continue\n        if line.startswith(\":\"):\n            continue\n        f, _, v = line.partition(\":\")\n        if v.startswith(\" \"):\n            v = v[1:]\n        if f == \"event\":\n            ev, pending = v, True\n        elif f == \"data\":\n            data.append(v); pending = True\n        elif f == \"id\" and \"\\0\" not in v:\n            rid, pending = v, True\n        elif f == \"retry\" and v and all(c in \"0123456789\" for c in v):\n            retry, pending = int(v), True\n    return out\nTEXT = [\"tok\", \" \", \"é\", \"中\", \"😀\", \":\", \"  \", \"{}\", \"[DONE]\", \"x\"]\nfor seed in (4, 29, 77):\n    rng = random.Random(seed)\n    for trial in range(120):\n        parts = []\n        for _ in range(rng.randint(0, 8)):\n            kind = rng.choice([\"data\", \"data\", \"event\", \"id\", \"retry\", \"comment\", \"blank\", \"blank\", \"junk\", \"done\"])\n            val = \"\".join(rng.choice(TEXT) for _ in range(rng.randint(0, 3)))\n            if kind == \"done\":\n                line = \"data: [DONE]\"\n            elif kind == \"comment\":\n                line = \":\" + val\n            elif kind == \"blank\":\n                line = \"\"\n            elif kind == \"retry\":\n                line = \"retry: \" + rng.choice([\"10\", \"x1\", \"\", \"250\"])\n            elif kind == \"junk\":\n                line = rng.choice([\"foo: bar\", \"data\", \"event\", \"idx: 1\"])\n            else:\n                line = kind + rng.choice([\": \", \":\", \":  \"]) + val\n            parts.append(line + rng.choice([\"\\n\", \"\\r\", \"\\r\\n\"]))\n        body = \"\".join(parts).encode()\n        dec, got = {fn}(), []\n        i = 0\n        while i < len(body):\n            j = min(len(body), i + rng.randint(1, 6))\n            got += dec.feed(body[i:j])\n            i = j\n        assert got == oracle(body), (seed, trial, body, got)\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "What state must survive between two feed calls: bytes of an unfinished line, a pending carriage return, fields of an unfinished event? When is it safe to decode bytes as UTF-8?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Walk the chunk byte by byte. Keep a bytearray for the current line and a skip_lf flag set after a carriage return; if the next byte is a newline, drop it. On each line ending, decode the buffer and pass the line to a field parser that keeps event, data lines, id, retry and a pending flag."
+        }
+      ],
+      "advisoryPrerequisites": [],
+      "modelConnections": [
+        "The openai-python client's SSEDecoder reads every chat completion stream; vLLM, SGLang and TGI serve the same format.",
+        "Anthropic's Messages API streams typed SSE events (message_start, content_block_delta, message_stop) and uses the event field to tell them apart."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Works through ordinary HTTP infrastructure, needs no handshake, and is easy to debug with curl."
+        ],
+        "cons": [
+          "One direction only and text only; interruption or client-to-server audio needs a second channel or WebSockets."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "How does a chat completion API stream tokens to the client? What does one SSE event look like on the wire?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why can't a client decode each network chunk as UTF-8 and split it on newlines?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through what state the decoder keeps between chunks. What goes wrong if a CRLF is split across two chunks and you forget the pending carriage return?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why does the last event id persist across events while the event name and data reset? How is it used on reconnect?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why does the OpenAI protocol end with a [DONE] sentinel instead of just closing the connection?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "SSE versus WebSockets versus gRPC streaming for serving LLM tokens: proxies, bidirectionality, backpressure and client support?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Streaming one event per token versus batching several tokens per event: latency, overhead and user-visible smoothness?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/openai/openai-python",
+          "commit": "a380cf256abc2aa51cbf5d49437ae039b9aa9b12",
+          "path": "src/openai/_streaming.py",
+          "symbol": "_SSELineDecoder, SSEDecoder.decode and Stream.__stream__",
+          "license": "Apache-2.0",
+          "adapted": "CR, LF and CRLF line splitting with a carriage return carried across chunks, decoding only complete lines, field parsing, a last event id that persists, and stopping at a [DONE] data line.",
+          "simplifications": "A pending flag decides dispatch instead of checking the fields' truthiness, and retry accepts ASCII digits only."
+        },
+        {
+          "kind": "paper",
+          "url": "https://html.spec.whatwg.org/multipage/server-sent-events.html",
+          "section": "9.2.6 Interpreting an event stream"
+        }
+      ]
+    },
+    {
+      "id": "stop_string_holdback",
+      "title": "Streaming Stop Strings",
+      "titleZh": "Streaming Stop Strings",
+      "difficulty": "Medium",
+      "functionName": "StopStringStream",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "A request can ask generation to end at stop strings such as `\"\\nUser:\"`, and by default the stop string is not part of the output. When text is streamed, a stop string may arrive split over several tokens, so the server must hold back just enough text never to stream a piece of it. Implement vLLM's stop-string handling.\n\n**Signature:** `StopStringStream(stop, include_stop_str_in_output=False, min_tokens=0)` with `update(new_texts: list[str]) -> str | None` and `get_next_output_text(finished: bool) -> str`. It keeps `output_text`, starting at `\"\"`.\n\n**Hold-back length.** `max(len(s) for s in stop) - 1` if `stop` is non-empty and stop strings are excluded from the output; otherwise 0.\n\n**`update(new_texts)`** — each item is the text of one new token.\n1. If `new_texts` is empty, return None.\n2. Let `check_from = len(output_text)`. For each text: append it to `output_text` and count the token; if `min_tokens > 0` and the token count is now `<= min_tokens`, set `check_from = len(output_text)`.\n3. If `stop` is non-empty and the token count is `> min_tokens`, search, then return the match or None.\n\n**Search.** Let `new_chars = len(output_text) - check_from`. If it is 0, there is no match. For each stop string `s`, find its first occurrence at or after index `len(output_text) - new_chars - len(s) + 1` (clamped to 0). Among the stop strings found, the match is the one whose occurrence *ends* earliest; ties go to the earlier string in `stop`. On a match, truncate `output_text` to the end of the occurrence if stop strings are included, else to its start.\n\n**`get_next_output_text(finished)`** returns the text not yet returned, up to `len(output_text) - hold`, where `hold` is 0 if `finished` and the hold-back length otherwise. It returns `\"\"` if there is nothing new.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why hold back one character less than the longest stop string.** If the tail of the text is a proper prefix of a stop string, the next token may complete it. A prefix is at most `len - 1` characters, so holding that many is enough, and holding less could stream part of a stop string the client then cannot take back.\n\n**Why search only the new text plus an overlap.** Earlier text was already searched. A stop string completed by the new text can start up to `len(s) - 1` characters before it, so the search begins there instead of rescanning the whole output.\n\n**Why the earliest end.** Speculative decoding can append several tokens in one step. Picking the stop string that completes first gives the same result as appending the tokens one at a time.\n\n**Why `min_tokens` moves the search start.** Text from the first `min_tokens` tokens cannot trigger a stop, but a stop string that ends after that point may still begin inside it.",
+      "descriptionZh": "A request can ask generation to end at stop strings such as `\"\\nUser:\"`, and by default the stop string is not part of the output. When text is streamed, a stop string may arrive split over several tokens, so the server must hold back just enough text never to stream a piece of it. Implement vLLM's stop-string handling.\n\n**Signature:** `StopStringStream(stop, include_stop_str_in_output=False, min_tokens=0)` with `update(new_texts: list[str]) -> str | None` and `get_next_output_text(finished: bool) -> str`. It keeps `output_text`, starting at `\"\"`.\n\n**Hold-back length.** `max(len(s) for s in stop) - 1` if `stop` is non-empty and stop strings are excluded from the output; otherwise 0.\n\n**`update(new_texts)`** — each item is the text of one new token.\n1. If `new_texts` is empty, return None.\n2. Let `check_from = len(output_text)`. For each text: append it to `output_text` and count the token; if `min_tokens > 0` and the token count is now `<= min_tokens`, set `check_from = len(output_text)`.\n3. If `stop` is non-empty and the token count is `> min_tokens`, search, then return the match or None.\n\n**Search.** Let `new_chars = len(output_text) - check_from`. If it is 0, there is no match. For each stop string `s`, find its first occurrence at or after index `len(output_text) - new_chars - len(s) + 1` (clamped to 0). Among the stop strings found, the match is the one whose occurrence *ends* earliest; ties go to the earlier string in `stop`. On a match, truncate `output_text` to the end of the occurrence if stop strings are included, else to its start.\n\n**`get_next_output_text(finished)`** returns the text not yet returned, up to `len(output_text) - hold`, where `hold` is 0 if `finished` and the hold-back length otherwise. It returns `\"\"` if there is nothing new.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why hold back one character less than the longest stop string.** If the tail of the text is a proper prefix of a stop string, the next token may complete it. A prefix is at most `len - 1` characters, so holding that many is enough, and holding less could stream part of a stop string the client then cannot take back.\n\n**Why search only the new text plus an overlap.** Earlier text was already searched. A stop string completed by the new text can start up to `len(s) - 1` characters before it, so the search begins there instead of rescanning the whole output.\n\n**Why the earliest end.** Speculative decoding can append several tokens in one step. Picking the stop string that completes first gives the same result as appending the tokens one at a time.\n\n**Why `min_tokens` moves the search start.** Text from the first `min_tokens` tokens cannot trigger a stop, but a stop string that ends after that point may still begin inside it.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Holds back a partial stop string",
+          "code": "\ns = {fn}([\"\\nUser:\"])\nassert s.update([\"Hi\", \" there\", \"\\nUs\"]) is None\nassert s.get_next_output_text(False) == \"Hi the\"\nassert s.update([\"er:\", \" more\"]) == \"\\nUser:\"\nassert s.output_text == \"Hi there\"\nassert s.get_next_output_text(True) == \"re\"\nassert s.get_next_output_text(True) == \"\"\n",
+          "behavior": "protocol.validation"
+        },
+        {
+          "name": "Match selection, inclusion and min_tokens",
+          "visibility": "unshown",
+          "behavior": "protocol.validation",
+          "failureMessage": "Prefer the stop string that ends first (list order on ties), truncate after it when included, and ignore stops that end inside the first min_tokens tokens.",
+          "hiddenCode": "\ns = {fn}([\"cde\", \"bc\"])\nassert s.update([\"abcdef\"]) == \"bc\" and s.output_text == \"a\"\ns = {fn}([\"xy\", \"y\"], include_stop_str_in_output=True)\nassert s.update([\"axyz\"]) == \"xy\" and s.output_text == \"axy\"\nassert s.get_next_output_text(False) == \"axy\"\ns = {fn}([\"b\", \"ab\"])\nassert s.update([\"ab\"]) == \"b\" and s.output_text == \"a\"\ns = {fn}([\"STOP\"], min_tokens=2)\nassert s.update([\"ST\", \"OP\"]) is None and s.output_text == \"STOP\"\nassert s.update([\"x\"]) is None\ns = {fn}([\"STOP\"], min_tokens=1)\nassert s.update([\"ST\", \"OP\"]) == \"STOP\" and s.output_text == \"\"\ns = {fn}([\"ab\"], min_tokens=1)\nassert s.update([\"ab\"]) is None and s.update([\"c\"]) is None and s.output_text == \"abc\"\ns = {fn}([])\nassert s.update([\"abc\"]) is None and s.get_next_output_text(False) == \"abc\"\nassert s.update([]) is None\n"
+        },
+        {
+          "name": "Search starts at the overlap",
+          "visibility": "unshown",
+          "behavior": "protocol.validation",
+          "failureMessage": "Search from len(output_text) - new_chars - len(s) + 1 so already-searched text is not matched again.",
+          "hiddenCode": "\ns = {fn}([\"aa\"], include_stop_str_in_output=True, min_tokens=1)\nassert s.update([\"aaa\"]) is None\nassert s.update([\"b\"]) is None and s.output_text == \"aaab\"\ns = {fn}([\"aba\"], include_stop_str_in_output=True, min_tokens=1)\nassert s.update([\"ab\"]) is None\nassert s.update([\"a\"]) == \"aba\" and s.output_text == \"aba\"\n"
+        },
+        {
+          "name": "Seeded streams never leak a stop string",
+          "visibility": "unshown",
+          "behavior": "protocol.validation",
+          "failureMessage": "The deltas must match the reference exactly: hold back len(longest) - 1 characters until finished, and never return text past the truncation point.",
+          "hiddenCode": "\nimport random\nclass Ref:\n    def __init__(self, stop, inc, mt):\n        self.stop, self.inc, self.mt = stop, inc, mt\n        self.hold = max(len(x) for x in stop) - 1 if stop and not inc else 0\n        self.text, self.n, self.off = \"\", 0, 0\n    def update(self, texts):\n        if not texts:\n            return None\n        start = len(self.text)\n        for t in texts:\n            self.text += t; self.n += 1\n            if self.mt and self.n <= self.mt:\n                start = len(self.text)\n        if not self.stop or self.n <= self.mt:\n            return None\n        new = len(self.text) - start\n        if not new:\n            return None\n        best = None\n        for x in self.stop:\n            i = self.text.find(x, max(0, len(self.text) - new - len(x) + 1))\n            if i != -1 and (best is None or i + len(x) < best[1] + len(best[0])):\n                best = (x, i)\n        if best is None:\n            return None\n        x, i = best\n        self.text = self.text[:i + len(x)] if self.inc else self.text[:i]\n        return x\n    def out(self, fin):\n        lim = len(self.text) - (0 if fin else self.hold)\n        if self.off < lim:\n            r = self.text[self.off:lim]; self.off = lim; return r\n        return \"\"\nALPH = \"abc\\n:\"\nfor seed in (5, 43, 96):\n    rng = random.Random(seed)\n    for trial in range(200):\n        stop = [\"\".join(rng.choice(ALPH) for _ in range(rng.randint(1, 4))) for _ in range(rng.randint(0, 3))]\n        inc, mt = rng.random() < 0.3, rng.choice([0, 0, 1, 3])\n        s, r = {fn}(stop, include_stop_str_in_output=inc, min_tokens=mt), Ref(stop, inc, mt)\n        streamed = \"\"\n        for step in range(rng.randint(1, 10)):\n            texts = [\"\".join(rng.choice(ALPH) for _ in range(rng.randint(0, 3))) for _ in range(rng.randint(0, 3))]\n            got, want = s.update(texts), r.update(texts)\n            assert got == want and s.output_text == r.text, (seed, trial, stop, texts, got, want, s.output_text, r.text)\n            fin = got is not None or rng.random() < 0.1\n            a, b = s.get_next_output_text(fin), r.out(fin)\n            assert a == b, (seed, trial, stop, a, b)\n            streamed += a\n            if fin:\n                break\n        if stop and not inc and not mt:\n            assert not any(x in streamed for x in stop), (stop, streamed)\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "What is the longest piece of a stop string that could be sitting at the end of the text right now? Where must the search start so that it catches a stop string that straddles old and new text? Which match wins if two stop strings appear in the same update?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Keep output_text, a token count and the offset of text already returned. In update, append texts while moving check_from past the first min_tokens tokens, then str.find each stop string from the computed start and keep the one with the smallest end. In get_next_output_text, compute the limit, slice from the last offset, and advance it."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "incremental_detokenize"
+      ],
+      "modelConnections": [
+        "vLLM's BaseIncrementalDetokenizer.update and check_stop_strings implement stop strings for the OpenAI-compatible server, including include_stop_str_in_output and min_tokens.",
+        "The same hold-back appears in SGLang and TGI, and in client libraries that apply stop sequences on their side."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Never streams a character it must retract, and the search cost per step depends on the new text, not the whole output."
+        ],
+        "cons": [
+          "Adds up to one stop-string length of latency to every streamed chunk, and long stop strings make streaming noticeably jumpier."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What are stop strings in an LLM API, and why can't the server just check each new token against them?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why must a streaming server hold back some text before sending it when stop strings are excluded from the output?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why is the hold-back exactly the longest stop string's length minus one? Show a case where holding one character less leaks part of a stop string."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Where does the search for a stop string start after an update, and why is the overlap len(s) - 1 characters?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Speculative decoding appends several tokens at once and two stop strings appear. Which one should win and why?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Stop strings checked on detokenized text versus stop token ids checked in the sampler: exactness, tokenization ambiguity and cost?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Holding back text for stop strings versus streaming immediately and letting the client trim: latency versus correctness guarantees?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/vllm-project/vllm",
+          "commit": "953f90d25fea2240965878a1aca66cec519685b0",
+          "path": "vllm/v1/engine/detokenizer.py",
+          "symbol": "BaseIncrementalDetokenizer.update, BaseIncrementalDetokenizer.get_next_output_text and check_stop_strings",
+          "license": "Apache-2.0",
+          "adapted": "The hold-back length, the min_tokens search offset, searching new text plus an overlap, the earliest-ending match with list-order ties, truncation for both output modes, and delta output.",
+          "simplifications": "Takes token texts instead of detokenizing ids, drops the stop-token skip and the cumulative output mode."
+        }
+      ]
+    },
+    {
+      "id": "attention_sink_cache",
+      "title": "Attention Sink KV Cache",
+      "titleZh": "Attention Sink KV Cache",
+      "difficulty": "Hard",
+      "functionName": "StreamingLLMCache",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "StreamingLLM lets a model generate far past its context length with a fixed-size KV cache: it keeps the first few tokens (attention sinks) and the most recent ones, and gives positions by place in the cache rather than in the text. Implement one attention layer with this cache.\n\n**Signature:** `StreamingLLMCache(start_size, recent_size, base=10000.0)` with `attend(q, k, v) -> Tensor` and attributes `keys`, `values`.\n\n**Shapes.** `q`, `k`, `v` are `[heads, n, d]` for `n` new tokens; `d` is even. `keys` and `values` are the cached, un-rotated `[heads, L, d]` tensors (L = 0 before the first call). The output is `[heads, n, d]`.\n\n**`attend(q, k, v)`:**\n1. Raise `ValueError` unless `1 <= n <= recent_size`.\n2. **Evict for space.** With `L` cached tokens, if `L + n > start_size + recent_size`, keep cached tokens `[0, start_size)` and `[L - recent_size + n, L)`, in order.\n3. Append `k` and `v` to the cache. Let `T` be the new cache length.\n4. **Rotate by cache position.** Apply RoPE to the cached keys at positions `0 .. T-1` and to `q` at positions `T-n .. T-1`. RoPE of `x` at position `p`: `inv_freq[i] = 1 / base ** (2i / d)` for `i < d/2`; `angle = p * cat(inv_freq, inv_freq)`; result `x * cos(angle) + rotate_half(x) * sin(angle)` where `rotate_half(x) = cat(-x[..., d/2:], x[..., :d/2])`.\n5. **Attend.** Scores `q_rot @ k_rot^T / sqrt(d)`; query `i` (position `T-n+i`) may see keys at positions `<= T-n+i`. Softmax over keys, multiply by the cached values, and return.\n\nThe cache stores keys before rotation; compute in the input dtype.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Attention sinks.** Softmax must put its mass somewhere. Trained models learn to dump attention on the first tokens, which every later token sees. Evicting them, as a plain sliding window does, shifts that mass onto other tokens and perplexity explodes. Keeping about four of them fixes it.\n\n**Why positions inside the cache.** After eviction the text positions of kept tokens have gaps and grow without bound, past what the model was trained on. Numbering by cache slot keeps every distance within the training range.\n\n**Why store un-rotated keys.** Positions change whenever tokens are evicted, so keys are rotated again at every step. The next exercise stores rotated keys and corrects them only when the cache shifts.\n\n**What it does not do.** Evicted tokens are gone; StreamingLLM keeps generation fluent but does not extend what the model can remember.",
+      "descriptionZh": "StreamingLLM lets a model generate far past its context length with a fixed-size KV cache: it keeps the first few tokens (attention sinks) and the most recent ones, and gives positions by place in the cache rather than in the text. Implement one attention layer with this cache.\n\n**Signature:** `StreamingLLMCache(start_size, recent_size, base=10000.0)` with `attend(q, k, v) -> Tensor` and attributes `keys`, `values`.\n\n**Shapes.** `q`, `k`, `v` are `[heads, n, d]` for `n` new tokens; `d` is even. `keys` and `values` are the cached, un-rotated `[heads, L, d]` tensors (L = 0 before the first call). The output is `[heads, n, d]`.\n\n**`attend(q, k, v)`:**\n1. Raise `ValueError` unless `1 <= n <= recent_size`.\n2. **Evict for space.** With `L` cached tokens, if `L + n > start_size + recent_size`, keep cached tokens `[0, start_size)` and `[L - recent_size + n, L)`, in order.\n3. Append `k` and `v` to the cache. Let `T` be the new cache length.\n4. **Rotate by cache position.** Apply RoPE to the cached keys at positions `0 .. T-1` and to `q` at positions `T-n .. T-1`. RoPE of `x` at position `p`: `inv_freq[i] = 1 / base ** (2i / d)` for `i < d/2`; `angle = p * cat(inv_freq, inv_freq)`; result `x * cos(angle) + rotate_half(x) * sin(angle)` where `rotate_half(x) = cat(-x[..., d/2:], x[..., :d/2])`.\n5. **Attend.** Scores `q_rot @ k_rot^T / sqrt(d)`; query `i` (position `T-n+i`) may see keys at positions `<= T-n+i`. Softmax over keys, multiply by the cached values, and return.\n\nThe cache stores keys before rotation; compute in the input dtype.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Attention sinks.** Softmax must put its mass somewhere. Trained models learn to dump attention on the first tokens, which every later token sees. Evicting them, as a plain sliding window does, shifts that mass onto other tokens and perplexity explodes. Keeping about four of them fixes it.\n\n**Why positions inside the cache.** After eviction the text positions of kept tokens have gaps and grow without bound, past what the model was trained on. Numbering by cache slot keeps every distance within the training range.\n\n**Why store un-rotated keys.** Positions change whenever tokens are evicted, so keys are rotated again at every step. The next exercise stores rotated keys and corrects them only when the cache shifts.\n\n**What it does not do.** Evicted tokens are gone; StreamingLLM keeps generation fluent but does not extend what the model can remember.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Evicts the middle and keeps sinks",
+          "code": "\nimport torch\ntorch.manual_seed(0)\nc = {fn}(start_size=2, recent_size=3)\nks = [torch.full((1, 1, 4), float(i)) for i in range(8)]\nfor i in range(8):\n    out = c.attend(torch.randn(1, 1, 4), ks[i], ks[i])\n    assert out.shape == (1, 1, 4)\nassert c.keys[0, :, 0].tolist() == [0.0, 1.0, 5.0, 6.0, 7.0], c.keys[0, :, 0]\nassert torch.equal(c.values, c.keys)\n",
+          "behavior": "attention.cache"
+        },
+        {
+          "name": "Positions come from cache slots",
+          "visibility": "unshown",
+          "behavior": "attention.masking",
+          "failureMessage": "Rotate keys at their cache positions 0..T-1 and new queries at T-n..T-1, and let each new query see only keys at or before its position.",
+          "hiddenCode": "\nimport math, torch\ndef rope(x, pos, base=10000.0):\n    d = x.shape[-1]\n    inv = 1.0 / base ** (torch.arange(0, d, 2, dtype=x.dtype) / d)\n    ang = pos.to(x.dtype)[:, None] * torch.cat([inv, inv])[None, :]\n    rh = torch.cat([-x[..., d // 2:], x[..., :d // 2]], dim=-1)\n    return x * ang.cos() + rh * ang.sin()\ndef ref(q, K, V, base):\n    T, n, d = K.shape[1], q.shape[1], q.shape[-1]\n    kr = rope(K, torch.arange(T), base)\n    qr = rope(q, torch.arange(T - n, T), base)\n    s = qr @ kr.transpose(-1, -2) / math.sqrt(d)\n    qpos = torch.arange(T - n, T)[:, None]\n    s = s.masked_fill(torch.arange(T)[None, :] > qpos, float(\"-inf\"))\n    return torch.softmax(s, -1) @ V\ntorch.manual_seed(3)\nc = {fn}(start_size=1, recent_size=4, base=100.0)\nraw_k, raw_v = [], []\nfor n in [3, 2, 1, 4, 2]:\n    q, k, v = (torch.randn(2, n, 6, dtype=torch.float64) for _ in range(3))\n    L = len(raw_k)\n    if L + n > 5:\n        keep = list(range(1)) + list(range(L - 4 + n, L))\n        raw_k = [raw_k[i] for i in keep]; raw_v = [raw_v[i] for i in keep]\n    raw_k += list(k.unbind(1)); raw_v += list(v.unbind(1))\n    K, V = torch.stack(raw_k, 1), torch.stack(raw_v, 1)\n    out = c.attend(q, k, v)\n    assert out.dtype == torch.float64\n    torch.testing.assert_close(out, ref(q, K, V, 100.0))\n    torch.testing.assert_close(c.keys, K)\n"
+        },
+        {
+          "name": "Seeded long streams match the reference",
+          "visibility": "unshown",
+          "behavior": "attention.cache",
+          "failureMessage": "Evict [start_size, L - recent_size + n) before appending, keep un-rotated keys, and rotate by cache position every call.",
+          "hiddenCode": "\nimport math, random, torch\ndef rope(x, pos, base=10000.0):\n    d = x.shape[-1]\n    inv = 1.0 / base ** (torch.arange(0, d, 2, dtype=x.dtype) / d)\n    ang = pos.to(x.dtype)[:, None] * torch.cat([inv, inv])[None, :]\n    rh = torch.cat([-x[..., d // 2:], x[..., :d // 2]], dim=-1)\n    return x * ang.cos() + rh * ang.sin()\nfor seed in (11, 45, 78):\n    rng = random.Random(seed)\n    torch.manual_seed(seed)\n    s, r = rng.randint(0, 3), rng.randint(2, 6)\n    c = {fn}(start_size=s, recent_size=r)\n    ks, vs = [], []\n    for step in range(25):\n        n = rng.randint(1, r)\n        q, k, v = (torch.randn(3, n, 8, dtype=torch.float64) for _ in range(3))\n        if len(ks) + n > s + r:\n            keep = list(range(s)) + list(range(len(ks) - r + n, len(ks)))\n            ks = [ks[i] for i in keep]; vs = [vs[i] for i in keep]\n        ks += list(k.unbind(1)); vs += list(v.unbind(1))\n        K, V = torch.stack(ks, 1), torch.stack(vs, 1)\n        T = K.shape[1]\n        sc = rope(q, torch.arange(T - n, T)) @ rope(K, torch.arange(T)).transpose(-1, -2) / math.sqrt(8)\n        sc = sc.masked_fill(torch.arange(T)[None, :] > torch.arange(T - n, T)[:, None], float(\"-inf\"))\n        torch.testing.assert_close(c.attend(q, k, v), torch.softmax(sc, -1) @ V, msg=f\"{seed} {step}\")\n        assert c.keys.shape[1] <= s + r\n"
+        },
+        {
+          "name": "Rejects chunks larger than the window",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "n must satisfy 1 <= n <= recent_size.",
+          "hiddenCode": "\nimport torch\nc = {fn}(start_size=1, recent_size=2)\nfor n in (0, 3):\n    try:\n        c.attend(torch.zeros(1, n, 2), torch.zeros(1, n, 2), torch.zeros(1, n, 2))\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"accepted n={n}\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which cached tokens survive when n new tokens arrive and the cache is full? After eviction, what position does each key get, and what position do the new queries get? Which keys can the second of three new queries see?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Evict with two slices and a cat along the sequence dim, then cat the new k and v. Build a rope(x, positions) helper from arange positions. Rotate all cached keys and the queries, compute scores, mask entries where key position > query position with -inf, softmax, and matmul with values."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "kv_cache",
+        "rope",
+        "sliding_window"
+      ],
+      "modelConnections": [
+        "StreamingLLM (MIT HAN Lab) patches Llama, Falcon and GPT-NeoX attention this way and is used in TensorRT-LLM and SwiftInfer for endless chat.",
+        "OpenAI's gpt-oss models add a learned sink logit per head, building the sink into the architecture instead of relying on the first tokens."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Constant memory and latency per token for any stream length, with no retraining, and much lower perplexity than a plain window."
+        ],
+        "cons": [
+          "Evicted context is lost for good, and re-rotating every cached key at every step costs extra compute."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is an attention sink, and why does a plain sliding-window KV cache fall apart once the first tokens are evicted?"
+        },
+        {
+          "stage": "concept",
+          "question": "What problem does StreamingLLM solve, and what problem does it explicitly not solve?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through evict-for-space when the cache is full and n new tokens arrive. Which slice is dropped and why does it depend on n?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why does StreamingLLM give keys positions by cache slot instead of their original text positions? What happens with RoPE if you use text positions?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why must the cache store keys before RoPE in this design, and what does that cost per decoding step?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Attention sinks plus a recent window versus H2O-style importance-based eviction versus a learned sink logit (gpt-oss): quality, cost and implementation complexity?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Bounded-memory streaming versus retrieval over an external store of evicted context for long-running assistants?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/mit-han-lab/streaming-llm",
+          "commit": "2e5042606d69933d88fbf909bd77907456b9b4dd",
+          "path": "streaming_llm/kv_cache.py",
+          "symbol": "StartRecentKVCache.evict_for_space",
+          "license": "MIT",
+          "adapted": "Keeping the first start_size tokens and the recent window that leaves room for the incoming tokens.",
+          "simplifications": "One layer, no batch dimension, and eviction applied inside attend instead of by the generation loop."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/mit-han-lab/streaming-llm",
+          "commit": "2e5042606d69933d88fbf909bd77907456b9b4dd",
+          "path": "streaming_llm/pos_shift/modify_llama.py",
+          "symbol": "llama_pos_shift_attention_forward",
+          "license": "MIT",
+          "adapted": "Caching un-rotated keys, rotating keys at their cache positions and queries at the cache positions of the new tokens.",
+          "simplifications": "No projections, grouped-query heads or attention-mask argument; the causal mask is built from positions."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2309.17453",
+          "section": "Section 3.2, Rolling KV Cache with Attention Sinks"
+        }
+      ]
+    },
+    {
+      "id": "embodied_action_stream",
+      "title": "Embodied Action Chunk Scheduler",
+      "titleZh": "Embodied Action Chunk Scheduler",
+      "difficulty": "Hard",
+      "functionName": "schedule_actions",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "SIMA 2 is a Gemini-based agent that watches a game's video frames and writes structured text that is parsed deterministically into keyboard and mouse commands, in chunks, while the game keeps running. Implement the parser and the scheduler that turns chunks arriving over time into low-level events. The paper does not publish its text format; this exercise uses the format below.\n\n**Signature:** `schedule_actions(chunks, keys) -> dict`\n- `chunks` — list of `(arrival_tick, text)` with non-decreasing integer ticks; raise `ValueError` otherwise.\n- `keys` — set of valid key names.\n\n**Format.** A chunk's text is a sequence of segments `<think>...</think>`, `<say>...</say>` and `<act>...</act>`, separated only by whitespace; segment bodies contain no `<`. Inside `<act>`, actions are separated by `;`, stripped, and empty ones are skipped. Actions, with single spaces between parts:\n- `press K`, `hold K`, `release K` with `K` in `keys`.\n- `move DX DY` with integers (optional leading `-`), each clamped to `[-100, 100]`.\n- `click left` or `click right`.\n- `wait N` with an integer `N >= 1`.\n\nAnything else makes the chunk **malformed**: record its index in `rejected` and ignore it entirely; earlier chunks keep running.\n\n**Scheduling a valid chunk arriving at tick `t`:**\n1. **Preempt.** Drop every event scheduled at a tick `>= t`. For each key that is down after the remaining events, schedule `(\"up\", K)` at `t`, in sorted key order.\n2. **Dialogue.** Record `(t, body.strip())` for each `<say>` segment. `<think>` produces nothing.\n3. **Actions**, with a cursor starting at `t`: `press` schedules `(\"down\", K)` at the cursor and `(\"up\", K)` at cursor + 1; `hold` schedules `(\"down\", K)`; `release` schedules `(\"up\", K)`; `move` schedules `(\"move\", (dx, dy))`; `click` schedules `(\"click\", B)`; `wait N` adds `N` to the cursor.\n\nA key is down after an event sequence if its last event was `down`. Events at the same tick run in the order they were scheduled.\n\n**Returns** `{\"events\": [(tick, kind, arg), ...], \"dialogue\": [(tick, text), ...], \"rejected\": [index, ...], \"held\": sorted keys down after all events}`, with events sorted by tick.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why text actions.** Writing actions as parseable text lets one Gemini model interleave reasoning, dialogue and control, and reuse everything it knows about language. The parser must be deterministic and strict: a half-understood command is worse than none.\n\n**Why chunks and preemption.** Inference takes longer than a game frame, so the agent emits a short plan of actions. When a newer chunk arrives, it was computed from a newer frame, so the rest of the old plan is stale and is dropped.\n\n**Why release held keys.** Dropping the rest of a plan can drop the release of a key it held. Without an explicit release the character keeps walking forever: the embodied version of a leaked lock.\n\n**Why reject malformed chunks whole.** Applying half a chunk executes a plan the model did not intend; keeping the previous plan running is the safer fallback.\n\n**Hierarchy.** SIMA 2 can also be steered by Gemini Pro, which watches the video at a slower cadence and issues new language instructions every k steps: a slow planner over a fast controller.",
+      "descriptionZh": "SIMA 2 is a Gemini-based agent that watches a game's video frames and writes structured text that is parsed deterministically into keyboard and mouse commands, in chunks, while the game keeps running. Implement the parser and the scheduler that turns chunks arriving over time into low-level events. The paper does not publish its text format; this exercise uses the format below.\n\n**Signature:** `schedule_actions(chunks, keys) -> dict`\n- `chunks` — list of `(arrival_tick, text)` with non-decreasing integer ticks; raise `ValueError` otherwise.\n- `keys` — set of valid key names.\n\n**Format.** A chunk's text is a sequence of segments `<think>...</think>`, `<say>...</say>` and `<act>...</act>`, separated only by whitespace; segment bodies contain no `<`. Inside `<act>`, actions are separated by `;`, stripped, and empty ones are skipped. Actions, with single spaces between parts:\n- `press K`, `hold K`, `release K` with `K` in `keys`.\n- `move DX DY` with integers (optional leading `-`), each clamped to `[-100, 100]`.\n- `click left` or `click right`.\n- `wait N` with an integer `N >= 1`.\n\nAnything else makes the chunk **malformed**: record its index in `rejected` and ignore it entirely; earlier chunks keep running.\n\n**Scheduling a valid chunk arriving at tick `t`:**\n1. **Preempt.** Drop every event scheduled at a tick `>= t`. For each key that is down after the remaining events, schedule `(\"up\", K)` at `t`, in sorted key order.\n2. **Dialogue.** Record `(t, body.strip())` for each `<say>` segment. `<think>` produces nothing.\n3. **Actions**, with a cursor starting at `t`: `press` schedules `(\"down\", K)` at the cursor and `(\"up\", K)` at cursor + 1; `hold` schedules `(\"down\", K)`; `release` schedules `(\"up\", K)`; `move` schedules `(\"move\", (dx, dy))`; `click` schedules `(\"click\", B)`; `wait N` adds `N` to the cursor.\n\nA key is down after an event sequence if its last event was `down`. Events at the same tick run in the order they were scheduled.\n\n**Returns** `{\"events\": [(tick, kind, arg), ...], \"dialogue\": [(tick, text), ...], \"rejected\": [index, ...], \"held\": sorted keys down after all events}`, with events sorted by tick.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why text actions.** Writing actions as parseable text lets one Gemini model interleave reasoning, dialogue and control, and reuse everything it knows about language. The parser must be deterministic and strict: a half-understood command is worse than none.\n\n**Why chunks and preemption.** Inference takes longer than a game frame, so the agent emits a short plan of actions. When a newer chunk arrives, it was computed from a newer frame, so the rest of the old plan is stale and is dropped.\n\n**Why release held keys.** Dropping the rest of a plan can drop the release of a key it held. Without an explicit release the character keeps walking forever: the embodied version of a leaked lock.\n\n**Why reject malformed chunks whole.** Applying half a chunk executes a plan the model did not intend; keeping the previous plan running is the safer fallback.\n\n**Hierarchy.** SIMA 2 can also be steered by Gemini Pro, which watches the video at a slower cadence and issues new language instructions every k steps: a slow planner over a fast controller.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "A new chunk preempts and releases held keys",
+          "code": "\nkeys = {\"W\", \"A\", \"space\"}\nout = {fn}([(0, \"<think>go forward</think><act>hold W; wait 5; release W</act>\"),\n            (2, \"<say> jumping </say><act>press space; move 3 -200</act>\")], keys)\nassert out == {\n    \"events\": [(0, \"down\", \"W\"), (2, \"up\", \"W\"), (2, \"down\", \"space\"), (2, \"move\", (3, -100)), (3, \"up\", \"space\")],\n    \"dialogue\": [(2, \"jumping\")], \"rejected\": [], \"held\": []}, out\n",
+          "behavior": "events.ordering"
+        },
+        {
+          "name": "Malformed chunks are rejected whole",
+          "visibility": "unshown",
+          "behavior": "protocol.validation",
+          "failureMessage": "Any invalid segment or action rejects the whole chunk: no dialogue, no preemption, and earlier plans keep running.",
+          "hiddenCode": "\nkeys = {\"W\", \"S\"}\nbad = [\"<act>press Q</act>\", \"<act>hold W; jump</act>\", \"<act>wait 0</act>\", \"<act>move 1</act>\", \"hello <act>hold W</act>\",\n       \"<act>hold W</act\", \"<say>hi</say><dance>x</dance>\", \"<act>click middle</act>\", \"<act>move 1.5 2</act>\",\n       \"<act>hold  W</act>\", \"<act>wait -1</act>\", \"<act>move +1 2</act>\"]\nfor text in bad:\n    out = {fn}([(0, \"<act>hold S</act>\"), (1, \"<say>no</say>\" + text)], keys)\n    assert out == {\"events\": [(0, \"down\", \"S\")], \"dialogue\": [], \"rejected\": [1], \"held\": [\"S\"]}, (text, out)\nok = {fn}([(0, \"  <act> hold W ;; ; </act>\\n<think></think>  \")], keys)\nassert ok[\"events\"] == [(0, \"down\", \"W\")] and ok[\"held\"] == [\"W\"], ok\ntry:\n    {fn}([(3, \"<act></act>\"), (2, \"<act></act>\")], keys)\nexcept ValueError:\n    pass\nelse:\n    raise AssertionError(\"accepted decreasing arrival ticks\")\n"
+        },
+        {
+          "name": "Preemption keeps past events and releases only held keys",
+          "visibility": "unshown",
+          "behavior": "events.ordering",
+          "failureMessage": "Keep events before the arrival tick, release keys still down (sorted) at the arrival tick before new events, and drop a pending press release.",
+          "hiddenCode": "\nkeys = {\"A\", \"B\", \"C\"}\nout = {fn}([(0, \"<act>hold C; press A; wait 1; hold B; release C; wait 3; release B</act>\"),\n            (1, \"<act>click left</act>\")], keys)\nassert out[\"events\"] == [(0, \"down\", \"C\"), (0, \"down\", \"A\"), (1, \"up\", \"A\"), (1, \"up\", \"C\"), (1, \"click\", \"left\")], out\nout = {fn}([(0, \"<act>press A</act>\"), (1, \"<act>move 0 0</act>\")], keys)\nassert out[\"events\"] == [(0, \"down\", \"A\"), (1, \"up\", \"A\"), (1, \"move\", (0, 0))], out\nout = {fn}([(0, \"<act>hold B; hold A</act>\"), (0, \"<act>wait 2; press C</act>\")], keys)\nassert out[\"events\"] == [(2, \"down\", \"C\"), (3, \"up\", \"C\")], out\nassert out[\"held\"] == [], out\n"
+        },
+        {
+          "name": "Seeded chunk streams match an oracle",
+          "visibility": "unshown",
+          "behavior": "events.ordering",
+          "failureMessage": "Parse strictly, preempt at each valid arrival, release held keys in sorted order, and schedule actions with the cursor rules.",
+          "hiddenCode": "\nimport random, re\nKEYS = {\"W\", \"A\", \"S\", \"D\", \"E\"}\ndef oracle(chunks):\n    ev, dia, rej, seq = [], [], [], 0\n    for idx, (t, text) in enumerate(chunks):\n        segs, pos, ok = [], 0, True\n        for m in re.finditer(r\"\\s*<(think|say|act)>([^<]*)</\\1>\\s*\", text):\n            if m.start() != pos:\n                ok = False\n            segs.append((m.group(1), m.group(2))); pos = m.end()\n        if pos != len(text):\n            ok = False\n        acts = []\n        for kind, body in segs:\n            if kind != \"act\":\n                continue\n            for a in body.split(\";\"):\n                a = a.strip()\n                if not a:\n                    continue\n                p = a.split(\" \")\n                if len(p) == 2 and p[0] in (\"press\", \"hold\", \"release\") and p[1] in KEYS:\n                    acts.append((p[0], p[1]))\n                elif len(p) == 3 and p[0] == \"move\" and all(re.fullmatch(r\"-?\\d+\", x) for x in p[1:]):\n                    acts.append((\"move\", tuple(max(-100, min(100, int(x))) for x in p[1:])))\n                elif len(p) == 2 and p[0] == \"click\" and p[1] in (\"left\", \"right\"):\n                    acts.append((\"click\", p[1]))\n                elif len(p) == 2 and p[0] == \"wait\" and re.fullmatch(r\"\\d+\", p[1]) and int(p[1]) >= 1:\n                    acts.append((\"wait\", int(p[1])))\n                else:\n                    ok = False\n        if not ok:\n            rej.append(idx); continue\n        ev = [e for e in ev if e[0] < t]\n        down = set()\n        for e in sorted(ev, key=lambda e: (e[0], e[1])):\n            if e[2] == \"down\": down.add(e[3])\n            elif e[2] == \"up\": down.discard(e[3])\n        for k in sorted(down):\n            ev.append((t, seq, \"up\", k)); seq += 1\n        dia += [(t, b.strip()) for k, b in segs if k == \"say\"]\n        cur = t\n        for kind, arg in acts:\n            if kind == \"wait\":\n                cur += arg; continue\n            if kind == \"press\":\n                ev.append((cur, seq, \"down\", arg)); seq += 1\n                ev.append((cur + 1, seq, \"up\", arg)); seq += 1\n                continue\n            name = {\"hold\": \"down\", \"release\": \"up\"}.get(kind, kind)\n            ev.append((cur, seq, name, arg)); seq += 1\n    ev.sort(key=lambda e: (e[0], e[1]))\n    down = set()\n    for e in ev:\n        if e[2] == \"down\": down.add(e[3])\n        elif e[2] == \"up\": down.discard(e[3])\n    return {\"events\": [(e[0], e[2], e[3]) for e in ev], \"dialogue\": dia, \"rejected\": rej, \"held\": sorted(down)}\ndef action(rng):\n    r = rng.random()\n    if r < 0.45:\n        return rng.choice([\"press\", \"hold\", \"hold\", \"release\"]) + \" \" + rng.choice(sorted(KEYS) + ([\"Q\"] if rng.random() < 0.05 else []))\n    if r < 0.6:\n        return f\"move {rng.randint(-150, 150)} {rng.randint(-150, 150)}\"\n    if r < 0.7:\n        return \"click \" + rng.choice([\"left\", \"right\", \"left\"])\n    if r < 0.97:\n        return f\"wait {rng.randint(1, 3)}\"\n    return rng.choice([\"wait 0\", \"jump\", \"move 1\"])\nfor seed in (15, 52, 97):\n    rng = random.Random(seed)\n    for trial in range(120):\n        chunks, t = [], 0\n        for _ in range(rng.randint(1, 5)):\n            t += rng.randint(0, 4)\n            segs = []\n            for _ in range(rng.randint(0, 3)):\n                kind = rng.choice([\"act\", \"act\", \"say\", \"think\"])\n                body = \"; \".join(action(rng) for _ in range(rng.randint(0, 5))) if kind == \"act\" else rng.choice([\"ok\", \" look left \", \"\"])\n                segs.append(f\"<{kind}>{body}</{kind}>\")\n            text = rng.choice([\"\", \" \", \"\\n\"]).join(segs)\n            if rng.random() < 0.05:\n                text = \"noise\" + text\n            chunks.append((t, text))\n        got = {fn}(chunks, set(KEYS))\n        assert got == oracle(chunks), (seed, trial, chunks, got)\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "What must happen to the old plan's future events when a new chunk arrives, and which keys could be left pressed? Why should a malformed chunk not preempt anything? At which ticks do a press's down and up land?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Parse the whole chunk first with a regex over segments and a small action parser; return None if anything fails. Keep a list of (tick, seq, kind, arg). For a valid chunk, filter out ticks >= t, replay the rest in (tick, seq) order to find held keys, append releases at t, then walk the actions with a cursor."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "chat_stream_accumulator"
+      ],
+      "modelConnections": [
+        "Google DeepMind's SIMA 2 emits structured text parsed into 96 keyboard keys, mouse clicks and discretized mouse moves, applied in chunks.",
+        "Computer-use agents (Claude computer use, OpenAI Operator) and robot policies with action chunking (ACT, pi0) face the same stale-plan and preemption problem."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "One model reasons, talks and acts through text, and the strict parser plus preemption keep the game in a safe state when plans change."
+        ],
+        "cons": [
+          "Control is only as fast as inference plus parsing, and every chunk is computed from a frame that is already old when it executes."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "How does an agent like SIMA 2 turn a language model's output into keyboard and mouse control of a running game?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why do embodied agents emit actions in chunks, and why is every chunk already stale when it starts executing?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "A new chunk arrives while the old plan still holds a key. Walk through what the scheduler drops, what it releases and in which order."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why should a malformed chunk be rejected entirely instead of executing the valid prefix, and why must it not preempt the running plan?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How does a slow planner issuing instructions every k steps (Gemini Pro) combine with a fast controller (SIMA 2)? What goes wrong if the controller ignores stale instructions?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Text actions from a general LLM versus a dedicated action head with discrete tokens or continuous outputs: generality, latency and precision?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Long action chunks versus short chunks with frequent re-planning: smoothness, reactivity and inference cost?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2512.04797",
+          "section": "Section 3.2, Agent-Environment Interface (structured text actions, action chunks, 96 keys and discretized mouse movement)"
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2512.04797",
+          "section": "Section 4.4, Gemini Instructing SIMA 2"
+        }
+      ]
+    },
+    {
+      "id": "h2o_kv_eviction",
+      "title": "H2O Heavy-Hitter KV Eviction",
+      "titleZh": "H2O Heavy-Hitter KV Eviction",
+      "difficulty": "Hard",
+      "functionName": "H2OCache",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "H2O (Heavy-Hitter Oracle) bounds the KV cache by keeping, for each head, the tokens that have received the most attention so far plus the most recent tokens. Implement the per-step bookkeeping and eviction.\n\n**Signature:** `H2OCache(heavy_size, recent_size)` with `update(keys, values, attn) -> (keys, values)` and a `scores` attribute (None before the first update).\n\n**Inputs to `update`.**\n- `keys`, `values` — `[heads, L, d]`: the cache returned by the previous update with this step's `n` new tokens appended (the whole prompt on the first call).\n- `attn` — `[heads, n, L]`: the softmax attention of the `n` new queries over all `L` keys.\n\n**Steps:**\n1. **Validate.** Raise `ValueError` if `attn.shape[2] != L`, or if there are previous scores and their length is not `L - n`.\n2. **Accumulate.** `step = attn.sum(dim=1)`, shape `[heads, L]`. On the first call `scores = step`; otherwise `scores = step` with the previous scores added to its first `L - n` columns.\n3. **Evict.** If `L <= heavy_size + recent_size`, return the inputs unchanged. Otherwise, for each head independently: among positions `[0, L - recent_size)`, choose the `heavy_size` with the highest scores (on equal scores, the lower index wins), sort them ascending, and append positions `[L - recent_size, L)`. Gather keys, values and scores at those positions.\n4. Return the new keys and values, each `[heads, heavy_size + recent_size, d]`; `scores` becomes `[heads, heavy_size + recent_size]`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Heavy hitters.** Accumulated attention follows a power law: a small set of tokens receives most of it across steps. Keeping them preserves most of what attention reads, even with a small cache.\n\n**Why a recent window as well.** New tokens have had few steps to accumulate score, so a pure score ranking would evict them before they could prove important; local context also matters for fluency.\n\n**Why per head.** Heads attend to different things. Choosing per head keeps each head's important tokens, at the cost of a ragged layout that paged attention kernels do not handle directly.\n\n**Relation to attention sinks.** The first tokens usually become heavy hitters on their own, which is why StreamingLLM's fixed sinks work: they are a hand-coded special case of this policy.\n\n**The catch.** H2O needs the attention probabilities, which fused kernels such as FlashAttention never write out, so real systems either recompute them or use a cheaper proxy score.",
+      "descriptionZh": "H2O (Heavy-Hitter Oracle) bounds the KV cache by keeping, for each head, the tokens that have received the most attention so far plus the most recent tokens. Implement the per-step bookkeeping and eviction.\n\n**Signature:** `H2OCache(heavy_size, recent_size)` with `update(keys, values, attn) -> (keys, values)` and a `scores` attribute (None before the first update).\n\n**Inputs to `update`.**\n- `keys`, `values` — `[heads, L, d]`: the cache returned by the previous update with this step's `n` new tokens appended (the whole prompt on the first call).\n- `attn` — `[heads, n, L]`: the softmax attention of the `n` new queries over all `L` keys.\n\n**Steps:**\n1. **Validate.** Raise `ValueError` if `attn.shape[2] != L`, or if there are previous scores and their length is not `L - n`.\n2. **Accumulate.** `step = attn.sum(dim=1)`, shape `[heads, L]`. On the first call `scores = step`; otherwise `scores = step` with the previous scores added to its first `L - n` columns.\n3. **Evict.** If `L <= heavy_size + recent_size`, return the inputs unchanged. Otherwise, for each head independently: among positions `[0, L - recent_size)`, choose the `heavy_size` with the highest scores (on equal scores, the lower index wins), sort them ascending, and append positions `[L - recent_size, L)`. Gather keys, values and scores at those positions.\n4. Return the new keys and values, each `[heads, heavy_size + recent_size, d]`; `scores` becomes `[heads, heavy_size + recent_size]`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Heavy hitters.** Accumulated attention follows a power law: a small set of tokens receives most of it across steps. Keeping them preserves most of what attention reads, even with a small cache.\n\n**Why a recent window as well.** New tokens have had few steps to accumulate score, so a pure score ranking would evict them before they could prove important; local context also matters for fluency.\n\n**Why per head.** Heads attend to different things. Choosing per head keeps each head's important tokens, at the cost of a ragged layout that paged attention kernels do not handle directly.\n\n**Relation to attention sinks.** The first tokens usually become heavy hitters on their own, which is why StreamingLLM's fixed sinks work: they are a hand-coded special case of this policy.\n\n**The catch.** H2O needs the attention probabilities, which fused kernels such as FlashAttention never write out, so real systems either recompute them or use a cheaper proxy score.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Keeps heavy hitters and the recent window",
+          "code": "\nimport torch\nc = {fn}(heavy_size=1, recent_size=2)\nkeys = torch.arange(4.0).view(1, 4, 1)\nattn = torch.tensor([[[0.7, 0.1, 0.1, 0.1], [0.1, 0.1, 0.6, 0.2]]])\nk, v = c.update(keys, keys.clone(), attn)\nassert k.flatten().tolist() == [0.0, 2.0, 3.0], k\ntorch.testing.assert_close(c.scores, torch.tensor([[0.8, 0.7, 0.3]]))\nk, v = c.update(torch.cat([k, torch.tensor([[[4.0]]])], 1), torch.cat([v, torch.tensor([[[4.0]]])], 1),\n                torch.tensor([[[0.1, 0.1, 0.1, 0.7]]]))\nassert k.flatten().tolist() == [0.0, 3.0, 4.0] and torch.equal(k, v), k\n",
+          "behavior": "attention.cache"
+        },
+        {
+          "name": "Seeded multi-head streams match an oracle",
+          "visibility": "unshown",
+          "behavior": "attention.cache",
+          "failureMessage": "Accumulate summed attention onto the previous scores, pick heavy hitters per head from outside the recent window with lower-index tie-breaking, and keep positions in order.",
+          "hiddenCode": "\nimport random, torch\nfor seed in (12, 57, 83):\n    rng = random.Random(seed)\n    torch.manual_seed(seed)\n    H, hh, rc, d = 3, rng.randint(0, 3), rng.randint(1, 4), 2\n    c = {fn}(heavy_size=hh, recent_size=rc)\n    L0 = rng.randint(1, 10)\n    ids = [list(range(L0)) for _ in range(H)]\n    sc = None\n    K = torch.arange(L0, dtype=torch.float64).view(1, L0, 1).expand(H, L0, d).clone()\n    nxt = L0\n    for step in range(20):\n        n = L0 if step == 0 else rng.randint(1, 3)\n        if step > 0:\n            new = torch.arange(nxt, nxt + n, dtype=torch.float64).view(1, n, 1).expand(H, n, d)\n            K = torch.cat([K, new], 1)\n            for h in range(H):\n                ids[h] += list(range(nxt, nxt + n))\n            nxt += n\n        L = K.shape[1]\n        logits = torch.randn(H, n, L, dtype=torch.float64)\n        if rng.random() < 0.3:\n            logits = logits.round()\n        attn = torch.softmax(logits, -1)\n        s = attn.sum(1).clone()\n        if sc is not None:\n            s[:, :L - n] += sc\n        k, v = c.update(K, K * 2, attn)\n        if L > hh + rc:\n            keep = []\n            for h in range(H):\n                cand = sorted(range(L - rc), key=lambda i: (-s[h, i].item(), i))[:hh]\n                keep.append(sorted(cand) + list(range(L - rc, L)))\n            idx = torch.tensor(keep)\n            want = torch.gather(K, 1, idx[..., None].expand(-1, -1, d))\n            s = torch.gather(s, 1, idx)\n        else:\n            want = K\n        torch.testing.assert_close(k, want, msg=f\"{seed} {step}\")\n        torch.testing.assert_close(v, want * 2)\n        torch.testing.assert_close(c.scores, s)\n        K, sc = k, s\n"
+        },
+        {
+          "name": "Recent tokens are never heavy-hitter candidates",
+          "visibility": "unshown",
+          "behavior": "attention.cache",
+          "failureMessage": "Heavy hitters come only from positions before the recent window, even when a recent token has the highest score.",
+          "hiddenCode": "\nimport torch\nc = {fn}(heavy_size=1, recent_size=2)\nkeys = torch.arange(5.0).view(1, 5, 1)\nattn = torch.tensor([[[0.1, 0.2, 0.05, 0.6, 0.05]]])\nk, v = c.update(keys, keys, attn)\nassert k.flatten().tolist() == [1.0, 3.0, 4.0], k\n"
+        },
+        {
+          "name": "Validates shapes",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Reject attention whose key length differs from the cache, and new tokens that do not line up with the previous scores.",
+          "hiddenCode": "\nimport torch\nc = {fn}(heavy_size=1, recent_size=1)\ntry:\n    c.update(torch.zeros(1, 3, 2), torch.zeros(1, 3, 2), torch.zeros(1, 1, 4))\nexcept ValueError:\n    pass\nelse:\n    raise AssertionError(\"accepted mismatched attention\")\nc.update(torch.zeros(1, 2, 2), torch.zeros(1, 2, 2), torch.full((1, 2, 2), 0.5))\ntry:\n    c.update(torch.zeros(1, 5, 2), torch.zeros(1, 5, 2), torch.full((1, 1, 5), 0.2))\nexcept ValueError:\n    pass\nelse:\n    raise AssertionError(\"accepted a cache that does not extend the previous one\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Where do the new tokens' scores come from, and which columns of the new score row line up with the previous scores? Which positions are candidates for heavy hitters, and how do you break ties deterministically?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "step = attn.sum(1); add old scores to step[:, :L - n]. For eviction, take scores[:, :L - recent], argsort descending with stable=True, keep the first heavy_size, sort them, cat with arange(L - recent, L), then torch.gather keys, values and scores with the index expanded over d."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "attention_sink_cache",
+        "kv_cache"
+      ],
+      "modelConnections": [
+        "H2O (NeurIPS 2023) introduced heavy-hitter eviction; SnapKV, Scissorhands and NVIDIA's kvpress build on accumulated or windowed attention scores.",
+        "StreamingLLM's attention sinks are the special case where the heavy hitters are fixed to the first tokens."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Adapts to the content: tokens that matter keep their place, so quality holds with a much smaller cache than a fixed window."
+        ],
+        "cons": [
+          "Needs attention probabilities that fused kernels do not produce, evicts irreversibly, and yields a per-head ragged layout that complicates paged memory."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is a heavy hitter in the KV cache, and why does accumulated attention identify tokens worth keeping?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why does H2O keep a recent window in addition to the heavy hitters?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through one decoding step: how are the new token's attention weights folded into the scores, and which columns line up with the old scores?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why choose heavy hitters per head rather than one set for the whole layer? What does that do to memory layout?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do attention sinks relate to H2O's heavy hitters?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "H2O's accumulated scores versus SnapKV's observation-window scores versus fixed sinks plus a window: accuracy, overhead and compatibility with FlashAttention?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Irreversible eviction versus offloading evicted KV to CPU and recalling it when needed: latency, memory and complexity?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2306.14048",
+          "section": "Section 3 and Algorithm 1, Heavy-Hitter Oracle"
+        }
+      ]
+    },
+    {
+      "id": "sink_cache_rerotation",
+      "title": "Sink Cache Key Re-rotation",
+      "titleZh": "Sink Cache Key Re-rotation",
+      "difficulty": "Hard",
+      "functionName": "sink_cache_update",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Hugging Face's `SinkCache` implements attention sinks for models that cache keys after RoPE. When tokens are evicted, the kept keys move to earlier slots, so their rotation must change. The un-rotated keys are gone; instead, rotate the cached keys backwards by the shift. Implement one cache update.\n\n**Signature:** `sink_cache_update(key_cache, value_cache, k, v, window_length, num_sink_tokens, base=10000.0) -> (keys, values)`\n\n**Shapes.** `key_cache` and `value_cache` are `[heads, L, d]` (L may be 0); `k` and `v` are `[heads, n, d]`; `d` is even. Every cached key is already rotated at its slot index. `k` is not rotated yet. Do not modify the inputs.\n\n**RoPE** of `x` at position `p`: `inv_freq[i] = 1 / base ** (2i / d)` for `i < d/2`; `angle = p * cat(inv_freq, inv_freq)`; result `x * cos(angle) + rotate_half(x) * sin(angle)`, where `rotate_half(x) = cat(-x[..., d/2:], x[..., :d/2])`.\n\n**Update:**\n1. Raise `ValueError` unless `1 <= n <= window_length - num_sink_tokens`.\n2. Let `shift = max(0, L + n - window_length)`. If `shift > 0`, drop cached slots `[num_sink_tokens, num_sink_tokens + shift)`, keep the sinks unchanged, and rotate every kept non-sink key back by `shift` positions: `x * cos(a) - rotate_half(x) * sin(a)` with `a = shift * cat(inv_freq, inv_freq)`.\n3. Rotate `k` at the slots it will occupy, `T-n .. T-1`, where `T` is the new length, and append `k` and `v`.\n4. Return the new keys and values. Afterwards every key is rotated at its slot index, and `T <= window_length`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why rotating back works.** RoPE rotates each pair of dimensions by an angle proportional to position, and rotations compose by adding angles. A key rotated at slot `p` and then rotated by `-shift` equals the original key rotated at `p - shift`, with no need for the original.\n\n**Why this beats rotating every step.** The previous exercise re-rotates every cached key at every step. Here keys are rotated once when cached and corrected only on eviction, which works with the standard attention kernel and the model's usual RoPE call.\n\n**Numerics.** Each correction adds rounding error; Hugging Face computes the correction's cos and sin in float32, and in half precision the error accumulates over very long streams.\n\n**Status.** Recent Transformers releases no longer ship `SinkCache` in the core library; the rotation identity is the part worth knowing.",
+      "descriptionZh": "Hugging Face's `SinkCache` implements attention sinks for models that cache keys after RoPE. When tokens are evicted, the kept keys move to earlier slots, so their rotation must change. The un-rotated keys are gone; instead, rotate the cached keys backwards by the shift. Implement one cache update.\n\n**Signature:** `sink_cache_update(key_cache, value_cache, k, v, window_length, num_sink_tokens, base=10000.0) -> (keys, values)`\n\n**Shapes.** `key_cache` and `value_cache` are `[heads, L, d]` (L may be 0); `k` and `v` are `[heads, n, d]`; `d` is even. Every cached key is already rotated at its slot index. `k` is not rotated yet. Do not modify the inputs.\n\n**RoPE** of `x` at position `p`: `inv_freq[i] = 1 / base ** (2i / d)` for `i < d/2`; `angle = p * cat(inv_freq, inv_freq)`; result `x * cos(angle) + rotate_half(x) * sin(angle)`, where `rotate_half(x) = cat(-x[..., d/2:], x[..., :d/2])`.\n\n**Update:**\n1. Raise `ValueError` unless `1 <= n <= window_length - num_sink_tokens`.\n2. Let `shift = max(0, L + n - window_length)`. If `shift > 0`, drop cached slots `[num_sink_tokens, num_sink_tokens + shift)`, keep the sinks unchanged, and rotate every kept non-sink key back by `shift` positions: `x * cos(a) - rotate_half(x) * sin(a)` with `a = shift * cat(inv_freq, inv_freq)`.\n3. Rotate `k` at the slots it will occupy, `T-n .. T-1`, where `T` is the new length, and append `k` and `v`.\n4. Return the new keys and values. Afterwards every key is rotated at its slot index, and `T <= window_length`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why rotating back works.** RoPE rotates each pair of dimensions by an angle proportional to position, and rotations compose by adding angles. A key rotated at slot `p` and then rotated by `-shift` equals the original key rotated at `p - shift`, with no need for the original.\n\n**Why this beats rotating every step.** The previous exercise re-rotates every cached key at every step. Here keys are rotated once when cached and corrected only on eviction, which works with the standard attention kernel and the model's usual RoPE call.\n\n**Numerics.** Each correction adds rounding error; Hugging Face computes the correction's cos and sin in float32, and in half precision the error accumulates over very long streams.\n\n**Status.** Recent Transformers releases no longer ship `SinkCache` in the core library; the rotation identity is the part worth knowing.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Kept keys match keys rotated at their new slots",
+          "code": "\nimport torch\ndef rope(x, pos, base=10000.0):\n    d = x.shape[-1]\n    inv = 1.0 / base ** (torch.arange(0, d, 2, dtype=x.dtype) / d)\n    ang = pos.to(x.dtype)[:, None] * torch.cat([inv, inv])[None, :]\n    return x * ang.cos() + torch.cat([-x[..., d // 2:], x[..., :d // 2]], -1) * ang.sin()\ntorch.manual_seed(0)\nraw = torch.randn(1, 6, 4, dtype=torch.float64)\nK, V = torch.zeros(1, 0, 4, dtype=torch.float64), torch.zeros(1, 0, 4, dtype=torch.float64)\nfor i in range(6):\n    K, V = {fn}(K, V, raw[:, i:i + 1], raw[:, i:i + 1], window_length=4, num_sink_tokens=1)\nkept = raw[:, [0, 3, 4, 5]]\ntorch.testing.assert_close(K, rope(kept, torch.arange(4)))\ntorch.testing.assert_close(V, kept)\n",
+          "behavior": "attention.cache"
+        },
+        {
+          "name": "Seeded streams stay consistent",
+          "visibility": "unshown",
+          "behavior": "attention.cache",
+          "failureMessage": "Drop slots [sinks, sinks + shift), rotate kept non-sink keys back by shift, leave sinks alone, and rotate new keys at slots T-n..T-1.",
+          "hiddenCode": "\nimport random, torch\ndef rope(x, pos, base):\n    d = x.shape[-1]\n    inv = 1.0 / base ** (torch.arange(0, d, 2, dtype=x.dtype) / d)\n    ang = pos.to(x.dtype)[:, None] * torch.cat([inv, inv])[None, :]\n    return x * ang.cos() + torch.cat([-x[..., d // 2:], x[..., :d // 2]], -1) * ang.sin()\nfor seed in (9, 40, 73):\n    rng = random.Random(seed)\n    torch.manual_seed(seed)\n    w, s = rng.randint(3, 8), rng.randint(0, 2)\n    base = rng.choice([10000.0, 50.0])\n    K = V = torch.zeros(2, 0, 6, dtype=torch.float64)\n    ks, vs = [], []\n    for step in range(30):\n        n = rng.randint(1, w - s)\n        k, v = torch.randn(2, n, 6, dtype=torch.float64), torch.randn(2, n, 6, dtype=torch.float64)\n        before = (K.clone(), V.clone(), k.clone())\n        K2, V2 = {fn}(K, V, k, v, window_length=w, num_sink_tokens=s, base=base)\n        assert torch.equal(K, before[0]) and torch.equal(V, before[1]) and torch.equal(k, before[2]), \"inputs modified\"\n        shift = max(0, len(ks) + n - w)\n        ks = ks[:s] + ks[s + shift:] + list(k.unbind(1)); vs = vs[:s] + vs[s + shift:] + list(v.unbind(1))\n        want_k = rope(torch.stack(ks, 1), torch.arange(len(ks)), base)\n        torch.testing.assert_close(K2, want_k, msg=f\"{seed} {step}\")\n        torch.testing.assert_close(V2, torch.stack(vs, 1))\n        K, V = K2, V2\n"
+        },
+        {
+          "name": "Rejects bad chunk sizes",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "n must satisfy 1 <= n <= window_length - num_sink_tokens.",
+          "hiddenCode": "\nimport torch\nz = torch.zeros(1, 0, 2)\nfor n in (0, 3):\n    try:\n        {fn}(z, z, torch.zeros(1, n, 2), torch.zeros(1, n, 2), window_length=4, num_sink_tokens=2)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"accepted n={n}\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "If a key was rotated at slot 7 and now belongs at slot 4, what single rotation fixes it? Which slots are dropped when n new tokens overflow the window by shift? Which keys must not be rotated?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Compute inv_freq and a helper that rotates by an angle tensor. If shift > 0, split the cache into sinks and cache[:, sinks + shift:], rotate the latter by -shift, and cat. Then rotate k at arange(T - n, T) and cat keys and values."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "attention_sink_cache",
+        "rope"
+      ],
+      "modelConnections": [
+        "transformers' SinkCache re-rotated kept keys with _get_rerotation_cos_sin; the attention_sinks package did the same for many Hugging Face models.",
+        "Any RoPE cache that moves tokens, such as context shifting in llama.cpp, uses the same composition to avoid recomputing keys."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Keys are rotated once and corrected only on eviction, so the attention kernel and model code stay unchanged."
+        ],
+        "cons": [
+          "Each correction adds rounding error, and it only works for position encodings that compose, such as RoPE, not learned absolute embeddings."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why can a RoPE key rotated at one position be moved to another position without the original key?"
+        },
+        {
+          "stage": "concept",
+          "question": "What does a sink cache keep and what does it evict when the window overflows?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Derive the correction: a key rotated at slot p must end up rotated at p - shift. What angle do you apply and why are sinks excluded?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Compare storing keys before RoPE and rotating every step (StreamingLLM) with storing them after RoPE and correcting on eviction (SinkCache). What does each cost per token?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why does repeated re-rotation accumulate error, and how would you bound it in half precision?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Correcting rotated keys on eviction versus caching pre-RoPE keys and fusing RoPE into the attention kernel: kernel complexity, memory traffic and numerics?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Shipping a cache strategy inside the modeling library versus as optional Hub code: maintenance cost versus discoverability?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/huggingface/transformers",
+          "commit": "2ef31dec1676249d26044a8aa8abe33dbecf0d10",
+          "path": "src/transformers/cache_utils.py",
+          "symbol": "SinkCache.update and SinkCache._get_rerotation_cos_sin",
+          "license": "Apache-2.0",
+          "adapted": "Evicting the oldest non-sink keys, re-rotating the kept ones backwards with the angle-difference identity, and keeping sinks fixed.",
+          "simplifications": "A stateless function over one layer without batch; new keys arrive un-rotated and are rotated at their final slot; the shift is exactly the number of evicted tokens; no partial rotation."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2309.17453",
+          "section": "Section 3.2, Rolling KV Cache with Attention Sinks"
+        }
+      ]
     }
   ]
 }

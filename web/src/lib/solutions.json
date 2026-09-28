@@ -402,6 +402,15 @@
       }
     ]
   },
+  "chat_stream_accumulator": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def _is_number(value):\n    return isinstance(value, (int, float)) and not isinstance(value, bool)\n\n\ndef _is_indexed(value):\n    return isinstance(value, list) and any(isinstance(e, dict) and \"index\" in e for e in value)\n\n\ndef accumulate_delta(acc, delta):\n    for key, value in delta.items():\n        if key not in acc or acc[key] is None:\n            if not _is_indexed(value):\n                acc[key] = value\n                continue\n            acc[key] = []\n\n        current = acc[key]\n        if key == \"index\" or key == \"type\":\n            acc[key] = value\n        elif isinstance(current, str) and isinstance(value, str):\n            acc[key] = current + value\n        elif _is_number(current) and _is_number(value):\n            acc[key] = current + value\n        elif isinstance(current, dict) and isinstance(value, dict):\n            accumulate_delta(current, value)\n        elif isinstance(current, list) and isinstance(value, list):\n            primitive = all(isinstance(e, (str, int, float)) for e in current)\n            if primitive and (current or not _is_indexed(value)):\n                current.extend(value)\n                continue\n            for entry in value:\n                if not isinstance(entry, dict) or type(entry.get(\"index\")) is not int:\n                    raise ValueError(f\"list delta entry needs an int index: {entry!r}\")\n                index = entry[\"index\"]\n                if index < len(current):\n                    if not isinstance(current[index], dict):\n                        raise ValueError(\"cannot merge into a non-dict element\")\n                    accumulate_delta(current[index], entry)\n                else:\n                    current.insert(index, entry)\n    return acc",
+        "role": "solution"
+      }
+    ]
+  },
   "confidence_calibration": {
     "cells": [
       {
@@ -604,6 +613,15 @@
       }
     ]
   },
+  "duplex_streaming_session": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "class StreamingSession:\n    def __init__(self, bos_id=None):\n        self.bos_id = bos_id\n        self.history = []\n        self.kv_len = 0\n        self._inflight = None\n\n    def begin(self, input_ids, max_new_tokens):\n        if self._inflight is not None:\n            raise RuntimeError(\"streaming session already has an active request\")\n        new_ids = list(input_ids)\n        if self.history and self.bos_id is not None and new_ids[:1] == [self.bos_id]:\n            new_ids = new_ids[1:]\n        sequence = self.history + new_ids\n        if not sequence:\n            raise ValueError(\"a session request must contain input tokens\")\n        self._inflight = (sequence, max_new_tokens)\n        return {\"input_ids\": list(sequence), \"cached_len\": self.kv_len}\n\n    def finish(self, output_ids):\n        if self._inflight is None:\n            raise RuntimeError(\"no request in flight\")\n        sequence, max_new_tokens = self._inflight\n        out = list(output_ids[:max_new_tokens])\n        self.history = sequence + out\n        self.kv_len = len(sequence) + max(len(out) - 1, 0)\n        self._inflight = None\n\n    def abort(self):\n        self._inflight = None",
+        "role": "solution"
+      }
+    ]
+  },
   "focal_loss": {
     "cells": [
       {
@@ -665,6 +683,15 @@
         "type": "code",
         "source": "Q = torch.zeros(1, 4, 1)\nK = torch.zeros(1, 4, 1)\nV = torch.arange(1, 5, dtype=torch.float32).view(1, 4, 1)\nprint('local:', hybrid_attention_schedule(Q, K, V, 0, 1, 2).flatten())\nprint('global:', hybrid_attention_schedule(Q, K, V, 1, 1, 2).flatten())",
         "role": "demo"
+      }
+    ]
+  },
+  "incremental_detokenize": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "class IncrementalDetokenizer:\n    def __init__(self, convert, prompt_tokens, initial_offset=5):\n        self.convert = convert\n        self.tokens = list(prompt_tokens[-(initial_offset + 2):]) if prompt_tokens else []\n        self.read_offset = len(self.tokens)\n        self.prefix_offset = max(self.read_offset - initial_offset, 0)\n\n    def step(self, token):\n        self.tokens.append(token)\n        prefix_text = self.convert(self.tokens[self.prefix_offset:self.read_offset])\n        new_text = self.convert(self.tokens[self.prefix_offset:])\n        if len(new_text) <= len(prefix_text) or new_text.endswith(\"\\ufffd\"):\n            return \"\"\n        self.prefix_offset = self.read_offset\n        self.read_offset = len(self.tokens)\n        return new_text[len(prefix_text):]",
+        "role": "solution"
       }
     ]
   },
@@ -958,6 +985,15 @@
       }
     ]
   },
+  "posed_frame_context": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import math\n\n\ndef _angle(a, b):\n    return abs((a - b + 180) % 360 - 180)\n\n\nclass SpatialFrameMemory:\n    def __init__(self):\n        self.frames = []\n        self.ids = set()\n\n    def add(self, frame_id, position, yaw):\n        if frame_id in self.ids:\n            raise ValueError(f\"frame {frame_id!r} already added\")\n        self.ids.add(frame_id)\n        self.frames.append((frame_id, tuple(position), yaw))\n\n    def context(self, position, yaw, k, recent=2, max_angle=90.0, angle_weight=1.0):\n        if k < 1 or not 0 <= recent <= k:\n            raise ValueError(\"need k >= 1 and 0 <= recent <= k\")\n        n = len(self.frames)\n        chosen = set(range(max(0, n - recent), n))\n\n        def score(i):\n            _, pos, frame_yaw = self.frames[i]\n            return math.dist(pos, position) + angle_weight * math.radians(_angle(frame_yaw, yaw))\n\n        others = [i for i in range(n) if i not in chosen and _angle(self.frames[i][2], yaw) <= max_angle]\n        others.sort(key=lambda i: (score(i), -i))\n        chosen.update(others[:k - len(chosen)])\n        return [self.frames[i][0] for i in sorted(chosen)]",
+        "role": "solution"
+      }
+    ]
+  },
   "ppo_loss": {
     "cells": [
       {
@@ -1018,6 +1054,15 @@
       {
         "type": "code",
         "source": "def reinforce_policy_loss(log_probs, returns, baseline, mask):\n    import torch\n    tensors = (log_probs, returns, baseline, mask)\n    if (any(x.ndim != 1 for x in tensors)\n            or any(x.shape != log_probs.shape or x.device != log_probs.device for x in tensors)\n            or any(not x.is_floating_point() or not torch.isfinite(x).all()\n                   for x in (log_probs, returns, baseline))\n            or mask.dtype != torch.bool or not bool(mask.any())):\n        raise ValueError(\"invalid policy-gradient inputs\")\n    advantage = returns.detach() - baseline.detach()\n    return -(log_probs * advantage * mask).sum() / mask.sum()",
+        "role": "solution"
+      }
+    ]
+  },
+  "request_output_collector": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import asyncio\nimport copy\n\n\nclass OutputCollector:\n    def __init__(self, aggregate):\n        self.aggregate = aggregate\n        self.output = None\n        self.ready = asyncio.Event()\n\n    def put(self, item):\n        if self.output is None or isinstance(item, Exception):\n            self.output = item if isinstance(item, Exception) else copy.deepcopy(item)\n            self.ready.set()\n        elif not isinstance(self.output, Exception):\n            self._merge(self.output, item)\n\n    def _merge(self, pending, new):\n        pending[\"finished\"] = pending[\"finished\"] or new[\"finished\"]\n        for completion in new[\"outputs\"]:\n            for i, current in enumerate(pending[\"outputs\"]):\n                if current[\"index\"] == completion[\"index\"]:\n                    if self.aggregate:\n                        current[\"text\"] += completion[\"text\"]\n                        current[\"token_ids\"].extend(completion[\"token_ids\"])\n                        current[\"finish_reason\"] = completion[\"finish_reason\"]\n                    else:\n                        pending[\"outputs\"][i] = copy.deepcopy(completion)\n                    break\n            else:\n                pending[\"outputs\"].append(copy.deepcopy(completion))\n\n    def get_nowait(self):\n        output = self.output\n        if output is not None:\n            self.output = None\n            self.ready.clear()\n        if isinstance(output, Exception):\n            raise output\n        return output\n\n    async def get(self):\n        while self.output is None:\n            await self.ready.wait()\n        return self.get_nowait()",
         "role": "solution"
       }
     ]
@@ -1141,6 +1186,24 @@
       }
     ]
   },
+  "sse_decoder": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "class SSEDecoder:\n    def __init__(self):\n        self._line = bytearray()\n        self._skip_lf = False\n        self._event = None\n        self._data = []\n        self._last_id = None\n        self._retry = None\n        self._pending = False\n        self.done = False\n\n    def feed(self, chunk):\n        events = []\n        for byte in chunk:\n            if self.done:\n                break\n            if self._skip_lf:\n                self._skip_lf = False\n                if byte == 10:\n                    continue\n            if byte != 10 and byte != 13:\n                self._line.append(byte)\n                continue\n            self._skip_lf = byte == 13\n            line = self._line.decode(\"utf-8\")\n            self._line.clear()\n            event = self._decode(line)\n            if event is None:\n                continue\n            if event[\"data\"].startswith(\"[DONE]\"):\n                self.done = True\n            else:\n                events.append(event)\n        return events\n\n    def _decode(self, line):\n        if not line:\n            if not self._pending:\n                return None\n            event = {\"event\": self._event, \"data\": \"\\n\".join(self._data), \"id\": self._last_id, \"retry\": self._retry}\n            self._event, self._data, self._retry, self._pending = None, [], None, False\n            return event\n        if line.startswith(\":\"):\n            return None\n        field, _, value = line.partition(\":\")\n        if value.startswith(\" \"):\n            value = value[1:]\n        if field == \"event\":\n            self._event = value\n        elif field == \"data\":\n            self._data.append(value)\n        elif field == \"id\":\n            if \"\\0\" in value:\n                return None\n            self._last_id = value\n        elif field == \"retry\":\n            if not value or any(c not in \"0123456789\" for c in value):\n                return None\n            self._retry = int(value)\n        else:\n            return None\n        self._pending = True\n        return None",
+        "role": "solution"
+      }
+    ]
+  },
+  "stop_string_holdback": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "class StopStringStream:\n    def __init__(self, stop, include_stop_str_in_output=False, min_tokens=0):\n        self.stop = list(stop)\n        self.include = include_stop_str_in_output\n        self.min_tokens = min_tokens\n        self.hold = max(len(s) for s in self.stop) - 1 if self.stop and not self.include else 0\n        self.output_text = \"\"\n        self.num_tokens = 0\n        self._returned = 0\n\n    def update(self, new_texts):\n        if not new_texts:\n            return None\n        check_from = len(self.output_text)\n        for text in new_texts:\n            self.output_text += text\n            self.num_tokens += 1\n            if self.min_tokens and self.num_tokens <= self.min_tokens:\n                check_from = len(self.output_text)\n        if not self.stop or self.num_tokens <= self.min_tokens:\n            return None\n\n        new_chars = len(self.output_text) - check_from\n        if not new_chars:\n            return None\n        best, best_index, best_end = None, 0, None\n        for s in self.stop:\n            index = self.output_text.find(s, max(0, len(self.output_text) - new_chars - len(s) + 1))\n            if index == -1:\n                continue\n            end = index + len(s)\n            if best_end is None or end < best_end:\n                best, best_index, best_end = s, index, end\n        if best is None:\n            return None\n        self.output_text = self.output_text[:best_end] if self.include else self.output_text[:best_index]\n        return best\n\n    def get_next_output_text(self, finished):\n        limit = len(self.output_text) - (0 if finished else self.hold)\n        if self._returned < limit:\n            text = self.output_text[self._returned:limit]\n            self._returned = limit\n            return text\n        return \"\"",
+        "role": "solution"
+      }
+    ]
+  },
   "swiglu": {
     "cells": [
       {
@@ -1247,6 +1310,15 @@
       }
     ]
   },
+  "attention_sink_cache": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import math\n\nimport torch\n\n\ndef _rope(x, positions, base):\n    d = x.shape[-1]\n    inv_freq = 1.0 / base ** (torch.arange(0, d, 2, dtype=x.dtype, device=x.device) / d)\n    angle = positions.to(x.dtype)[:, None] * torch.cat([inv_freq, inv_freq])[None, :]\n    rotated_half = torch.cat([-x[..., d // 2:], x[..., :d // 2]], dim=-1)\n    return x * angle.cos() + rotated_half * angle.sin()\n\n\nclass StreamingLLMCache:\n    def __init__(self, start_size, recent_size, base=10000.0):\n        self.start_size = start_size\n        self.recent_size = recent_size\n        self.base = base\n        self.keys = None\n        self.values = None\n\n    def attend(self, q, k, v):\n        n = q.shape[1]\n        if not 1 <= n <= self.recent_size:\n            raise ValueError(\"need 1 <= n <= recent_size\")\n        if self.keys is None:\n            self.keys, self.values = k[:, :0], v[:, :0]\n        length = self.keys.shape[1]\n        if length + n > self.start_size + self.recent_size:\n            cut = length - self.recent_size + n\n            self.keys = torch.cat([self.keys[:, :self.start_size], self.keys[:, cut:]], dim=1)\n            self.values = torch.cat([self.values[:, :self.start_size], self.values[:, cut:]], dim=1)\n        self.keys = torch.cat([self.keys, k], dim=1)\n        self.values = torch.cat([self.values, v], dim=1)\n\n        total = self.keys.shape[1]\n        key_pos = torch.arange(total, device=q.device)\n        query_pos = torch.arange(total - n, total, device=q.device)\n        k_rot = _rope(self.keys, key_pos, self.base)\n        q_rot = _rope(q, query_pos, self.base)\n        scores = q_rot @ k_rot.transpose(-1, -2) / math.sqrt(q.shape[-1])\n        scores = scores.masked_fill(key_pos[None, :] > query_pos[:, None], float(\"-inf\"))\n        return torch.softmax(scores, dim=-1) @ self.values",
+        "role": "solution"
+      }
+    ]
+  },
   "bpe": {
     "cells": [
       {
@@ -1339,6 +1411,15 @@
       {
         "type": "code",
         "source": "import torch\nimport torch.nn.functional as F\n\ndef embedding_diversity_selection(embeddings, k, seed_index=0):\n    if (embeddings.ndim != 2 or embeddings.shape[0] == 0 or embeddings.shape[1] == 0\n            or not torch.is_floating_point(embeddings) or not torch.isfinite(embeddings).all()\n            or (embeddings.norm(dim=1) == 0).any() or not isinstance(k, int) or isinstance(k, bool)\n            or k < 1 or k > embeddings.shape[0] or not isinstance(seed_index, int)\n            or isinstance(seed_index, bool) or seed_index < 0 or seed_index >= embeddings.shape[0]):\n        raise ValueError(\"invalid embeddings or selection size\")\n    normalized = F.normalize(embeddings, dim=1)\n    distances = 1 - normalized @ normalized.T\n    selected = [seed_index]\n    while len(selected) < k:\n        candidate = max((i for i in range(len(embeddings)) if i not in selected),\n                        key=lambda i: (min(distances[i, j].item() for j in selected), -i))\n        selected.append(candidate)\n    return selected",
+        "role": "solution"
+      }
+    ]
+  },
+  "embodied_action_stream": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import re\n\n_SEGMENT = re.compile(r\"\\s*<(think|say|act)>([^<]*)</\\1>\\s*\")\n_INT = re.compile(r\"-?\\d+\")\n\n\ndef _parse_action(text, keys):\n    parts = text.split(\" \")\n    if len(parts) == 2 and parts[0] in (\"press\", \"hold\", \"release\") and parts[1] in keys:\n        return parts[0], parts[1]\n    if len(parts) == 3 and parts[0] == \"move\" and all(_INT.fullmatch(p) for p in parts[1:]):\n        return \"move\", tuple(max(-100, min(100, int(p))) for p in parts[1:])\n    if len(parts) == 2 and parts[0] == \"click\" and parts[1] in (\"left\", \"right\"):\n        return \"click\", parts[1]\n    if len(parts) == 2 and parts[0] == \"wait\" and parts[1].isdigit() and parts[1].isascii() and int(parts[1]) >= 1:\n        return \"wait\", int(parts[1])\n    return None\n\n\ndef _parse_chunk(text, keys):\n    segments, pos = [], 0\n    for match in _SEGMENT.finditer(text):\n        if match.start() != pos:\n            return None\n        segments.append((match.group(1), match.group(2)))\n        pos = match.end()\n    if pos != len(text):\n        return None\n    dialogue, actions = [], []\n    for kind, body in segments:\n        if kind == \"say\":\n            dialogue.append(body.strip())\n        elif kind == \"act\":\n            for raw in body.split(\";\"):\n                raw = raw.strip()\n                if not raw:\n                    continue\n                action = _parse_action(raw, keys)\n                if action is None:\n                    return None\n                actions.append(action)\n    return dialogue, actions\n\n\ndef _held(events):\n    down = set()\n    for _, _, kind, arg in sorted(events, key=lambda e: (e[0], e[1])):\n        if kind == \"down\":\n            down.add(arg)\n        elif kind == \"up\":\n            down.discard(arg)\n    return down\n\n\ndef schedule_actions(chunks, keys):\n    ticks = [t for t, _ in chunks]\n    if any(b < a for a, b in zip(ticks, ticks[1:])):\n        raise ValueError(\"arrival ticks must be non-decreasing\")\n    events, dialogue, rejected, seq = [], [], [], 0\n    for index, (tick, text) in enumerate(chunks):\n        parsed = _parse_chunk(text, keys)\n        if parsed is None:\n            rejected.append(index)\n            continue\n        says, actions = parsed\n        events = [e for e in events if e[0] < tick]\n        for key in sorted(_held(events)):\n            events.append((tick, seq, \"up\", key))\n            seq += 1\n        dialogue.extend((tick, s) for s in says)\n        cursor = tick\n        for kind, arg in actions:\n            if kind == \"wait\":\n                cursor += arg\n                continue\n            if kind == \"press\":\n                events.append((cursor, seq, \"down\", arg))\n                events.append((cursor + 1, seq + 1, \"up\", arg))\n                seq += 2\n                continue\n            name = {\"hold\": \"down\", \"release\": \"up\"}.get(kind, kind)\n            events.append((cursor, seq, name, arg))\n            seq += 1\n    events.sort(key=lambda e: (e[0], e[1]))\n    return {\n        \"events\": [(t, kind, arg) for t, _, kind, arg in events],\n        \"dialogue\": dialogue,\n        \"rejected\": rejected,\n        \"held\": sorted(_held(events)),\n    }",
         "role": "solution"
       }
     ]
@@ -1501,6 +1582,15 @@
         "type": "code",
         "source": "# See the visible deterministic fixture in the exercise tests.",
         "role": "demo"
+      }
+    ]
+  },
+  "h2o_kv_eviction": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\n\n\nclass H2OCache:\n    def __init__(self, heavy_size, recent_size):\n        self.heavy_size = heavy_size\n        self.recent_size = recent_size\n        self.scores = None\n\n    def update(self, keys, values, attn):\n        length, n = keys.shape[1], attn.shape[1]\n        if attn.shape[2] != length:\n            raise ValueError(\"attention must cover every cached key\")\n        if self.scores is not None and self.scores.shape[1] != length - n:\n            raise ValueError(\"new tokens must extend the previous cache\")\n        scores = attn.sum(dim=1)\n        if self.scores is not None:\n            scores = scores.clone()\n            scores[:, :length - n] += self.scores\n        self.scores = scores\n        if length <= self.heavy_size + self.recent_size:\n            return keys, values\n\n        candidates = scores[:, :length - self.recent_size]\n        order = torch.argsort(-candidates, dim=-1, stable=True)\n        heavy = order[:, :self.heavy_size].sort(dim=-1).values\n        recent = torch.arange(length - self.recent_size, length, device=keys.device).expand(keys.shape[0], -1)\n        keep = torch.cat([heavy, recent], dim=-1)\n        index = keep[..., None].expand(-1, -1, keys.shape[-1])\n        self.scores = torch.gather(scores, 1, keep)\n        return torch.gather(keys, 1, index), torch.gather(values, 1, index)",
+        "role": "solution"
       }
     ]
   },
@@ -1776,6 +1866,15 @@
       {
         "type": "code",
         "source": "def rollout_weight_sync_staleness(samples, trainer_version, serving_version, max_staleness, in_flight, sync_weights):\n    for value in (trainer_version, serving_version, max_staleness, in_flight):\n        if not isinstance(value, int) or isinstance(value, bool) or value < 0:\n            raise ValueError(\"versions and counts must be non-negative integers\")\n    if serving_version > trainer_version:\n        raise ValueError(\"serving version is ahead of trainer\")\n    train, retry, dropped, seen = [], [], [], set()\n    for sample in samples:\n        try:\n            sample_id = sample[\"sample_id\"]\n            version = sample[\"weight_version\"]\n            status = sample[\"status\"]\n        except (KeyError, TypeError):\n            raise ValueError(\"malformed sample\")\n        if sample_id in seen or status not in (\"complete\", \"aborted\", \"failed\"):\n            raise ValueError(\"duplicate id or unknown status\")\n        seen.add(sample_id)\n        if not isinstance(version, int) or isinstance(version, bool) or version < 0 or version > trainer_version:\n            raise ValueError(\"invalid sample version\")\n        if status == \"failed\":\n            dropped.append(sample)\n        elif status == \"aborted\" or trainer_version - version > max_staleness:\n            retry.append(sample)\n        else:\n            train.append(sample)\n    sync_deferred = serving_version != trainer_version and in_flight > 0\n    if serving_version != trainer_version and not sync_deferred:\n        sync_weights(trainer_version)\n        serving_version = trainer_version\n    return {\n        \"train\": train, \"retry\": retry, \"dropped\": dropped,\n        \"serving_version\": serving_version, \"sync_deferred\": sync_deferred,\n    }",
+        "role": "solution"
+      }
+    ]
+  },
+  "sink_cache_rerotation": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\n\n\ndef _rotate(x, angle):\n    d = x.shape[-1]\n    rotated_half = torch.cat([-x[..., d // 2:], x[..., :d // 2]], dim=-1)\n    return x * angle.cos() + rotated_half * angle.sin()\n\n\ndef sink_cache_update(key_cache, value_cache, k, v, window_length, num_sink_tokens, base=10000.0):\n    n, d = k.shape[1], k.shape[-1]\n    if not 1 <= n <= window_length - num_sink_tokens:\n        raise ValueError(\"need 1 <= n <= window_length - num_sink_tokens\")\n    inv_freq = 1.0 / base ** (torch.arange(0, d, 2, dtype=k.dtype, device=k.device) / d)\n    freqs = torch.cat([inv_freq, inv_freq])\n\n    shift = max(0, key_cache.shape[1] + n - window_length)\n    if shift > 0:\n        sinks = key_cache[:, :num_sink_tokens]\n        kept = _rotate(key_cache[:, num_sink_tokens + shift:], -shift * freqs)\n        key_cache = torch.cat([sinks, kept], dim=1)\n        value_cache = torch.cat([value_cache[:, :num_sink_tokens], value_cache[:, num_sink_tokens + shift:]], dim=1)\n\n    start = key_cache.shape[1]\n    positions = torch.arange(start, start + n, dtype=k.dtype, device=k.device)\n    new_keys = _rotate(k, positions[:, None] * freqs[None, :])\n    return torch.cat([key_cache, new_keys], dim=1), torch.cat([value_cache, v], dim=1)",
         "role": "solution"
       }
     ]
