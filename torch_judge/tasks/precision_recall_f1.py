@@ -56,6 +56,16 @@ Any ratio whose denominator is 0 is defined as 0.0.
         "pros": ["Precision and recall separate false positives from false negatives, which accuracy hides on imbalanced data."],
         "cons": ["F1 ignores true negatives and depends on the decision threshold, so it can rank models differently from threshold-free metrics such as ROC AUC."],
     },
+    "sources": [{'kind': 'code',
+      'url': 'https://github.com/scikit-learn/scikit-learn',
+      'commit': '857849927da6e988d7d026b17aef214d43e5f26e',
+      'path': 'sklearn/metrics/_classification.py',
+      'symbol': 'precision_recall_fscore_support',
+      'license': 'BSD-3-Clause',
+      'adapted': 'Per-class counts, micro, macro and weighted averaging, macro F1 as the mean of per-class F1, and '
+                 'zero_division=0.',
+      'simplifications': 'Single-label multiclass only; no labels, pos_label, binary average or samples average; the class '
+                         'set is the union of predictions and targets.'}],
     "tests": [
         {"name": "Macro average on a small example", "behavior": "metrics.averaging", "code": r"""
 import torch

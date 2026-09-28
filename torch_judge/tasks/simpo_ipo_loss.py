@@ -38,7 +38,7 @@ TASK = {
 
 **SimPO.** DPO's implicit reward is a log-ratio against a frozen reference, which costs a second model and does not match how generation ranks sequences. SimPO replaces it with the length-normalized average log-probability, the same score beam search uses, and asks the chosen response to win by at least `gamma / beta`.
 
-**IPO.** With deterministic preferences DPO keeps pushing the log-ratio gap toward infinity, which overfits and ignores the KL regularizer. IPO regresses the gap toward a finite target `1 / (2 * beta)` with a squared loss, so a larger `beta` means a smaller target and stronger regularization.""",
+**IPO.** With deterministic preferences DPO keeps pushing the log-ratio gap toward infinity, which overfits and ignores the KL regularizer. IPO regresses the gap toward a finite target `1 / (2 * beta)` with a squared loss, so a larger `beta` means a smaller target and stronger regularization. TRL applies this same formula to length-averaged log-probabilities, which keeps `beta` comparable across response lengths.""",
     "advisory_prerequisites": ["dpo_loss"],
     "hints": [
         {"level": 1, "kind": "questions", "content": "Which loss uses the reference model and which uses response lengths? What is -log(sigmoid(x)) as a stable function? What target does IPO regress the gap toward?"},
@@ -51,6 +51,33 @@ TASK = {
         "pros": ["SimPO drops the reference model and aligns the training score with generation; IPO bounds the gap and resists overfitting on deterministic preferences."],
         "cons": ["SimPO loses the KL anchor to the reference and needs careful tuning of beta and gamma; IPO's squared loss is sensitive to beta and to label noise."],
     },
+    "sources": [{'kind': 'code',
+      'url': 'https://github.com/huggingface/trl',
+      'commit': 'd947c4f5098c8d6ca30ea7ff58b98e6570fd6a01',
+      'path': 'trl/experimental/cpo/cpo_trainer.py',
+      'symbol': "CPOTrainer.cpo_loss (loss_type='simpo')",
+      'license': 'Apache-2.0',
+      'adapted': 'SimPO: -logsigmoid(beta * (average chosen logp - average rejected logp) - gamma).',
+      'simplifications': 'No label smoothing or AlphaPO reward transform; lengths are passed explicitly instead of '
+                         'averaging inside the trainer.'},
+     {'kind': 'code',
+      'url': 'https://github.com/huggingface/trl',
+      'commit': 'd947c4f5098c8d6ca30ea7ff58b98e6570fd6a01',
+      'path': 'trl/trainer/dpo_trainer.py',
+      'symbol': "DPOTrainer loss_type='ipo' branch",
+      'license': 'Apache-2.0',
+      'adapted': 'IPO: squared distance of the log-ratio gap from 1 / (2 * beta).',
+      'simplifications': 'DIVERGES: TRL divides each log-ratio by its completion length before taking the gap; this '
+                         'exercise uses the summed form of the IPO paper (Eq. 17). Passing length-averaged '
+                         'log-probabilities reproduces TRL.'},
+     {'kind': 'paper',
+      'url': 'https://arxiv.org/abs/2405.14734',
+      'equation': 'SimPO paper, Eq. 6',
+      'note': 'The SimPO objective.'},
+     {'kind': 'paper',
+      'url': 'https://arxiv.org/abs/2310.12036',
+      'equation': 'IPO paper (Azar et al.), Eq. 17',
+      'note': 'The IPO objective.'}],
     "tests": [
         {"name": "SimPO and IPO on a small batch", "behavior": "rl.logprob", "code": r"""
 import math, torch

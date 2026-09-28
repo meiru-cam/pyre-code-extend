@@ -50,6 +50,16 @@ TASK = {
         "pros": ["Cheap correction for a real source of off-policy drift that needs no extra forward pass beyond the logprobs you already compute."],
         "cons": ["Truncation biases the gradient, and a cap that is too low hides a broken rollout engine instead of fixing it."],
     },
+    "sources": [{'kind': 'code',
+      'url': 'https://github.com/volcengine/verl',
+      'commit': '00094bd9cd3fef9cf8903daf60ea4a2bcf832efc',
+      'path': 'verl/trainer/ppo/rollout_corr_helper.py',
+      'symbol': 'compute_rollout_correction_weights',
+      'license': 'Apache-2.0',
+      'adapted': 'Token-level and sequence-level weights exp(log ratio), truncated at an upper threshold and zeroed on '
+                 'padding.',
+      'simplifications': 'TIS only: no IcePop lower bound, batch normalization or metrics; truncation is applied in log '
+                         "space instead of verl's fixed safety bound of 20 before exponentiating."}],
     "tests": [
         {"name": "Token-level weights with a cap", "behavior": "rl.clipping", "code": r"""
 import math, torch

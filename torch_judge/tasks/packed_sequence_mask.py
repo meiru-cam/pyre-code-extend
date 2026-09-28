@@ -46,6 +46,15 @@ TASK = {
         "pros": ["Removes padding waste while keeping each document's computation identical to training it alone."],
         "cons": ["The dense mask is quadratic in row length; real systems rely on varlen kernels, and packing changes per-document loss weighting unless the loss is normalized carefully."],
     },
+    "sources": [{'kind': 'code',
+      'url': 'https://github.com/huggingface/transformers',
+      'commit': '2e703d6c7e81ec584c25edc39e8bd2f5a45b04bd',
+      'path': 'src/transformers/data/data_collator.py',
+      'symbol': 'DataCollatorWithFlattening',
+      'license': 'Apache-2.0',
+      'adapted': 'Per-document position ids that restart at zero and cumulative sequence offsets for varlen attention.',
+      'simplifications': 'Builds the dense block-diagonal causal mask as well, for learning; adds explicit padding rows '
+                         'that attend only to themselves.'}],
     "tests": [
         {"name": "Two documents and padding", "behavior": "attention.masking", "code": r"""
 import torch

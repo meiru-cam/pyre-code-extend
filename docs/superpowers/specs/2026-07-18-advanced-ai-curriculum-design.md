@@ -52,6 +52,8 @@ Knowledge of frontier attention, MoE training, distributed expert execution, age
 
 Prerequisites are advisory. Paths and exercises are never locked. A readiness check may direct learners to existing Pyre Code exercises without blocking access.
 
+Amendment (2026-09-28): inside an exercise, the interview gate locks hints, reference pros and cons, the solution, AI help and the editor until the learner answers the opening and deep-dive interview questions or records a skip. Opening an exercise is never blocked.
+
 ## Curriculum Architecture
 
 Each path follows a three-layer progression:

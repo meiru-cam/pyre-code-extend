@@ -17,6 +17,7 @@ Enable learners with basic PyTorch knowledge to move from recognizing modern AI 
 
 - Require only basic PyTorch knowledge and no GPU.
 - Keep prerequisites advisory: recommend preparation and readiness checks without locking content.
+- Open every exercise with an interview gate: help, the solution and the editor unlock once the learner answers the opening and deep-dive questions or records a skip. This is the one deliberate lock; it gates help inside an exercise, never access to a path or an exercise.
 - Combine visible examples with unshown evaluator cases and behavior-level failure diagnostics.
 - Keep exercises fully usable offline without model-provider API keys.
 - Use independently revealed Level 1 question hints and Level 2 analytical hints.

@@ -50,6 +50,10 @@ TASK = {
         "pros": ["Deriving gradients by hand makes shape bugs, missing batch averaging and dead-ReLU behaviour obvious."],
         "cons": ["Manual gradients do not scale to large graphs and are easy to get subtly wrong; autograd plus a gradient check is the practical workflow."],
     },
+    "sources": [{'kind': 'paper',
+      'url': 'https://www.deeplearningbook.org/contents/mlp.html',
+      'section': '6.5 Back-Propagation and Other Differentiation Algorithms',
+      'note': 'Chain-rule gradients for affine layers, ReLU and softmax cross-entropy.'}],
     "tests": [
         {"name": "Matches autograd on a small batch", "behavior": "gradient.flow", "code": r"""
 import torch, torch.nn.functional as F

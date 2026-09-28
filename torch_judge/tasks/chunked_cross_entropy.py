@@ -43,6 +43,16 @@ TASK = {
         "pros": ["Cuts peak memory from the LM head by the number of chunks, which allows longer sequences or larger micro-batches."],
         "cons": ["Recomputation adds one extra LM-head matmul per chunk, and the Python loop launches more kernels than a fused implementation."],
     },
+    "sources": [{'kind': 'code',
+      'url': 'https://github.com/linkedin/Liger-Kernel',
+      'commit': '6ad077c36379eb9c7950f5572cc713f4d38e21a7',
+      'path': 'src/liger_kernel/ops/fused_linear_cross_entropy.py',
+      'symbol': 'fused_linear_cross_entropy_forward',
+      'license': 'BSD-2-Clause',
+      'adapted': 'Chunking the LM-head projection so full (N, V) logits are never held for backward, with the mean taken '
+                 'over non-ignored tokens across all chunks.',
+      'simplifications': 'Recomputes each chunk with torch.utils.checkpoint instead of computing gradients in the forward '
+                         'pass with Triton kernels; no label smoothing, z-loss or softcapping.'}],
     "tests": [
         {"name": "Matches the full loss on a small batch", "behavior": "numerics.stability", "code": r"""
 import torch, torch.nn.functional as F

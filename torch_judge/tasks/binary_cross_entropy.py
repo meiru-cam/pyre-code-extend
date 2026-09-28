@@ -45,6 +45,14 @@ TASK = {
         "pros": ["Stable at any logit scale and supports soft labels and per-class positive weights."],
         "cons": ["Treats labels independently, so it cannot express that classes are mutually exclusive; use softmax cross-entropy for that."],
     },
+    "sources": [{'kind': 'code',
+      'url': 'https://github.com/pytorch/pytorch',
+      'commit': '2166a71ef9393436f33138e6d0d50a3fde30b699',
+      'path': 'aten/src/ATen/native/Loss.cpp',
+      'symbol': 'binary_cross_entropy_with_logits',
+      'license': 'BSD-3-Clause',
+      'adapted': 'Softplus-stable form with pos_weight scaling only the positive term, mean reduction.',
+      'simplifications': 'No per-element weight or reduction argument; written in Python instead of ATen C++.'}],
     "tests": [
         {"name": "Matches the definition on small logits", "behavior": "numerics.stability", "code": r"""
 import torch, math

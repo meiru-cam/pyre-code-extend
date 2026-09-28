@@ -54,6 +54,15 @@ With `momentum == 0` keep no buffer and use `d` directly.
         "pros": ["One buffer per parameter, half of Adam's optimizer memory, and often better generalization on vision tasks."],
         "cons": ["Needs careful learning-rate tuning and scheduling; one global step size handles badly scaled parameters worse than adaptive methods."],
     },
+    "sources": [{'kind': 'code',
+      'url': 'https://github.com/pytorch/pytorch',
+      'commit': '2166a71ef9393436f33138e6d0d50a3fde30b699',
+      'path': 'torch/optim/sgd.py',
+      'symbol': '_single_tensor_sgd',
+      'license': 'BSD-3-Clause',
+      'adapted': 'Weight decay added to the gradient, momentum buffer initialized to the first gradient, dampening-free '
+                 'update and the Nesterov variant.',
+      'simplifications': 'No dampening, maximize flag, foreach or fused paths; one parameter list only.'}],
     "tests": [
         {"name": "One momentum step matches the rule", "behavior": "optim.state", "code": r"""
 import torch

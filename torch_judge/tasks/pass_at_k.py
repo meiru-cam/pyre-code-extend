@@ -45,6 +45,18 @@ where `C(a, k)` is the binomial coefficient and `C(a, k) = 0` when `a < k`.
         "pros": ["Unbiased and lower variance than drawing exactly k samples, and one set of n samples gives every k up to n."],
         "cons": ["Measures only whether any sample is correct; it hides how often the model is right, which pass@1 and majority voting capture."],
     },
+    "sources": [{'kind': 'code',
+      'url': 'https://github.com/openai/human-eval',
+      'commit': '6d43fb980f9fee3c892a914eda09951f772ad10d',
+      'path': 'human_eval/evaluation.py',
+      'symbol': 'estimate_pass_at_k',
+      'license': 'MIT',
+      'adapted': 'The numerically stable product form and the n - c < k shortcut.',
+      'simplifications': 'Pure Python instead of numpy; returns the mean over problems and validates counts.'},
+     {'kind': 'paper',
+      'url': 'https://arxiv.org/abs/2107.03374',
+      'section': 'Chen et al. 2021 (Codex), Section 2.1 and Figure 3',
+      'note': 'The unbiased estimator.'}],
     "tests": [
         {"name": "Small cases by hand", "behavior": "metrics.averaging", "code": r"""
 out = {fn}([5, 4], [2, 0], 2)

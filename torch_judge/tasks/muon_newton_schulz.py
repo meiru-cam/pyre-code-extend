@@ -57,6 +57,16 @@ TASK = {
         "pros": ["Faster convergence than AdamW per step at similar cost, one momentum buffer instead of two, and a well-conditioned update direction."],
         "cons": ["Only for 2-D hidden weights, extra matmuls per step, and the orthogonalization needs the full matrix, which complicates sharding under FSDP or tensor parallelism."],
     },
+    "sources": [{'kind': 'code',
+      'url': 'https://github.com/KellerJordan/Muon',
+      'commit': 'f98f1cacc0263b04290753e32be8d498c1efc806',
+      'path': 'muon.py',
+      'symbol': 'zeropower_via_newtonschulz5 and muon_update',
+      'license': 'MIT',
+      'adapted': 'Momentum lerp, Nesterov look-ahead, Frobenius normalization, transposing tall matrices, the quintic '
+                 'coefficients and the sqrt(max(1, R / K)) scale.',
+      'simplifications': 'Computes in the input dtype instead of bfloat16, does not overwrite grad in place, and supports '
+                         '2-D matrices only.'}],
     "tests": [
         {"name": "Update of a diagonal gradient", "behavior": "optim.state", "code": r"""
 import torch

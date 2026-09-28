@@ -12841,6 +12841,18 @@
           "stage": "tradeoffs",
           "question": "What happens to calibration when you train with pos_weight far from 1?"
         }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/pytorch/pytorch",
+          "commit": "2166a71ef9393436f33138e6d0d50a3fde30b699",
+          "path": "aten/src/ATen/native/Loss.cpp",
+          "symbol": "binary_cross_entropy_with_logits",
+          "license": "BSD-3-Clause",
+          "adapted": "Softplus-stable form with pos_weight scaling only the positive term, mean reduction.",
+          "simplifications": "No per-element weight or reduction argument; written in Python instead of ATen C++."
+        }
       ]
     },
     {
@@ -12951,6 +12963,14 @@
           "stage": "tradeoffs",
           "question": "L1 versus L2 versus elastic net: when would you pick each?"
         }
+      ],
+      "sources": [
+        {
+          "kind": "paper",
+          "url": "https://www.deeplearningbook.org/contents/regularization.html",
+          "section": "7.1.1 L2 Parameter Regularization and 7.1.2 L1 Regularization",
+          "note": "The 0.5 * l2 * ||w||^2 and l1 * ||w||_1 penalties; penalizing weights but not biases follows the chapter's discussion."
+        }
       ]
     },
     {
@@ -13056,6 +13076,18 @@
         {
           "stage": "tradeoffs",
           "question": "F1 depends on the decision threshold. How would you choose the threshold, and when would you prefer a threshold-free metric?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/scikit-learn/scikit-learn",
+          "commit": "857849927da6e988d7d026b17aef214d43e5f26e",
+          "path": "sklearn/metrics/_classification.py",
+          "symbol": "precision_recall_fscore_support",
+          "license": "BSD-3-Clause",
+          "adapted": "Per-class counts, micro, macro and weighted averaging, macro F1 as the mean of per-class F1, and zero_division=0.",
+          "simplifications": "Single-label multiclass only; no labels, pos_label, binary average or samples average; the class set is the union of predictions and targets."
         }
       ]
     },
@@ -13164,6 +13196,24 @@
         {
           "stage": "tradeoffs",
           "question": "AUC versus log loss versus accuracy for model selection: what does each reward?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/scikit-learn/scikit-learn",
+          "commit": "857849927da6e988d7d026b17aef214d43e5f26e",
+          "path": "sklearn/metrics/_ranking.py",
+          "symbol": "roc_auc_score and _binary_roc_auc_score",
+          "license": "BSD-3-Clause",
+          "adapted": "Binary AUC with tied scores counted as one half, equal to the trapezoidal area under the ROC curve.",
+          "simplifications": "Computed with average ranks (Mann-Whitney U) instead of an explicit ROC curve; no max_fpr, sample weights or multiclass."
+        },
+        {
+          "kind": "paper",
+          "url": "https://pubs.rsna.org/doi/10.1148/radiology.143.1.7063747",
+          "section": "Hanley and McNeil (1982), relation between AUC and the Wilcoxon statistic",
+          "note": "The rank-sum formula used by the reference solution."
         }
       ]
     },
@@ -13280,6 +13330,18 @@
           "stage": "tradeoffs",
           "question": "How do momentum and learning rate interact, and why do schedules sometimes change both?"
         }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/pytorch/pytorch",
+          "commit": "2166a71ef9393436f33138e6d0d50a3fde30b699",
+          "path": "torch/optim/sgd.py",
+          "symbol": "_single_tensor_sgd",
+          "license": "BSD-3-Clause",
+          "adapted": "Weight decay added to the gradient, momentum buffer initialized to the first gradient, dampening-free update and the Nesterov variant.",
+          "simplifications": "No dampening, maximize flag, foreach or fused paths; one parameter list only."
+        }
       ]
     },
     {
@@ -13375,6 +13437,24 @@
         {
           "stage": "tradeoffs",
           "question": "pass@k versus majority voting versus a verifier-reranked best-of-n: what does each reward, and which matches deployment?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/openai/human-eval",
+          "commit": "6d43fb980f9fee3c892a914eda09951f772ad10d",
+          "path": "human_eval/evaluation.py",
+          "symbol": "estimate_pass_at_k",
+          "license": "MIT",
+          "adapted": "The numerically stable product form and the n - c < k shortcut.",
+          "simplifications": "Pure Python instead of numpy; returns the mean over problems and validates counts."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2107.03374",
+          "section": "Chen et al. 2021 (Codex), Section 2.1 and Figure 3",
+          "note": "The unbiased estimator."
         }
       ]
     },
@@ -13479,6 +13559,24 @@
           "stage": "tradeoffs",
           "question": "RLOO versus PPO with a learned critic: sample cost, variance and stability?"
         }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/volcengine/verl",
+          "commit": "00094bd9cd3fef9cf8903daf60ea4a2bcf832efc",
+          "path": "verl/trainer/ppo/core_algos.py",
+          "symbol": "compute_rloo_outcome_advantage",
+          "license": "Apache-2.0",
+          "adapted": "Leave-one-out baseline written as k / (k - 1) * (r - group mean).",
+          "simplifications": "Rewards arrive as a flat group-major vector instead of token-level rewards plus a prompt index; groups of size 1 are rejected instead of given zero advantage."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2402.14740",
+          "section": "Ahmadian et al. 2024, Section 3.2 REINFORCE Leave-One-Out",
+          "note": "The RLOO estimator definition."
+        }
       ]
     },
     {
@@ -13575,6 +13673,18 @@
         {
           "stage": "tradeoffs",
           "question": "Repetition penalty versus frequency and presence penalties: what does each punish, and when do they hurt quality?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/huggingface/transformers",
+          "commit": "2e703d6c7e81ec584c25edc39e8bd2f5a45b04bd",
+          "path": "src/transformers/generation/logits_process.py",
+          "symbol": "RepetitionPenaltyLogitsProcessor, TemperatureLogitsWarper, TopKLogitsWarper and TopPLogitsWarper",
+          "license": "Apache-2.0",
+          "adapted": "The sign-aware repetition penalty, temperature scaling, top-k keeping ties with the k-th value, and top-p keeping the smallest prefix that reaches p.",
+          "simplifications": "Applied in one function in a fixed order; top-p is computed with a descending cumulative sum, which can differ from Hugging Face's ascending form only when a cumulative sum lands exactly on the threshold; min_tokens_to_keep is fixed at 1."
         }
       ]
     },
@@ -13673,6 +13783,24 @@
           "stage": "tradeoffs",
           "question": "How does the aggregation mode interact with gradient accumulation and data-parallel batch splits?"
         }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/volcengine/verl",
+          "commit": "00094bd9cd3fef9cf8903daf60ea4a2bcf832efc",
+          "path": "verl/trainer/ppo/core_algos.py",
+          "symbol": "agg_loss",
+          "license": "Apache-2.0",
+          "adapted": "The four loss_agg_mode reductions, excluding fully masked sequences from sequence means and using the horizon T for seq-mean-token-sum-norm.",
+          "simplifications": "Single process: no dp_size, batch_num_tokens, global_batch_size, loss_scale_factor or token-sum mode; an all-false mask raises instead of dividing by zero."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2503.20783",
+          "section": "Liu et al. 2025 (Dr. GRPO), Section 3.1 length bias",
+          "note": "Motivation for a constant normaliser."
+        }
       ]
     },
     {
@@ -13769,6 +13897,14 @@
         {
           "stage": "tradeoffs",
           "question": "Which intermediate activations must be stored for this backward pass, and how does activation checkpointing trade compute for that memory?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "paper",
+          "url": "https://www.deeplearningbook.org/contents/mlp.html",
+          "section": "6.5 Back-Propagation and Other Differentiation Algorithms",
+          "note": "Chain-rule gradients for affine layers, ReLU and softmax cross-entropy."
         }
       ]
     },
@@ -13867,6 +14003,18 @@
           "stage": "tradeoffs",
           "question": "Greedy bin packing versus sorting by length versus truncation: effects on throughput, padding and data distribution?"
         }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/huggingface/transformers",
+          "commit": "2e703d6c7e81ec584c25edc39e8bd2f5a45b04bd",
+          "path": "src/transformers/data/data_collator.py",
+          "symbol": "DataCollatorWithFlattening",
+          "license": "Apache-2.0",
+          "adapted": "Per-document position ids that restart at zero and cumulative sequence offsets for varlen attention.",
+          "simplifications": "Builds the dense block-diagonal causal mask as well, for learning; adds explicit padding rows that attend only to themselves."
+        }
       ]
     },
     {
@@ -13877,8 +14025,8 @@
       "functionName": "preference_loss",
       "hint": "",
       "hintZh": "",
-      "descriptionEn": "Implement the SimPO and IPO preference losses.\n\n**Signature:** `preference_loss(chosen_logps, rejected_logps, loss_type, beta, chosen_lengths=None, rejected_lengths=None, gamma=0.0, ref_chosen_logps=None, ref_rejected_logps=None) -> Tensor`\n\n**Parameters:**\n- `chosen_logps`, `rejected_logps` — float tensors `(B,)`: the policy's summed log-probability of each response.\n- `loss_type` — `\"simpo\"` or `\"ipo\"`.\n- `beta` — positive float.\n- `chosen_lengths`, `rejected_lengths` — integer tensors `(B,)` of response token counts. Required for SimPO.\n- `gamma` — SimPO target reward margin.\n- `ref_chosen_logps`, `ref_rejected_logps` — float tensors `(B,)` from the reference model. Required for IPO.\n\n**Returns:** scalar tensor, the mean over the batch of the per-pair loss:\n\n    simpo:  x = beta * (chosen_logps / chosen_lengths - rejected_logps / rejected_lengths) - gamma\n            loss = -log(sigmoid(x))\n    ipo:    h = (chosen_logps - ref_chosen_logps) - (rejected_logps - ref_rejected_logps)\n            loss = (h - 1 / (2 * beta)) ** 2\n\n**Constraints:**\n- SimPO uses no reference model. IPO uses no sigmoid.\n- The SimPO loss must stay finite for margins as large as 1000 in either direction.\n- Keep the result differentiable with respect to the policy log-probabilities.\n- Raise `ValueError` for an unknown `loss_type`, `beta <= 0`, a missing required argument, or a length that is not positive.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**SimPO.** DPO's implicit reward is a log-ratio against a frozen reference, which costs a second model and does not match how generation ranks sequences. SimPO replaces it with the length-normalized average log-probability, the same score beam search uses, and asks the chosen response to win by at least `gamma / beta`.\n\n**IPO.** With deterministic preferences DPO keeps pushing the log-ratio gap toward infinity, which overfits and ignores the KL regularizer. IPO regresses the gap toward a finite target `1 / (2 * beta)` with a squared loss, so a larger `beta` means a smaller target and stronger regularization.",
-      "descriptionZh": "Implement the SimPO and IPO preference losses.\n\n**Signature:** `preference_loss(chosen_logps, rejected_logps, loss_type, beta, chosen_lengths=None, rejected_lengths=None, gamma=0.0, ref_chosen_logps=None, ref_rejected_logps=None) -> Tensor`\n\n**Parameters:**\n- `chosen_logps`, `rejected_logps` — float tensors `(B,)`: the policy's summed log-probability of each response.\n- `loss_type` — `\"simpo\"` or `\"ipo\"`.\n- `beta` — positive float.\n- `chosen_lengths`, `rejected_lengths` — integer tensors `(B,)` of response token counts. Required for SimPO.\n- `gamma` — SimPO target reward margin.\n- `ref_chosen_logps`, `ref_rejected_logps` — float tensors `(B,)` from the reference model. Required for IPO.\n\n**Returns:** scalar tensor, the mean over the batch of the per-pair loss:\n\n    simpo:  x = beta * (chosen_logps / chosen_lengths - rejected_logps / rejected_lengths) - gamma\n            loss = -log(sigmoid(x))\n    ipo:    h = (chosen_logps - ref_chosen_logps) - (rejected_logps - ref_rejected_logps)\n            loss = (h - 1 / (2 * beta)) ** 2\n\n**Constraints:**\n- SimPO uses no reference model. IPO uses no sigmoid.\n- The SimPO loss must stay finite for margins as large as 1000 in either direction.\n- Keep the result differentiable with respect to the policy log-probabilities.\n- Raise `ValueError` for an unknown `loss_type`, `beta <= 0`, a missing required argument, or a length that is not positive.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**SimPO.** DPO's implicit reward is a log-ratio against a frozen reference, which costs a second model and does not match how generation ranks sequences. SimPO replaces it with the length-normalized average log-probability, the same score beam search uses, and asks the chosen response to win by at least `gamma / beta`.\n\n**IPO.** With deterministic preferences DPO keeps pushing the log-ratio gap toward infinity, which overfits and ignores the KL regularizer. IPO regresses the gap toward a finite target `1 / (2 * beta)` with a squared loss, so a larger `beta` means a smaller target and stronger regularization.",
+      "descriptionEn": "Implement the SimPO and IPO preference losses.\n\n**Signature:** `preference_loss(chosen_logps, rejected_logps, loss_type, beta, chosen_lengths=None, rejected_lengths=None, gamma=0.0, ref_chosen_logps=None, ref_rejected_logps=None) -> Tensor`\n\n**Parameters:**\n- `chosen_logps`, `rejected_logps` — float tensors `(B,)`: the policy's summed log-probability of each response.\n- `loss_type` — `\"simpo\"` or `\"ipo\"`.\n- `beta` — positive float.\n- `chosen_lengths`, `rejected_lengths` — integer tensors `(B,)` of response token counts. Required for SimPO.\n- `gamma` — SimPO target reward margin.\n- `ref_chosen_logps`, `ref_rejected_logps` — float tensors `(B,)` from the reference model. Required for IPO.\n\n**Returns:** scalar tensor, the mean over the batch of the per-pair loss:\n\n    simpo:  x = beta * (chosen_logps / chosen_lengths - rejected_logps / rejected_lengths) - gamma\n            loss = -log(sigmoid(x))\n    ipo:    h = (chosen_logps - ref_chosen_logps) - (rejected_logps - ref_rejected_logps)\n            loss = (h - 1 / (2 * beta)) ** 2\n\n**Constraints:**\n- SimPO uses no reference model. IPO uses no sigmoid.\n- The SimPO loss must stay finite for margins as large as 1000 in either direction.\n- Keep the result differentiable with respect to the policy log-probabilities.\n- Raise `ValueError` for an unknown `loss_type`, `beta <= 0`, a missing required argument, or a length that is not positive.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**SimPO.** DPO's implicit reward is a log-ratio against a frozen reference, which costs a second model and does not match how generation ranks sequences. SimPO replaces it with the length-normalized average log-probability, the same score beam search uses, and asks the chosen response to win by at least `gamma / beta`.\n\n**IPO.** With deterministic preferences DPO keeps pushing the log-ratio gap toward infinity, which overfits and ignores the KL regularizer. IPO regresses the gap toward a finite target `1 / (2 * beta)` with a squared loss, so a larger `beta` means a smaller target and stronger regularization. TRL applies this same formula to length-averaged log-probabilities, which keeps `beta` comparable across response lengths.",
+      "descriptionZh": "Implement the SimPO and IPO preference losses.\n\n**Signature:** `preference_loss(chosen_logps, rejected_logps, loss_type, beta, chosen_lengths=None, rejected_lengths=None, gamma=0.0, ref_chosen_logps=None, ref_rejected_logps=None) -> Tensor`\n\n**Parameters:**\n- `chosen_logps`, `rejected_logps` — float tensors `(B,)`: the policy's summed log-probability of each response.\n- `loss_type` — `\"simpo\"` or `\"ipo\"`.\n- `beta` — positive float.\n- `chosen_lengths`, `rejected_lengths` — integer tensors `(B,)` of response token counts. Required for SimPO.\n- `gamma` — SimPO target reward margin.\n- `ref_chosen_logps`, `ref_rejected_logps` — float tensors `(B,)` from the reference model. Required for IPO.\n\n**Returns:** scalar tensor, the mean over the batch of the per-pair loss:\n\n    simpo:  x = beta * (chosen_logps / chosen_lengths - rejected_logps / rejected_lengths) - gamma\n            loss = -log(sigmoid(x))\n    ipo:    h = (chosen_logps - ref_chosen_logps) - (rejected_logps - ref_rejected_logps)\n            loss = (h - 1 / (2 * beta)) ** 2\n\n**Constraints:**\n- SimPO uses no reference model. IPO uses no sigmoid.\n- The SimPO loss must stay finite for margins as large as 1000 in either direction.\n- Keep the result differentiable with respect to the policy log-probabilities.\n- Raise `ValueError` for an unknown `loss_type`, `beta <= 0`, a missing required argument, or a length that is not positive.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**SimPO.** DPO's implicit reward is a log-ratio against a frozen reference, which costs a second model and does not match how generation ranks sequences. SimPO replaces it with the length-normalized average log-probability, the same score beam search uses, and asks the chosen response to win by at least `gamma / beta`.\n\n**IPO.** With deterministic preferences DPO keeps pushing the log-ratio gap toward infinity, which overfits and ignores the KL regularizer. IPO regresses the gap toward a finite target `1 / (2 * beta)` with a squared loss, so a larger `beta` means a smaller target and stronger regularization. TRL applies this same formula to length-averaged log-probabilities, which keeps `beta` comparable across response lengths.",
       "version": 1,
       "tests": [
         {
@@ -13962,6 +14110,40 @@
         {
           "stage": "tradeoffs",
           "question": "DPO, IPO and SimPO on noisy human labels versus clean verifiable labels: which would you pick for each?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/huggingface/trl",
+          "commit": "d947c4f5098c8d6ca30ea7ff58b98e6570fd6a01",
+          "path": "trl/experimental/cpo/cpo_trainer.py",
+          "symbol": "CPOTrainer.cpo_loss (loss_type='simpo')",
+          "license": "Apache-2.0",
+          "adapted": "SimPO: -logsigmoid(beta * (average chosen logp - average rejected logp) - gamma).",
+          "simplifications": "No label smoothing or AlphaPO reward transform; lengths are passed explicitly instead of averaging inside the trainer."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/huggingface/trl",
+          "commit": "d947c4f5098c8d6ca30ea7ff58b98e6570fd6a01",
+          "path": "trl/trainer/dpo_trainer.py",
+          "symbol": "DPOTrainer loss_type='ipo' branch",
+          "license": "Apache-2.0",
+          "adapted": "IPO: squared distance of the log-ratio gap from 1 / (2 * beta).",
+          "simplifications": "DIVERGES: TRL divides each log-ratio by its completion length before taking the gap; this exercise uses the summed form of the IPO paper (Eq. 17). Passing length-averaged log-probabilities reproduces TRL."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2405.14734",
+          "equation": "SimPO paper, Eq. 6",
+          "note": "The SimPO objective."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2310.12036",
+          "equation": "IPO paper (Azar et al.), Eq. 17",
+          "note": "The IPO objective."
         }
       ]
     },
@@ -14067,6 +14249,18 @@
           "stage": "tradeoffs",
           "question": "Truncated IS versus fixing the mismatch at the source (same kernels, fp32 logits, batch-invariant ops): costs and benefits?"
         }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/volcengine/verl",
+          "commit": "00094bd9cd3fef9cf8903daf60ea4a2bcf832efc",
+          "path": "verl/trainer/ppo/rollout_corr_helper.py",
+          "symbol": "compute_rollout_correction_weights",
+          "license": "Apache-2.0",
+          "adapted": "Token-level and sequence-level weights exp(log ratio), truncated at an upper threshold and zeroed on padding.",
+          "simplifications": "TIS only: no IcePop lower bound, batch normalization or metrics; truncation is applied in log space instead of verl's fixed safety bound of 20 before exponentiating."
+        }
       ]
     },
     {
@@ -14164,6 +14358,18 @@
           "stage": "tradeoffs",
           "question": "How do you choose the chunk size, and what happens at the extremes?"
         }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/linkedin/Liger-Kernel",
+          "commit": "6ad077c36379eb9c7950f5572cc713f4d38e21a7",
+          "path": "src/liger_kernel/ops/fused_linear_cross_entropy.py",
+          "symbol": "fused_linear_cross_entropy_forward",
+          "license": "BSD-2-Clause",
+          "adapted": "Chunking the LM-head projection so full (N, V) logits are never held for backward, with the mean taken over non-ignored tokens across all chunks.",
+          "simplifications": "Recomputes each chunk with torch.utils.checkpoint instead of computing gradients in the forward pass with Triton kernels; no label smoothing, z-loss or softcapping."
+        }
       ]
     },
     {
@@ -14260,6 +14466,18 @@
         {
           "stage": "tradeoffs",
           "question": "Newton-Schulz versus an exact SVD or polar decomposition: speed, numerical precision and bfloat16 stability?"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/KellerJordan/Muon",
+          "commit": "f98f1cacc0263b04290753e32be8d498c1efc806",
+          "path": "muon.py",
+          "symbol": "zeropower_via_newtonschulz5 and muon_update",
+          "license": "MIT",
+          "adapted": "Momentum lerp, Nesterov look-ahead, Frobenius normalization, transposing tall matrices, the quintic coefficients and the sqrt(max(1, R / K)) scale.",
+          "simplifications": "Computes in the input dtype instead of bfloat16, does not overwrite grad in place, and supports 2-D matrices only."
         }
       ]
     },

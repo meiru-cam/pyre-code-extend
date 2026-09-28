@@ -16,6 +16,8 @@ Licenses of vendored material:
   * openrlhf_loss.py    — Apache License 2.0, the OpenRLHF authors
   * nano_aha_moment.py  — MIT License, Copyright (c) 2025 McGill NLP
   * verl_agent_loop.py  — Apache License 2.0, Bytedance Ltd. and affiliates
+  * verl_core_algos.py  — Apache License 2.0, Bytedance Ltd. and affiliates
+  * trl_preference.py   — Apache License 2.0, the HuggingFace Team
 """
 
 from torch_judge.harness.rl.vendored.nano_aha_moment import (
@@ -34,7 +36,14 @@ from torch_judge.harness.rl.vendored.openrlhf_loss import (
     openrlhf_policy_loss,
     openrlhf_value_loss,
 )
+from torch_judge.harness.rl.vendored.trl_preference import trl_ipo_loss, trl_simpo_loss
 from torch_judge.harness.rl.vendored.verl_agent_loop import verl_finalize_agent_rollout
+from torch_judge.harness.rl.vendored.verl_core_algos import (
+    VERL_IS_SAFETY_BOUND,
+    verl_agg_loss,
+    verl_rloo_outcome_advantage,
+    verl_rollout_is_weights,
+)
 
 __all__ = [
     "NANO_ADVANTAGE_EPS",
@@ -49,5 +58,11 @@ __all__ = [
     "openrlhf_gspo_ratio",
     "openrlhf_policy_loss",
     "openrlhf_value_loss",
+    "trl_ipo_loss",
+    "trl_simpo_loss",
+    "VERL_IS_SAFETY_BOUND",
+    "verl_agg_loss",
     "verl_finalize_agent_rollout",
+    "verl_rloo_outcome_advantage",
+    "verl_rollout_is_weights",
 ]

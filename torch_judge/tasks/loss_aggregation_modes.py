@@ -47,6 +47,20 @@ TASK = {
         "pros": ["Making aggregation explicit exposes a hidden length bias that changes what the policy learns."],
         "cons": ["No mode is best everywhere; token-mean lets long responses dominate the batch and constant normalization needs a fixed horizon."],
     },
+    "sources": [{'kind': 'code',
+      'url': 'https://github.com/volcengine/verl',
+      'commit': '00094bd9cd3fef9cf8903daf60ea4a2bcf832efc',
+      'path': 'verl/trainer/ppo/core_algos.py',
+      'symbol': 'agg_loss',
+      'license': 'Apache-2.0',
+      'adapted': 'The four loss_agg_mode reductions, excluding fully masked sequences from sequence means and using the '
+                 'horizon T for seq-mean-token-sum-norm.',
+      'simplifications': 'Single process: no dp_size, batch_num_tokens, global_batch_size, loss_scale_factor or token-sum '
+                         'mode; an all-false mask raises instead of dividing by zero.'},
+     {'kind': 'paper',
+      'url': 'https://arxiv.org/abs/2503.20783',
+      'section': 'Liu et al. 2025 (Dr. GRPO), Section 3.1 length bias',
+      'note': 'Motivation for a constant normaliser.'}],
     "tests": [
         {"name": "All four modes on a ragged batch", "behavior": "rl.masking", "code": r"""
 import torch

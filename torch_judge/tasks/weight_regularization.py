@@ -47,6 +47,11 @@ TASK = {
         "pros": ["L1 drives weights to exactly zero for sparsity; L2 shrinks all weights smoothly and keeps the problem strongly convex for linear models."],
         "cons": ["Penalty strength interacts with the learning rate and optimizer; with Adam an L2 loss term is not the same as decoupled weight decay."],
     },
+    "sources": [{'kind': 'paper',
+      'url': 'https://www.deeplearningbook.org/contents/regularization.html',
+      'section': '7.1.1 L2 Parameter Regularization and 7.1.2 L1 Regularization',
+      'note': "The 0.5 * l2 * ||w||^2 and l1 * ||w||_1 penalties; penalizing weights but not biases follows the chapter's "
+              'discussion.'}],
     "tests": [
         {"name": "Adds both penalties to the data loss", "behavior": "state.invariant", "code": r"""
 import torch

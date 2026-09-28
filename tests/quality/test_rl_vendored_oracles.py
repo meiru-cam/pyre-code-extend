@@ -28,7 +28,13 @@ from torch_judge.harness.rl.vendored import (
     openrlhf_gspo_ratio,
     openrlhf_policy_loss,
     openrlhf_value_loss,
+    trl_ipo_loss,
+    trl_simpo_loss,
+    VERL_IS_SAFETY_BOUND,
+    verl_agg_loss,
     verl_finalize_agent_rollout,
+    verl_rloo_outcome_advantage,
+    verl_rollout_is_weights,
 )
 from torch_judge.tasks import get_task
 
@@ -271,6 +277,88 @@ def test_agent_rollout_truncation_matches_verl_prefix_and_reward_layout(seed):
 
 
 # --------------------------------------------------------------------------
+# verl: RLOO, loss aggregation, truncated importance sampling
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("seed", range(5))
+def test_rloo_advantage_matches_verl(seed):
+    g = torch.Generator().manual_seed(seed)
+    k = int(torch.randint(2, 7, (1,), generator=g))
+    groups = int(torch.randint(1, 5, (1,), generator=g))
+    rewards = torch.randn(groups * k, generator=g, dtype=torch.float64)
+    index = [i // k for i in range(groups * k)]
+    upstream = verl_rloo_outcome_advantage(rewards.clone().unsqueeze(-1), torch.ones(groups * k, 1, dtype=torch.float64), index)
+    mine = reference("rloo_advantage")(rewards.clone(), k)
+    assert torch.allclose(mine, upstream.squeeze(-1), atol=1e-12)
+
+
+@pytest.mark.parametrize("seed", range(5))
+@pytest.mark.parametrize("mode", ["token-mean", "seq-mean-token-mean", "seq-mean-token-sum", "seq-mean-token-sum-norm"])
+def test_loss_aggregation_matches_verl(seed, mode):
+    g = torch.Generator().manual_seed(seed)
+    B, T = int(torch.randint(2, 6, (1,), generator=g)), int(torch.randint(2, 9, (1,), generator=g))
+    loss = torch.randn(B, T, generator=g, dtype=torch.float64)
+    mask = torch.rand(B, T, generator=g) < 0.6
+    mask[0, 0] = True
+    mask[-1] = False
+    upstream = verl_agg_loss(loss, mask.to(loss.dtype), mode)
+    mine = reference("loss_aggregation_modes")(loss, mask, mode)
+    # verl adds 1e-8 to each sequence's token count in seq-mean-token-mean.
+    assert torch.allclose(mine, upstream, rtol=1e-6, atol=1e-10), (mine, upstream)
+
+
+@pytest.mark.parametrize("seed", range(5))
+@pytest.mark.parametrize("level", ["token", "sequence"])
+def test_truncated_is_weights_match_verl(seed, level):
+    g = torch.Generator().manual_seed(seed)
+    B, T = 3, 6
+    train = -torch.rand(B, T, generator=g, dtype=torch.float64) * 3
+    rollout = train + torch.randn(B, T, generator=g, dtype=torch.float64) * 0.5
+    mask = torch.rand(B, T, generator=g) < 0.7
+    mask[:, 0] = True
+    upstream = verl_rollout_is_weights(train - rollout, mask.to(train.dtype), level, 2.0)
+    mine = reference("truncated_importance_sampling")(train, rollout, mask, cap=2.0, level=level)
+    assert torch.allclose(mine, upstream, atol=1e-12)
+    assert VERL_IS_SAFETY_BOUND > 2.0, "the safety bound never binds below the cap used here"
+
+
+# --------------------------------------------------------------------------
+# TRL: SimPO and IPO
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("seed", range(5))
+def test_simpo_matches_trl(seed):
+    g = torch.Generator().manual_seed(seed)
+    B = 4
+    chosen, rejected = -torch.rand(B, generator=g, dtype=torch.float64) * 40, -torch.rand(B, generator=g, dtype=torch.float64) * 40
+    lc, lr = torch.randint(1, 20, (B,), generator=g), torch.randint(1, 20, (B,), generator=g)
+    upstream = trl_simpo_loss(chosen, rejected, lc, lr, beta=2.0, simpo_gamma=0.5).mean()
+    mine = reference("simpo_ipo_loss")(chosen, rejected, "simpo", 2.0, chosen_lengths=lc, rejected_lengths=lr, gamma=0.5)
+    assert torch.allclose(mine, upstream, atol=1e-12)
+
+
+@pytest.mark.parametrize("seed", range(5))
+def test_ipo_matches_trl_on_length_averaged_inputs(seed):
+    """TRL length-normalizes IPO; the exercise follows the paper's summed form.
+
+    Feeding the exercise length-averaged log-probabilities must reproduce TRL
+    exactly, and feeding it sums must differ whenever lengths are not 1.
+    """
+    g = torch.Generator().manual_seed(seed)
+    B = 4
+    c, r, rc, rr = (-torch.rand(B, generator=g, dtype=torch.float64) * 30 for _ in range(4))
+    lc, lr = torch.randint(2, 20, (B,), generator=g).double(), torch.randint(2, 20, (B,), generator=g).double()
+    upstream = trl_ipo_loss(c, r, rc, rr, lc, lr, beta=0.5).mean()
+    ipo = reference("simpo_ipo_loss")
+    averaged = ipo(c / lc, r / lr, "ipo", 0.5, ref_chosen_logps=rc / lc, ref_rejected_logps=rr / lr)
+    summed = ipo(c, r, "ipo", 0.5, ref_chosen_logps=rc, ref_rejected_logps=rr)
+    assert torch.allclose(averaged, upstream, atol=1e-12)
+    assert not torch.allclose(summed, upstream)
+
+
+# --------------------------------------------------------------------------
 # Provenance hygiene
 # --------------------------------------------------------------------------
 
@@ -291,7 +379,7 @@ def test_vendored_modules_never_import_a_task_solution():
 
 
 @pytest.mark.parametrize(
-    "module", ["openrlhf_loss.py", "nano_aha_moment.py", "verl_agent_loop.py"]
+    "module", ["openrlhf_loss.py", "nano_aha_moment.py", "verl_agent_loop.py", "verl_core_algos.py", "trl_preference.py"]
 )
 def test_vendored_modules_carry_provenance_and_license(module):
     source = (VENDORED_DIR / module).read_text()

@@ -44,6 +44,19 @@ TASK = {
         "pros": ["Unbiased baseline without a value network, using samples you already drew."],
         "cons": ["Needs at least two samples per prompt, and groups where every reward is equal give zero advantage everywhere."],
     },
+    "sources": [{'kind': 'code',
+      'url': 'https://github.com/volcengine/verl',
+      'commit': '00094bd9cd3fef9cf8903daf60ea4a2bcf832efc',
+      'path': 'verl/trainer/ppo/core_algos.py',
+      'symbol': 'compute_rloo_outcome_advantage',
+      'license': 'Apache-2.0',
+      'adapted': 'Leave-one-out baseline written as k / (k - 1) * (r - group mean).',
+      'simplifications': 'Rewards arrive as a flat group-major vector instead of token-level rewards plus a prompt index; '
+                         'groups of size 1 are rejected instead of given zero advantage.'},
+     {'kind': 'paper',
+      'url': 'https://arxiv.org/abs/2402.14740',
+      'section': 'Ahmadian et al. 2024, Section 3.2 REINFORCE Leave-One-Out',
+      'note': 'The RLOO estimator definition.'}],
     "tests": [
         {"name": "Leave-one-out baseline on two groups", "behavior": "rl.advantage", "code": r"""
 import torch

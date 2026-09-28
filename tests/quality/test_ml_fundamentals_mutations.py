@@ -124,6 +124,7 @@ def test_task_metadata_is_valid_and_english_only(task_id):
     validate_task(task_id, task)
     assert not {"title_zh", "description_zh", "hint_zh"} & set(task)
     assert task["interview_questions"]
+    assert task.get("sources"), "every new exercise needs pinned provenance"
 
 
 def test_ml_fundamentals_path_lists_every_new_task():

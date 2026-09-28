@@ -45,6 +45,19 @@ where the counts run over every pair of one positive and one negative.
         "pros": ["Threshold-free, invariant to any monotonic rescaling of scores, and unaffected by the positive rate."],
         "cons": ["Can look high on heavily imbalanced data where precision is poor; precision-recall AUC is more informative there."],
     },
+    "sources": [{'kind': 'code',
+      'url': 'https://github.com/scikit-learn/scikit-learn',
+      'commit': '857849927da6e988d7d026b17aef214d43e5f26e',
+      'path': 'sklearn/metrics/_ranking.py',
+      'symbol': 'roc_auc_score and _binary_roc_auc_score',
+      'license': 'BSD-3-Clause',
+      'adapted': 'Binary AUC with tied scores counted as one half, equal to the trapezoidal area under the ROC curve.',
+      'simplifications': 'Computed with average ranks (Mann-Whitney U) instead of an explicit ROC curve; no max_fpr, '
+                         'sample weights or multiclass.'},
+     {'kind': 'paper',
+      'url': 'https://pubs.rsna.org/doi/10.1148/radiology.143.1.7063747',
+      'section': 'Hanley and McNeil (1982), relation between AUC and the Wilcoxon statistic',
+      'note': 'The rank-sum formula used by the reference solution.'}],
     "tests": [
         {"name": "Perfect, reversed and partial rankings", "behavior": "metrics.ties", "code": r"""
 import torch

@@ -50,6 +50,17 @@ TASK = {
         "pros": ["Cheap, model-agnostic control over diversity and repetition at inference time."],
         "cons": ["The knobs interact, and the repetition penalty also punishes tokens that should repeat, such as code syntax or names."],
     },
+    "sources": [{'kind': 'code',
+      'url': 'https://github.com/huggingface/transformers',
+      'commit': '2e703d6c7e81ec584c25edc39e8bd2f5a45b04bd',
+      'path': 'src/transformers/generation/logits_process.py',
+      'symbol': 'RepetitionPenaltyLogitsProcessor, TemperatureLogitsWarper, TopKLogitsWarper and TopPLogitsWarper',
+      'license': 'Apache-2.0',
+      'adapted': 'The sign-aware repetition penalty, temperature scaling, top-k keeping ties with the k-th value, and '
+                 'top-p keeping the smallest prefix that reaches p.',
+      'simplifications': 'Applied in one function in a fixed order; top-p is computed with a descending cumulative sum, '
+                         "which can differ from Hugging Face's ascending form only when a cumulative sum lands exactly on "
+                         'the threshold; min_tokens_to_keep is fixed at 1.'}],
     "tests": [
         {"name": "Each processor on a small row", "behavior": "tensor.shape", "code": r"""
 import math, torch
