@@ -263,7 +263,7 @@
   "rollout_weight_sync_staleness": {
     "Why do inference engine weights lag behind trainer weights in RL systems?": "Syncing weights to the inference engine takes time, and rollouts keep running during training, so the rollouts use older weights.",
     "What is staleness, and why cap it?": "The version gap between the policy that generated a sample and the current one. Large gaps make the data too off-policy.",
-    "How do you route complete, aborted and failed samples, and why do stale samples go to retry rather than dropped?": "Complete samples within the staleness limit train. Stale and aborted samples go to retry: the prompt is still valid, only the generation is unusable. Failed samples are dropped.",
+    "How do you route complete, aborted and failed samples, and why do stale samples go to retry rather than dropped?": "Complete samples within the staleness limit train, while stale and aborted ones go to retry because the prompt is still valid. Failed samples are dropped.",
     "When is it safe to sync weights to the serving engine, and why wait for in-flight requests?": "When no request is running on the old weights. Swapping mid-generation mixes two policies within one sample.",
     "What should happen if lag is negative?": "A sample from a newer version than the trainer means a bookkeeping bug. Raise an error rather than silently accepting it.",
     "Strict on-policy versus bounded staleness: what do you gain in throughput and lose in correctness?": "Bounded staleness gives higher throughput and less idling but introduces an off-policy bias.",

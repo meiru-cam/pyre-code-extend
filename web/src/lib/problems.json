@@ -1073,7 +1073,7 @@
         {
           "stage": "tradeoffs",
           "question": "Pre-norm versus post-norm placement: how does it affect training stability?",
-          "hint": "Post-norm puts LayerNorm after the residual add. At initialization the gradients of the layers near the output are large (Xiong et al. 2020), so it needs learning-rate warmup. Pre-norm keeps a clean identity path and trains without it."
+          "hint": "Post-norm puts LayerNorm after the residual add, and at initialization the gradients near the output are large (Xiong et al. 2020), so it needs learning-rate warmup. Pre-norm keeps a clean identity path and trains without it."
         }
       ]
     },
@@ -2637,7 +2637,7 @@
         {
           "stage": "tradeoffs",
           "question": "RoPE versus ALiBi: extrapolation and efficiency trade-offs?",
-          "hint": "ALiBi adds a linear distance bias inside the attention scores; it extrapolates somewhat but always penalizes long range. RoPE is applied to Q and K before attention, so any attention kernel works unchanged, and it gave better quality at the training length."
+          "hint": "ALiBi adds a linear distance bias inside the attention scores, extrapolates somewhat but always penalizes long range. RoPE is applied to Q and K before attention, so any kernel works unchanged, with comparable or slightly better quality at the training length."
         }
       ]
     },
@@ -4341,7 +4341,7 @@
         {
           "stage": "deep_dive",
           "question": "How do you handle unvisited children in selection?",
-          "hint": "In classic UCB1 an unvisited child scores infinity and is tried first. This exercise adds 1 to the visit count, so the score stays finite, but the exploration term is largest for unvisited children. PUCT relies on the prior instead."
+          "hint": "Classic UCB1 scores an unvisited child as infinity, so it is tried first, and PUCT relies on the prior instead. This exercise adds 1 to the visit count, which keeps the score finite while giving unvisited children the largest exploration term."
         },
         {
           "stage": "deep_dive",
@@ -6339,7 +6339,7 @@
         {
           "stage": "deep_dive",
           "question": "How do you compute the balance and z losses from router logits?",
-          "hint": "Here: importance = mean over tokens of the softmax, balance = E * sum(importance^2), which is 1 when usage is uniform. Switch uses E * sum f_i * P_i with hard token fractions f_i instead. Z: mean of logsumexp(logits) squared."
+          "hint": "Here importance is the mean softmax per expert and balance = E * sum(importance^2), unlike Switch's E * sum f_i * P_i with hard token fractions. The z-loss is the mean of logsumexp(logits) squared."
         },
         {
           "stage": "deep_dive",
@@ -7103,7 +7103,7 @@
         {
           "stage": "deep_dive",
           "question": "How do you order policies and resolve conflicts, for example deny wins?",
-          "hint": "Evaluate in constructor order and stop at the first deny, so later policies never run. An allow never undoes an earlier transform; record each policy's reason."
+          "hint": "Evaluate in constructor order and stop at the first deny, so later policies never run. An allow never undoes an earlier transform, and each transform's reason is kept for the decision."
         },
         {
           "stage": "deep_dive",
@@ -12405,7 +12405,7 @@
         {
           "stage": "deep_dive",
           "question": "How do you route complete, aborted and failed samples, and why do stale samples go to retry rather than dropped?",
-          "hint": "Complete samples within the staleness limit train. Stale and aborted samples go to retry: the prompt is still valid, only the generation is unusable. Failed samples are dropped."
+          "hint": "Complete samples within the staleness limit train, while stale and aborted ones go to retry because the prompt is still valid. Failed samples are dropped."
         },
         {
           "stage": "deep_dive",
@@ -14622,7 +14622,7 @@
         {
           "stage": "deep_dive",
           "question": "Walk through implementing top-p on a batch. Is the token that crosses the threshold kept, and how do you map the mask back from sorted order?",
-          "hint": "Sort descending and take the cumulative sum. Remove a token when the sum of the tokens before it already reaches p, so the token that crosses the threshold stays. Scatter the mask back with the sort indices."
+          "hint": "Sort descending and remove a token when the cumulative sum of the tokens before it already reaches p, so the crossing token stays. Scatter the mask back with the sort indices."
         },
         {
           "stage": "deep_dive",
@@ -17693,7 +17693,7 @@
         {
           "stage": "deep_dive",
           "question": "Why must index and type be replaced rather than concatenated? What breaks if they are not?",
-          "hint": "They identify a call rather than carry content. Concatenating type gives \"functionfunction\", and adding indexes turns 1 + 1 into 2, so later fragments land on the wrong call."
+          "hint": "They identify a call rather than carry content, so they must be replaced. Concatenating type gives \"functionfunction\", and adding indexes turns 1 + 1 into 2, a corrupt index in the snapshot."
         },
         {
           "stage": "deep_dive",
