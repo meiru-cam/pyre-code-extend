@@ -5,8 +5,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   highestPassedPart,
   loadUnlockedPart,
+  resultThroughPart,
   saveUnlockedPart,
-  testIndicesThroughPart,
   unlockedAfter,
 } from '@/lib/parts';
 import type { SubmissionResult, Test } from '@/lib/types';
@@ -26,9 +26,16 @@ function result(passed: Record<number, boolean>): SubmissionResult {
 }
 
 describe('part grading', () => {
-  it('runs every case of the parts reached so far, unshown ones included', () => {
-    expect(testIndicesThroughPart(tests, 1)).toEqual([0, 1]);
-    expect(testIndicesThroughPart(tests, 2)).toEqual([0, 1, 2]);
+  it('shows only the cases of unlocked parts and recounts them', () => {
+    const shown = resultThroughPart(tests, result({ 0: true, 1: true, 2: false, 3: false }), 2);
+    expect(shown.results.map((r) => r.testIndex)).toEqual([0, 1, 2]);
+    expect([shown.passed, shown.total]).toEqual([2, 3]);
+  });
+
+  it('unlocks straight to the last part when a full solution passes everything', () => {
+    const all = result({ 0: true, 1: true, 2: true, 3: true });
+    expect(unlockedAfter(tests, all, 3, 1)).toBe(3);
+    expect(resultThroughPart(tests, all, 3).results).toHaveLength(4);
   });
 
   it('counts a part as passed only when all its cases passed', () => {

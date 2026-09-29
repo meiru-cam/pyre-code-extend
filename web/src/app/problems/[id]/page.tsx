@@ -24,7 +24,7 @@ import {
   loadUnlockedPart,
   partCount,
   saveUnlockedPart,
-  testIndicesThroughPart,
+  resultThroughPart,
   unlockedAfter,
 } from '@/lib/parts';
 import {
@@ -173,13 +173,16 @@ function WorkspacePageNew() {
   const parts = problem ? partCount(problem) : 0;
   const shownPart = parts && progress[id]?.status === 'solved' ? parts : unlockedPart;
 
-  const unlockFrom = (result: SubmissionResult) => {
-    if (!problem || !parts || !result.results) return;
+  // Run and Submit grade every part. Unlock as far as the code passes, then show only the
+  // unlocked parts' cases. The first failing part is always unlocked, so a failure is never hidden.
+  const unlockAndShow = (result: SubmissionResult): SubmissionResult => {
+    if (!problem || !parts || !result.results) return result;
     const next = unlockedAfter(problem.tests, result, parts, unlockedPart);
     if (next > unlockedPart) {
       setUnlockedPart(next);
       saveUnlockedPart(id, problem.version ?? 1, next);
     }
+    return resultThroughPart(problem.tests, result, Math.max(next, shownPart));
   };
 
   const handleRun = async () => {
@@ -187,9 +190,8 @@ function WorkspacePageNew() {
     setIsRunning(true);
     setRunResult(null);
     try {
-      // A multi-part exercise grades every case of the parts reached so far.
       const testIndices = parts
-        ? testIndicesThroughPart(problem.tests, shownPart)
+        ? problem.tests.map((_, index) => index)
         : visibleTestIndices(problem.tests).slice(0, 2);
       const res = await fetch('/api/run', {
         method: 'POST',
@@ -197,8 +199,7 @@ function WorkspacePageNew() {
         body: JSON.stringify({ taskId: id, code: currentCode, testIndices }),
       });
       const data = await res.json();
-      setRunResult(data);
-      unlockFrom(data);
+      setRunResult(unlockAndShow(data));
       setBottomTab('testresults');
     } catch {
       setRunResult({ passed: 0, total: 0, allPassed: false, results: [], totalTimeMs: 0, error: t('networkError') });
@@ -218,11 +219,11 @@ function WorkspacePageNew() {
         body: JSON.stringify({ taskId: id, code: currentCode }),
       });
       const data: SubmissionResult = await res.json();
-      setSubmissionResult(data);
-      setRunResult(data);
-      unlockFrom(data);
+      const shown = unlockAndShow(data);
+      setSubmissionResult(shown);
+      setRunResult(shown);
       setBottomTab('testresults');
-      setFeedbackResult(data);
+      setFeedbackResult(shown);
       fetch('/api/progress').then((r) => r.json()).then((d) => setProgress(d.progress || {}));
       fetch(`/api/submissions/${id}`).then((r) => r.json()).then((d: SubmissionHistory[]) => setSubmissionHistory(d)).catch(() => {});
     } catch {

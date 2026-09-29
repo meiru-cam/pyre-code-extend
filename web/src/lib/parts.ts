@@ -6,11 +6,15 @@ export function partCount(problem: Pick<Problem, 'parts'>): number {
   return problem.parts?.length ?? 0;
 }
 
-/** Every case of parts 1..part, visible or not, since parts are graded together. */
-export function testIndicesThroughPart(tests: Test[], part: number): number[] {
-  return tests
-    .map((test, index) => ((test.part ?? 1) <= part ? index : -1))
-    .filter((index) => index >= 0);
+/**
+ * `result` cut down to the cases of parts 1..part, so a locked part's case names never show.
+ * Run and Submit grade every part; the page then shows only what the learner has unlocked.
+ */
+export function resultThroughPart(tests: Test[], result: SubmissionResult, part: number): SubmissionResult {
+  const results = result.results.filter(
+    (r) => r.testIndex === undefined || (tests[r.testIndex]?.part ?? 1) <= part,
+  );
+  return { ...result, results, passed: results.filter((r) => r.passed).length, total: results.length };
 }
 
 /**
