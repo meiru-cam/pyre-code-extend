@@ -1,0 +1,25 @@
+{
+  "title": "Webhook Delivery",
+  "summary": "Tenants register callback URLs and receive every matching event at least once, about 650 million deliveries a day: retries with backoff, isolating slow or dead endpoints, signed requests, and SSRF protection.",
+  "round": "system-design",
+  "kind": "System design",
+  "difficulty": null,
+  "frequency": "low",
+  "format": null,
+  "topics": [
+    "queueing",
+    "retry",
+    "idempotency",
+    "security"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/system-design/webhook-delivery",
+  "rubric": [
+    "Requirements and scale",
+    "Data model and API",
+    "Architecture",
+    "Deep dives",
+    "Failure modes and recovery",
+    "Trade-offs and alternatives rejected"
+  ],
+  "exercises": []
+}

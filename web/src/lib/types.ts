@@ -156,3 +156,40 @@ export interface AiHelpResponse {
   model?: string;
   advisory?: boolean;
 }
+
+export type PrepRound = 'ml-coding' | 'coding' | 'system-design' | 'behavioral' | 'take-home';
+
+export interface PrepItem {
+  id: string;
+  company: string;
+  title: string;
+  summary: string;
+  round: PrepRound;
+  kind: string;
+  difficulty: string | null;
+  frequency: string | null;
+  format: string | null;
+  topics: string[];
+  source: string;
+  rubric: string[];
+  exercises: string[];
+  prompt: string;
+  reference: string;
+}
+
+/** A question hosted elsewhere whose text may not be copied here. */
+export interface PrepLink {
+  id: string;
+  company: string;
+  title: string;
+  round: PrepRound;
+  url: string;
+}
+
+export type PrepItemSummary = Omit<PrepItem, 'prompt' | 'reference'> & {
+  exercisesSolved: number;
+};
+
+export type PrepItemDetail = PrepItem & {
+  exerciseSteps: LearningPathProblemSummary[];
+};

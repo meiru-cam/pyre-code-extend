@@ -1,0 +1,20 @@
+{
+  "title": "Longest-Match Tokenizer",
+  "summary": "Tokenize a string against a vocabulary by greedy longest match from the left, falling back to a per-character UNK id where nothing matches. Merge consecutive UNKs and bound the match search by the vocabulary's longest entry, then replace that search with a trie built once and reused across many texts.",
+  "round": "ml-coding",
+  "kind": "Coding · string processing",
+  "difficulty": "Medium",
+  "frequency": "medium",
+  "format": "3 parts / 55 min",
+  "topics": [
+    "greedy",
+    "string-processing",
+    "trie",
+    "tokenization"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/coding/longest-match-tokenizer",
+  "rubric": [],
+  "exercises": [
+    "bpe"
+  ]
+}

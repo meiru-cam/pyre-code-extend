@@ -1,0 +1,22 @@
+{
+  "title": "Cross-Entropy Loss from Scratch",
+  "summary": "Cross-entropy on top of NumPy starter code, then masking and label smoothing, with a running conversation about the ML behind it and its link to KL divergence.",
+  "round": "ml-coding",
+  "kind": "Coding with ML concepts · NumPy",
+  "difficulty": "Medium",
+  "frequency": "rare",
+  "format": "4 parts",
+  "topics": [
+    "numpy",
+    "numerical-stability",
+    "loss-functions",
+    "kl-divergence"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/coding/cross-entropy-loss",
+  "rubric": [],
+  "exercises": [
+    "cross_entropy",
+    "label_smoothing",
+    "chunked_cross_entropy"
+  ]
+}

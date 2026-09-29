@@ -1,0 +1,28 @@
+{
+  "title": "Project Deep Dive: Presentation and Technical Q&A",
+  "summary": "Present one past technical project of your choice for about 20-25 minutes, then defend it through 25-30 minutes of Q&A on context, architecture, rejected alternatives, your own contribution, results, failures, and scale.",
+  "round": "behavioral",
+  "kind": "Presentation and Q&A",
+  "difficulty": null,
+  "frequency": "very-high",
+  "format": "55 min",
+  "topics": [
+    "presentation",
+    "project-deep-dive",
+    "trade-offs",
+    "metrics",
+    "retrospective"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/behavioral/project-deep-dive",
+  "rubric": [
+    "Problem and context",
+    "Architecture and key decisions",
+    "Trade-offs and alternatives rejected",
+    "Your contribution versus the team's",
+    "Measurement and results",
+    "Failures and what you would do differently",
+    "Scaling and operational concerns",
+    "For research roles: experimental design"
+  ],
+  "exercises": []
+}
