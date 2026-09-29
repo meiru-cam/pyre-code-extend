@@ -46,8 +46,8 @@ export function savePrepDraft(itemId: string, draft: PrepDraft) {
   }
 }
 
-/** Plain text for pasting into an outside model to grade the answer against the rubric. */
-export function formatPrepForGrading(
+/** Plain text for pasting into an outside model to get feedback against the rubric. */
+export function formatPrepForFeedback(
   item: { title: string; prompt: string; rubric: string[] },
   answer: string,
 ): string {
@@ -56,7 +56,7 @@ export function formatPrepForGrading(
     '',
     item.prompt,
     '',
-    'Grade my answer against these points, one by one, and say what an interviewer would push on next:',
+    'Give feedback on my answer against these points, one by one, and say what an interviewer would push on next:',
     ...item.rubric.map((point) => `- ${point}`),
     '',
     'My answer:',

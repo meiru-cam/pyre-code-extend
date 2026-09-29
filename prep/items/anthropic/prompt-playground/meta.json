@@ -19,7 +19,9 @@
     "Requirements and scale",
     "Data model and API",
     "Architecture",
-    "Deep dives"
+    "Deep dives",
+    "Failure modes and recovery",
+    "Trade-offs and alternatives rejected"
   ],
   "exercises": []
 }

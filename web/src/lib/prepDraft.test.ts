@@ -3,7 +3,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
-  formatPrepForGrading,
+  formatPrepForFeedback,
   hasPrepDraftContent,
   loadPrepDraft,
   savePrepDraft,
@@ -35,9 +35,9 @@ describe('prep local drafts', () => {
   });
 });
 
-describe('grading text', () => {
+describe('feedback text', () => {
   it('lists the question, every rubric point and the trimmed answer', () => {
-    const text = formatPrepForGrading(
+    const text = formatPrepForFeedback(
       { title: 'Webhook delivery', prompt: 'Design it.', rubric: ['Architecture', 'Deep dives'] },
       '  At-least-once with idempotency keys.\n',
     );

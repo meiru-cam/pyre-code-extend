@@ -84,4 +84,14 @@ def test_behavioral_rubric_prefers_prompt_themes():
     problem = "Intro\n\n### Motivation\n\n### Values stories\n"
     reference = "### Motivation\n\n### Prep outline\n"
     assert rubric_for("behavioral", problem, reference) == ["Motivation", "Values stories"]
-    assert rubric_for("system-design", "", "### Architecture\n### Follow-ups\n") == ["Architecture"]
+
+
+def test_design_rubric_always_asks_for_failure_modes_and_tradeoffs():
+    assert rubric_for("system-design", "", "### Architecture\n### Follow-ups\n") == [
+        "Architecture", "Failure modes and recovery", "Trade-offs and alternatives rejected",
+    ]
+
+
+def test_site_markdown_survives_short_table_rows():
+    source = "| Story | Failure |\n| --- | --- |\n| Mistake |\n"
+    assert to_site_markdown(source) == "- Story: Mistake\n"

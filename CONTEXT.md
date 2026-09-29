@@ -13,7 +13,7 @@ An ordered sequence of exercises that develops one coherent implementation capab
 _Avoid_: Category, tag, problem list
 
 **Prep item**:
-One real company interview question, filed under a company and a round, adapted with attribution from an outside notes repository. It points at exercises (ML coding) or carries a visible rubric and a learner answer (system design, behavioral); it is never graded and never part of a learning path. Items live in `prep/items/`.
+One real company interview question, filed under a company and a round, adapted with attribution from an outside notes repository. It points at exercises (ML coding) or carries a visible rubric and a learner answer (system design, behavioral). The site never grades the answer; the learner may copy it out for outside feedback. It is never part of a learning path. Items live in `prep/items/`.
 _Avoid_: Exercise, company path
 
 **Round**:
@@ -129,7 +129,7 @@ An immutable snapshot of a learner's code or design note submitted against one e
 _Avoid_: Exercise version
 
 **Draft**:
-The learner's unsent code or design note stored in browser-local storage for the current exercise.
+The learner's unsent code, design note or prep answer stored in browser-local storage for the current exercise or prep item.
 _Avoid_: Submission attempt
 
 **Transient AI feedback**:

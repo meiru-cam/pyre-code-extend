@@ -12,12 +12,11 @@ ROOT = Path(__file__).parent.parent
 PREP_DIR = ROOT / "prep"
 OUTPUT = ROOT / "web" / "src" / "lib" / "prep.json"
 
+# Make torch_judge importable when the script is run directly.
 sys.path.insert(0, str(ROOT))
 
 from torch_judge.tasks import TASKS
 
-# Companies with their own tab; every other company is listed under "other".
-FEATURED_COMPANIES = ("openai", "anthropic")
 ROUNDS = ("ml-coding", "coding", "system-design", "behavioral", "take-home")
 RUBRIC_ROUNDS = frozenset({"system-design", "behavioral"})
 

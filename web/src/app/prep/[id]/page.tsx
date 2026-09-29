@@ -11,10 +11,10 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { MarkdownContent } from '@/components/workspace/MarkdownContent';
 import { useLocale } from '@/context/LocaleContext';
-import { PREP_ROUND_LABEL, companyName } from '@/lib/prep';
+import { PREP_ROUND_LABEL, companyName, difficultyVariant } from '@/lib/prep';
 import {
   EMPTY_PREP_DRAFT,
-  formatPrepForGrading,
+  formatPrepForFeedback,
   loadPrepDraft,
   savePrepDraft,
   type PrepDraft,
@@ -23,10 +23,10 @@ import type { PrepItemDetail } from '@/lib/types';
 
 const SAVE_DELAY_MS = 400;
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children }: { title?: string; children: React.ReactNode }) {
   return (
     <section className="pt-8 mt-8" style={{ borderTop: '1px solid var(--line)' }}>
-      <h2 className="text-[18px] font-semibold tracking-[-0.02em] mb-4">{title}</h2>
+      {title && <h2 className="text-[18px] font-semibold tracking-[-0.02em] mb-4">{title}</h2>}
       {children}
     </section>
   );
@@ -34,24 +34,39 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default function PrepItemPage() {
   const { id } = useParams<{ id: string }>();
-  const { t } = useLocale();
+  const { locale, t } = useLocale();
   const [item, setItem] = useState<PrepItemDetail | null>(null);
+  const [notFound, setNotFound] = useState(false);
   const [draft, setDraft] = useState<PrepDraft>(EMPTY_PREP_DRAFT);
   const [showReference, setShowReference] = useState(false);
   const [copied, setCopied] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout>>();
+  const pendingSave = useRef<(() => void) | null>(null);
 
   useEffect(() => {
+    setItem(null);
+    setNotFound(false);
     fetch(`/api/prep/${id}`)
-      .then((r) => r.json())
-      .then((d: PrepItemDetail) => setItem(d));
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: PrepItemDetail | null) => (d ? setItem(d) : setNotFound(true)))
+      .catch(() => setNotFound(true));
     setDraft(loadPrepDraft(id) ?? EMPTY_PREP_DRAFT);
+  }, [id]);
+
+  // Write out a debounced save that is still waiting when the learner leaves the page.
+  useEffect(() => () => {
+    clearTimeout(saveTimer.current);
+    pendingSave.current?.();
   }, [id]);
 
   const updateDraft = (next: PrepDraft) => {
     setDraft(next);
     clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => savePrepDraft(id, next), SAVE_DELAY_MS);
+    pendingSave.current = () => {
+      savePrepDraft(id, next);
+      pendingSave.current = null;
+    };
+    saveTimer.current = setTimeout(() => pendingSave.current?.(), SAVE_DELAY_MS);
   };
 
   const toggleCovered = (point: string) => {
@@ -61,10 +76,10 @@ export default function PrepItemPage() {
     updateDraft({ ...draft, covered });
   };
 
-  const copyForGrading = async () => {
+  const copyForFeedback = async () => {
     if (!item) return;
     try {
-      await navigator.clipboard.writeText(formatPrepForGrading(item, draft.answer));
+      await navigator.clipboard.writeText(formatPrepForFeedback(item, draft.answer));
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -74,13 +89,18 @@ export default function PrepItemPage() {
 
   if (!item) {
     return (
-      <div className="min-h-screen bg-bg flex items-center justify-center">
-        <p className="text-sm text-text-3">{t('loading')}</p>
+      <div className="min-h-screen bg-bg flex flex-col items-center justify-center gap-3">
+        <p className="text-sm text-text-3">{notFound ? t('prepNotFound') : t('loading')}</p>
+        {notFound && <Link href="/prep" className="text-sm text-accent">{t('prep')}</Link>}
       </div>
     );
   }
 
-  const meta = [item.kind, item.format, item.frequency && `freq: ${item.frequency}`].filter(Boolean);
+  const meta = [
+    item.kind,
+    item.format,
+    item.frequency && t('prepFrequency', { value: item.frequency }),
+  ].filter(Boolean);
 
   return (
     <div className="min-h-screen bg-bg">
@@ -97,7 +117,7 @@ export default function PrepItemPage() {
         <div className="eyebrow mb-2">{t(PREP_ROUND_LABEL[item.round])}</div>
         <h1 className="text-[clamp(28px,3.4vw,42px)] font-semibold tracking-[-0.03em] leading-[1.1] mb-3">{item.title}</h1>
         <div className="flex items-center gap-2 flex-wrap mb-4">
-          {item.difficulty && <Badge>{item.difficulty.toUpperCase()}</Badge>}
+          {item.difficulty && <Badge variant={difficultyVariant(item.difficulty)}>{item.difficulty.toUpperCase()}</Badge>}
           <span className="mono text-xs text-text-3">{meta.join(' · ')}</span>
         </div>
         <p className="text-base text-text-2 leading-relaxed mb-3">{item.summary}</p>
@@ -110,9 +130,9 @@ export default function PrepItemPage() {
           {t('prepSource')} <ExternalLink className="w-3 h-3" />
         </a>
 
-        <div className="pt-8 mt-8" style={{ borderTop: '1px solid var(--line)' }}>
+        <Section>
           <MarkdownContent content={item.prompt} extended />
-        </div>
+        </Section>
 
         {item.exerciseSteps.length > 0 && (
           <Section title={t('prepPracticeWith')}>
@@ -125,11 +145,11 @@ export default function PrepItemPage() {
                   style={{ background: 'var(--bg-elev)', borderTop: i === 0 ? undefined : '1px solid var(--line)' }}
                 >
                   <div className="flex-1 min-w-0">
-                    <div className="font-medium text-sm">{step.title}</div>
+                    <div className="font-medium text-sm">{locale === 'zh' ? step.titleZh : step.title}</div>
                     <div className="mono text-[11.5px] text-text-3 mt-0.5">{step.id}.py</div>
                   </div>
                   {step.status === 'solved' && <Check className="w-4 h-4 text-easy flex-shrink-0" />}
-                  <Badge variant={step.difficulty.toLowerCase() as 'easy' | 'medium' | 'hard'}>
+                  <Badge variant={difficultyVariant(step.difficulty)}>
                     {step.difficulty.toUpperCase()}
                   </Badge>
                   <ArrowRight className="w-4 h-4 text-text-3 group-hover:text-accent transition-colors flex-shrink-0" />
@@ -167,16 +187,16 @@ export default function PrepItemPage() {
               style={{ background: 'var(--bg-sunken)', border: '1px solid var(--line)' }}
             />
             <div className="flex justify-end mt-3">
-              <Button variant="secondary" onClick={copyForGrading} disabled={!draft.answer.trim()}>
+              <Button variant="secondary" onClick={copyForFeedback} disabled={!draft.answer.trim()}>
                 {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                {copied ? t('prepCopied') : t('prepCopyForGrading')}
+                {copied ? t('prepCopied') : t('prepCopyForFeedback')}
               </Button>
             </div>
           </Section>
         )}
 
         {item.reference && (
-          <div className="pt-8 mt-8" style={{ borderTop: '1px solid var(--line)' }}>
+          <Section>
             <Button variant="secondary" onClick={() => setShowReference((v) => !v)}>
               {showReference ? t('prepHideReference') : t('prepShowReference')}
             </Button>
@@ -185,7 +205,7 @@ export default function PrepItemPage() {
                 <MarkdownContent content={item.reference} extended />
               </div>
             )}
-          </div>
+          </Section>
         )}
       </main>
       <Footer />

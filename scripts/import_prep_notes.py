@@ -7,8 +7,9 @@ Usage:
 Writes prep/items/<company>/<slug>/{meta.json,prompt.md,reference.md} for every source. The notes' prose is
 CC BY-NC 4.0, so every item keeps its source URL; see prep/NOTICE.md.
 
-The site's markdown renderer knows headings, dash lists, paragraphs and fenced code only,
-so tables become dash lists and links become "text (url)".
+The site's markdown renderer has no tables, links or HTML, so tables become dash lists,
+links become "text (url)" and <details> wrappers are dropped. It does render italics and
+TeX in its extended mode, which the prep pages use, so those pass through.
 """
 
 from __future__ import annotations
@@ -19,6 +20,8 @@ import re
 import sys
 from pathlib import Path
 
+from export_prep import ROUNDS, RUBRIC_ROUNDS
+
 ROOT = Path(__file__).parent.parent
 ITEMS_DIR = ROOT / "prep" / "items"
 SOURCES = ROOT / "prep" / "sources.json"
@@ -28,12 +31,12 @@ SOURCE_REPOS = {
     "anthropic": "https://github.com/Schuture/Anthropic-Interview-Notes",
 }
 
-ROUNDS = {
-    "coding": "coding",
-    "system-design": "system-design",
-    "behavioral": "behavioral",
-    "take-home": "take-home",
-}
+# Notes categories are prep rounds as-is, except that "coding" becomes "ml-coding" when the
+# item links to exercises.
+CATEGORIES = frozenset(ROUNDS) - {"ml-coding"}
+
+# Design answers are judged on these even where the reference has no section for them.
+_DESIGN_RUBRIC_EXTRAS = ("Failure modes and recovery", "Trade-offs and alternatives rejected")
 
 # Reference-solution sections that coach delivery rather than name a thing to cover.
 _NOT_RUBRIC = {"follow-ups", "prep outline", "slide outline", "choosing the project"}
@@ -61,15 +64,23 @@ def _read_meta(path: Path) -> dict[str, object]:
     return meta
 
 
+def _with_fences(lines: list[str]):
+    """Yield (line, in_code); fence lines themselves count as code."""
+    in_code = False
+    for line in lines:
+        if line.lstrip().startswith("```"):
+            in_code = not in_code
+            yield line, True
+        else:
+            yield line, in_code
+
+
 def _sections(text: str) -> dict[str, str]:
     """Split a README on its level-2 headings."""
     parts: dict[str, str] = {}
     current = None
     buffer: list[str] = []
-    in_code = False
-    for line in text.splitlines():
-        if line.startswith("```"):
-            in_code = not in_code
+    for line, in_code in _with_fences(text.splitlines()):
         if not in_code and line.startswith("## "):
             if current:
                 parts[current] = "\n".join(buffer).strip()
@@ -87,7 +98,10 @@ def _table_to_list(rows: list[str]) -> list[str]:
     out = []
     for row in body:
         pairs = [f"{h}: {v}" for h, v in zip(header, row) if v]
-        out.append("- " + " · ".join(pairs) if len(header) > 2 else f"- **{row[0]}**: {row[1]}")
+        if len(header) == 2 and len(row) >= 2:
+            out.append(f"- **{row[0]}**: {row[1]}")
+        else:
+            out.append("- " + " · ".join(pairs))
     return out
 
 
@@ -95,10 +109,7 @@ def to_site_markdown(text: str) -> str:
     """Rewrite GitHub markdown into what MarkdownContent.tsx renders."""
     out: list[str] = []
     table: list[str] = []
-    in_code = False
-    for line in text.splitlines():
-        if line.startswith("```"):
-            in_code = not in_code
+    for line, in_code in _with_fences(text.splitlines()):
         if not in_code and line.lstrip().startswith("|"):
             table.append(line)
             continue
@@ -156,22 +167,22 @@ def _unwrap(lines: list[str]) -> list[str]:
 
 
 def _headings(section: str) -> list[str]:
-    heads, in_code = [], False
-    for line in section.splitlines():
-        if line.startswith("```"):
-            in_code = not in_code
+    heads = []
+    for line, in_code in _with_fences(section.splitlines()):
         if not in_code and line.startswith("### "):
             heads.append(line[4:].strip())
     return heads
 
 
 def rubric_for(round_: str, problem: str, reference: str) -> list[str]:
-    if round_ not in ("system-design", "behavioral"):
+    if round_ not in RUBRIC_ROUNDS:
         return []
     # Behavioral prompts list their themes under the problem; design prompts do not.
     heads = _headings(problem) if round_ == "behavioral" else []
-    heads = heads or _headings(reference)
-    return [h for h in heads if h.lower() not in _NOT_RUBRIC]
+    heads = [h for h in heads or _headings(reference) if h.lower() not in _NOT_RUBRIC]
+    if round_ == "system-design":
+        heads += [extra for extra in _DESIGN_RUBRIC_EXTRAS if extra not in heads]
+    return heads
 
 
 def import_item(checkout: Path, company: str, rel: str, exercises: list[str]) -> Path:
@@ -181,7 +192,9 @@ def import_item(checkout: Path, company: str, rel: str, exercises: list[str]) ->
     parts = _sections((source_dir / "README.md").read_text(encoding="utf-8"))
     problem = parts.get("problem", "")
     reference = parts.get("reference solution", "")
-    round_ = ROUNDS[category]
+    if category not in CATEGORIES:
+        raise ValueError(f"{rel}: unknown notes category {category!r}")
+    round_ = category
     if round_ == "coding" and exercises:
         round_ = "ml-coding"
 

@@ -23,6 +23,12 @@ const COMPANY_NAMES: Record<string, string> = {
   xai: 'xAI',
 };
 
+/** Badge variant for a difficulty label, falling back to neutral for unknown values. */
+export function difficultyVariant(difficulty: string | null): 'easy' | 'medium' | 'hard' | 'default' {
+  const value = difficulty?.toLowerCase();
+  return value === 'easy' || value === 'medium' || value === 'hard' ? value : 'default';
+}
+
 export function companyName(company: string): string {
   return COMPANY_NAMES[company] ?? company.charAt(0).toUpperCase() + company.slice(1);
 }

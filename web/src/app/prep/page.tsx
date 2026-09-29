@@ -7,19 +7,21 @@ import { TopNav } from '@/components/layout/TopNav';
 import { Footer } from '@/components/layout/Footer';
 import { Badge } from '@/components/ui/Badge';
 import { useLocale } from '@/context/LocaleContext';
-import { PREP_ROUND_LABEL, PREP_TABS, companyName, groupByRound, type PrepTab } from '@/lib/prep';
+import {
+  PREP_ROUND_LABEL,
+  PREP_TABS,
+  companyName,
+  difficultyVariant,
+  groupByRound,
+  type PrepTab,
+} from '@/lib/prep';
 import { hasPrepDraftContent, loadPrepDraft } from '@/lib/prepDraft';
 import { cn } from '@/lib/utils';
 import type { PrepItemSummary, PrepLink } from '@/lib/types';
 
-type Entry = (PrepItemSummary & { kind_: 'item' }) | (PrepLink & { kind_: 'link' });
+type Entry = (PrepItemSummary & { entryType: 'item' }) | (PrepLink & { entryType: 'link' });
 
 const TAB_STORAGE_KEY = 'pyre-code-prep-tab';
-
-function difficultyVariant(difficulty: string | null) {
-  const value = difficulty?.toLowerCase();
-  return value === 'easy' || value === 'medium' || value === 'hard' ? value : 'default';
-}
 
 function StatusChip({ label, tone }: { label: string; tone: 'solved' | 'drafted' }) {
   const color = tone === 'solved' ? 'var(--easy)' : 'var(--accent)';
@@ -66,8 +68,8 @@ export default function PrepPage() {
   };
 
   const entries: Entry[] = [
-    ...items.map((item) => ({ ...item, kind_: 'item' as const })),
-    ...links.map((link) => ({ ...link, kind_: 'link' as const })),
+    ...items.map((item) => ({ ...item, entryType: 'item' as const })),
+    ...links.map((link) => ({ ...link, entryType: 'link' as const })),
   ];
   const groups = groupByRound(entries, tab);
   const tabCount = (candidate: PrepTab) => groupByRound(entries, candidate).reduce((n, g) => n + g.entries.length, 0);
@@ -118,13 +120,13 @@ export default function PrepPage() {
                 {group.entries.map((entry, i) => {
                   const rowClass = 'group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-[color-mix(in_oklab,var(--text)_3%,transparent)]';
                   const rowStyle = { background: 'var(--bg-elev)', borderTop: i === 0 ? undefined : '1px solid var(--line)' };
-                  if (entry.kind_ === 'link') {
+                  if (entry.entryType === 'link') {
                     return (
                       <a key={entry.id} href={entry.url} target="_blank" rel="noopener noreferrer" className={rowClass} style={rowStyle}>
                         <div className="flex-1 min-w-0">
                           <div className="font-medium text-sm">{entry.title}</div>
                           <div className="mono text-[11.5px] text-text-3 mt-0.5">
-                            {tab === 'other' ? `${companyName(entry.company)} · ` : ''}darkinterview.com
+                            {tab === 'other' ? `${companyName(entry.company)} · ` : ''}{t('prepExternalSource')}
                           </div>
                         </div>
                         <Badge>{t('prepExternal')}</Badge>
@@ -139,11 +141,15 @@ export default function PrepPage() {
                         <div className="font-medium text-sm">{entry.title}</div>
                         <div className="text-[13px] text-text-2 mt-1 leading-snug line-clamp-2 max-w-[90ch]">{entry.summary}</div>
                         <div className="mono text-[11.5px] text-text-3 mt-1.5">
-                          {[entry.format, entry.frequency && `freq: ${entry.frequency}`].filter(Boolean).join(' · ')}
-                          {entry.exercises.length > 0 && ` · ${entry.exercisesSolved}/${entry.exercises.length} exercises`}
+                          {[
+                            entry.format,
+                            entry.frequency && t('prepFrequency', { value: entry.frequency }),
+                            entry.exercises.length > 0
+                              && t('prepExercisesSolved', { solved: entry.exercisesSolved, total: entry.exercises.length }),
+                          ].filter(Boolean).join(' · ')}
                         </div>
                       </div>
-                      {solved && <StatusChip label="SOLVED" tone="solved" />}
+                      {solved && <StatusChip label={t('prepSolved').toUpperCase()} tone="solved" />}
                       {!solved && drafted.has(entry.id) && <StatusChip label={t('prepDrafted').toUpperCase()} tone="drafted" />}
                       {entry.difficulty && (
                         <Badge variant={difficultyVariant(entry.difficulty)} className="max-[600px]:hidden">
