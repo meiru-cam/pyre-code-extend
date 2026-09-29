@@ -1,0 +1,24 @@
+{
+  "title": "Multi-Head Attention with einsum",
+  "summary": "Implement scaled dot-product attention and causal multi-head self-attention in NumPy using np.einsum for every contraction, then find and fix four planted bugs in a NumPy layer normalization plus attention block.",
+  "round": "ml-coding",
+  "kind": "Coding with derivation · NumPy",
+  "difficulty": "Hard",
+  "frequency": "low",
+  "format": "3 parts / 55 min",
+  "topics": [
+    "attention",
+    "einsum",
+    "multi-head",
+    "masking",
+    "numerical-stability",
+    "debugging"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/coding/qkv-attention-einsum",
+  "rubric": [],
+  "exercises": [
+    "attention",
+    "mha",
+    "gqa"
+  ]
+}

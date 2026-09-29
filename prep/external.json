@@ -1,0 +1,107 @@
+[
+  {
+    "company": "anthropic",
+    "slug": "web-crawler",
+    "title": "Web crawler",
+    "round": "coding",
+    "url": "https://github.com/harry-the-nerd/interview-notes-questions/blob/main/anthropic/web-crawler.md"
+  },
+  {
+    "company": "openai",
+    "slug": "shard-rebalancing",
+    "title": "Shard rebalancing",
+    "round": "coding",
+    "url": "https://github.com/harry-the-nerd/interview-notes-questions/blob/main/openai/shard-rebalancing.md"
+  },
+  {
+    "company": "openai",
+    "slug": "toy-language-type-system",
+    "title": "Toy language type system",
+    "round": "coding",
+    "url": "https://github.com/harry-the-nerd/interview-notes-questions/blob/main/openai/toy-language-type-system.md"
+  },
+  {
+    "company": "apple",
+    "slug": "lru-cache",
+    "title": "LRU cache",
+    "round": "coding",
+    "url": "https://github.com/harry-the-nerd/interview-notes-questions/blob/main/apple/lru-cache.md"
+  },
+  {
+    "company": "coinbase",
+    "slug": "crypto-order-system",
+    "title": "Crypto order system",
+    "round": "coding",
+    "url": "https://github.com/harry-the-nerd/interview-notes-questions/blob/main/coinbase/crypto-order-system.md"
+  },
+  {
+    "company": "databricks",
+    "slug": "find-optimal-commute",
+    "title": "Find optimal commute",
+    "round": "coding",
+    "url": "https://github.com/harry-the-nerd/interview-notes-questions/blob/main/databricks/find-optimal-commute.md"
+  },
+  {
+    "company": "netflix",
+    "slug": "auto-expire-cache",
+    "title": "Auto-expire cache",
+    "round": "coding",
+    "url": "https://github.com/harry-the-nerd/interview-notes-questions/blob/main/netflix/auto-expire-cache.md"
+  },
+  {
+    "company": "perplexity",
+    "slug": "stream-stop-word-processing",
+    "title": "Stream processing with stop words",
+    "round": "coding",
+    "url": "https://github.com/harry-the-nerd/interview-notes-questions/blob/main/perplexity/stream-stop-word-processing.md"
+  },
+  {
+    "company": "reddit",
+    "slug": "moderator-list-hierarchy",
+    "title": "Moderator list hierarchy",
+    "round": "coding",
+    "url": "https://github.com/harry-the-nerd/interview-notes-questions/blob/main/reddit/moderator-list-hierarchy.md"
+  },
+  {
+    "company": "rippling",
+    "slug": "in-memory-kv-store",
+    "title": "In-memory key-value store with transactions",
+    "round": "coding",
+    "url": "https://github.com/harry-the-nerd/interview-notes-questions/blob/main/rippling/in-memory-kv-store.md"
+  },
+  {
+    "company": "roblox",
+    "slug": "sliding-window-rate-limiter",
+    "title": "Sliding-window rate limiter",
+    "round": "coding",
+    "url": "https://github.com/harry-the-nerd/interview-notes-questions/blob/main/roblox/sliding-window-rate-limiter.md"
+  },
+  {
+    "company": "snowflake",
+    "slug": "design-in-memory-file-system",
+    "title": "In-memory file system",
+    "round": "coding",
+    "url": "https://github.com/harry-the-nerd/interview-notes-questions/blob/main/snowflake/design-in-memory-file-system.md"
+  },
+  {
+    "company": "stripe",
+    "slug": "shipping-cost-calculator",
+    "title": "Shipping cost calculator",
+    "round": "coding",
+    "url": "https://github.com/harry-the-nerd/interview-notes-questions/blob/main/stripe/shipping-cost-calculator.md"
+  },
+  {
+    "company": "uber",
+    "slug": "jump-game-variant",
+    "title": "Jump game variant",
+    "round": "coding",
+    "url": "https://github.com/harry-the-nerd/interview-notes-questions/blob/main/uber/jump-game-variant.md"
+  },
+  {
+    "company": "xai",
+    "slug": "weighted-lru-cache",
+    "title": "Weighted LRU cache",
+    "round": "coding",
+    "url": "https://github.com/harry-the-nerd/interview-notes-questions/blob/main/xai/weighted-lru-cache.md"
+  }
+]

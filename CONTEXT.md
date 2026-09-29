@@ -12,6 +12,18 @@ _Avoid_: Personal study plan, lesson archive
 An ordered sequence of exercises that develops one coherent implementation capability from prerequisites through a capstone.
 _Avoid_: Category, tag, problem list
 
+**Prep item**:
+One real company interview question, filed under a company and a round, adapted with attribution from an outside notes repository. It points at exercises (ML coding) or carries a visible rubric and a learner answer (system design, behavioral); it is never graded and never part of a learning path. Items live in `prep/items/`.
+_Avoid_: Exercise, company path
+
+**Round**:
+The interview stage a prep item comes from: `ml-coding`, `coding` (practical, multi-part, not algorithm puzzles), `system-design`, `behavioral` or `take-home`.
+_Avoid_: Category, difficulty
+
+**Prep link**:
+A prep item whose source forbids copying, listed by title and URL only. Listed in `prep/external.json`.
+_Avoid_: Imported question
+
 **Entry baseline**:
 The minimum knowledge assumed before a learner begins a learning path. For the advanced paths, this means basic PyTorch tensor operations, modules, gradients, and ordinary multi-head attention—not prior knowledge of frontier architectures.
 _Avoid_: Beginner course, PyTorch benchmark

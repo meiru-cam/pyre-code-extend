@@ -1,0 +1,22 @@
+{
+  "title": "RL Training Loop Bug Hunt",
+  "summary": "A policy-gradient loop on a small grid world runs without an error but the reward never moves. Find the four reinforcement-learning bugs, say what each does to the gradient, and fix them so the reward climbs.",
+  "round": "ml-coding",
+  "kind": "Debugging · PyTorch",
+  "difficulty": "Hard",
+  "frequency": "rare",
+  "format": "4 bugs + 5 follow-ups",
+  "topics": [
+    "reinforcement-learning",
+    "policy-gradient",
+    "debugging",
+    "pytorch"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/coding/rl-training-debug",
+  "rubric": [],
+  "exercises": [
+    "ppo_clipped_policy_loss",
+    "gae_advantage",
+    "k3_kl_penalty"
+  ]
+}

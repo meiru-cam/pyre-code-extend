@@ -1,0 +1,25 @@
+{
+  "title": "Prompt Playground (Product and Data Design)",
+  "summary": "Design the product behind a prompt-engineering playground on top of a fixed browser/server/database deployment: the schema and API for prompts, immutable versions and runs, sharing with role-based permissions, and how very large prompts, concurrent edits and cost control are handled.",
+  "round": "system-design",
+  "kind": "Product and API design",
+  "difficulty": "Medium",
+  "frequency": "high",
+  "format": "55 min",
+  "topics": [
+    "schema-design",
+    "versioning",
+    "permissions",
+    "streaming",
+    "concurrency-control",
+    "product-design"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/system-design/prompt-playground",
+  "rubric": [
+    "Requirements and scale",
+    "Data model and API",
+    "Architecture",
+    "Deep dives"
+  ],
+  "exercises": []
+}

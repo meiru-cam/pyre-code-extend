@@ -1,0 +1,94 @@
+[
+  {
+    "company": "openai",
+    "item": "system-design/llm-inference-serving"
+  },
+  {
+    "company": "openai",
+    "item": "system-design/chatgpt-enterprise-rag"
+  },
+  {
+    "company": "openai",
+    "item": "system-design/webhook-delivery"
+  },
+  {
+    "company": "openai",
+    "item": "behavioral/technical-deep-dive"
+  },
+  {
+    "company": "openai",
+    "item": "behavioral/hiring-manager-why-openai"
+  },
+  {
+    "company": "openai",
+    "item": "coding/cross-entropy-loss",
+    "exercises": [
+      "cross_entropy",
+      "label_smoothing",
+      "chunked_cross_entropy"
+    ]
+  },
+  {
+    "company": "openai",
+    "item": "coding/transformer-bug-hunt",
+    "exercises": [
+      "causal_attention",
+      "gpt2_block",
+      "layernorm"
+    ]
+  },
+  {
+    "company": "openai",
+    "item": "coding/rl-training-debug",
+    "exercises": [
+      "ppo_clipped_policy_loss",
+      "gae_advantage",
+      "k3_kl_penalty"
+    ]
+  },
+  {
+    "company": "anthropic",
+    "item": "system-design/inference-api-batching"
+  },
+  {
+    "company": "anthropic",
+    "item": "system-design/model-weight-distribution"
+  },
+  {
+    "company": "anthropic",
+    "item": "system-design/prompt-playground"
+  },
+  {
+    "company": "anthropic",
+    "item": "behavioral/project-deep-dive"
+  },
+  {
+    "company": "anthropic",
+    "item": "behavioral/culture-ai-safety"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/qkv-attention-einsum",
+    "exercises": [
+      "attention",
+      "mha",
+      "gqa"
+    ]
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/grpo-debug",
+    "exercises": [
+      "group_relative_advantage",
+      "grpo_token_loss",
+      "grpo_loss"
+    ]
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/longest-match-tokenizer",
+    "exercises": [
+      "bpe"
+    ]
+  }
+]

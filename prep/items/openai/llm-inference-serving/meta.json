@@ -1,0 +1,24 @@
+{
+  "title": "LLM Inference Serving",
+  "summary": "A consumer LLM chat backend: continuous batching with chunked prefill vs. disaggregated pools, paged KV-cache memory with preemption and swap for long context, and tiered quotas that protect paid-tier time-to-first-token under overload.",
+  "round": "system-design",
+  "kind": "System design",
+  "difficulty": null,
+  "frequency": "high",
+  "format": "60 min",
+  "topics": [
+    "gpu-scheduling",
+    "batching",
+    "streaming",
+    "rate-limiting",
+    "cost"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/system-design/llm-inference-serving",
+  "rubric": [
+    "Requirements and scale",
+    "Data model and API",
+    "Architecture",
+    "Deep dives"
+  ],
+  "exercises": []
+}

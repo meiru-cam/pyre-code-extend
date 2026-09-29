@@ -1,0 +1,24 @@
+{
+  "title": "Hiring Manager Round: Why OpenAI, Safety, AGI",
+  "summary": "The hiring-manager conversation: why this company and this team, your views on AGI and safety, a safety-versus-deadline dilemma, stories about ownership, conflict and failure, and working with non-engineering partners.",
+  "round": "behavioral",
+  "kind": "Behavioral",
+  "difficulty": null,
+  "frequency": "very-high",
+  "format": "60 min",
+  "topics": [
+    "behavioral",
+    "why-company",
+    "ai-safety",
+    "cross-functional"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/behavioral/hiring-manager-why-openai",
+  "rubric": [
+    "Motivation",
+    "Views on AGI and safety",
+    "A hypothetical dilemma",
+    "Past experience",
+    "Cross-functional collaboration"
+  ],
+  "exercises": []
+}

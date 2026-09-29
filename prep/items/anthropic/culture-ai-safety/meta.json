@@ -1,0 +1,25 @@
+{
+  "title": "Culture Round: AI Safety, Values and Judgment",
+  "summary": "A 55-minute onsite conversation about AI-safety judgment: why Anthropic and why safety matters to you, a chain of hypothetical dilemmas pressed with follow-ups, a critical read of the company's own published safety commitments, personal stories about being persuaded, repairing a relationship, and owning a mistake, and a separate read on your character and judgment through lighter, more personal prompts.",
+  "round": "behavioral",
+  "kind": "Behavioral",
+  "difficulty": null,
+  "frequency": "very-high",
+  "format": "55 min",
+  "topics": [
+    "ai-safety",
+    "values",
+    "culture",
+    "critical-thinking",
+    "dilemmas"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/behavioral/culture-ai-safety",
+  "rubric": [
+    "Motivation and mission",
+    "Hypothetical dilemmas",
+    "Critical engagement with Anthropic's public commitments",
+    "Values stories",
+    "Character and judgment"
+  ],
+  "exercises": []
+}

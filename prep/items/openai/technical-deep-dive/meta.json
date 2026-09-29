@@ -1,0 +1,22 @@
+{
+  "title": "Technical Deep Dive (with slides)",
+  "summary": "Present one past project from slides and defend every decision: architecture, trade-offs, measured impact, what you would change, and “why not X”.",
+  "round": "behavioral",
+  "kind": "Presentation and Q&A",
+  "difficulty": null,
+  "frequency": "very-high",
+  "format": "60 min",
+  "topics": [
+    "presentation",
+    "project-deep-dive"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/behavioral/technical-deep-dive",
+  "rubric": [
+    "Architecture and key decisions",
+    "Scale and limits",
+    "Measuring impact",
+    "Retrospective",
+    "Where AI could help"
+  ],
+  "exercises": []
+}

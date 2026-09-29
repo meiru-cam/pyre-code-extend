@@ -1,0 +1,23 @@
+A *model repository* is an object store holding one *checkpoint* per trained model version: the complete set of weight tensors a model needs to run inference. A checkpoint is published to the repository as a fixed number of *shard files* — large, individually addressable byte blobs that together make up the checkpoint, sized this way so that no single file exceeds a storage-system size limit — plus a *manifest*, a small document that lists every shard file, subdivides the checkpoint into fixed-size *chunks* (a chunk boundary need not line up with a shard-file boundary), and records each chunk's SHA-256 hash and a single version id for the whole checkpoint.
+
+A *fleet* of $N$ hosts, $100 \le N \le 1{,}000$, must each end up holding a complete, byte-verified local copy of exactly one checkpoint version before serving inference traffic on it. Every host runs one inference process that, once told to activate a version, either serves every request against that version or serves nothing for it — no request is ever answered by a mix of two versions or by a version still being written to local disk. Each host and the repository connect to the network through a 10 Gbps NIC. Two variants of this link are in scope:
+
+- *Full-duplex* (the default in this problem unless stated otherwise): a host can receive at 10 Gbps while simultaneously sending at 10 Gbps — the two directions do not compete for capacity.
+- *Shared*: a host's send and receive traffic draw from one combined 10 Gbps budget, so bytes it sends to help another host reduce, second for second, how fast it can receive its own remaining data.
+
+No rack, zone, or network topology is assumed: any two hosts, and the repository, reach each other at the stated link rate over an ordinary point-to-point connection, as if attached to one non-blocking switch with no network-level multicast — a single send reaches exactly one recipient. Between 1% and 5% of the fleet may fail during a single rollout, and the design must keep making progress on the survivors with no operator stepping in by hand; a host that comes back after a failure, or a host added to the fleet later, catches up to whichever version is currently active using the same mechanism as the original rollout.
+
+Scale for this design:
+
+- $N$ between 100 and 1,000 hosts, extending to 10,000 as a follow-up.
+- A checkpoint of $S = 500$ GB, stored as 200 shard files of 2.5 GB each.
+- A 10 Gbps link at every host and at the repository, under both variants above.
+
+In scope: moving checkpoint bytes from the repository to every host as fast as the link constraints allow, chunk-level integrity checking, the version manifest and the atomic switch from one version to the next (including which hosts a load balancer may route to at any moment), detecting and recovering from failed or slow hosts during distribution, and keeping distribution traffic from degrading concurrent inference traffic on the same NICs. Out of scope: how the shard files are produced (training and export pipelines); how a host loads verified bytes from local disk into GPU memory (assume `load(local_path) -> ready` is available as a fixed-duration black box once a version is verified); gradual, percentage-of-traffic canary shifting between two already-active versions (each host here activates its one target version outright once verified — holding a subset of hosts back from that is an orchestration policy layered on top, touched on in the follow-ups, not designed here); and authenticating the API calls themselves.
+
+Produce:
+
+- The theoretical lower bound on how long distributing the checkpoint can take, under both link variants; the completion time of a design where every host pulls independently from the repository; of a tree-broadcast design; and of a chunked, peer-to-peer design — each computed for $N = 100$ and $N = 1{,}000$.
+- A data model for the version manifest and per-host distribution state, and the core control-plane and host-facing APIs.
+- An architecture diagram for the chosen chunked, peer-to-peer design, and a walk-through of one host's path from a new version being published to it serving traffic on that version.
+- Deep dives into: (a) integrity and versioning — the manifest, verifying a host's copy before it may activate, and the atomic switch, including how a load balancer learns which hosts are safe to route to for a given version; (b) failure handling — stragglers, dead peers, resumable chunk-level retries, and recovering without a central coordinator; (c) keeping distribution traffic from starving concurrent inference traffic on the same hosts, and observability into a stuck rollout; (d) using rack or zone information when it is available, and prewarming the next version ahead of its release.

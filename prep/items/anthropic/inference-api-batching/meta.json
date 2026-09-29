@@ -1,0 +1,24 @@
+{
+  "title": "LLM Inference API with Batched GPU Serving",
+  "summary": "Design the public API and dispatcher in front of a pool of GPU model replicas that expose a fixed-latency batch call, covering batching policy, load balancing and admission control, KV-cache and prefix-cache arithmetic, real-time/offline isolation, and a follow-up scheduling policy for a large model that needs a whole 8-GPU pool against a small model that needs one GPU.",
+  "round": "system-design",
+  "kind": "System design",
+  "difficulty": "Hard",
+  "frequency": "very-high",
+  "format": "55 min",
+  "topics": [
+    "batching",
+    "kv-cache",
+    "gpu-scheduling",
+    "admission-control",
+    "capacity-planning"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/system-design/inference-api-batching",
+  "rubric": [
+    "Requirements and scale",
+    "Data model and API",
+    "Architecture",
+    "Deep dives"
+  ],
+  "exercises": []
+}

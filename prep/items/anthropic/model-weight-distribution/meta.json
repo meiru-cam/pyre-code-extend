@@ -1,0 +1,24 @@
+{
+  "title": "Distributing Model Weights to a GPU Fleet",
+  "summary": "Design the fastest way to get a several-hundred-GB checkpoint from object storage onto every host in a GPU fleet: derive the bandwidth lower bound, evolve from a naive pull and tree broadcast to a chunked peer-to-peer swarm, and handle integrity, versioning, stragglers and failures, and rate limiting against live serving traffic.",
+  "round": "system-design",
+  "kind": "System design",
+  "difficulty": "Hard",
+  "frequency": "high",
+  "format": "55 min",
+  "topics": [
+    "bandwidth",
+    "peer-to-peer",
+    "chunking",
+    "versioning",
+    "readiness"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/system-design/model-weight-distribution",
+  "rubric": [
+    "Requirements and scale",
+    "Data model and API",
+    "Architecture",
+    "Deep dives"
+  ],
+  "exercises": []
+}

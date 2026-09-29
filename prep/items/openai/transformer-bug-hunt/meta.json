@@ -1,0 +1,22 @@
+{
+  "title": "Transformer Bug Hunt",
+  "summary": "A small Transformer and training script that almost work. Find the handful of planted bugs so the loss converges, then extend the model with a classification head or a KV cache.",
+  "round": "ml-coding",
+  "kind": "Debugging · PyTorch",
+  "difficulty": "Medium",
+  "frequency": "high",
+  "format": "4 bugs + 2 follow-ups",
+  "topics": [
+    "transformer",
+    "debugging",
+    "kv-cache",
+    "pytorch"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/coding/transformer-bug-hunt",
+  "rubric": [],
+  "exercises": [
+    "causal_attention",
+    "gpt2_block",
+    "layernorm"
+  ]
+}

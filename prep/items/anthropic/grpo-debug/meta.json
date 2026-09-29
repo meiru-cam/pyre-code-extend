@@ -1,0 +1,23 @@
+{
+  "title": "Debugging a GRPO Training Loop",
+  "summary": "Debug a small GRPO trainer in PyTorch that samples a group of completions per prompt on a toy verifiable-reward task, then defend the ratio, the clipping, and the group-normalized advantage that make it work.",
+  "round": "ml-coding",
+  "kind": "Debugging · PyTorch, RL",
+  "difficulty": "Hard",
+  "frequency": "low",
+  "format": "3 bugs + 2 parts / 55 min",
+  "topics": [
+    "grpo",
+    "ppo-clipping",
+    "policy-gradient",
+    "advantage-normalization",
+    "reinforcement-learning"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/coding/grpo-debug",
+  "rubric": [],
+  "exercises": [
+    "group_relative_advantage",
+    "grpo_token_loss",
+    "grpo_loss"
+  ]
+}

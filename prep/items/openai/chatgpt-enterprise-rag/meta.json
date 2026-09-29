@@ -1,0 +1,22 @@
+{
+  "title": "ChatGPT Enterprise: RAG over Company Data",
+  "summary": "Companies upload internal documents and get an assistant grounded in them: ingestion, chunking and embedding, retrieval and ranking, permissions, evaluation and freshness.",
+  "round": "system-design",
+  "kind": "ML system design",
+  "difficulty": null,
+  "frequency": "rare",
+  "format": "60 min",
+  "topics": [
+    "rag",
+    "retrieval",
+    "access-control"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/system-design/chatgpt-enterprise-rag",
+  "rubric": [
+    "Requirements and scale",
+    "Data model and API",
+    "Architecture",
+    "Deep dives"
+  ],
+  "exercises": []
+}

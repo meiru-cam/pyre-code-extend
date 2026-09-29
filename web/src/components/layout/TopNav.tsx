@@ -40,6 +40,7 @@ export function TopNav({ solvedCount, totalCount }: TopNavProps) {
     { href: '/', label: t('home'), key: 'home' },
     { href: '/problems', label: t('problems'), key: 'problems' },
     { href: '/paths', label: t('paths'), key: 'paths' },
+    { href: '/prep', label: t('prep'), key: 'prep' },
   ];
 
   const isActive = (href: string) => {
