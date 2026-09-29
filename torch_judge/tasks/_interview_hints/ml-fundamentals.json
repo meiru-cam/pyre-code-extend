@@ -23,7 +23,7 @@
     "Write focal loss in terms of p_t.": "FL = -alpha_t (1 - p_t)^gamma log(p_t), where p_t is the probability of the true class.",
     "How do you compute it stably from logits?": "Subtract the row max, take log p_t = logit_t - logsumexp(logits) (log-softmax), then p_t = exp(log p_t). Never take the log of a softmax that may have underflowed to 0.",
     "What does gamma equal to zero reduce to?": "It reduces to alpha-weighted cross-entropy.",
-    "Focal loss versus class reweighting versus resampling?": "Focal loss adapts per example by difficulty. Reweighting is a fixed per-class factor. Resampling changes the data seen.",
+    "Focal loss versus class reweighting versus resampling?": "Focal loss adapts per example by difficulty, while reweighting is a fixed per-class factor. Resampling changes the data seen.",
     "Why can focal loss hurt calibration?": "Downweighting confident predictions pushes probabilities toward the middle, so raw outputs become miscalibrated."
   },
   "weight_regularization": {
@@ -66,13 +66,13 @@
     "What is backpropagation, and why is it much cheaper than computing each gradient separately?": "The chain rule applied from the output backwards, reusing intermediate gradients, so all gradients cost about one extra forward pass.",
     "Derive the gradient of softmax cross-entropy with respect to the logits.": "Differentiate log-softmax: dL/dz = softmax(z) - onehot(y), divided by the batch size if the loss is a mean.",
     "Walk through the backward pass of y = x @ W.T + b. Why is dW an outer product summed over the batch?": "dx = dy @ W, dW = dy^T @ x, db = dy.sum(0). Each example contributes an outer product of its dy and x.",
-    "What does the ReLU do to the gradient, what is a dead ReLU, and how does the derivative convention at 0 matter?": "It passes the gradient where the input was > 0 and zeroes it elsewhere. A dead unit's gradient is always 0. Pick the convention at exactly 0 to match autograd.",
+    "What does the ReLU do to the gradient, what is a dead ReLU, and how does the derivative convention at 0 matter?": "It passes the gradient where the input was > 0 and zeroes it elsewhere, so a dead unit's gradient is always 0. Pick the convention at exactly 0 to match autograd.",
     "How would you verify hand-written gradients with a finite-difference check, and why use float64 for it?": "Perturb each parameter by +/- h, compute (L+ - L-) / 2h, and compare with a relative error. float64 keeps rounding error below the finite-difference error.",
     "Reverse-mode versus forward-mode automatic differentiation: when is each cheaper?": "Reverse mode costs one backward per output, so it is cheap for scalar losses. Forward mode costs one pass per input, so it is cheap when inputs are few.",
     "Which intermediate activations must be stored for this backward pass, and how does activation checkpointing trade compute for that memory?": "The input, the pre-activation (or ReLU mask), the hidden activation and the logits or probabilities. Checkpointing stores fewer of them and recomputes."
   },
   "precision_recall_f1": {
-    "Define precision and recall in words. Give an application where each one matters more.": "Precision: of the predicted positives, how many are right. Recall: of the actual positives, how many are found. Spam filtering versus cancer screening.",
+    "Define precision and recall in words. Give an application where each one matters more.": "Precision: of the predicted positives, how many are right; recall: of the actual positives, how many are found. Contrast spam filtering with cancer screening.",
     "Why is F1 a harmonic mean rather than an arithmetic mean of precision and recall?": "The harmonic mean is low if either is low, so a model cannot score well by maximizing only one.",
     "Explain micro, macro and weighted averaging. Why do micro precision, recall and F1 all equal accuracy for single-label multiclass data?": "Micro pools counts, macro averages per class, weighted averages by support. In single-label multiclass every false positive is someone else's false negative.",
     "Is macro F1 the F1 of macro precision and macro recall? Construct a case where the two differ.": "No. Example: class A with P = 1, R = 0.1 and class B with P = 0.1, R = 1 give different results from each formula.",

@@ -3,9 +3,9 @@
     "How does a chat completion API stream tokens to the client? What does one SSE event look like on the wire?": "Over one HTTP response with text/event-stream: lines like \"data: {json}\" followed by a blank line, one event per chunk of tokens.",
     "Why can't a client decode each network chunk as UTF-8 and split it on newlines?": "The network cuts bytes anywhere: through a multi-byte character, or between \\r and \\n.",
     "Walk through what state the decoder keeps between chunks. What goes wrong if a CRLF is split across two chunks and you forget the pending carriage return?": "The bytes of the unfinished line, a pending carriage-return flag, and the fields of the unfinished event. A forgotten CR makes CRLF read as a line end plus an empty line, which dispatches the event too early.",
-    "Why does the last event id persist across events while the event name and data reset? How is it used on reconnect?": "The id identifies the resume point. The client sends it as Last-Event-ID when reconnecting. The name and data belong to one event only.",
+    "Why does the last event id persist across events while the event name and data reset? How is it used on reconnect?": "The id identifies the resume point, and the client sends it as Last-Event-ID when reconnecting. The name and data belong to one event only.",
     "Why does the OpenAI protocol end with a [DONE] sentinel instead of just closing the connection?": "A closed connection could be a network failure. An explicit end marker lets the client tell a finished stream from a cut one.",
-    "SSE versus WebSockets versus gRPC streaming for serving LLM tokens: proxies, bidirectionality, backpressure and client support?": "SSE is simple and proxy-friendly but one-way. WebSockets are bidirectional but harder to proxy. gRPC is typed and fast but less supported in browsers.",
+    "SSE versus WebSockets versus gRPC streaming for serving LLM tokens: proxies, bidirectionality, backpressure and client support?": "SSE is simple and proxy-friendly but one-way, and WebSockets are bidirectional but harder to proxy. gRPC is typed and fast but less supported in browsers.",
     "Streaming one event per token versus batching several tokens per event: latency, overhead and user-visible smoothness?": "One event per token gives the lowest latency but more overhead. Batching reduces overhead but makes text appear in jumps."
   },
   "chat_stream_accumulator": {
@@ -20,7 +20,7 @@
   "incremental_detokenize": {
     "Why can't a streaming server decode each generated token id on its own and send the result?": "Tokenizers drop leading spaces when decoding a lone token, and a character can span several byte tokens.",
     "What is byte-fallback tokenization, and what does a client see if the server streams a partial UTF-8 character?": "Rare characters are split into byte tokens. A partial sequence decodes to the replacement character.",
-    "Walk through prefix_offset and read_offset over three steps where the second token is an incomplete byte. What is decoded at each step and what is returned?": "Step 1 emits the text. Step 2 decodes to something ending in the replacement character, so it returns \"\" and keeps the offsets. Step 3 completes the character and emits it.",
+    "Walk through prefix_offset and read_offset over three steps where the second token is an incomplete byte. What is decoded at each step and what is returned?": "Step 1 emits the text; step 2 decodes to something ending in the replacement character, so it returns \"\" and keeps the offsets. Step 3 completes the character and emits it.",
     "Why is the window seeded with the last few prompt tokens instead of starting empty?": "The first generated token needs context for its leading space. Without the prompt it would be decoded at the start of a string.",
     "Why does the detokenizer compare lengths before slicing, and when can the new decode be shorter than the prefix?": "Decoding can merge or drop characters, so the new text may not be longer than the prefix. Then there is nothing new to send yet.",
     "Window-based incremental decoding (vLLM) versus buffering until a word boundary (HF TextStreamer): latency, correctness and CJK handling?": "The window approach is exact and fast. Word buffering is simple but adds latency and needs special handling for CJK, which has no spaces.",
@@ -41,8 +41,8 @@
     "Why does the collector merge outputs instead of queueing them? What stays the same and what changes for a slow client?": "Merging keeps memory constant: a slow client gets the same text in bigger chunks.",
     "Delta mode appends and cumulative mode replaces. Walk through three puts in each mode before one get.": "Delta mode: \"a\", \"b\", \"c\" become \"abc\". Cumulative mode: \"a\", \"ab\", \"abc\" become \"abc\" (the latest).",
     "Why must merging match completions by index when n > 1, and why does an exception override pending output?": "With n > 1 samples, each index is a separate completion. An error must reach the client even if outputs are pending.",
-    "One-slot merging versus a bounded queue that blocks the producer versus an unbounded queue: memory, fairness and latency?": "One slot never blocks the engine and keeps memory bounded. A bounded queue blocks the producer. Unbounded risks running out of memory.",
-    "Detecting client disconnects and aborting the request versus finishing generation anyway: GPU cost, caching and idempotency?": "Aborting saves GPU work. Finishing may help caching or retries. Consider idempotency when the client reconnects."
+    "One-slot merging versus a bounded queue that blocks the producer versus an unbounded queue: memory, fairness and latency?": "One slot never blocks the engine and keeps memory bounded, while a bounded queue blocks the producer. An unbounded queue risks running out of memory.",
+    "Detecting client disconnects and aborting the request versus finishing generation anyway: GPU cost, caching and idempotency?": "Aborting saves GPU work, while finishing may help caching or retries. Consider idempotency when the client reconnects."
   },
   "attention_sink_cache": {
     "What is an attention sink, and why does a plain sliding-window KV cache fall apart once the first tokens are evicted?": "Models dump attention mass on the first tokens. Evicting them shifts that mass elsewhere and perplexity explodes.",
@@ -50,7 +50,7 @@
     "Walk through evict-for-space when the cache is full and n new tokens arrive. Which slice is dropped and why does it depend on n?": "Keep the first start_size tokens and the last recent_size - n tokens, so the n new tokens fit.",
     "Why does StreamingLLM give keys positions by cache slot instead of their original text positions? What happens with RoPE if you use text positions?": "Positions stay within the trained range. Text positions grow without bound and have gaps, which is out of distribution for RoPE.",
     "Why must the cache store keys before RoPE in this design, and what does that cost per decoding step?": "Positions change after eviction, so keys must be rotated again. Every cached key is rotated every step.",
-    "Attention sinks plus a recent window versus H2O-style importance-based eviction versus a learned sink logit (gpt-oss): quality, cost and implementation complexity?": "Sinks and a window are simple and work with standard kernels. H2O adapts to content but needs attention scores. A learned sink is built into training.",
+    "Attention sinks plus a recent window versus H2O-style importance-based eviction versus a learned sink logit (gpt-oss): quality, cost and implementation complexity?": "Sinks and a window are simple and work with standard kernels, while H2O adapts to content but needs attention scores. A learned sink is built into training.",
     "Bounded-memory streaming versus retrieval over an external store of evicted context for long-running assistants?": "Bounded memory is cheap but forgets. Retrieval can recall evicted facts but adds latency and complexity."
   },
   "sink_cache_rerotation": {
@@ -68,7 +68,7 @@
     "Walk through one decoding step: how are the new token's attention weights folded into the scores, and which columns line up with the old scores?": "Sum the new queries' attention over queries. Add the old scores to the first L - n columns, which are the old tokens.",
     "Why choose heavy hitters per head rather than one set for the whole layer? What does that do to memory layout?": "Heads attend to different things. Per-head selection gives a ragged layout that paged kernels do not handle directly.",
     "How do attention sinks relate to H2O's heavy hitters?": "The first tokens usually become heavy hitters on their own. Sinks are a fixed special case.",
-    "H2O's accumulated scores versus SnapKV's observation-window scores versus fixed sinks plus a window: accuracy, overhead and compatibility with FlashAttention?": "H2O needs attention weights that FlashAttention does not output. SnapKV scores once from a window. Sinks need nothing.",
+    "H2O's accumulated scores versus SnapKV's observation-window scores versus fixed sinks plus a window: accuracy, overhead and compatibility with FlashAttention?": "H2O needs attention weights that FlashAttention does not output, and SnapKV scores once from a window. Sinks need nothing.",
     "Irreversible eviction versus offloading evicted KV to CPU and recalling it when needed: latency, memory and complexity?": "Eviction is simple but permanent. Offloading keeps everything but adds transfer latency and complexity."
   },
   "duplex_streaming_session": {
@@ -95,7 +95,7 @@
     "Walk through choosing context for a camera that turns around in place. Why filter by viewing direction before ranking by distance?": "Frames facing the opposite way show different content. Filter by direction first, then rank by distance.",
     "Why always include the most recent frames, even when they are far from the query pose in some sense?": "They carry motion and lighting continuity, which keeps the stream smooth.",
     "How does pose-based retrieval make the world persistent when the user leaves an area and returns?": "Old frames of a place are retrieved again when you return, so it looks the same.",
-    "Retrieval by pose heuristics versus learned retrieval over frame embeddings versus an explicit 3D representation (Gaussian splats): consistency, cost and generality?": "Pose heuristics are cheap but miss occlusion. Learned retrieval adapts but costs more. Explicit 3D is consistent but less general.",
-    "Spending the real-time frame budget on more context frames versus more diffusion steps per frame: quality, latency and memory?": "More context improves consistency. More steps improve quality. Both cost latency."
+    "Retrieval by pose heuristics versus learned retrieval over frame embeddings versus an explicit 3D representation (Gaussian splats): consistency, cost and generality?": "Pose heuristics are cheap but miss occlusion, and learned retrieval adapts but costs more. Explicit 3D is consistent but less general.",
+    "Spending the real-time frame budget on more context frames versus more diffusion steps per frame: quality, latency and memory?": "More context improves consistency and more steps improve quality. Both cost latency."
   }
 }

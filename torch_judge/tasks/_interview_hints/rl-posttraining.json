@@ -24,7 +24,7 @@
     "Show that the RLOO advantage equals k / (k - 1) times the mean-centred reward.": "r_i - (S - r_i)/(k - 1) = (k r_i - S)/(k - 1) = k/(k - 1) * (r_i - S/k).",
     "Why must the group size be at least 2, and what happens when all rewards in a group are equal?": "With k = 1 there are no others to average. With equal rewards every advantage is exactly 0.",
     "RLOO versus GRPO: what does dividing by the group standard deviation add, and what bias does it introduce?": "The std division rescales each group to unit variance, a per-prompt learning-rate change that biases toward low-variance prompts.",
-    "RLOO versus PPO with a learned critic: sample cost, variance and stability?": "RLOO needs several samples per prompt but no critic. It is simple and stable, with variance depending on k. A critic is cheaper per sample but can be wrong."
+    "RLOO versus PPO with a learned critic: sample cost, variance and stability?": "RLOO needs several samples per prompt but no critic, and it is simple and stable, with variance depending on k. A critic is cheaper per sample but can be wrong."
   },
   "k3_kl_penalty": {
     "Why do RLHF and GRPO add a KL penalty to a frozen reference model at all?": "To keep the policy near the reference: this prevents reward hacking, language drift and forgetting.",
@@ -40,7 +40,7 @@
     "What goes wrong in training if padding tokens leak into the policy loss?": "The loss averages in zeros or garbage, gradients go to padding logits, and length-dependent scaling becomes wrong.",
     "Build the mask for a right-padded batch without a Python loop. What broadcasting do you use?": "positions = arange(max_len); mask = (positions >= prompt_len[:, None]) & (positions < total_len[:, None]).",
     "How would the mask change for left-padded batches, which many inference engines return?": "Positions shift: real tokens start at max_len - len. Compute offsets from the left padding length.",
-    "What are the edge cases: an empty generation, a row that fills max_len exactly, prompt length zero?": "An empty generation gives an all-false row. A full row has no padding. With prompt length 0 everything up to the length is response.",
+    "What are the edge cases: an empty generation, a row that fills max_len exactly, prompt length zero?": "An empty generation gives an all-false row, and a full row has no padding. With prompt length 0, everything up to the length is response.",
     "Multi-turn agent rollouts interleave tool output with model tokens. How does a single prompt/response mask break down there?": "Tool outputs sit inside the response but were not generated, so they must be masked too. You need a per-segment mask.",
     "Where else does the same mask get reused downstream, and what bug appears if the mask and logits are misaligned by one position?": "It is reused in the KL term, advantage broadcast, entropy and loss averaging. An off-by-one shift trains on the wrong token or leaks the prompt."
   },
@@ -72,11 +72,11 @@
     "REINFORCE versus PPO: what does PPO add, and when is plain REINFORCE with a good baseline enough?": "PPO adds clipped importance ratios for several update epochs and usually a critic. REINFORCE with a good baseline (RLOO) is enough for on-policy single-update training."
   },
   "grpo_token_loss": {
-    "Walk me through the GRPO objective end to end: which pieces come from the policy, the reference and the reward?": "Policy: current log-probs. Old policy: the ratio for clipping. Reference: the KL term. Reward: group-relative advantages broadcast to tokens.",
+    "Walk me through the GRPO objective end to end: which pieces come from the policy, the reference and the reward?": "Policy: current log-probs; old policy: the ratio for clipping; reference: the KL term. Reward: group-relative advantages broadcast to tokens.",
     "Why is there no value network in GRPO, and what replaces it?": "Group statistics replace the value network. The baseline comes from other samples of the same prompt.",
     "How do you broadcast a per-sequence advantage onto per-token log-probs?": "Unsqueeze the (B,) advantage to (B, 1) and let it broadcast over the (B, T) log-probs, then apply the mask.",
     "What denominator do you use for the loss, and how does the choice change the gradient scale per token?": "Per-sequence mean (original GRPO) versus total valid tokens (DAPO). Say which one makes each token's gradient depend on its response length.",
-    "What is the role of beta, and what happens to training when it is too large or zero?": "beta weights the KL to the reference. Too large and the policy barely moves. Zero lets it drift, which risks hacking but is common for verifiable rewards.",
+    "What is the role of beta, and what happens to training when it is too large or zero?": "beta weights the KL to the reference; too large and the policy barely moves. Zero lets it drift, which risks hacking but is common for verifiable rewards.",
     "Sequence-level versus token-level loss aggregation in GRPO: which is used by DAPO and why?": "DAPO uses token-level aggregation so long responses are not down-weighted per token and bad long patterns get penalized properly.",
     "What instability does GRPO show on long reasoning traces, and how do GSPO or DAPO address it?": "Per-token ratios on long sequences get noisy and clipping becomes erratic, especially in MoE. GSPO uses a sequence-level ratio; DAPO uses clip-higher and dynamic sampling."
   },
@@ -104,7 +104,7 @@
     "Why take the maximum of clipped and unclipped squared errors instead of the minimum?": "Taking the max is pessimistic, like the policy's min. It keeps the larger error, so clipping never gives a smaller loss artificially.",
     "How do you mask and average the value loss, and why the 0.5 factor?": "Mask to response tokens and average over valid ones. 0.5 makes the gradient of the squared error the plain error.",
     "What happens if returns are not detached?": "The critic target would move with the critic, and gradients would flow into the return computation.",
-    "Value clipping has been reported to hurt in some settings. When would you turn it off?": "When returns change a lot between updates, or with reward scaling changes. Clipping then slows needed updates. Andrychowicz et al. found it can hurt.",
+    "Value clipping has been reported to hurt in some settings. When would you turn it off?": "When returns change a lot between updates, or reward scaling changes, clipping slows needed updates. Andrychowicz et al. found it can hurt.",
     "Why have GRPO-style methods dropped the critic entirely, and what do they lose?": "A critic costs memory and is hard to train on sparse terminal rewards. You lose per-token credit assignment and variance reduction."
   },
   "gae_advantage": {
@@ -172,7 +172,7 @@
   },
   "grpo_train_step": {
     "Walk me through one GRPO step from batch to optimizer update.": "Rollouts are generated and scored, and group advantages computed, before this step. In the step: policy log-probs, reference log-probs under no_grad, the loss (advantage-weighted log-probs minus beta times KL), backward and one optimizer step.",
-    "Which model is frozen, which receives gradients, and how do you guarantee it?": "The reference is frozen (requires_grad False, eval mode, no_grad). The policy trains. Assert that the reference has no gradients after backward.",
+    "Which model is frozen, which receives gradients, and how do you guarantee it?": "The reference is frozen (requires_grad False, eval mode, no_grad) and only the policy trains. Assert that the reference has no gradients after backward.",
     "Where do you shift logits and input_ids to get per-token log-probs, and how do you avoid an off-by-one?": "In a real trainer, logits[:, :-1] pair with input_ids[:, 1:], and the response mask shifts the same way. This exercise's batch is already aligned, so do not shift here.",
     "Why compute reference log-probs under torch.no_grad, and what memory does that save?": "The reference never updates, so there is no need to store activations for backward. no_grad saves that memory.",
     "Why must the returned metrics be detached, and what leaks if they are not?": "Metrics holding tensors with gradient keep the whole graph alive, which leaks memory across steps.",
@@ -272,7 +272,7 @@
   "truncated_importance_sampling": {
     "Why do the rollout engine and the trainer assign different probabilities to the same token, and why does that make on-policy RL off-policy?": "Different kernels, precision, batch composition or quantization in vLLM versus the FSDP trainer give slightly different log-probs for the same token.",
     "What does importance sampling correct, and why truncate the ratio instead of using it directly?": "It reweights samples from the rollout distribution to match the trainer's. Truncation bounds the variance from rare huge ratios.",
-    "Write the token-level and sequence-level weights. Which one is closer to the true trajectory ratio, and which one hits the cap more often?": "Token: exp(train - rollout) per token, capped. Sequence: exp of the summed log-ratios, capped. Sequence is the true trajectory ratio but explodes and hits the cap much more often.",
+    "Write the token-level and sequence-level weights. Which one is closer to the true trajectory ratio, and which one hits the cap more often?": "Token: exp(train - rollout) per token, capped; sequence: exp of the summed log-ratios, capped. Sequence is the true trajectory ratio but explodes and hits the cap much more often.",
     "Why must the weight be detached, and where does it enter the loss?": "It is a fixed correction factor, not something to optimize. It multiplies the per-token policy loss.",
     "How do you keep the weight finite when a log-ratio is huge, and why must masked positions be excluded before arithmetic?": "Clamp the log-ratio before exp and zero masked positions first, since padded garbage can overflow.",
     "How do you choose the cap? What do you monitor to detect that the rollout engine itself is broken?": "Pick a small cap such as 2 and watch the fraction of capped tokens and the mean log-ratio. A spike means the engine is misbehaving.",
@@ -298,7 +298,7 @@
   },
   "confidence_calibration": {
     "What is calibration, and why does it matter for RL-trained reasoning models?": "Whether stated or implied confidence matches the actual accuracy. It matters for deciding when to trust or abstain.",
-    "How do accuracy, Brier score and ECE differ?": "Accuracy: fraction correct. Brier: mean squared error of the probabilities. ECE: the weighted average gap between confidence and accuracy per bin.",
+    "How do accuracy, Brier score and ECE differ?": "Accuracy: fraction correct; Brier: mean squared error of the probabilities. ECE: the count-weighted average gap between confidence and accuracy per bin.",
     "How do you assign confidences to equal-width bins, including the boundaries at 0 and 1?": "bin = min(floor(conf * B), B - 1), so 1.0 goes in the last bin. Check how 0 is handled.",
     "Why weight each bin's gap by its count?": "Bins with more samples should matter more. Otherwise a nearly empty bin could dominate.",
     "How do empty bins affect ECE?": "They have no samples and no gap. Skip them, with weight zero.",
@@ -308,7 +308,7 @@
   "embedding_diversity_selection": {
     "Why select diverse training data, and what does embedding diversity capture?": "Diverse data covers more of the task space and reduces redundancy. Embeddings capture semantic similarity.",
     "What is farthest-first traversal?": "Pick a start point, then repeatedly add the point farthest from its nearest selected point. It is a 2-approximation for k-center.",
-    "How do you maintain each row's distance to its nearest selected row efficiently?": "Keep min_dist per row. After each pick, update it with the minimum of the old value and the distance to the new pick. That is O(N) per step.",
+    "How do you maintain each row's distance to its nearest selected row efficiently?": "Keep min_dist per row, and after each pick lower it to the distance to the new pick where that is smaller. That is O(N) per step.",
     "Why cosine distance rather than Euclidean for embeddings?": "Embedding direction carries meaning, while norms vary with length or frequency. Cosine ignores the norm.",
     "How do tie-breaking and the seed index affect determinism?": "Fix the first pick (the seed index) and break ties by lowest index, so the same input gives the same output.",
     "Diverse in embedding space does not mean useful for training. What else would you consider?": "Quality, difficulty, label correctness and relevance to the target task. Combine diversity with a quality filter.",
@@ -330,7 +330,7 @@
     "What goes wrong if padding or masked positions contribute to the loss or the gradient? How do you handle the mask and numerical stability in code?": "Padded positions add fake targets and gradients. Use log_softmax for both, compute the KL per position, and take a masked mean.",
     "Should gradients flow back into the teacher? How do you cut them in PyTorch?": "No: the teacher is fixed. Compute teacher logits under torch.no_grad() or call detach().",
     "If every position in the batch is masked, or T <= 0, what should the loss function do and why?": "With no valid positions, the mean is undefined. Raise an error for an empty mask and for T <= 0 rather than returning NaN.",
-    "Temperature KD is teacher-forced distillation. What are its limits for autoregressive generation, for example exposure bias or distribution shift?": "The student trains on teacher-forced prefixes but generates from its own. Errors compound. On-policy distillation addresses this.",
+    "Temperature KD is teacher-forced distillation. What are its limits for autoregressive generation, for example exposure bias or distribution shift?": "The student trains on teacher-forced prefixes but generates from its own, so errors compound. On-policy distillation addresses this.",
     "Compared with plain cross-entropy SFT on teacher outputs, what does matching the full teacher distribution buy you, and what does it cost?": "The full distribution carries the teacher's uncertainty and near-miss answers (more signal per token). It costs teacher logits at train time, storage, and a shared vocabulary."
   },
   "opd_sampled_kl_advantage": {

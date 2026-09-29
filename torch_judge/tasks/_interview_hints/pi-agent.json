@@ -14,13 +14,13 @@
     "Why run every before_tool_call hook before any tool starts? What race would appear otherwise?": "Hooks can block or modify calls. If some tools started first, a later hook's decision would come too late.",
     "How do you return results in call order when calls finish in a different order?": "Store each result at its call's index, then emit in index order.",
     "Where is the abort flag checked, and what result does each skipped or aborted call get?": "In preparation, after before_tool_call (that call gets \"Operation aborted\") and after each call (stop preparing; later calls get no message). Then again as each prepared call starts running: it does not execute and gets \"Operation aborted\".",
-    "Unbounded parallelism versus a bounded pool versus fully sequential execution: latency, rate limits and resource contention?": "Unbounded is fastest until rate limits or resource contention hit. A pool bounds them. Sequential is safest and slowest.",
+    "Unbounded parallelism versus a bounded pool versus fully sequential execution: latency, rate limits and resource contention?": "Unbounded is fastest until rate limits or resource contention hit, and a pool bounds them. Sequential is safest and slowest.",
     "Declaring sequential per tool versus detecting conflicts from arguments (same file, same process): precision and complexity?": "Declaring per tool is simple and coarse. Detecting conflicts from arguments is precise but complex and can miss hidden conflicts."
   },
   "pi_streaming_json": {
     "Why would an agent UI parse tool-call arguments before the model finishes streaming them?": "To show progress (the file being edited, the command) and start UI work before the call finishes.",
     "Which partial values are safe to show, and which must be dropped? Give an example of each.": "Complete keys and values are safe. Partial numbers (12 of 123), true or false half-written, and dangling escapes must be dropped.",
-    "Walk through parsing '{\"path\": \"src/ma' and '{\"force\": tr'. How does your parser report that it ran out of input inside a value?": "The path gives a partial string \"src/ma\", which is safe to show. For \"tr\", a literal is unfinished, so drop the key. The parser reports running out inside a value.",
+    "Walk through parsing '{\"path\": \"src/ma' and '{\"force\": tr'. How does your parser report that it ran out of input inside a value?": "Both inputs end inside a value: the partial string \"src/ma\" is kept and safe to show, but the unfinished literal \"tr\" is missing, so its key is dropped. Say how your parser signals that it ran out of input.",
     "What does the repair pass fix, and why are raw newlines and escapes like \\d so common in model output?": "Raw newlines inside strings and invalid escapes. Models write JSON like prose or code (a regex's \\d).",
     "Why try the unrepaired text before the repaired text in the partial step?": "If the raw text already parses, repair could only change its meaning. Use repair as a fallback.",
     "Repairing malformed tool arguments versus rejecting them and asking the model to retry: robustness versus executing something the model did not mean?": "Repair is robust but may execute something slightly different from what was intended. Rejecting is safer but costs a retry round trip.",
@@ -30,18 +30,18 @@
     "What has to change in a conversation history when you switch from one LLM provider to another mid-session?": "Message formats, tool-call id formats, reasoning blocks and provider-specific fields must be converted or dropped.",
     "Why can reasoning blocks from one model not simply be replayed to another?": "Reasoning may be encrypted or signed for one provider, and another model cannot verify or use it.",
     "Walk through how tool-call ids are normalized and how the matching tool results follow them. Why must the mapping be built while scanning in order?": "Map each old id to a valid new one as you go. The results that follow must use the same mapping, so build it in order.",
-    "When is a tool call orphaned, and what does the repair insert? Why are system messages held back while calls are pending?": "A call with no result before the next user or assistant message. Insert a synthetic error result. Holding system messages back keeps the call and its result adjacent.",
-    "Why skip errored or aborted assistant messages entirely instead of repairing them?": "They may contain partial or invalid tool calls. Repairing could invent content. Dropping them is safer.",
+    "When is a tool call orphaned, and what does the repair insert? Why are system messages held back while calls are pending?": "A call is orphaned when no result arrives before the next user or assistant message; insert a synthetic error result. Holding system messages back keeps the call and its result adjacent.",
+    "Why skip errored or aborted assistant messages entirely instead of repairing them?": "They may contain partial or invalid tool calls, and repairing them could invent content. Dropping them is safer.",
     "Converting foreign reasoning to text versus dropping it: context quality, token cost and the risk of the new model imitating another model's style?": "Converting keeps useful context but costs tokens and may copy another model's style. Dropping loses context.",
     "Repairing malformed histories silently versus failing loudly: when does each help or hurt debugging?": "Silent repair keeps sessions working but hides bugs. Failing loudly finds them fast but breaks users."
   },
   "pi_multi_edit": {
     "Why do coding agents edit files by string replacement instead of line numbers or full rewrites?": "Line numbers shift after every edit and full rewrites cost tokens and risk accidental changes. String replacement is anchored to content.",
     "Why must old_text be unique, and what should the tool tell the model when it is not?": "An ambiguous match could edit the wrong place. Report how many matches were found and ask for more context.",
-    "Walk through exact-then-fuzzy matching. Which differences does the normalization forgive, and why is fuzzy mode decided once for the whole call?": "Try each old_text exactly. If one is missing but its normalized form matches, turn fuzzy mode on for every edit. Normalization forgives NFKC differences, trailing whitespace, curly quotes, Unicode dashes and special spaces; line endings are unified separately.",
+    "Walk through exact-then-fuzzy matching. Which differences does the normalization forgive, and why is fuzzy mode decided once for the whole call?": "Try each old_text exactly; if one misses but its normalized form matches, fuzzy mode turns on for every edit. Normalization forgives NFKC differences, trailing whitespace, curly quotes, Unicode dashes and special spaces; line endings are handled separately.",
     "Why match all edits against the original content, and why apply replacements from the end of the file backwards?": "Edits are defined against the file the model saw. Applying from the end keeps earlier offsets valid.",
     "In fuzzy mode, how do you write back only the touched lines? What would go wrong if you wrote back the normalized file?": "Replace only the lines covered by each match in the original text. Writing the normalized file would silently change untouched lines.",
-    "String replacement versus unified diffs versus whole-file rewrites as the edit format for an LLM: token cost, failure modes and model accuracy?": "Replacement is cheap and precise but needs unique anchors. Diffs are compact but models get the line counts wrong. Rewrites are simple but expensive.",
+    "String replacement versus unified diffs versus whole-file rewrites as the edit format for an LLM: token cost, failure modes and model accuracy?": "Replacement is cheap and precise but needs unique anchors, and diffs are compact but models get the line counts wrong. Rewrites are simple but expensive.",
     "How far would you take fuzzy matching (indentation, whitespace inside lines, edit distance) before the risk of editing the wrong place outweighs the benefit?": "Stop at whitespace and quote normalization. Edit distance risks changing a similar but wrong location."
   },
   "pi_file_mutation_queue": {
@@ -50,7 +50,7 @@
     "Walk through how each caller waits for the previous one and signals the next. Why does the key get deleted only if you are still the tail?": "Chain each caller on the previous one's completion. Delete the key only if no newer caller has queued behind you.",
     "What happens in asyncio if a caller is cancelled while waiting, and how do you hand its turn on safely?": "The cancelled waiter must still pass its turn to the next caller, or the chain deadlocks. Use try/finally.",
     "Why must a failing edit still release the key?": "Otherwise the next caller waits forever. Release in finally.",
-    "A per-file queue versus one global lock versus optimistic concurrency that re-reads and retries on conflict: throughput and correctness?": "Per-file allows parallel work on different files. A global lock is simple but serial. Optimistic retries are fast but complex.",
+    "A per-file queue versus one global lock versus optimistic concurrency that re-reads and retries on conflict: throughput and correctness?": "A per-file queue allows parallel work on different files, and a global lock is simple but serial. Optimistic retries are fast but complex.",
     "Should read operations also go through the queue? What anomalies can a model observe if they do not?": "Without it, a read can see a half-applied or older version while a write is pending."
   },
   "pi_truncate_output": {
@@ -69,6 +69,6 @@
     "What is a split turn, and what extra summary does it need so the kept messages still make sense?": "The cut falls inside a turn, so the kept part lacks the user request that started it. Summarize that request separately.",
     "Why pull adjacent metadata entries into the kept range?": "They describe the kept messages (model change, labels). Separating them loses that context.",
     "Estimated tokens (chars / 4) versus the provider's reported usage for deciding when and where to compact: accuracy, cost and staleness?": "Estimates are cheap and available immediately but inaccurate. Reported usage is exact but only known after a call.",
-    "Cut-and-summarize compaction versus pruning tool outputs versus retrieval over the full log: what does each lose?": "Compaction loses detail. Pruning loses tool output but keeps structure. Retrieval keeps everything but needs search to find it."
+    "Cut-and-summarize compaction versus pruning tool outputs versus retrieval over the full log: what does each lose?": "Compaction loses detail, and pruning loses tool output but keeps structure. Retrieval keeps everything but needs search to find it."
   }
 }

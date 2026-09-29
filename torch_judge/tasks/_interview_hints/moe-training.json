@@ -11,7 +11,7 @@
   "moe_topk_router": {
     "What is token-choice top-k routing?": "Each token picks its own top-k experts by router score.",
     "How does it differ from expert-choice routing?": "In expert choice, each expert picks its top tokens up to capacity. That gives perfect balance, but a token may get zero or many experts.",
-    "Softmax before or after top-k: how do the weights differ?": "Softmax over all experts then topk gives weights that do not sum to 1 unless renormalized. Softmax over only the top-k logits sums to 1. Compare the magnitudes.",
+    "Softmax before or after top-k: how do the weights differ?": "Softmax over all experts, then top-k, gives weights that do not sum to 1 unless renormalized, while softmax over only the top-k logits sums to 1. Compare the magnitudes.",
     "How do you break ties deterministically?": "Prefer the lower expert index on equal scores, for example with a stable sort or by adding tiny index-based offsets.",
     "What validation is needed on k?": "k must be an integer with 1 <= k <= number of experts.",
     "Top-1 versus top-2 routing: quality and cost?": "Top-2 is more robust and gives each token two experts' views, at twice the expert compute and communication. Switch showed top-1 can work.",
@@ -23,7 +23,7 @@
     "Where is the noise added, and how is it scaled?": "To the logits before selection, scaled by softplus of a learned noise projection of the input.",
     "How do you compute weights only over the selected experts?": "Mask the unselected experts with -inf, then take the softmax, so weights sum to 1 over the chosen k.",
     "Why pass noise in as an argument rather than sampling inside?": "Tests become deterministic and the caller controls randomness, such as seeds or turning noise off in eval.",
-    "Noise for exploration versus a load-balancing loss?": "Noise is implicit and indirect. A balancing loss directly targets the imbalance. Modern models mostly use losses or bias updates.",
+    "Noise for exploration versus a load-balancing loss?": "Noise works only indirectly, while a balancing loss directly targets the imbalance. Modern models mostly use losses or bias updates.",
     "Should noise be on at inference?": "Usually not: you want deterministic routing at inference. Train and inference then differ slightly."
   },
   "moe_router_zloss": {
@@ -32,7 +32,7 @@
     "Write the loss with logsumexp over experts.": "z = logsumexp(logits, dim=-1) per token; loss = mean(z^2).",
     "Why square it, and why average over tokens?": "Squaring penalizes large values more and is smooth. Averaging makes the weight independent of the batch size.",
     "How does it interact with bf16 numerics?": "Large logits in bf16 have large rounding errors, which flip routing decisions and blow up exp. Smaller logits stay precise.",
-    "Z-loss versus clipping or normalizing router logits?": "Clipping is a hard cutoff with no gradient beyond it. Normalizing changes the scale directly. Z-loss is a soft penalty.",
+    "Z-loss versus clipping or normalizing router logits?": "Clipping is a hard cutoff with no gradient beyond it, and normalizing changes the scale directly. Z-loss is a soft penalty.",
     "How large should the z-loss weight be?": "Tiny, around 1e-3, as in ST-MoE. Big enough to stop drift but small next to the main loss."
   },
   "moe_capacity_dispatch": {

@@ -2,7 +2,7 @@
   "relu": {
     "Why do neural networks need nonlinear activations at all?": "Compose two linear layers with no activation in between. What single layer is that equivalent to?",
     "Why did ReLU replace sigmoid and tanh in deep networks?": "Look at the derivative of sigmoid far from zero, then multiply many such factors through depth. ReLU's derivative is exactly 1 on half its range.",
-    "What is the gradient of ReLU at zero, and what does PyTorch do there?": "The true derivative is undefined at 0. Pick a subgradient; PyTorch returns 0 there. Say why the choice rarely matters in practice.",
+    "What is the gradient of ReLU at zero, and what does PyTorch do there?": "The true derivative is undefined at 0, so pick a subgradient; PyTorch returns 0 there. Say why the choice rarely matters in practice.",
     "How do you implement ReLU without an in-place operation that breaks autograd?": "An in-place op overwrites a tensor autograd saved for backward. Use x.clamp(min=0) or torch.where, which return new tensors.",
     "What is the dying ReLU problem, and how does it show up in training?": "If a unit's pre-activation is negative for every input, its gradient is always 0. Think of large learning rates or big negative biases, and how you would measure dead units.",
     "Compare ReLU with Leaky ReLU, GELU and SiLU.": "Cover three axes: gradient for negative inputs, smoothness at 0, and cost. Leaky keeps a small slope; GELU and SiLU are smooth and non-monotonic near 0.",
@@ -11,7 +11,7 @@
   "gelu": {
     "What is GELU, and what is its intuition as a probabilistic gate?": "GELU is x times the probability that a standard normal falls below x. Contrast a hard gate (ReLU) with a soft gate that depends on how large x is.",
     "Where is GELU used, and why did transformers adopt it?": "Name BERT and GPT-2. Mention the smooth curve and the small negative dip, and that it trained slightly better than ReLU in their experiments.",
-    "Write the exact erf form and the tanh approximation. Why does the approximation exist?": "Exact: 0.5 x (1 + erf(x / sqrt 2)). The tanh form uses sqrt(2/pi) and a 0.044715 x^3 term. erf used to be slow or missing on some hardware.",
+    "Write the exact erf form and the tanh approximation. Why does the approximation exist?": "Exact: 0.5 x (1 + erf(x / sqrt 2)); the tanh form uses sqrt(2/pi) and a 0.044715 x^3 term. It exists because erf used to be slow or missing on some hardware.",
     "How does GELU behave for large negative and large positive inputs?": "Take the limits of the Gaussian CDF: near 0 for large negative x and near 1 for large positive x. So GELU approaches 0 and x.",
     "What is the derivative of GELU, and is it smooth at zero?": "Use the product rule: Phi(x) + x phi(x). Both parts are smooth everywhere, unlike ReLU's kink.",
     "GELU versus ReLU versus SiLU: accuracy and speed trade-offs?": "Compare the final loss reported in papers against cost per element: erf or tanh versus a max. Mention that fused kernels shrink the speed gap.",
@@ -23,7 +23,7 @@
     "Write SwiGLU in terms of x, W1, Wgate and W2. Which projection gets the Swish?": "Write (SiLU(x Wgate) * (x W1)) W2. The Swish applies to the gate projection only.",
     "Why is d_ff often set to about 8/3 of d_model with SwiGLU instead of 4 times?": "There are three matrices instead of two. Solve 3 * d_model * d_ff = 2 * d_model * 4 d_model for d_ff.",
     "What are the parameter and FLOP counts compared with a standard two-matrix MLP?": "Count the weight matrices and multiply-adds per token for each design, then compare them at the same d_ff and again at matched parameters.",
-    "What does gating buy you empirically, and is there a good theoretical explanation?": "Empirically it gives lower loss at equal FLOPs. Theory is thin: Shazeer attributed it to \"divine benevolence\". Mention multiplicative interactions.",
+    "What does gating buy you empirically, and is there a good theoretical explanation?": "Empirically it gives lower loss at equal FLOPs, but theory is thin: Shazeer attributed it to \"divine benevolence\". Mention multiplicative interactions.",
     "What does SwiGLU cost at inference time?": "Three matmuls, a larger activation footprint and memory traffic per token. Mention that the gate and up projections are often fused into one matmul."
   },
   "layernorm": {
@@ -107,6 +107,6 @@
     "Where is the causal mask applied, and how do you build it?": "In the scores before softmax. Build it with torch.triu(ones, diagonal=1) and set those positions to -inf.",
     "What are the parameter counts of the attention and MLP parts for a given d_model?": "Attention has 4 d^2 weights; a 4x MLP has 8 d^2. Add the biases and norms.",
     "What changed from GPT-2 blocks to LLaMA blocks, and why?": "RMSNorm, RoPE, SwiGLU and no biases. Say what each change buys.",
-    "Why do very deep transformers need special initialization or residual scaling?": "Residual variance grows with depth. GPT-2 scaled residual projections by 1/sqrt(N). Mention DeepNet and similar schemes."
+    "Why do very deep transformers need special initialization or residual scaling?": "Residual variance grows with depth, so GPT-2 scaled residual projections by 1/sqrt(N). Mention DeepNet and similar schemes."
   }
 }

@@ -32,7 +32,7 @@
     "How do you choose which messages to summarize?": "The oldest middle messages that are no longer active, keeping the head and the recent tail verbatim.",
     "How do you keep tool call and tool result pairs intact?": "Treat a call and its result as one unit: never keep one without the other.",
     "How do you enforce both the total and the summary budget?": "Check the summary against its own cap and the total against the budget, and truncate the summary if needed.",
-    "Summarization versus truncation versus retrieval?": "A summary keeps meaning but is lossy. Truncation is cheap but blind. Retrieval keeps everything but needs a search step.",
+    "Summarization versus truncation versus retrieval?": "A summary keeps meaning but is lossy, and truncation is cheap but blind. Retrieval keeps everything but needs a search step.",
     "How can compaction lose information that matters later?": "Exact values (ids, numbers, file paths) or constraints stated early can get summarized away. Tag must-keep facts."
   },
   "tool_call_dag": {

@@ -6,7 +6,7 @@
     "What happens to isolated nodes?": "With self-loops their degree is 1, so they keep their own features. Without self-loops you would divide by zero.",
     "Why multiply by W before or after aggregation?": "Both orders are mathematically equal (associativity). Multiply by W first when it reduces the feature dimension, to save compute.",
     "What is oversmoothing in deep GCNs?": "Repeated averaging makes node features converge to the same value, so deep GCNs lose discrimination.",
-    "Spectral versus spatial views of GCN?": "Spectral: a first-order approximation of graph Fourier filters. Spatial: neighbor averaging. Both give the same formula."
+    "Spectral versus spatial views of GCN?": "Spectral: a first-order approximation of graph Fourier filters; spatial: neighbor averaging. Both give the same formula."
   },
   "graph_readout": {
     "What is a graph readout, and when do you need one?": "It combines node embeddings into one graph embedding for graph-level tasks such as molecule property prediction.",
@@ -42,7 +42,7 @@
     "What does the update function combine?": "The node's previous state and its aggregated message, through an MLP or GRU.",
     "How do you vectorize over edges?": "Gather node features with the source and destination indices (E, D), compute all messages at once, and scatter-add.",
     "Sum versus mean aggregation for messages?": "Sum keeps degree information but grows with degree. Mean is scale-stable but loses the count.",
-    "How does MPNN relate to GCN, GAT and GIN as special cases?": "GCN: fixed normalized messages. GAT: attention-weighted messages. GIN: sum with an MLP. Each is a choice of message and update function."
+    "How does MPNN relate to GCN, GAT and GIN as special cases?": "Each is a choice of message and update function: GCN uses fixed normalized messages, GAT attention-weighted ones, and GIN a sum followed by an MLP. Name which part each one changes."
   },
   "link_prediction": {
     "What is link prediction, and where is it used?": "Predict whether an edge exists between two nodes. Recommendations, knowledge graph completion, drug interactions.",

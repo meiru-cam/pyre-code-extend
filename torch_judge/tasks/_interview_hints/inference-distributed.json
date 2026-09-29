@@ -23,7 +23,7 @@
     "How do you implement top-p with a sorted cumulative sum?": "Sort probabilities descending, take the cumsum, mask tokens whose cumsum before them already exceeds p, then scatter the mask back.",
     "How do you make sure at least one token survives?": "Always keep the top token, for example by shifting the mask one position right or forcing index 0 to stay.",
     "In which order do temperature, top-k and top-p apply?": "Usually temperature first, then top-k, then top-p. Say what changes if top-p runs on untempered probabilities.",
-    "Top-p versus min-p versus typical sampling?": "Top-p uses a fixed probability mass. Min-p keeps tokens above a fraction of the top probability, adapting to confidence. Typical sampling targets expected information content.",
+    "Top-p versus min-p versus typical sampling?": "Top-p keeps a fixed probability mass, while min-p keeps tokens above a fraction of the top probability, adapting to confidence. Typical sampling targets expected information content.",
     "How do sampling settings affect RL rollouts and evaluation?": "Rollouts need diversity for exploration, and the training logprobs must match the sampling distribution. Evaluation often uses greedy or fixed settings with pass@k."
   },
   "logits_processors": {
@@ -33,7 +33,7 @@
     "Why does the order of temperature and top-p matter? Give a concrete example.": "Temperature changes the shape before the cutoff. Example: logits [2, 1, 0] with p = 0.8 keep a different number of tokens at T = 0.5 than at T = 2.",
     "How should top-k treat ties, and what does torch.topk do with them?": "Ties at the k-th value: either keep all tied tokens or break by index. torch.topk makes no stable guarantee, so the spec must say.",
     "Top-p versus top-k versus min-p for creative writing and for code: which would you use and why?": "Creative writing wants moderate p or min-p for diversity. Code wants low temperature or a small k because one wrong token breaks it.",
-    "Repetition penalty versus frequency and presence penalties: what does each punish, and when do they hurt quality?": "Repetition penalty scales logits of any seen token once. Frequency penalty grows with count; presence penalty is a flat one-time subtraction. They can suppress needed repeats such as names or code."
+    "Repetition penalty versus frequency and presence penalties: what does each punish, and when do they hurt quality?": "Repetition penalty scales the logit of any seen token once, frequency penalty grows with the count, and presence penalty is a flat one-time subtraction. All can suppress needed repeats such as names or code."
   },
   "beam_search": {
     "What is beam search, and how does it differ from greedy decoding?": "Keep the B best partial sequences by total log-probability at each step, instead of only the single best token as greedy does.",
@@ -69,7 +69,7 @@
     "Why is the gradient divided by the number of workers?": "It averages the per-worker gradients so the result equals the gradient of the global mean loss.",
     "How does each worker update only its shard?": "Each worker runs the optimizer only on the parameter slice and optimizer state it owns.",
     "What does FSDP cost in communication compared with DDP?": "About 1.5x DDP's communication volume (all-gather forward and backward plus reduce-scatter), in exchange for much less memory.",
-    "FSDP versus tensor parallelism versus pipeline parallelism: when each?": "FSDP when memory is the problem and the interconnect is good. TP for huge layers within a node. PP for very deep models across slow links."
+    "FSDP versus tensor parallelism versus pipeline parallelism: when each?": "FSDP when memory is the problem and the interconnect is good, and TP for huge layers within a node. PP for very deep models across slow links."
   },
   "ring_attention": {
     "What is ring attention, and why is it needed for long contexts?": "It splits a long sequence across devices and passes K and V blocks around a ring, so no device holds the full attention.",

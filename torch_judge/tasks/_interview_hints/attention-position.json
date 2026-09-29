@@ -11,7 +11,7 @@
   "rope": {
     "What is RoPE, and why does rotating Q and K encode relative position?": "It rotates Q and K pairs by a position-dependent angle. The dot product of two rotated vectors depends only on the angle difference.",
     "Why is RoPE applied to Q and K but not V?": "Position only has to affect which keys match which queries. V carries content that should be mixed as-is.",
-    "Walk through pairing dimensions and applying the rotation. How are the frequencies defined?": "Pair dimensions (2i, 2i+1) or the two halves. theta_i = base^(-2i/d). Rotate each pair by position times theta_i.",
+    "Walk through pairing dimensions and applying the rotation. How are the frequencies defined?": "Pair dimensions (2i, 2i+1) or the two halves, with frequencies theta_i = base^(-2i/d). Rotate each pair by position times theta_i.",
     "Interleaved pairs versus half-split pairs: why do implementations differ, and what breaks if you mix them?": "Interleaved pairs (original paper, GPT-J, Meta's LLaMA code) versus half-split (GPT-NeoX, Hugging Face LLaMA, which permutes Meta's q/k weights). Mixing conventions pairs the wrong dimensions and scrambles positions.",
     "How do you apply RoPE with a KV cache when new tokens start at an offset?": "Rotate new tokens at their absolute positions (offset plus index) and cache the rotated keys.",
     "Why does RoPE degrade beyond the training context length?": "Low-frequency dims never completed a full rotation during training, so longer positions produce unseen angles.",
@@ -32,8 +32,8 @@
     "How is the base adjusted from the scale factor and head dimension?": "base' = base * s^(d / (d - 2)). Derive it by requiring the lowest frequency to be interpolated by s.",
     "Why are high-frequency dimensions preserved and low-frequency ones stretched?": "High frequencies encode local order, which the model relies on. Low frequencies encode long range and need stretching to cover new lengths.",
     "What stays unchanged when scale equals one?": "With s = 1 the base is unchanged, so the output equals plain RoPE.",
-    "NTK scaling versus YaRN versus fine-tuning on long data: trade-offs?": "NTK needs no training but is imperfect. YaRN adds per-band ramps and an attention temperature. Fine-tuning is best but costs compute and data.",
-    "What quality regressions do you see on short contexts after scaling?": "Changed frequencies slightly shift short-range behavior. Look for perplexity increases at the original length. Dynamic NTK avoids scaling short inputs."
+    "NTK scaling versus YaRN versus fine-tuning on long data: trade-offs?": "NTK needs no training but is imperfect, and YaRN adds per-band ramps and an attention temperature. Fine-tuning is best but costs compute and data.",
+    "What quality regressions do you see on short contexts after scaling?": "Changed frequencies slightly shift short-range behavior, so look for perplexity increases at the original length. Dynamic NTK avoids scaling short inputs."
   },
   "causal_attention": {
     "Why do autoregressive models need a causal mask?": "At generation time, token t cannot see t+1. If training lets it peek, what does the model learn, and what happens at inference?",
@@ -42,7 +42,7 @@
     "Why must masking happen before the softmax?": "After softmax, zeroing weights leaves rows that no longer sum to 1. Masking the logits first renormalizes over the allowed positions.",
     "What does the first row of the attention matrix look like?": "Token 0 can only see itself, so its row is a one-hot on column 0.",
     "How does causal attention enable KV caching at inference?": "Past tokens never see future ones, so their keys and values never change. You can compute them once and reuse them.",
-    "Causal versus bidirectional attention: what does each do better?": "Bidirectional gives richer representations for understanding tasks (BERT). Causal enables generation and caching. Mention prefix-LM hybrids."
+    "Causal versus bidirectional attention: what does each do better?": "Bidirectional attention gives richer representations for understanding tasks (BERT), while causal attention enables generation and caching. Mention prefix-LM hybrids."
   },
   "cross_attention": {
     "What is cross-attention, and where is it used?": "Queries come from one sequence, keys and values from another. Name encoder-decoder translation, Whisper and text-to-image diffusion.",

@@ -21,7 +21,7 @@
     "What is label smoothing, and why use it?": "Replace the one-hot target with (1 - eps) on the true class and eps spread over the classes. It regularizes overconfidence.",
     "How does it change the target distribution?": "The target puts a little probability mass on wrong classes, so the model is not rewarded for pushing logits to infinity.",
     "Write the smoothed loss as a mix of cross-entropy and a uniform term.": "With this exercise's targets: loss = (1 - eps) * (-log p_true) + (eps / (C - 1)) * sum over the wrong classes of -log p_c. PyTorch instead spreads eps over all C classes, which gives eps * mean over classes of -log p.",
-    "Does the smoothing mass go to all classes or only the wrong ones? How does it change the formula?": "PyTorch spreads eps uniformly over all K classes, including the true one. The alternative is eps / (K - 1) over wrong ones only. Check the constant.",
+    "Does the smoothing mass go to all classes or only the wrong ones? How does it change the formula?": "PyTorch spreads eps uniformly over all K classes, including the true one; the alternative is eps / (K - 1) over the wrong ones only. Check the constant.",
     "How do you compute it stably from logits?": "Use log_softmax once, then gather the true class and take the mean over the class dimension.",
     "How does label smoothing affect calibration and knowledge distillation?": "It often improves calibration, but teachers trained with smoothing distill worse because it erases the similarity information in their logits.",
     "When should you avoid label smoothing?": "When you need accurate probabilities or dark knowledge for a teacher, or when data is already noisy or low-entropy."
@@ -51,7 +51,7 @@
     "What should the learning rate be at step zero and at the end of warmup?": "Near 0 at the start (check whether step 0 gives exactly 0 or 1/warmup), and the peak lr at the end of warmup.",
     "How do you add a minimum learning rate floor?": "Interpolate between max_lr and min_lr instead of max_lr and 0.",
     "Cosine versus warmup-stable-decay schedules: why have recent LLM runs moved to WSD?": "WSD holds a constant rate and decays only at the end, so you can branch or extend training without choosing the length up front.",
-    "How does the schedule interact with the total token budget if you extend training?": "Cosine is tied to a fixed total. Extending it means rewarming or restarting. WSD lets you continue from the stable phase."
+    "How does the schedule interact with the total token budget if you extend training?": "Cosine is tied to a fixed total, so extending it means rewarming or restarting. WSD lets you continue from the stable phase."
   },
   "gradient_clipping": {
     "What is gradient norm clipping, and why use it?": "Scale all gradients down when their total norm exceeds a threshold. It prevents occasional huge updates from destroying training.",

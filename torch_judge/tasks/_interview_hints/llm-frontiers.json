@@ -30,7 +30,7 @@
     "Why do MoE models need a load-balancing loss?": "Without pressure, the router sends most tokens to a few experts, wasting capacity and overloading devices.",
     "What is routing collapse?": "A few experts win early, get more gradient, get better, and win more: a rich-get-richer loop.",
     "Write the Switch-style auxiliary loss from token fractions and router probabilities.": "loss = alpha * E * sum over experts of f_i * P_i. f_i is the fraction of tokens routed to expert i; P_i is the mean router probability for it.",
-    "Why multiply the fraction by the mean probability instead of using either alone?": "f is non-differentiable (from the argmax). P is differentiable but alone could be gamed. The product is minimized by a uniform distribution.",
+    "Why multiply the fraction by the mean probability instead of using either alone?": "f is non-differentiable (from the argmax), and P is differentiable but could be gamed on its own. The product is minimized by a uniform distribution.",
     "Which term carries gradient?": "Only P_i. f_i comes from the hard top-k selection and is treated as a constant.",
     "How do you choose the loss weight, and what happens if it is too large?": "Sweep it small, around 1e-2. Too large forces uniform routing and hurts quality because experts cannot specialize.",
     "What do auxiliary-loss-free methods such as bias-based balancing do instead?": "Add a per-expert bias to the routing scores used for selection only, nudging it up or down according to load (DeepSeek-V3), with no gradient interference."

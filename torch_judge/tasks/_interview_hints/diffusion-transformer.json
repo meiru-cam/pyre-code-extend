@@ -2,7 +2,7 @@
   "noise_schedule": {
     "What is a noise schedule in diffusion, and what does alpha-bar represent?": "The schedule sets how much noise is added at each step. alpha-bar_t is the fraction of the signal's variance left at step t.",
     "How does the schedule relate to the signal-to-noise ratio?": "SNR(t) = alpha-bar / (1 - alpha-bar). The schedule is the path SNR follows from high to low.",
-    "Implement linear, cosine and another schedule. How do betas become alpha-bar?": "Linear: evenly spaced betas. Cosine: define alpha-bar with a cos^2 curve directly. alpha-bar_t is the cumulative product of (1 - beta).",
+    "Implement linear, cosine and another schedule. How do betas become alpha-bar?": "Linear uses evenly spaced betas, while cosine defines alpha-bar directly with a cos^2 curve. For beta schedules, alpha-bar_t is the cumulative product of (1 - beta).",
     "Why clip betas in the cosine schedule?": "Near the end of the cosine curve the implied betas approach 1, which gives singular steps, so the paper clips them at 0.999. This exercise clips alpha-bar itself to [0.0001, 0.9999] instead.",
     "What should alpha-bar look like at the first and last timestep?": "Close to 1 at the first step (almost clean) and close to 0 at the last (almost pure noise).",
     "Why did the cosine schedule improve over linear for small images?": "The linear schedule destroys low-resolution images too early, wasting many steps on pure noise. Cosine spreads the SNR decrease more evenly.",
@@ -32,7 +32,7 @@
     "Which parameters does the conditioning projection regress, and where does each apply in the block?": "Shift and scale for the norms before attention and before the MLP, and a gate on each residual branch. Six vectors per block.",
     "Why zero-initialize the final projection rather than the whole block?": "Zeroing only the modulation output gives gates of 0, which makes the block the identity while its internal layers still start with normal random weights.",
     "How do the shapes broadcast from a per-sample condition to every token?": "The condition is (B, D) and is unsqueezed to (B, 1, D) so it broadcasts across all N tokens.",
-    "adaLN versus cross-attention conditioning versus in-context tokens: trade-offs?": "adaLN is cheap and suits a global condition. Cross-attention handles token sequences such as text. In-context tokens are simplest but cost sequence length.",
+    "adaLN versus cross-attention conditioning versus in-context tokens: trade-offs?": "adaLN is cheap and suits a global condition, while cross-attention handles token sequences such as text. In-context tokens are simplest but cost sequence length.",
     "What does zero initialization buy for very deep diffusion transformers?": "Stable training at large depth without warmup tricks, and each block starts as the identity. It was DiT's best-performing variant."
   }
 }
