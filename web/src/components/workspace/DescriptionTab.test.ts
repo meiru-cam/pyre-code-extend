@@ -16,7 +16,7 @@ vi.mock('@/components/workspace/DesignNoteEditor', () => ({
   DesignNoteEditor: () => null,
 }));
 
-import { DescriptionTab } from '@/components/workspace/DescriptionTab';
+import { DescriptionTab, splitAtDivider } from '@/components/workspace/DescriptionTab';
 import type { Problem } from '@/lib/types';
 
 const problem: Problem = {
@@ -119,5 +119,45 @@ describe('DescriptionTab interview gate', () => {
     expect(screen.getByText('hint 1 · Guiding questions')).toBeTruthy();
     expect(screen.getByText('Reference pro')).toBeTruthy();
     expect(screen.getByText('Interview')).toBeTruthy();
+  });
+});
+
+
+const parted: Problem = {
+  ...problem,
+  id: 'parted',
+  descriptionEn: 'Build it.\n\n────\n\n**Background** only context.',
+  parts: [
+    { title: 'Basic store', descriptionEn: 'Store values.' },
+    { title: 'Injectable clock', descriptionEn: 'Default to the clock.' },
+    { title: 'Concurrent callers', descriptionEn: 'Add a lock.' },
+  ],
+};
+
+describe('DescriptionTab parts', () => {
+  afterEach(cleanup);
+
+  it('shows unlocked parts only, between the requirement and the background', () => {
+    const { container } = render(React.createElement(DescriptionTab, { problem: parted, unlockedPart: 2 }));
+    const text = container.textContent ?? '';
+
+    expect(screen.getByText('Basic store')).toBeTruthy();
+    expect(screen.getByText('Injectable clock')).toBeTruthy();
+    expect(screen.queryByText('Concurrent callers')).toBeNull();
+    expect(screen.queryByText('Add a lock.')).toBeNull();
+    expect(screen.getByText('partLocked')).toBeTruthy();
+    expect(text.indexOf('Build it.')).toBeLessThan(text.indexOf('Basic store'));
+    expect(text.indexOf('Injectable clock')).toBeLessThan(text.indexOf('only context.'));
+  });
+
+  it('drops the locked notice once every part is shown', () => {
+    render(React.createElement(DescriptionTab, { problem: parted, unlockedPart: 3 }));
+    expect(screen.getByText('Concurrent callers')).toBeTruthy();
+    expect(screen.queryByText('partLocked')).toBeNull();
+  });
+
+  it('splits at the divider and keeps it with the background', () => {
+    expect(splitAtDivider('a\n\n────\nb')).toEqual(['a', '────\nb']);
+    expect(splitAtDivider('no divider')).toEqual(['no divider', '']);
   });
 });

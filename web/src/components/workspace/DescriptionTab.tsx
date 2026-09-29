@@ -62,6 +62,14 @@ function renderDescription(text: string) {
   });
 }
 
+/** Split a description at its `────` divider line; the divider stays with the background. */
+export function splitAtDivider(text: string): [string, string] {
+  const lines = text.split('\n');
+  const index = lines.findIndex((line) => line.startsWith('─'));
+  if (index < 0) return [text, ''];
+  return [lines.slice(0, index).join('\n').trimEnd(), lines.slice(index).join('\n')];
+}
+
 interface DescriptionTabProps {
   problem: Problem;
   implementationStatus?: 'todo' | 'attempted' | 'solved';
@@ -70,18 +78,23 @@ interface DescriptionTabProps {
     record: InterviewRecord;
     onChange: (record: InterviewRecord) => void;
   };
+  /** Multi-part exercises only: how many parts the learner has unlocked. */
+  unlockedPart?: number;
 }
 
 export function DescriptionTab({
   problem,
   implementationStatus = 'todo',
   interview,
+  unlockedPart = 1,
 }: DescriptionTabProps) {
   const [hintOpen, setHintOpen] = useState(false);
   const [openLevels, setOpenLevels] = useState<Record<number, boolean>>({});
   const { locale, t } = useLocale();
 
   const description = locale === 'zh' ? problem.descriptionZh : problem.descriptionEn;
+  // Parts are requirement, so they go above the divider that opens the background section.
+  const [requirement, background] = problem.parts ? splitAtDivider(description) : [description, ''];
   const hint = locale === 'zh' && problem.hintZh ? problem.hintZh : problem.hint;
   const hintLevels = getHintLevels(problem);
   const helpUnlocked = !interview || isInterviewUnlocked(interview.record);
@@ -98,8 +111,38 @@ export function DescriptionTab({
         <p className="text-sm text-text-2">{t('implementFn', { fn: problem.functionName })}</p>
       </div>
 
-      {description && (
-        <div className="space-y-1">{renderDescription(description)}</div>
+      {requirement && (
+        <div className="space-y-1">{renderDescription(requirement)}</div>
+      )}
+
+      {problem.parts && (
+        <div className="space-y-5">
+          {problem.parts.slice(0, unlockedPart).map((part, index) => (
+            <div
+              key={part.title}
+              className="rounded-[10px] p-4 space-y-2"
+              style={{
+                border: '1px solid var(--line)',
+                background: index === unlockedPart - 1 ? 'var(--accent-wash)' : 'var(--bg-elev)',
+              }}
+            >
+              <div className="mono text-[11px] tracking-[0.12em] uppercase text-accent font-semibold">
+                {t('partHeading', { n: index + 1, total: problem.parts!.length })}
+              </div>
+              <h2 className="text-base font-semibold">{part.title}</h2>
+              <div className="space-y-1">{renderDescription(part.descriptionEn)}</div>
+            </div>
+          ))}
+          {unlockedPart < problem.parts.length && (
+            <p className="text-sm text-text-3 px-1">
+              {t('partLocked', { n: unlockedPart + 1, total: problem.parts.length, prev: unlockedPart })}
+            </p>
+          )}
+        </div>
+      )}
+
+      {background && (
+        <div className="space-y-1">{renderDescription(background)}</div>
       )}
 
       {interview && (

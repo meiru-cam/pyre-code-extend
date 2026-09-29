@@ -61,6 +61,8 @@ const en = {
   feat3Title: 'Progress Tracking',
   feat3Desc: 'Track solved problems, best times, and attempt counts across sessions.',
   browsePaths: 'Browse Learning Paths',
+  partHeading: 'Part {n} of {total}',
+  partLocked: 'Part {n} of {total} unlocks when every part 1–{prev} test passes. Run grades all of them together.',
   // prep
   prep: 'Prep',
   prepHero: 'Company Interview Prep',
@@ -194,6 +196,8 @@ const zh: Translations = {
   feat3Title: '进度追踪',
   feat3Desc: '跨会话记录已解决题目、最佳用时和尝试次数。',
   browsePaths: '浏览学习路径',
+  partHeading: '第 {n} 部分，共 {total} 部分',
+  partLocked: '第 1–{prev} 部分的测试全部通过后，解锁第 {n} 部分（共 {total} 部分）。Run 会一起评测这些部分。',
   // prep
   prep: '面试准备',
   prepHero: '公司面试准备',
