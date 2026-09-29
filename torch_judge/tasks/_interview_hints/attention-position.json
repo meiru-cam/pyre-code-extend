@@ -11,7 +11,7 @@
   "rope": {
     "What is RoPE, and why does rotating Q and K encode relative position?": "It rotates Q and K pairs by a position-dependent angle. The dot product of two rotated vectors depends only on the angle difference.",
     "Why is RoPE applied to Q and K but not V?": "Position only has to affect which keys match which queries. V carries content that should be mixed as-is.",
-    "Walk through pairing dimensions and applying the rotation. How are the frequencies defined?": "Pair dimensions (2i, 2i+1) or the two halves. theta_i = base^(-2i/d). Rotate each pair by position times theta_i.",
+    "Walk through pairing dimensions and applying the rotation. How are the frequencies defined?": "Pair dimensions (2i, 2i+1) or the two halves, with frequencies theta_i = base^(-2i/d). Rotate each pair by position times theta_i.",
     "Interleaved pairs versus half-split pairs: why do implementations differ, and what breaks if you mix them?": "Interleaved pairs (original paper, GPT-J, Meta's LLaMA code) versus half-split (GPT-NeoX, Hugging Face LLaMA, which permutes Meta's q/k weights). Mixing conventions pairs the wrong dimensions and scrambles positions.",
     "How do you apply RoPE with a KV cache when new tokens start at an offset?": "Rotate new tokens at their absolute positions (offset plus index) and cache the rotated keys.",
     "Why does RoPE degrade beyond the training context length?": "Low-frequency dims never completed a full rotation during training, so longer positions produce unseen angles.",

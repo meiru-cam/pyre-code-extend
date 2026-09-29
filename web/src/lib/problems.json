@@ -244,7 +244,7 @@
         {
           "stage": "deep_dive",
           "question": "Write the exact erf form and the tanh approximation. Why does the approximation exist?",
-          "hint": "Exact: 0.5 x (1 + erf(x / sqrt 2)). The tanh form uses sqrt(2/pi) and a 0.044715 x^3 term. erf used to be slow or missing on some hardware."
+          "hint": "Exact: 0.5 x (1 + erf(x / sqrt 2)); the tanh form uses sqrt(2/pi) and a 0.044715 x^3 term. It exists because erf used to be slow or missing on some hardware."
         },
         {
           "stage": "deep_dive",
@@ -2617,7 +2617,7 @@
         {
           "stage": "deep_dive",
           "question": "Walk through pairing dimensions and applying the rotation. How are the frequencies defined?",
-          "hint": "Pair dimensions (2i, 2i+1) or the two halves. theta_i = base^(-2i/d). Rotate each pair by position times theta_i."
+          "hint": "Pair dimensions (2i, 2i+1) or the two halves, with frequencies theta_i = base^(-2i/d). Rotate each pair by position times theta_i."
         },
         {
           "stage": "deep_dive",
@@ -4699,7 +4699,7 @@
         {
           "stage": "deep_dive",
           "question": "Implement linear, cosine and another schedule. How do betas become alpha-bar?",
-          "hint": "Linear: evenly spaced betas. Cosine: define alpha-bar with a cos^2 curve directly. alpha-bar_t is the cumulative product of (1 - beta)."
+          "hint": "Linear uses evenly spaced betas, while cosine defines alpha-bar directly with a cos^2 curve. For beta schedules, alpha-bar_t is the cumulative product of (1 - beta)."
         },
         {
           "stage": "deep_dive",
@@ -5953,7 +5953,7 @@
         {
           "stage": "deep_dive",
           "question": "Softmax before or after top-k: how do the weights differ?",
-          "hint": "Softmax over all experts then topk gives weights that do not sum to 1 unless renormalized, while softmax over only the top-k logits sums to 1. Compare the magnitudes."
+          "hint": "Softmax over all experts, then top-k, gives weights that do not sum to 1 unless renormalized, while softmax over only the top-k logits sums to 1. Compare the magnitudes."
         },
         {
           "stage": "deep_dive",
@@ -7985,7 +7985,7 @@
         {
           "stage": "tradeoffs",
           "question": "Noise for exploration versus a load-balancing loss?",
-          "hint": "Noise works implicitly and indirectly, while a balancing loss directly targets the imbalance. Modern models mostly use losses or bias updates."
+          "hint": "Noise works only indirectly, while a balancing loss directly targets the imbalance. Modern models mostly use losses or bias updates."
         },
         {
           "stage": "tradeoffs",
@@ -15587,7 +15587,7 @@
         {
           "stage": "concept",
           "question": "Explain the difference between emit, bail, serial, parallel and waterfall. Which would you use for an approval check, and which for a timeout wrapper?",
-          "hint": "emit: call everyone, ignore results. bail: return the first value that is not None or False. serial and parallel: async, in order or concurrently. waterfall: middleware wrapping next(). An approval check fits bail or serial; a timeout wrapper fits waterfall."
+          "hint": "emit calls everyone and ignores results, bail returns the first value that is not None or False, serial and parallel are async (in order or at once), and waterfall is middleware around next(). Approval fits bail or serial; a timeout wrapper fits waterfall."
         },
         {
           "stage": "deep_dive",
@@ -16417,7 +16417,7 @@
         {
           "stage": "deep_dive",
           "question": "Walk through exact-then-fuzzy matching. Which differences does the normalization forgive, and why is fuzzy mode decided once for the whole call?",
-          "hint": "Try each old_text exactly; if one is missing but its normalized form matches, fuzzy mode turns on for every edit. Normalization forgives NFKC differences, trailing whitespace, curly quotes, Unicode dashes and special spaces; line endings are unified apart."
+          "hint": "Try each old_text exactly; if one misses but its normalized form matches, fuzzy mode turns on for every edit. Normalization forgives NFKC differences, trailing whitespace, curly quotes, Unicode dashes and special spaces; line endings are handled separately."
         },
         {
           "stage": "deep_dive",
@@ -16764,7 +16764,7 @@
         {
           "stage": "deep_dive",
           "question": "Walk through the four cases: no system node, empty rendering, continuing capable route, and consolidation. What does each cost in cache misses?",
-          "hint": "No node: append; empty rendering: blank every non-empty node; continuing capable route: append only if the effective prompt changed, so the cached prefix survives. Otherwise consolidate: blank later nodes and rewrite the head, one cache miss."
+          "hint": "No node: append, one change; empty rendering: blank every non-empty node; continuing capable route: append only if the effective prompt changed, so the cached prefix survives. Otherwise consolidate: blank later nodes and rewrite the head, one cache miss."
         },
         {
           "stage": "deep_dive",
@@ -17122,7 +17122,7 @@
         {
           "stage": "deep_dive",
           "question": "Which failures go through post-execute and which skip it? Why does a denied call still go through post-execute?",
-          "hint": "Denied and cancelled calls go through post-execute, because loop detection needs to see denials. Crashes in the harness itself skip it."
+          "hint": "Denied and cancelled calls go through post-execute, and loop detection needs to see the denials. Crashes in the harness itself skip it."
         },
         {
           "stage": "deep_dive",
@@ -17358,7 +17358,7 @@
         {
           "stage": "deep_dive",
           "question": "Walk through parsing '{\"path\": \"src/ma' and '{\"force\": tr'. How does your parser report that it ran out of input inside a value?",
-          "hint": "The path gives a partial string \"src/ma\", which is safe to show. For \"tr\" the literal is unfinished, so the parser reports running out inside a value and the key is dropped."
+          "hint": "Both inputs end inside a value: the partial string \"src/ma\" is kept and safe to show, but the unfinished literal \"tr\" is missing, so its key is dropped. Say how your parser signals that it ran out of input."
         },
         {
           "stage": "deep_dive",
@@ -18267,7 +18267,7 @@
         {
           "stage": "tradeoffs",
           "question": "SSE versus WebSockets versus gRPC streaming for serving LLM tokens: proxies, bidirectionality, backpressure and client support?",
-          "hint": "SSE is simple and proxy-friendly but one-way. WebSockets are bidirectional but harder to proxy. gRPC is typed and fast but less supported in browsers."
+          "hint": "SSE is simple and proxy-friendly but one-way, and WebSockets are bidirectional but harder to proxy. gRPC is typed and fast but less supported in browsers."
         },
         {
           "stage": "tradeoffs",

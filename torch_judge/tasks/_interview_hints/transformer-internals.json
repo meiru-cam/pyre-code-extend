@@ -11,7 +11,7 @@
   "gelu": {
     "What is GELU, and what is its intuition as a probabilistic gate?": "GELU is x times the probability that a standard normal falls below x. Contrast a hard gate (ReLU) with a soft gate that depends on how large x is.",
     "Where is GELU used, and why did transformers adopt it?": "Name BERT and GPT-2. Mention the smooth curve and the small negative dip, and that it trained slightly better than ReLU in their experiments.",
-    "Write the exact erf form and the tanh approximation. Why does the approximation exist?": "Exact: 0.5 x (1 + erf(x / sqrt 2)). The tanh form uses sqrt(2/pi) and a 0.044715 x^3 term. erf used to be slow or missing on some hardware.",
+    "Write the exact erf form and the tanh approximation. Why does the approximation exist?": "Exact: 0.5 x (1 + erf(x / sqrt 2)); the tanh form uses sqrt(2/pi) and a 0.044715 x^3 term. It exists because erf used to be slow or missing on some hardware.",
     "How does GELU behave for large negative and large positive inputs?": "Take the limits of the Gaussian CDF: near 0 for large negative x and near 1 for large positive x. So GELU approaches 0 and x.",
     "What is the derivative of GELU, and is it smooth at zero?": "Use the product rule: Phi(x) + x phi(x). Both parts are smooth everywhere, unlike ReLU's kink.",
     "GELU versus ReLU versus SiLU: accuracy and speed trade-offs?": "Compare the final loss reported in papers against cost per element: erf or tanh versus a max. Mention that fused kernels shrink the speed gap.",
