@@ -1,32 +1,32 @@
 {
   "lora_merge": {
-    "Why merge a LoRA adapter before serving, and what does it cost at inference if you do not?": "Unmerged, every call runs two extra small matmuls. Merged, the layer is a plain linear again, with zero added latency.",
-    "Why keep the adapter matrices after merging instead of deleting them?": "Think about switching adapters on one base model, and about going back to training. PEFT keeps A and B so unmerge can restore W.",
-    "Write the merged weight in terms of W, A, B, alpha and rank, and check its shape.": "W' = W + (alpha / r) B A. B is (out x r) and A is (r x in), so the product is (out x in), the same shape as W.",
-    "Why must the merge update the weight in place under no_grad, and what breaks if it assigns a new tensor?": "Optimizers, FSDP shards and tied weights hold a reference to the Parameter. Name what happens to them if you assign a new tensor, and what autograd would record without no_grad.",
-    "What happens if merge() is called twice, and how do you prevent it?": "Without a guard it adds the delta twice. A merged flag makes merge and unmerge idempotent.",
-    "Is merge then unmerge exact in bf16? Why or why not?": "No: W + d - d is rounded twice in bf16 and can drift by an ulp per element. Mention casting the delta to the weight dtype and keeping an fp32 master copy.",
-    "Merged single-adapter serving versus unmerged multi-adapter serving (S-LoRA, Punica): latency, memory and flexibility?": "Merged: base-model latency, but one adapter per deployment. Unmerged: batched LoRA kernels serve many adapters over one base, at extra compute per token.",
-    "Can you merge a LoRA trained on a 4-bit QLoRA base back into the quantized weights? What goes wrong?": "The adapter was trained against the dequantized base. Adding it to 4-bit weights forces a requantization, which loses most of the small delta."
+    "Why merge a LoRA adapter before serving, and what does it cost at inference if you do not?": "Count the matmuls an unmerged LoRA layer runs per call, then ask what the layer looks like after merging.",
+    "Why keep the adapter matrices after merging instead of deleting them?": "Think about serving several adapters on one base model, and about resuming training. What would you need that a deleted A and B cannot give you?",
+    "Write the merged weight in terms of W, A, B, alpha and rank, and check its shape.": "Start from W' = W + (alpha / r) B A. Check the shapes of B and A and confirm the product matches W.",
+    "Why must the merge update the weight in place under no_grad, and what breaks if it assigns a new tensor?": "Optimizers, FSDP shards and tied weights hold a reference to the weight Parameter. Consider what each of them sees after you assign a new tensor, and what autograd records without no_grad.",
+    "What happens if merge() is called twice, and how do you prevent it?": "Trace two merge() calls in a row on the weight. Which piece of state lets the second call tell that it has nothing to do?",
+    "Is merge then unmerge exact in bf16? Why or why not?": "Follow W + d - d through bf16 rounding one step at a time. Then name two ways production stacks keep the round trip safe.",
+    "Merged single-adapter serving versus unmerged multi-adapter serving (S-LoRA, Punica): latency, memory and flexibility?": "Compare per-token latency, memory, and the number of adapters one deployment can serve. Mention batched LoRA kernels such as S-LoRA or Punica.",
+    "Can you merge a LoRA trained on a 4-bit QLoRA base back into the quantized weights? What goes wrong?": "The adapter was trained against the dequantized base. Think about what requantizing W + delta to 4 bits does to a small delta."
   },
   "dora": {
-    "What is DoRA, and how does it differ from LoRA?": "Write W as magnitude times unit direction per output row. LoRA updates the direction, and a separate trainable vector sets the magnitude.",
-    "What do the magnitude vector and the direction each represent, and how many extra parameters does DoRA add?": "Magnitude is one length per output unit, and direction is W + delta W normalized per row. Count what the magnitude vector adds per layer.",
-    "Along which axis is the weight norm taken, and why one value per output unit?": "Per output row of the (out x in) weight, i.e. norm over the input dimension. Each output unit gets its own scale.",
-    "How must the magnitude be initialized so training starts from the base model?": "Set m to the row norms of W. With B = 0, m / ||W|| is 1 and the output equals the base layer.",
-    "Why does DoRA detach the norm in backward, and what does that save?": "The paper's Section 4.3 treats ||W + delta W|| as a constant. Name the gradient term that drops and the activation memory it saves.",
-    "How do you merge a trained DoRA adapter into the base weight for inference?": "The rescaled weight (m / ||W'||) W' is still one (out x in) matrix. Compute it once and write it into the base weight.",
-    "DoRA versus LoRA at the same rank: accuracy, training memory and speed?": "DoRA usually matches or beats LoRA accuracy at the same rank, but pays extra memory and time to rebuild W' and its norm each step.",
-    "What does DoRA cost when the base model is quantized, as in QDoRA?": "The norm needs the full base weight, so each step dequantizes the 4-bit weights. Compare this with QLoRA, where only the matmul needs them."
+    "What is DoRA, and how does it differ from LoRA?": "Split each output row of W into a length and a unit direction. Say which part LoRA updates and which part gets its own parameter.",
+    "What do the magnitude vector and the direction each represent, and how many extra parameters does DoRA add?": "Describe what each part controls for one output unit. Count the extra parameters per layer in terms of out_features.",
+    "Along which axis is the weight norm taken, and why one value per output unit?": "The weight is (out x in), and you want one scale per output unit. Pick the axis that gives that.",
+    "How must the magnitude be initialized so training starts from the base model?": "Write the output of a fresh layer with B = 0 and ask which value of m makes it equal the base layer.",
+    "Why does DoRA detach the norm in backward, and what does that save?": "Section 4.3 of the paper treats ||W + delta W|| as a constant. Name the gradient term this drops and what memory it saves.",
+    "How do you merge a trained DoRA adapter into the base weight for inference?": "Is the adapted layer still one linear map? Write its weight in terms of m, W and delta W.",
+    "DoRA versus LoRA at the same rank: accuracy, training memory and speed?": "Weigh accuracy at the same rank against the per-step cost of rebuilding W' and its norm.",
+    "What does DoRA cost when the base model is quantized, as in QDoRA?": "Ask what the norm needs from the base weight each step when the base is 4-bit. Compare with what QLoRA needs."
   },
   "prefix_tuning": {
-    "What is prefix tuning, and how does it differ from prompt tuning?": "Prompt tuning adds trainable embeddings at the input only. Prefix tuning adds trainable keys and values in every layer, so it steers each attention layer directly.",
-    "What exactly is trained, and what shape does the prefix have per layer?": "Only the prefix: per layer, a key and a value tensor of shape (heads, num_prefix, head_dim). The whole model stays frozen.",
-    "Why are the prefix keys and values not passed through the frozen k and v projections?": "The prefix lives in key/value space already, like a KV cache. Projecting it again would tie it to frozen weights and change what it can express.",
-    "How do you build the attention mask once the prefix is prepended, including causality and padding?": "Keys are prefix then tokens. Prefix columns are always visible; token column j is visible to query i if j <= i and token j is real.",
-    "Why can a naive lower-triangular mask over the full key axis give wrong results?": "A tril over num_prefix + T hides later prefix slots from early queries. The prefix is a past that every query has already seen.",
-    "How does HuggingFace PEFT hand the prefix to a transformers model, and why does that reuse the KV-cache path?": "It reshapes the prefix into per-layer (key, value) tensors and passes them as past_key_values. It also prepends ones to the attention mask, reusing the KV-cache code path.",
-    "Prefix tuning versus LoRA: trainable parameters, inference cost and mergeability?": "Prefix tuning trains fewer parameters but spends attention compute and cache on every step and cannot be merged. LoRA merges away and is usually more accurate.",
-    "Why does the original paper reparameterize the prefix through an MLP, and when can you drop it?": "Training the prefix directly is unstable. The paper trains it through an MLP from a smaller embedding, then keeps only the MLP's output after training."
+    "What is prefix tuning, and how does it differ from prompt tuning?": "Contrast where each method inserts trainable vectors: at the input embeddings only, or inside every attention layer.",
+    "What exactly is trained, and what shape does the prefix have per layer?": "List what is frozen and what is trained. Give the prefix's shape per layer in terms of heads, num_prefix and head_dim.",
+    "Why are the prefix keys and values not passed through the frozen k and v projections?": "Ask which space the prefix vectors live in and what the frozen k and v projections would do to them.",
+    "How do you build the attention mask once the prefix is prepended, including causality and padding?": "Lay out the key axis as prefix then tokens. For query i, decide separately which prefix columns and which token columns it may see.",
+    "Why can a naive lower-triangular mask over the full key axis give wrong results?": "Draw a lower-triangular mask over num_prefix + T keys and check which prefix slots query 0 can see.",
+    "How does HuggingFace PEFT hand the prefix to a transformers model, and why does that reuse the KV-cache path?": "Think about how a transformers model accepts cached keys and values from earlier tokens, and what PEFT has to add to the attention mask.",
+    "Prefix tuning versus LoRA: trainable parameters, inference cost and mergeability?": "Compare trainable parameters, inference compute and KV-cache cost, and whether each method can be merged away.",
+    "Why does the original paper reparameterize the prefix through an MLP, and when can you drop it?": "Think about optimization stability when the prefix is trained directly. What does the paper put between the parameters and the prefix, and what does it keep after training?"
   }
 }
