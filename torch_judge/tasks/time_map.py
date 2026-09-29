@@ -262,14 +262,31 @@ assert recorded == [10.0, 11.0, 12.0, 13.0, 14.0]
 assert [tm.get("k", t) for t in recorded] == [0, 1, 2, 3, 4]
 """},
         {"name": "Part 4: concurrent sets on one key stay strictly increasing", "part": 4, "behavior": "concurrency.thread_safety", "code": r"""
-import threading, time
+import random, threading, time
+
+def pause():
+    # A random sleep hands the GIL to another thread and shuffles who resumes first.
+    time.sleep(random.random() * 0.0004)
+
+class SlowStamp(float):
+    def __lt__(self, other): pause(); return float(self) < float(other)
+    def __le__(self, other): pause(); return float(self) <= float(other)
+    def __gt__(self, other): pause(); return float(self) > float(other)
+    def __ge__(self, other): pause(); return float(self) >= float(other)
+
+class SlowKey(str):
+    # Every dict lookup on this key yields, including between two writes that belong together.
+    def __hash__(self):
+        pause()
+        return str.__hash__(self)
+    __eq__ = str.__eq__
 
 class SlowClock:
-    # now() yields the thread, so an unguarded read-compare-append interleaves.
     def now(self):
-        time.sleep(0.0002)
-        return 1000.0
+        pause()
+        return SlowStamp(1000.0)
 
+HOT = SlowKey("hot")
 tm = {fn}(clock=SlowClock())
 threads, per_thread = 8, 15
 recorded = [[] for _ in range(threads)]
@@ -278,7 +295,7 @@ errors = []
 def worker(i):
     try:
         for j in range(per_thread):
-            recorded[i].append((tm.set("hot", (i, j)), (i, j)))
+            recorded[i].append((tm.set(HOT, (i, j)), (i, j)))
     except Exception as error:
         errors.append(error)
 
@@ -291,7 +308,7 @@ assert len(set(stamps)) == len(stamps), "two sets on one key recorded the same t
 assert sorted(stamps) == [1000.0 + k for k in range(threads * per_thread)]
 for per in recorded:
     for stamp, value in per:
-        assert tm.get("hot", stamp) == value
+        assert tm.get(HOT, stamp) == value, "a value was paired with another set's timestamp"
 """},
         {"name": "Part 4: readers only see stored values", "part": 4, "visibility": "unshown", "behavior": "concurrency.thread_safety",
          "failure_message": "Under concurrent calls, get returned a value no set stored for that key or raised; guard reads and writes with the same lock.",
