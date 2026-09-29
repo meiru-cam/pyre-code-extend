@@ -152,6 +152,15 @@
       }
     ]
   },
+  "lora_merge": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\nimport torch.nn as nn\n\nclass MergeableLoRALinear(nn.Module):\n    def __init__(self, in_features, out_features, rank, alpha=1.0):\n        super().__init__()\n        self.linear = nn.Linear(in_features, out_features)\n        self.linear.weight.requires_grad_(False)\n        self.linear.bias.requires_grad_(False)\n        self.lora_A = nn.Parameter(torch.randn(rank, in_features) * 0.01)\n        self.lora_B = nn.Parameter(torch.zeros(out_features, rank))\n        self.scaling = alpha / rank\n        self.merged = False\n\n    def delta_weight(self):\n        return self.lora_B @ self.lora_A * self.scaling\n\n    @torch.no_grad()\n    def merge(self):\n        if self.merged:\n            return\n        self.linear.weight.add_(self.delta_weight())\n        self.merged = True\n\n    @torch.no_grad()\n    def unmerge(self):\n        if not self.merged:\n            return\n        self.linear.weight.sub_(self.delta_weight())\n        self.merged = False\n\n    def forward(self, x):\n        if self.merged:\n            return self.linear(x)\n        return self.linear(x) + (x @ self.lora_A.T @ self.lora_B.T) * self.scaling",
+        "role": "solution"
+      }
+    ]
+  },
   "max_pool2d": {
     "cells": [
       {
@@ -524,6 +533,15 @@
         "type": "code",
         "source": "torch.manual_seed(0)\nB, C_in, H, W = 2, 4, 8, 8\nC_out, kH, kW = 8, 3, 3\n\nx         = torch.randn(B, C_in, H, W)\ndw_weight = torch.randn(C_in, 1, kH, kW)   # one kernel per input channel\npw_weight = torch.randn(C_out, C_in, 1, 1)  # 1x1 conv\n\nout = depthwise_separable_conv(x, dw_weight, pw_weight)\nprint(\"Output shape:\", out.shape)  # (2, 8, 6, 6)\n\npatches = x.unfold(2, kH, 1).unfold(3, kW, 1)\ndw_ch0 = (patches[:, 0:1] * dw_weight[0:1, 0].view(1, 1, 1, 1, kH, kW)).sum(dim=(-2, -1))\ndw_ch1 = (patches[:, 1:2] * dw_weight[1:2, 0].view(1, 1, 1, 1, kH, kW)).sum(dim=(-2, -1))\nprint(\"DW ch0 and ch1 are independent (cross-correlation ~0):\",\n      (dw_ch0 * dw_ch1).mean().abs().item() < 1.0)",
         "role": "demo"
+      }
+    ]
+  },
+  "dora": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import torch\nimport torch.nn as nn\nimport torch.nn.functional as F\n\nclass DoRALinear(nn.Module):\n    def __init__(self, in_features, out_features, rank, alpha=1.0):\n        super().__init__()\n        self.linear = nn.Linear(in_features, out_features)\n        self.linear.weight.requires_grad_(False)\n        self.linear.bias.requires_grad_(False)\n        self.lora_A = nn.Parameter(torch.randn(rank, in_features) * 0.01)\n        self.lora_B = nn.Parameter(torch.zeros(out_features, rank))\n        self.scaling = alpha / rank\n        self.magnitude = nn.Parameter(self.linear.weight.detach().norm(dim=1))\n\n    def forward(self, x):\n        weight = self.linear.weight + self.scaling * self.lora_B @ self.lora_A\n        norm = weight.norm(dim=1).detach()\n        weight = (self.magnitude / norm)[:, None] * weight\n        return F.linear(x, weight, self.linear.bias)",
+        "role": "solution"
       }
     ]
   },
@@ -1811,6 +1829,15 @@
       {
         "type": "code",
         "source": "import torch\n\n\ndef ppo_clipped_policy_loss(\n    logprobs, old_logprobs, advantages, mask, clip_eps=0.2, dual_clip=None\n):\n    shapes = (logprobs.shape, old_logprobs.shape, advantages.shape, mask.shape)\n    if len(set(shapes)) != 1:\n        raise ValueError(f\"all tensors must share a shape, got {shapes}\")\n    if clip_eps <= 0:\n        raise ValueError(f\"clip_eps must be positive, got {clip_eps}\")\n    if dual_clip is not None and dual_clip <= 1.0:\n        raise ValueError(f\"dual_clip must be greater than 1.0, got {dual_clip}\")\n\n    keep = mask.to(logprobs.dtype)\n    denominator = keep.sum()\n    if denominator == 0:\n        return torch.zeros((), dtype=logprobs.dtype, device=logprobs.device)\n\n    ratio = torch.exp(logprobs - old_logprobs)\n    unclipped = ratio * advantages\n    clipped = ratio.clamp(1.0 - clip_eps, 1.0 + clip_eps) * advantages\n    per_token = -torch.min(unclipped, clipped)\n\n    if dual_clip is not None:\n        bounded = torch.min(per_token, -dual_clip * advantages)\n        per_token = torch.where(advantages < 0, bounded, per_token)\n\n    return (per_token * keep).sum() / denominator",
+        "role": "solution"
+      }
+    ]
+  },
+  "prefix_tuning": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import math\nimport torch\nimport torch.nn as nn\n\nclass PrefixAttention(nn.Module):\n    def __init__(self, d_model, num_heads, num_prefix):\n        super().__init__()\n        if d_model % num_heads != 0 or num_prefix < 1:\n            raise ValueError(\"need d_model divisible by num_heads and num_prefix >= 1\")\n        self.num_heads = num_heads\n        self.head_dim = d_model // num_heads\n        self.q_proj = nn.Linear(d_model, d_model)\n        self.k_proj = nn.Linear(d_model, d_model)\n        self.v_proj = nn.Linear(d_model, d_model)\n        self.o_proj = nn.Linear(d_model, d_model)\n        for proj in (self.q_proj, self.k_proj, self.v_proj, self.o_proj):\n            proj.requires_grad_(False)\n        self.prefix_k = nn.Parameter(torch.randn(num_heads, num_prefix, self.head_dim) * 0.02)\n        self.prefix_v = nn.Parameter(torch.randn(num_heads, num_prefix, self.head_dim) * 0.02)\n\n    def forward(self, x, attention_mask=None):\n        B, T, D = x.shape\n        H, hd = self.num_heads, self.head_dim\n        P = self.prefix_k.shape[1]\n        q = self.q_proj(x).view(B, T, H, hd).transpose(1, 2)\n        k = self.k_proj(x).view(B, T, H, hd).transpose(1, 2)\n        v = self.v_proj(x).view(B, T, H, hd).transpose(1, 2)\n        k = torch.cat([self.prefix_k.expand(B, H, P, hd), k], dim=2)\n        v = torch.cat([self.prefix_v.expand(B, H, P, hd), v], dim=2)\n\n        if attention_mask is None:\n            attention_mask = torch.ones(B, T, dtype=torch.bool, device=x.device)\n        causal = torch.ones(T, T, dtype=torch.bool, device=x.device).tril()\n        token_ok = causal[None, :, :] & attention_mask.bool()[:, None, :]\n        prefix_ok = torch.ones(B, T, P, dtype=torch.bool, device=x.device)\n        allowed = torch.cat([prefix_ok, token_ok], dim=2)[:, None]\n\n        scores = q @ k.transpose(-2, -1) / math.sqrt(hd)\n        scores = scores.masked_fill(~allowed, float(\"-inf\"))\n        out = torch.softmax(scores, dim=-1) @ v\n        return self.o_proj(out.transpose(1, 2).reshape(B, T, D))",
         "role": "solution"
       }
     ]
