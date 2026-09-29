@@ -11,7 +11,7 @@
   },
   "dora": {
     "What is DoRA, and how does it differ from LoRA?": "Write W as magnitude times unit direction per output row. LoRA updates the direction, and a separate trainable vector sets the magnitude.",
-    "What do the magnitude vector and the direction each represent, and how many extra parameters does DoRA add?": "Magnitude: one length per output unit. Direction: W + delta W normalized per row. It adds only out_features parameters per layer.",
+    "What do the magnitude vector and the direction each represent, and how many extra parameters does DoRA add?": "Magnitude is one length per output unit, and direction is W + delta W normalized per row. Count what the magnitude vector adds per layer.",
     "Along which axis is the weight norm taken, and why one value per output unit?": "Per output row of the (out x in) weight, i.e. norm over the input dimension. Each output unit gets its own scale.",
     "How must the magnitude be initialized so training starts from the base model?": "Set m to the row norms of W. With B = 0, m / ||W|| is 1 and the output equals the base layer.",
     "Why does DoRA detach the norm in backward, and what does that save?": "The paper's Section 4.3 treats ||W + delta W|| as a constant. Name the gradient term that drops and the activation memory it saves.",

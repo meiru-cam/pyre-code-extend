@@ -21,12 +21,14 @@ TASK = {
 **Forward:** `forward(x) -> Tensor`, `x` of shape `(*, in_features)`.
 - `W_adapted = linear.weight + scaling * lora_B @ lora_A`, shape `(out_features, in_features)`.
 - `norm` = L2 norm of each row of `W_adapted`, shape `(out_features,)`, detached from autograd.
-- Return `x @ (magnitude / norm)[:, None] * W_adapted` transposed, plus `linear.bias`. The bias is not rescaled.
+- `W_dora = (magnitude / norm)[:, None] * W_adapted`.
+
+**Returns:** `F.linear(x, W_dora, linear.bias)`, shape `(*, out_features)`. The bias is not rescaled.
 
 **Constraints:**
 - A freshly built layer returns exactly `linear(x)`.
 - Only `lora_A`, `lora_B` and `magnitude` receive gradients.
-- `norm` is a constant for backward. Gradients must match the detached form, not the fully differentiated one.
+- `norm` receives no gradient.
 
 ────────────────────────────────
 

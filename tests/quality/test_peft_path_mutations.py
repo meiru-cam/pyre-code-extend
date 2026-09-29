@@ -43,6 +43,7 @@ MUTATIONS = {
          "self.magnitude = nn.Parameter(torch.ones(out_features))"),
         ("magnitude frozen", "self.magnitude = nn.Parameter(self.linear.weight.detach().norm(dim=1))",
          "self.magnitude = nn.Parameter(self.linear.weight.detach().norm(dim=1), requires_grad=False)"),
+        ("norm keeps its dimension", "norm = weight.norm(dim=1).detach()", "norm = weight.norm(dim=1, keepdim=True).detach()"),
         ("plain LoRA", "        weight = (self.magnitude / norm)[:, None] * weight\n", ""),
     ],
     "prefix_tuning": [
@@ -52,6 +53,8 @@ MUTATIONS = {
          "token_ok = causal[None, :, :] & torch.cat([torch.ones(B, P, dtype=torch.bool), attention_mask.bool()], dim=1)[:, None, :T]"),
         ("ignores padding", "token_ok = causal[None, :, :] & attention_mask.bool()[:, None, :]",
          "token_ok = causal[None, :, :].expand(B, T, T)"),
+        ("strict causal mask", "causal = torch.ones(T, T, dtype=torch.bool, device=x.device).tril()",
+         "causal = torch.ones(T, T, dtype=torch.bool, device=x.device).tril(-1)"),
         ("no causal mask", "causal = torch.ones(T, T, dtype=torch.bool, device=x.device).tril()",
          "causal = torch.ones(T, T, dtype=torch.bool, device=x.device)"),
         ("prefix through k_proj", "k = torch.cat([self.prefix_k.expand(B, H, P, hd), k], dim=2)",
