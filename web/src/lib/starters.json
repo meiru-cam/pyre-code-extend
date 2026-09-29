@@ -173,5 +173,8 @@
   "h2o_kv_eviction": "import torch\n\n\nclass H2OCache:\n    def __init__(self, heavy_size, recent_size):\n        self.scores = None\n\n    def update(self, keys, values, attn):\n        pass",
   "duplex_streaming_session": "class StreamingSession:\n    def __init__(self, bos_id=None):\n        pass\n\n    def begin(self, input_ids, max_new_tokens):\n        pass\n\n    def finish(self, output_ids):\n        pass\n\n    def abort(self):\n        pass",
   "embodied_action_stream": "import re\n\n\ndef schedule_actions(chunks, keys):\n    pass",
-  "posed_frame_context": "import math\n\n\nclass SpatialFrameMemory:\n    def add(self, frame_id, position, yaw):\n        pass\n\n    def context(self, position, yaw, k, recent=2, max_angle=90.0, angle_weight=1.0):\n        pass"
+  "posed_frame_context": "import math\n\n\nclass SpatialFrameMemory:\n    def add(self, frame_id, position, yaw):\n        pass\n\n    def context(self, position, yaw, k, recent=2, max_angle=90.0, angle_weight=1.0):\n        pass",
+  "lora_merge": "class MergeableLoRALinear(nn.Module):\n\n    def __init__(self, in_features, out_features, rank, alpha=1.0):\n        super().__init__()\n        pass\n\n    def merge(self):\n        pass\n\n    def unmerge(self):\n        pass\n\n    def forward(self, x):\n        pass",
+  "dora": "class DoRALinear(nn.Module):\n\n    def __init__(self, in_features, out_features, rank, alpha=1.0):\n        super().__init__()\n        pass\n\n    def forward(self, x):\n        pass",
+  "prefix_tuning": "class PrefixAttention(nn.Module):\n\n    def __init__(self, d_model, num_heads, num_prefix):\n        super().__init__()\n        pass\n\n    def forward(self, x, attention_mask=None):\n        pass"
 }

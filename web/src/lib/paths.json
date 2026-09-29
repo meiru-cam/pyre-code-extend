@@ -189,6 +189,16 @@
       "icon": "Zap",
       "problems": ["sse_decoder", "chat_stream_accumulator", "tool_call_stream_parser", "pi_streaming_json", "incremental_detokenize", "stop_string_holdback", "request_output_collector", "kv_cache", "sliding_window", "attention_sink_cache", "sink_cache_rerotation", "h2o_kv_eviction", "duplex_streaming_session", "embodied_action_stream", "posed_frame_context"],
       "prerequisites": ["inference-distributed"]
+    },
+    {
+      "id": "peft",
+      "titleEn": "Parameter-Efficient Fine-Tuning",
+      "titleZh": "Parameter-Efficient Fine-Tuning",
+      "descriptionEn": "Adapt a frozen model by training a tiny fraction of its parameters. LoRA and its merge path for zero-latency serving, DoRA's magnitude and direction split, QLoRA on a quantized base, and prefix tuning's trainable per-layer key/value prefix.",
+      "descriptionZh": "Adapt a frozen model by training a tiny fraction of its parameters. LoRA and its merge path for zero-latency serving, DoRA's magnitude and direction split, QLoRA on a quantized base, and prefix tuning's trainable per-layer key/value prefix.",
+      "icon": "Layers",
+      "problems": ["lora", "lora_merge", "dora", "qlora", "prefix_tuning"],
+      "prerequisites": ["transformer-internals"]
     }
   ]
 }

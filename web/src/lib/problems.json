@@ -18884,6 +18884,402 @@
           "section": "Section 3.2, Rolling KV Cache with Attention Sinks"
         }
       ]
+    },
+    {
+      "id": "lora_merge",
+      "title": "LoRA Merge and Unmerge",
+      "titleZh": "LoRA Merge and Unmerge",
+      "difficulty": "Easy",
+      "functionName": "MergeableLoRALinear",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Extend a LoRA linear layer with `merge()` and `unmerge()`, which fold the adapter into the base weight and take it back out.\n\n**Signature:** `MergeableLoRALinear(in_features, out_features, rank, alpha=1.0)` (nn.Module)\n\n**Attributes:**\n- `linear` — `nn.Linear(in_features, out_features)`, weight and bias frozen.\n- `lora_A` — parameter `(rank, in_features)`, small random init.\n- `lora_B` — parameter `(out_features, rank)`, initialized to zeros.\n- `scaling` — float, `alpha / rank`.\n- `merged` — bool, `False` after construction.\n\n**Methods:**\n- `forward(x)` — unmerged: `linear(x) + x @ lora_A.T @ lora_B.T * scaling`. Merged: `linear(x)` only.\n- `merge()` — add `delta = lora_B @ lora_A * scaling` to `linear.weight`, set `merged = True`.\n- `unmerge()` — subtract the same delta, set `merged = False`.\n\n**Constraints:**\n- `merge()` on a merged layer and `unmerge()` on an unmerged layer do nothing.\n- Update `linear.weight` in place. It must stay the same `Parameter` object.\n- Neither method records autograd history, and neither changes `lora_A` or `lora_B`.\n- `merge()` then `unmerge()` restores `linear.weight` to within `1e-5`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why merge.** An unmerged LoRA layer runs two extra small matmuls per call. After merging, the layer is a plain `nn.Linear` again, so inference has zero extra latency and the adapter disappears from the serving graph.\n\n**Why unmerge.** Serving several adapters on one base model, or going back to training, needs the original weight. HuggingFace PEFT keeps the adapter matrices after `merge()` for exactly this. `merge_and_unload()` is the one-way version that drops them.\n\n**In place matters.** An optimizer, an FSDP shard or a tied embedding holds a reference to the weight `Parameter`. Replacing it with a new tensor silently detaches all of them.\n\n**Round-trip error.** In fp32 the round trip is exact to rounding. In bf16, `W + delta - delta` can differ from `W` by one ulp per element, which is why PEFT casts the delta to the weight dtype before subtracting and why production stacks keep an fp32 master copy.",
+      "descriptionZh": "Extend a LoRA linear layer with `merge()` and `unmerge()`, which fold the adapter into the base weight and take it back out.\n\n**Signature:** `MergeableLoRALinear(in_features, out_features, rank, alpha=1.0)` (nn.Module)\n\n**Attributes:**\n- `linear` — `nn.Linear(in_features, out_features)`, weight and bias frozen.\n- `lora_A` — parameter `(rank, in_features)`, small random init.\n- `lora_B` — parameter `(out_features, rank)`, initialized to zeros.\n- `scaling` — float, `alpha / rank`.\n- `merged` — bool, `False` after construction.\n\n**Methods:**\n- `forward(x)` — unmerged: `linear(x) + x @ lora_A.T @ lora_B.T * scaling`. Merged: `linear(x)` only.\n- `merge()` — add `delta = lora_B @ lora_A * scaling` to `linear.weight`, set `merged = True`.\n- `unmerge()` — subtract the same delta, set `merged = False`.\n\n**Constraints:**\n- `merge()` on a merged layer and `unmerge()` on an unmerged layer do nothing.\n- Update `linear.weight` in place. It must stay the same `Parameter` object.\n- Neither method records autograd history, and neither changes `lora_A` or `lora_B`.\n- `merge()` then `unmerge()` restores `linear.weight` to within `1e-5`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why merge.** An unmerged LoRA layer runs two extra small matmuls per call. After merging, the layer is a plain `nn.Linear` again, so inference has zero extra latency and the adapter disappears from the serving graph.\n\n**Why unmerge.** Serving several adapters on one base model, or going back to training, needs the original weight. HuggingFace PEFT keeps the adapter matrices after `merge()` for exactly this. `merge_and_unload()` is the one-way version that drops them.\n\n**In place matters.** An optimizer, an FSDP shard or a tied embedding holds a reference to the weight `Parameter`. Replacing it with a new tensor silently detaches all of them.\n\n**Round-trip error.** In fp32 the round trip is exact to rounding. In bf16, `W + delta - delta` can differ from `W` by one ulp per element, which is why PEFT casts the delta to the weight dtype before subtracting and why production stacks keep an fp32 master copy.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Merged output matches unmerged output",
+          "code": "\nimport torch\ntorch.manual_seed(0)\nlayer = {fn}(8, 4, rank=2, alpha=4.0)\nwith torch.no_grad():\n    layer.lora_B.normal_()\nx = torch.randn(3, 8)\nbefore = layer(x)\nlayer.merge()\nassert layer.merged\nassert torch.allclose(layer(x), before, atol=1e-5), 'merged forward must equal unmerged forward'\nlayer.unmerge()\nassert not layer.merged\nassert torch.allclose(layer(x), before, atol=1e-5)\n",
+          "behavior": "state.invariant"
+        },
+        {
+          "name": "Merge adds the scaled delta on seeded layers",
+          "visibility": "unshown",
+          "behavior": "numerics.stability",
+          "failureMessage": "merge() must add lora_B @ lora_A * (alpha / rank) to linear.weight, and the merged forward must use the base layer only.",
+          "hiddenCode": "\nimport torch, torch.nn.functional as F\nfor seed in (1, 7, 23):\n    torch.manual_seed(seed)\n    g = torch.Generator().manual_seed(seed)\n    fin, fout, r = int(torch.randint(4, 12, (1,), generator=g)), int(torch.randint(3, 9, (1,), generator=g)), int(torch.randint(1, 4, (1,), generator=g))\n    alpha = float(torch.randint(1, 9, (1,), generator=g))\n    layer = {fn}(fin, fout, rank=r, alpha=alpha)\n    with torch.no_grad():\n        layer.lora_A.copy_(torch.randn(r, fin, generator=g))\n        layer.lora_B.copy_(torch.randn(fout, r, generator=g))\n    W0 = layer.linear.weight.detach().clone()\n    b0 = layer.linear.bias.detach().clone()\n    A, B = layer.lora_A.detach().clone(), layer.lora_B.detach().clone()\n    x = torch.randn(4, fin, generator=g)\n    want = F.linear(x, W0 + (B @ A) * (alpha / r), b0)\n    assert torch.allclose(layer(x), want, atol=1e-4), seed\n    layer.merge()\n    assert torch.allclose(layer.linear.weight, W0 + (B @ A) * (alpha / r), atol=1e-5), seed\n    assert torch.allclose(layer(x), want, atol=1e-4), seed\n    assert torch.equal(layer.lora_A, A) and torch.equal(layer.lora_B, B), 'merge must not change the adapter'\n"
+        },
+        {
+          "name": "Repeat calls are no-ops and unmerge restores the weight",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "A second merge() or an unmerge() without a merge must leave the weight unchanged; merge then unmerge must restore it.",
+          "hiddenCode": "\nimport torch\nfor seed in (2, 11, 31):\n    torch.manual_seed(seed)\n    layer = {fn}(6, 5, rank=3, alpha=2.0)\n    with torch.no_grad():\n        layer.lora_B.normal_()\n    W0 = layer.linear.weight.detach().clone()\n    layer.unmerge()\n    assert torch.equal(layer.linear.weight, W0), 'unmerge before merge changed the weight'\n    assert not layer.merged\n    layer.merge()\n    W1 = layer.linear.weight.detach().clone()\n    layer.merge()\n    assert torch.equal(layer.linear.weight, W1), 'second merge added the delta twice'\n    layer.unmerge()\n    assert torch.allclose(layer.linear.weight, W0, atol=1e-5), 'unmerge did not restore the base weight'\n    layer.unmerge()\n    assert torch.allclose(layer.linear.weight, W0, atol=1e-5), 'second unmerge subtracted the delta twice'\n"
+        },
+        {
+          "name": "Weight updated in place without autograd history",
+          "visibility": "unshown",
+          "behavior": "gradient.flow",
+          "failureMessage": "Update linear.weight in place under torch.no_grad(); keep the same Parameter, frozen, with no grad_fn.",
+          "hiddenCode": "\nimport torch\ntorch.manual_seed(5)\nlayer = {fn}(6, 4, rank=2)\nwith torch.no_grad():\n    layer.lora_B.normal_()\nweight = layer.linear.weight\nlayer.merge()\nassert layer.linear.weight is weight, 'merge replaced the weight Parameter'\nassert layer.linear.weight.grad_fn is None and not layer.linear.weight.requires_grad\nlayer.unmerge()\nassert layer.linear.weight is weight, 'unmerge replaced the weight Parameter'\nassert layer.linear.weight.grad_fn is None and not layer.linear.weight.requires_grad\nparams = dict(layer.named_parameters())\nassert set(name for name, p in params.items() if p.requires_grad) == {'lora_A', 'lora_B'}\nlayer(torch.randn(2, 6)).sum().backward()\nassert layer.lora_A.grad is not None and layer.lora_B.grad is not None\n"
+        },
+        {
+          "name": "Fresh layer starts unmerged and equal to base",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Construct lora_A (rank, in), lora_B (out, rank) zeros, scaling alpha / rank and merged False.",
+          "hiddenCode": "\nimport torch\nlayer = {fn}(10, 6, rank=4, alpha=8.0)\nassert layer.lora_A.shape == (4, 10) and layer.lora_B.shape == (6, 4)\nassert torch.count_nonzero(layer.lora_B) == 0\nassert abs(layer.scaling - 2.0) < 1e-12\nassert layer.merged is False\nx = torch.randn(3, 10)\nassert torch.allclose(layer(x), layer.linear(x), atol=1e-6)\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "What (out, in) matrix does the adapter add to the base weight? Which state stops a second merge from adding it twice? How do you change a Parameter's values without replacing it and without autograd recording the change?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Write delta = lora_B @ lora_A * scaling. In merge, return early if merged, otherwise add delta to linear.weight inside torch.no_grad() with an in-place add_ and set merged. unmerge mirrors it with sub_. forward returns linear(x) alone when merged."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "lora"
+      ],
+      "modelConnections": [
+        "HuggingFace PEFT's LoraLayer.merge / unmerge and merge_and_unload fold adapters into the base weight before export.",
+        "vLLM and LoRAX keep adapters unmerged to serve many of them over one shared base model."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "A merged layer costs exactly what the base layer costs at inference.",
+          "Unmerge makes switching adapters on one base cheap and exact in fp32."
+        ],
+        "cons": [
+          "A merged model serves one adapter at a time; multi-tenant serving keeps adapters separate.",
+          "Merging into a low-precision or quantized weight loses information, so the round trip is not exact."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why merge a LoRA adapter before serving, and what does it cost at inference if you do not?",
+          "hint": "Unmerged, every call runs two extra small matmuls. Merged, the layer is a plain linear again, with zero added latency."
+        },
+        {
+          "stage": "concept",
+          "question": "Why keep the adapter matrices after merging instead of deleting them?",
+          "hint": "Think about switching adapters on one base model, and about going back to training. PEFT keeps A and B so unmerge can restore W."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Write the merged weight in terms of W, A, B, alpha and rank, and check its shape.",
+          "hint": "W' = W + (alpha / r) B A. B is (out x r) and A is (r x in), so the product is (out x in), the same shape as W."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why must the merge update the weight in place under no_grad, and what breaks if it assigns a new tensor?",
+          "hint": "Optimizers, FSDP shards and tied weights hold a reference to the Parameter. Name what happens to them if you assign a new tensor, and what autograd would record without no_grad."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What happens if merge() is called twice, and how do you prevent it?",
+          "hint": "Without a guard it adds the delta twice. A merged flag makes merge and unmerge idempotent."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Is merge then unmerge exact in bf16? Why or why not?",
+          "hint": "No: W + d - d is rounded twice in bf16 and can drift by an ulp per element. Mention casting the delta to the weight dtype and keeping an fp32 master copy."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Merged single-adapter serving versus unmerged multi-adapter serving (S-LoRA, Punica): latency, memory and flexibility?",
+          "hint": "Merged: base-model latency, but one adapter per deployment. Unmerged: batched LoRA kernels serve many adapters over one base, at extra compute per token."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Can you merge a LoRA trained on a 4-bit QLoRA base back into the quantized weights? What goes wrong?",
+          "hint": "The adapter was trained against the dequantized base. Adding it to 4-bit weights forces a requantization, which loses most of the small delta."
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/huggingface/peft",
+          "commit": "b8674c86183a5dee38d0c3ede392e189593025e5",
+          "path": "src/peft/tuners/lora/layer.py",
+          "symbol": "Linear.merge, Linear.unmerge, Linear.get_delta_weight",
+          "license": "Apache-2.0",
+          "adapted": "Delta weight lora_B @ lora_A * scaling added to and subtracted from base_layer.weight.data in place, with the merged state guarding repeat calls and a merged forward that runs the base layer only.",
+          "simplifications": "One adapter instead of a named set, no safe_merge NaN check, no lora_bias, fan_in_fan_out, dropout or DoRA variant."
+        }
+      ]
+    },
+    {
+      "id": "dora",
+      "title": "DoRA (Weight-Decomposed LoRA)",
+      "titleZh": "DoRA (Weight-Decomposed LoRA)",
+      "difficulty": "Medium",
+      "functionName": "DoRALinear",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Implement a DoRA linear layer: LoRA updates the direction of each output row of the weight, and a trainable magnitude vector sets its length.\n\n**Signature:** `DoRALinear(in_features, out_features, rank, alpha=1.0)` (nn.Module)\n\n**Attributes:**\n- `linear` — `nn.Linear(in_features, out_features)`, weight and bias frozen.\n- `lora_A` — parameter `(rank, in_features)`, small random init.\n- `lora_B` — parameter `(out_features, rank)`, initialized to zeros.\n- `magnitude` — parameter `(out_features,)`, initialized to the L2 norm of each row of `linear.weight`.\n- `scaling` — float, `alpha / rank`.\n\n**Forward:** `forward(x) -> Tensor`, `x` of shape `(*, in_features)`.\n- `W_adapted = linear.weight + scaling * lora_B @ lora_A`, shape `(out_features, in_features)`.\n- `norm` = L2 norm of each row of `W_adapted`, shape `(out_features,)`, detached from autograd.\n- Return `x @ (magnitude / norm)[:, None] * W_adapted` transposed, plus `linear.bias`. The bias is not rescaled.\n\n**Constraints:**\n- A freshly built layer returns exactly `linear(x)`.\n- Only `lora_A`, `lora_B` and `magnitude` receive gradients.\n- `norm` is a constant for backward. Gradients must match the detached form, not the fully differentiated one.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**The decomposition.** DoRA (Liu et al., 2024) writes any weight as `W = m * V / ||V||`: a magnitude per output row times a unit direction. Plain LoRA changes both at once through one low-rank update. DoRA trains the magnitude directly and lets LoRA move only the direction.\n\n**Why this helps.** The paper finds that full fine-tuning tends to change magnitude and direction in opposite amounts, while LoRA changes them in lock-step. Decoupling them brings DoRA's learning pattern, and usually its accuracy, closer to full fine-tuning at almost no extra parameter cost: one vector of `out_features` per layer.\n\n**Why detach the norm.** Section 4.3 of the paper treats `||V + delta V||` as a constant during backward. That drops a large term from the gradient graph and cuts training memory substantially, with little accuracy loss. HuggingFace PEFT follows it with `weight_norm.detach()`.\n\n**Merging.** The adapted layer is still one linear map, `(magnitude / norm)[:, None] * W_adapted`, so a trained DoRA adapter merges into the base weight for inference just like LoRA.",
+      "descriptionZh": "Implement a DoRA linear layer: LoRA updates the direction of each output row of the weight, and a trainable magnitude vector sets its length.\n\n**Signature:** `DoRALinear(in_features, out_features, rank, alpha=1.0)` (nn.Module)\n\n**Attributes:**\n- `linear` — `nn.Linear(in_features, out_features)`, weight and bias frozen.\n- `lora_A` — parameter `(rank, in_features)`, small random init.\n- `lora_B` — parameter `(out_features, rank)`, initialized to zeros.\n- `magnitude` — parameter `(out_features,)`, initialized to the L2 norm of each row of `linear.weight`.\n- `scaling` — float, `alpha / rank`.\n\n**Forward:** `forward(x) -> Tensor`, `x` of shape `(*, in_features)`.\n- `W_adapted = linear.weight + scaling * lora_B @ lora_A`, shape `(out_features, in_features)`.\n- `norm` = L2 norm of each row of `W_adapted`, shape `(out_features,)`, detached from autograd.\n- Return `x @ (magnitude / norm)[:, None] * W_adapted` transposed, plus `linear.bias`. The bias is not rescaled.\n\n**Constraints:**\n- A freshly built layer returns exactly `linear(x)`.\n- Only `lora_A`, `lora_B` and `magnitude` receive gradients.\n- `norm` is a constant for backward. Gradients must match the detached form, not the fully differentiated one.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**The decomposition.** DoRA (Liu et al., 2024) writes any weight as `W = m * V / ||V||`: a magnitude per output row times a unit direction. Plain LoRA changes both at once through one low-rank update. DoRA trains the magnitude directly and lets LoRA move only the direction.\n\n**Why this helps.** The paper finds that full fine-tuning tends to change magnitude and direction in opposite amounts, while LoRA changes them in lock-step. Decoupling them brings DoRA's learning pattern, and usually its accuracy, closer to full fine-tuning at almost no extra parameter cost: one vector of `out_features` per layer.\n\n**Why detach the norm.** Section 4.3 of the paper treats `||V + delta V||` as a constant during backward. That drops a large term from the gradient graph and cuts training memory substantially, with little accuracy loss. HuggingFace PEFT follows it with `weight_norm.detach()`.\n\n**Merging.** The adapted layer is still one linear map, `(magnitude / norm)[:, None] * W_adapted`, so a trained DoRA adapter merges into the base weight for inference just like LoRA.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Fresh layer equals the base layer",
+          "code": "\nimport torch\ntorch.manual_seed(0)\nlayer = {fn}(8, 5, rank=2, alpha=4.0)\nassert layer.magnitude.shape == (5,)\nassert torch.allclose(layer.magnitude, layer.linear.weight.norm(dim=1), atol=1e-6)\nx = torch.randn(3, 8)\nassert torch.allclose(layer(x), layer.linear(x), atol=1e-5)\n",
+          "behavior": "state.invariant"
+        },
+        {
+          "name": "Forward matches the decomposed weight on seeded layers",
+          "visibility": "unshown",
+          "behavior": "numerics.stability",
+          "failureMessage": "Output must be x @ ((magnitude / row_norm(W + scaling * B @ A))[:, None] * (W + scaling * B @ A)).T + bias.",
+          "hiddenCode": "\nimport torch, torch.nn.functional as F\nfor seed in (1, 9, 40):\n    torch.manual_seed(seed)\n    g = torch.Generator().manual_seed(seed)\n    fin, fout, r = int(torch.randint(4, 12, (1,), generator=g)), int(torch.randint(3, 9, (1,), generator=g)), int(torch.randint(1, 4, (1,), generator=g))\n    alpha = float(torch.randint(1, 9, (1,), generator=g)) * 3.0\n    layer = {fn}(fin, fout, rank=r, alpha=alpha)\n    with torch.no_grad():\n        layer.lora_A.copy_(torch.randn(r, fin, generator=g))\n        layer.lora_B.copy_(torch.randn(fout, r, generator=g))\n        layer.magnitude.copy_(torch.rand(fout, generator=g) * 2 + 0.5)\n        layer.linear.bias.copy_(torch.randn(fout, generator=g))\n    W = layer.linear.weight.detach() + (alpha / r) * layer.lora_B.detach() @ layer.lora_A.detach()\n    col = torch.sqrt((W * W).sum(dim=1))\n    x = torch.randn(2, 3, fin, generator=g)\n    want = torch.einsum(\"bti,oi->bto\", x, W) * (layer.magnitude.detach() / col) + layer.linear.bias.detach()\n    out = layer(x)\n    assert out.shape == (2, 3, fout), out.shape\n    assert torch.allclose(out, want, atol=1e-4), (seed, (out - want).abs().max())\n"
+        },
+        {
+          "name": "Gradients treat the norm as a constant",
+          "visibility": "unshown",
+          "behavior": "gradient.flow",
+          "failureMessage": "Detach the row norm: gradients of lora_A, lora_B and magnitude must match the paper's constant-norm form.",
+          "hiddenCode": "\nimport torch\nfor seed in (3, 17, 44):\n    torch.manual_seed(seed)\n    g = torch.Generator().manual_seed(seed)\n    layer = {fn}(7, 4, rank=3, alpha=6.0).double()\n    with torch.no_grad():\n        layer.lora_A.copy_(torch.randn(3, 7, generator=g, dtype=torch.float64))\n        layer.lora_B.copy_(torch.randn(4, 3, generator=g, dtype=torch.float64))\n        layer.magnitude.copy_(torch.rand(4, generator=g, dtype=torch.float64) + 0.5)\n    x = torch.randn(5, 7, generator=g, dtype=torch.float64)\n    upstream = torch.randn(5, 4, generator=g, dtype=torch.float64)\n    (layer(x) * upstream).sum().backward()\n    W0 = layer.linear.weight.detach()\n    A = layer.lora_A.detach().clone().requires_grad_()\n    B = layer.lora_B.detach().clone().requires_grad_()\n    m = layer.magnitude.detach().clone().requires_grad_()\n    W = W0 + 2.0 * B @ A\n    s = m / torch.sqrt((W.detach() ** 2).sum(dim=1))\n    ((x @ W.T) * s * upstream).sum().backward()\n    assert torch.allclose(layer.magnitude.grad, m.grad, atol=1e-9), seed\n    assert torch.allclose(layer.lora_A.grad, A.grad, atol=1e-9), seed\n    assert torch.allclose(layer.lora_B.grad, B.grad, atol=1e-9), seed\n    assert layer.linear.weight.grad is None and layer.linear.bias.grad is None\n"
+        },
+        {
+          "name": "Only the adapter and magnitude are trainable",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Freeze linear; train lora_A (rank, in), lora_B (out, rank) initialized to zero, and magnitude (out,) initialized to the row norms of linear.weight.",
+          "hiddenCode": "\nimport torch\ntorch.manual_seed(12)\nlayer = {fn}(12, 6, rank=4, alpha=8.0)\nassert torch.allclose(layer.magnitude.detach(), torch.sqrt((layer.linear.weight.detach() ** 2).sum(dim=1)), atol=1e-6)\nx = torch.randn(4, 12)\nassert torch.allclose(layer(x), layer.linear(x), atol=1e-5), 'a fresh layer must equal the base layer'\ntrainable = {name for name, p in layer.named_parameters() if p.requires_grad}\nassert trainable == {'lora_A', 'lora_B', 'magnitude'}, trainable\nassert layer.lora_A.shape == (4, 12) and layer.lora_B.shape == (6, 4)\nassert torch.count_nonzero(layer.lora_B) == 0\nassert abs(layer.scaling - 2.0) < 1e-12\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Along which dimension of the (out, in) weight do you take the norm, so there is one number per output unit? What must the magnitude be at init for the layer to start as the base? Where does torch need to be told that the norm is a constant?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "In __init__, set magnitude = nn.Parameter(linear.weight.detach().norm(dim=1)). In forward, build W = linear.weight + scaling * lora_B @ lora_A, norm = W.norm(dim=1).detach(), W_dora = (magnitude / norm)[:, None] * W, and return F.linear(x, W_dora, linear.bias)."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "lora",
+        "lora_merge"
+      ],
+      "modelConnections": [
+        "HuggingFace PEFT exposes DoRA as LoraConfig(use_dora=True); the math lives in DoraLinearLayer.",
+        "NVIDIA NeMo and Unsloth ship DoRA for LLaMA-family fine-tuning."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Closer to full fine-tuning accuracy than LoRA at the same rank, and still mergeable for inference.",
+          "Adds only one vector of size out_features per adapted layer."
+        ],
+        "cons": [
+          "Each training step rebuilds the full adapted weight to take its norm, which costs memory and time over plain LoRA.",
+          "Needs the dequantized base weight each step when combined with a quantized base."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is DoRA, and how does it differ from LoRA?",
+          "hint": "Write W as magnitude times unit direction per output row. LoRA updates the direction, and a separate trainable vector sets the magnitude."
+        },
+        {
+          "stage": "concept",
+          "question": "What do the magnitude vector and the direction each represent, and how many extra parameters does DoRA add?",
+          "hint": "Magnitude: one length per output unit. Direction: W + delta W normalized per row. It adds only out_features parameters per layer."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Along which axis is the weight norm taken, and why one value per output unit?",
+          "hint": "Per output row of the (out x in) weight, i.e. norm over the input dimension. Each output unit gets its own scale."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How must the magnitude be initialized so training starts from the base model?",
+          "hint": "Set m to the row norms of W. With B = 0, m / ||W|| is 1 and the output equals the base layer."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why does DoRA detach the norm in backward, and what does that save?",
+          "hint": "The paper's Section 4.3 treats ||W + delta W|| as a constant. Name the gradient term that drops and the activation memory it saves."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you merge a trained DoRA adapter into the base weight for inference?",
+          "hint": "The rescaled weight (m / ||W'||) W' is still one (out x in) matrix. Compute it once and write it into the base weight."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "DoRA versus LoRA at the same rank: accuracy, training memory and speed?",
+          "hint": "DoRA usually matches or beats LoRA accuracy at the same rank, but pays extra memory and time to rebuild W' and its norm each step."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What does DoRA cost when the base model is quantized, as in QDoRA?",
+          "hint": "The norm needs the full base weight, so each step dequantizes the 4-bit weights. Compare this with QLoRA, where only the matmul needs them."
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/huggingface/peft",
+          "commit": "b8674c86183a5dee38d0c3ede392e189593025e5",
+          "path": "src/peft/tuners/lora/dora.py",
+          "symbol": "DoraLinearLayer.get_weight_norm, DoraLinearLayer.update_layer, DoraLinearLayer.forward",
+          "license": "Apache-2.0",
+          "adapted": "Magnitude initialized to the row norms of the base weight, the adapted-weight norm computed per output row and detached, and the output rescaled by magnitude / norm with the bias left unscaled.",
+          "simplifications": "Computes the rescaled weight directly instead of adding a correction to the base output, no dropout, caching, fan_in_fan_out, quantized base or embedding and conv variants."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2402.09353",
+          "section": "Section 4 (Eq. 5) and Section 4.3, gradient of the detached norm"
+        }
+      ]
+    },
+    {
+      "id": "prefix_tuning",
+      "title": "Prefix Tuning (Trainable KV Prefix)",
+      "titleZh": "Prefix Tuning (Trainable KV Prefix)",
+      "difficulty": "Hard",
+      "functionName": "PrefixAttention",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Add trainable key and value prefixes to a frozen causal multi-head self-attention layer, as prefix tuning and P-tuning v2 do.\n\n**Signature:** `PrefixAttention(d_model, num_heads, num_prefix)` (nn.Module)\n\n**Attributes:**\n- `q_proj`, `k_proj`, `v_proj`, `o_proj` — `nn.Linear(d_model, d_model)` each, weights and biases frozen.\n- `prefix_k`, `prefix_v` — parameters `(num_heads, num_prefix, head_dim)`, where `head_dim = d_model // num_heads`. Small random init.\n\n**Forward:** `forward(x, attention_mask=None) -> Tensor`\n- `x` — `(B, T, d_model)`.\n- `attention_mask` — optional `(B, T)` bool or 0/1 tensor, true for real tokens. `None` means every token is real.\n- Returns `(B, T, d_model)`.\n\n**Attention rule:**\n- Per head, keys are the `num_prefix` prefix keys followed by the `T` projected keys. Values likewise.\n- Every query attends to every prefix slot, regardless of its position or the padding mask.\n- Query `i` attends to token key `j` only if `j <= i` and token `j` is real.\n- Scores use scale `1 / sqrt(head_dim)`. Apply `o_proj` to the concatenated heads.\n\n**Constraints:**\n- Use `prefix_k` and `prefix_v` directly as keys and values. Do not pass them through `k_proj` or `v_proj`.\n- One prefix is shared by every sequence in the batch.\n- Only `prefix_k` and `prefix_v` receive gradients.\n- Raise `ValueError` if `d_model` is not divisible by `num_heads` or `num_prefix < 1`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**What prefix tuning trains.** Li and Liang (2021) freeze the whole model and learn a few virtual tokens per layer. Unlike prompt tuning, which only adds embeddings at the input, the prefix lives in every layer's keys and values, so it steers every attention layer directly. P-tuning v2 applies the same idea to understanding tasks.\n\n**How PEFT runs it.** HuggingFace PEFT stores the prefix as a tensor shaped `(num_virtual_tokens, num_layers * 2 * hidden)`, reshapes it into one `(batch, heads, num_virtual_tokens, head_dim)` key and value pair per layer, and passes them to the model as `past_key_values`. The model then treats the prefix exactly like a KV cache from earlier tokens. PEFT also prepends `num_virtual_tokens` ones to the attention mask.\n\n**The causal-mask trap.** Building a lower-triangular mask over the full `num_prefix + T` key axis is wrong: it hides later prefix slots from early queries. The prefix acts as a past that every query has already seen, so the causal mask applies to the real-token keys only.\n\n**Reparameterization.** Optimizing the prefix directly can be unstable, so the paper trains it through a small MLP from a smaller embedding and keeps only the MLP output after training. That is PEFT's `prefix_projection=True`. This exercise trains the prefix directly.",
+      "descriptionZh": "Add trainable key and value prefixes to a frozen causal multi-head self-attention layer, as prefix tuning and P-tuning v2 do.\n\n**Signature:** `PrefixAttention(d_model, num_heads, num_prefix)` (nn.Module)\n\n**Attributes:**\n- `q_proj`, `k_proj`, `v_proj`, `o_proj` — `nn.Linear(d_model, d_model)` each, weights and biases frozen.\n- `prefix_k`, `prefix_v` — parameters `(num_heads, num_prefix, head_dim)`, where `head_dim = d_model // num_heads`. Small random init.\n\n**Forward:** `forward(x, attention_mask=None) -> Tensor`\n- `x` — `(B, T, d_model)`.\n- `attention_mask` — optional `(B, T)` bool or 0/1 tensor, true for real tokens. `None` means every token is real.\n- Returns `(B, T, d_model)`.\n\n**Attention rule:**\n- Per head, keys are the `num_prefix` prefix keys followed by the `T` projected keys. Values likewise.\n- Every query attends to every prefix slot, regardless of its position or the padding mask.\n- Query `i` attends to token key `j` only if `j <= i` and token `j` is real.\n- Scores use scale `1 / sqrt(head_dim)`. Apply `o_proj` to the concatenated heads.\n\n**Constraints:**\n- Use `prefix_k` and `prefix_v` directly as keys and values. Do not pass them through `k_proj` or `v_proj`.\n- One prefix is shared by every sequence in the batch.\n- Only `prefix_k` and `prefix_v` receive gradients.\n- Raise `ValueError` if `d_model` is not divisible by `num_heads` or `num_prefix < 1`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**What prefix tuning trains.** Li and Liang (2021) freeze the whole model and learn a few virtual tokens per layer. Unlike prompt tuning, which only adds embeddings at the input, the prefix lives in every layer's keys and values, so it steers every attention layer directly. P-tuning v2 applies the same idea to understanding tasks.\n\n**How PEFT runs it.** HuggingFace PEFT stores the prefix as a tensor shaped `(num_virtual_tokens, num_layers * 2 * hidden)`, reshapes it into one `(batch, heads, num_virtual_tokens, head_dim)` key and value pair per layer, and passes them to the model as `past_key_values`. The model then treats the prefix exactly like a KV cache from earlier tokens. PEFT also prepends `num_virtual_tokens` ones to the attention mask.\n\n**The causal-mask trap.** Building a lower-triangular mask over the full `num_prefix + T` key axis is wrong: it hides later prefix slots from early queries. The prefix acts as a past that every query has already seen, so the causal mask applies to the real-token keys only.\n\n**Reparameterization.** Optimizing the prefix directly can be unstable, so the paper trains it through a small MLP from a smaller embedding and keeps only the MLP output after training. That is PEFT's `prefix_projection=True`. This exercise trains the prefix directly.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Output shape and trainable parameters",
+          "code": "\nimport torch\ntorch.manual_seed(0)\nlayer = {fn}(d_model=8, num_heads=2, num_prefix=3)\nassert layer.prefix_k.shape == (2, 3, 4) and layer.prefix_v.shape == (2, 3, 4)\ntrainable = {name for name, p in layer.named_parameters() if p.requires_grad}\nassert trainable == {'prefix_k', 'prefix_v'}, trainable\nout = layer(torch.randn(2, 5, 8))\nassert out.shape == (2, 5, 8), out.shape\n",
+          "behavior": "contract.signature"
+        },
+        {
+          "name": "Matches a reference attention on seeded inputs",
+          "visibility": "unshown",
+          "behavior": "attention.masking",
+          "failureMessage": "Every query must see all prefix slots plus real token keys at positions <= its own, scaled by 1 / sqrt(head_dim).",
+          "hiddenCode": "\nimport math, torch\nfor seed in (1, 8, 29):\n    torch.manual_seed(seed)\n    g = torch.Generator().manual_seed(seed)\n    H = int(torch.randint(1, 4, (1,), generator=g)); hd = int(torch.randint(2, 5, (1,), generator=g)); D = H * hd\n    P = int(torch.randint(1, 5, (1,), generator=g)); B = 3; T = int(torch.randint(3, 8, (1,), generator=g))\n    layer = {fn}(D, H, P).double()\n    with torch.no_grad():\n        layer.prefix_k.copy_(torch.randn(H, P, hd, generator=g, dtype=torch.float64))\n        layer.prefix_v.copy_(torch.randn(H, P, hd, generator=g, dtype=torch.float64))\n    x = torch.randn(B, T, D, generator=g, dtype=torch.float64)\n    mask = torch.rand(B, T, generator=g) > 0.3\n    mask[:, 0] = True\n    mask[1, :2] = False\n    out = layer(x, attention_mask=mask)\n    q = layer.q_proj(x).view(B, T, H, hd); k = layer.k_proj(x).view(B, T, H, hd); v = layer.v_proj(x).view(B, T, H, hd)\n    want = torch.zeros(B, T, H, hd, dtype=torch.float64)\n    for b in range(B):\n        for h in range(H):\n            for i in range(T):\n                keys = [layer.prefix_k[h, p] for p in range(P)] + [k[b, j, h] for j in range(T) if j <= i and mask[b, j]]\n                vals = [layer.prefix_v[h, p] for p in range(P)] + [v[b, j, h] for j in range(T) if j <= i and mask[b, j]]\n                scores = torch.stack([q[b, i, h] @ key for key in keys]) / math.sqrt(hd)\n                want[b, i, h] = torch.softmax(scores, dim=0) @ torch.stack(vals)\n    want = layer.o_proj(want.reshape(B, T, D))\n    assert torch.allclose(out, want, atol=1e-9), (seed, (out - want).abs().max())\n    none_out = layer(x)\n    full = layer(x, attention_mask=torch.ones(B, T, dtype=torch.long))\n    assert torch.allclose(none_out, full, atol=1e-12), 'attention_mask=None must mean all tokens are real'\n"
+        },
+        {
+          "name": "Early queries see the whole prefix",
+          "visibility": "unshown",
+          "behavior": "attention.masking",
+          "failureMessage": "The causal mask applies to token keys only; query 0 must still attend to every prefix slot.",
+          "hiddenCode": "\nimport torch\ntorch.manual_seed(4)\nlayer = {fn}(d_model=4, num_heads=1, num_prefix=3).double()\nwith torch.no_grad():\n    for proj in (layer.q_proj, layer.k_proj, layer.v_proj, layer.o_proj):\n        proj.weight.zero_(); proj.bias.zero_()\n    layer.o_proj.weight.copy_(torch.eye(4))\n    layer.prefix_k.zero_()\n    layer.prefix_v.copy_(torch.tensor([[[3., 0, 0, 0], [0, 3., 0, 0], [0, 0, 3., 0]]], dtype=torch.float64))\nx = torch.randn(1, 4, 4, dtype=torch.float64)\nout = layer(x)\n# all scores are 0: query i averages 3 prefix values and i + 1 zero token values\nfor i in range(4):\n    want = torch.tensor([3., 3., 3., 0], dtype=torch.float64) / (3 + i + 1)\n    assert torch.allclose(out[0, i], want, atol=1e-12), (i, out[0, i], want)\n"
+        },
+        {
+          "name": "Gradients reach only the prefix",
+          "visibility": "unshown",
+          "behavior": "gradient.flow",
+          "failureMessage": "Use prefix_k and prefix_v directly as keys and values, shared across the batch; keep all projections frozen.",
+          "hiddenCode": "\nimport torch\nfor seed in (6, 15, 33):\n    torch.manual_seed(seed)\n    g = torch.Generator().manual_seed(seed)\n    layer = {fn}(6, 2, 2).double()\n    with torch.no_grad():\n        layer.prefix_k.copy_(torch.randn(2, 2, 3, generator=g, dtype=torch.float64))\n        layer.prefix_v.copy_(torch.randn(2, 2, 3, generator=g, dtype=torch.float64))\n    x = torch.randn(2, 4, 6, generator=g, dtype=torch.float64)\n    mask = torch.tensor([[1, 1, 1, 1], [0, 1, 1, 1]])\n    upstream = torch.randn(2, 4, 6, generator=g, dtype=torch.float64)\n    (layer(x, attention_mask=mask) * upstream).sum().backward()\n    eps = 1e-6\n    for name, param in (('prefix_k', layer.prefix_k), ('prefix_v', layer.prefix_v)):\n        base = param.detach().clone()\n        for idx in [(0, 0, 0), (1, 1, 2), (0, 1, 1)]:\n            with torch.no_grad():\n                param.copy_(base); param[idx] += eps\n            plus = (layer(x, attention_mask=mask) * upstream).sum()\n            with torch.no_grad():\n                param.copy_(base); param[idx] -= eps\n            minus = (layer(x, attention_mask=mask) * upstream).sum()\n            with torch.no_grad():\n                param.copy_(base)\n            numeric = (plus - minus) / (2 * eps)\n            assert abs(param.grad[idx].item() - numeric.item()) < 1e-6, (seed, name, idx, param.grad[idx].item(), numeric.item())\n    for proj in (layer.q_proj, layer.k_proj, layer.v_proj, layer.o_proj):\n        assert proj.weight.grad is None and proj.bias.grad is None\n"
+        },
+        {
+          "name": "Rejects invalid configurations",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Raise ValueError when d_model % num_heads != 0 or num_prefix < 1.",
+          "hiddenCode": "\nfor args in ((10, 3, 2), (8, 2, 0), (8, 2, -1)):\n    try:\n        {fn}(*args)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"accepted {args}\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "After concatenation the key axis has num_prefix + T slots: which of them may query i see? How do you turn the (B, T) padding mask and a (T, T) causal mask into one (B, 1, T, num_prefix + T) mask? How do you give a (heads, P, head_dim) prefix a batch dimension without copying it per sequence?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Project x to q, k, v and reshape to (B, H, T, hd). Expand prefix_k and prefix_v to (B, H, P, hd) and concatenate before k and v on dim 2. Build token_ok = tril(ones(T, T)) combined with the padding mask on the key axis, then prepend an all-True (B, 1, T, P) block. Softmax the masked scores, multiply by v, merge heads and apply o_proj."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "causal_attention",
+        "mha",
+        "kv_cache"
+      ],
+      "modelConnections": [
+        "HuggingFace PEFT's PrefixTuningConfig feeds the prefix to transformers models as past_key_values.",
+        "P-tuning v2 applies deep prompts to every layer for NLU tasks such as sequence labeling."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Trains 0.1% of the parameters or less and stores one small prefix per task.",
+          "Mixed-task batches can use a different prefix per row with one frozen model."
+        ],
+        "cons": [
+          "Each prefix slot takes attention compute and KV cache memory at inference, and it cannot be merged away like LoRA.",
+          "Training is sensitive to initialization and learning rate, which is why the MLP reparameterization exists."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is prefix tuning, and how does it differ from prompt tuning?",
+          "hint": "Prompt tuning adds trainable embeddings at the input only. Prefix tuning adds trainable keys and values in every layer, so it steers each attention layer directly."
+        },
+        {
+          "stage": "concept",
+          "question": "What exactly is trained, and what shape does the prefix have per layer?",
+          "hint": "Only the prefix: per layer, a key and a value tensor of shape (heads, num_prefix, head_dim). The whole model stays frozen."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why are the prefix keys and values not passed through the frozen k and v projections?",
+          "hint": "The prefix lives in key/value space already, like a KV cache. Projecting it again would tie it to frozen weights and change what it can express."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you build the attention mask once the prefix is prepended, including causality and padding?",
+          "hint": "Keys are prefix then tokens. Prefix columns are always visible; token column j is visible to query i if j <= i and token j is real."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why can a naive lower-triangular mask over the full key axis give wrong results?",
+          "hint": "A tril over num_prefix + T hides later prefix slots from early queries. The prefix is a past that every query has already seen."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How does HuggingFace PEFT hand the prefix to a transformers model, and why does that reuse the KV-cache path?",
+          "hint": "It reshapes the prefix into per-layer (key, value) tensors and passes them as past_key_values. It also prepends ones to the attention mask, reusing the KV-cache code path."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Prefix tuning versus LoRA: trainable parameters, inference cost and mergeability?",
+          "hint": "Prefix tuning trains fewer parameters but spends attention compute and cache on every step and cannot be merged. LoRA merges away and is usually more accurate."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why does the original paper reparameterize the prefix through an MLP, and when can you drop it?",
+          "hint": "Training the prefix directly is unstable. The paper trains it through an MLP from a smaller embedding, then keeps only the MLP's output after training."
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/huggingface/peft",
+          "commit": "b8674c86183a5dee38d0c3ede392e189593025e5",
+          "path": "src/peft/peft_model.py",
+          "symbol": "PeftModel.get_prompt, PeftModelForCausalLM.forward",
+          "license": "Apache-2.0",
+          "adapted": "The prefix reshaped into per-layer (heads, num_virtual_tokens, head_dim) key and value tensors shared across the batch, and an all-ones prefix block prepended to the attention mask.",
+          "simplifications": "One attention layer instead of num_layers, the prefix trained directly rather than through the PrefixEncoder MLP, and no positional encoding."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2101.00190",
+          "section": "Section 4.1 (Prefix-tuning method) and Section 4.3 (Parametrization of P)"
+        }
+      ]
     }
   ]
 }
