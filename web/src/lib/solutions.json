@@ -138,6 +138,15 @@
       }
     ]
   },
+  "ipv4_iterator": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "# Adapted from Schuture/OpenAI-Interview-Notes (code under the MIT License).\nimport re\n\n_SEGMENT = re.compile(r\"\\A(0|[1-9][0-9]{0,2})\\Z\")  # \\Z, not $: \"$\" also matches before a final newline\n_PREFIX = re.compile(r\"\\A(0|[1-9][0-9]?)\\Z\")\nMAX_IP = (1 << 32) - 1\n\n\ndef _parse_ip(text):\n    segments = text.split(\".\")\n    if len(segments) != 4:\n        raise ValueError(f\"expected 4 dot-separated segments, got {text!r}\")\n    value = 0\n    for segment in segments:\n        if not _SEGMENT.match(segment) or int(segment) > 255:  # a pattern, not int(): int(\" 7\") is 7\n            raise ValueError(f\"bad segment {segment!r} in {text!r}\")\n        value = (value << 8) | int(segment)  # the leftmost segment is the most significant byte\n    return value\n\n\ndef _parse(text):\n    \"\"\"Returns (start, first, last) for \"a.b.c.d\" or \"a.b.c.d/prefix\".\"\"\"\n    ip_part, slash, prefix_part = text.partition(\"/\")\n    start = _parse_ip(ip_part)\n    if not slash:\n        return start, 0, MAX_IP\n    if not _PREFIX.match(prefix_part) or int(prefix_part) > 32:\n        raise ValueError(f\"bad prefix {prefix_part!r}\")\n    host_bits = 32 - int(prefix_part)\n    first = start >> host_bits << host_bits  # /0 shifts by 32, which a Python int handles fine\n    return start, first, first + (1 << host_bits) - 1\n\n\ndef _format(value):\n    return \".\".join(str((value >> shift) & 0xFF) for shift in (24, 16, 8, 0))\n\n\nclass IPV4Iterator:\n    def __init__(self, address, reverse=False, step=1):\n        self._cursor, self._lo, self._hi = _parse(address)\n        if step <= 0:\n            raise ValueError(f\"step must be positive, got {step}\")\n        self._delta = -step if reverse else step\n\n    def __iter__(self):\n        return self\n\n    def __next__(self):\n        if not self._lo <= self._cursor <= self._hi:  # a step may jump past an end without landing on it\n            raise StopIteration\n        result = _format(self._cursor)\n        self._cursor += self._delta\n        return result\n\n    def next_batch(self, size):\n        if size < 0:\n            raise ValueError(f\"size must be non-negative, got {size}\")\n        out = []\n        for _ in range(size):\n            try:\n                out.append(next(self))\n            except StopIteration:\n                break\n        return out",
+        "role": "solution"
+      }
+    ]
+  },
   "label_smoothing": {
     "cells": [
       {

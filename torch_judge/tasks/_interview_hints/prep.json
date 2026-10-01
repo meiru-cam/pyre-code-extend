@@ -113,5 +113,14 @@
     "Which files can an interrupted save leave behind, and how does the next save find and remove them?": "Picture a save that died halfway through, then a later save that finished. Which files from the first one does nothing point to any more, and how would the second save recognise them?",
     "How does a log record let load() tell a complete record from a torn or damaged one, and why should the checksum cover the length?": "Write out the bytes of a record, then zero its last few bytes or cut it short. Which fields would a reader check, and what would twelve zero bytes look like to it?",
     "Why must load() cut a damaged tail off the log instead of just skipping it?": "Recover from a torn tail, append one new record, then reload. Where does the new record sit relative to the damaged bytes, and will the reader ever reach it?"
+  },
+  "ipv4_iterator": {
+    "Why turn an address into one 32-bit integer instead of incrementing the four segments?": "Write 192.0.2.255 as one number, add 1 and turn it back into four segments. Did you have to think about a carry at all?",
+    "Which inputs does a lenient parser such as int() on each segment wrongly accept?": "Call int() on \" 7\", \"+7\", \"007\", \"7_0\" and \"\\u0663\". Which of them return a number, and which of those does the address format allow?",
+    "Why must the iterator not build the list of addresses up front, and how much memory would the full space take?": "Count how many addresses start at 0.0.0.0, then estimate the bytes for one short str plus one list slot. Compare that with what the iterator needs to remember between calls.",
+    "How do you get a block's first and last address from a prefix, and what happens at /0 in a language with 32-bit integers?": "Write a prefix as a number of low bits to clear. What do you get when you clear them, and when you set them? Then ask what shifting a 32-bit value by 32 does in C or Java.",
+    "With a step larger than 1, why is checking for equality with the last address not enough to stop?": "Take a block ending at .31 and a step of 3 starting at .16. List the positions the cursor visits after .31 and check which comparison notices it left the block.",
+    "How should a batch read behave near the end, and what does a size of 0 mean?": "Picture the last few addresses in the range and a batch of size 10. What should the caller get back, and what would it do if the call raised instead? Then try size 0.",
+    "What goes wrong if two threads share one iterator, and how would you fix it?": "Two threads call next() at once on the same cursor. Write down the reads and writes each makes, and find an order where both return the same address."
   }
 }

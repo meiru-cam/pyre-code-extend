@@ -21836,6 +21836,201 @@
           "hint": "Recover from a torn tail, append one new record, then reload. Where does the new record sit relative to the damaged bytes, and will the reader ever reach it?"
         }
       ]
+    },
+    {
+      "id": "ipv4_iterator",
+      "title": "IPv4 Address Iterator",
+      "titleZh": "IPv4 Address Iterator",
+      "difficulty": "Easy",
+      "functionName": "IPV4Iterator",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Build `IPV4Iterator(address)`, an iterator that walks IPv4 addresses one at a time, starting from `address`.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior, so one `IPV4Iterator` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- An address is written `\"a.b.c.d\"`: exactly four segments separated by dots. Each segment is decimal digits `0`–`9` with a value from `0` to `255`, and has no leading zero unless it is exactly `0`. So `\"0.0.0.0\"` and `\"10.0.0.255\"` are valid; `\"1.2.03.4\"`, `\"1.2.00.4\"`, `\"1.2.3.256\"` and `\" 1.2.3.4\"` are not.\n- The address `\"a.b.c.d\"` stands for the 32-bit number `a·2²⁴ + b·2¹⁶ + c·2⁸ + d`. Addresses are ordered by that number, from `0.0.0.0` up to `255.255.255.255`.\n- Every invalid argument makes the constructor raise `ValueError`.\n- Each `next()` does constant work. The iterator must not build the whole range up front: starting at `0.0.0.0` must be as quick as starting anywhere else.\n- Once the iterator raises `StopIteration`, every later `next()` raises it too.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** turning dotted text into one integer makes the walking trivial, so the work is in strict parsing and in off-by-one boundaries. Each later part adds one requirement.\n\n**Where it is used:** network scanners, firewall rule checkers and IP address managers all walk address ranges.\n\nAdapted from the IPv4 iterator question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded.",
+      "descriptionZh": "Build `IPV4Iterator(address)`, an iterator that walks IPv4 addresses one at a time, starting from `address`.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior, so one `IPV4Iterator` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- An address is written `\"a.b.c.d\"`: exactly four segments separated by dots. Each segment is decimal digits `0`–`9` with a value from `0` to `255`, and has no leading zero unless it is exactly `0`. So `\"0.0.0.0\"` and `\"10.0.0.255\"` are valid; `\"1.2.03.4\"`, `\"1.2.00.4\"`, `\"1.2.3.256\"` and `\" 1.2.3.4\"` are not.\n- The address `\"a.b.c.d\"` stands for the 32-bit number `a·2²⁴ + b·2¹⁶ + c·2⁸ + d`. Addresses are ordered by that number, from `0.0.0.0` up to `255.255.255.255`.\n- Every invalid argument makes the constructor raise `ValueError`.\n- Each `next()` does constant work. The iterator must not build the whole range up front: starting at `0.0.0.0` must be as quick as starting anywhere else.\n- Once the iterator raises `StopIteration`, every later `next()` raises it too.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** turning dotted text into one integer makes the walking trivial, so the work is in strict parsing and in off-by-one boundaries. Each later part adds one requirement.\n\n**Where it is used:** network scanners, firewall rule checkers and IP address managers all walk address ranges.\n\nAdapted from the IPv4 iterator question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Part 1: the worked example",
+          "code": "\nimport itertools\nit = {fn}(\"192.0.2.254\")\nassert iter(it) is it\nassert [next(it) for _ in range(4)] == [\"192.0.2.254\", \"192.0.2.255\", \"192.0.3.0\", \"192.0.3.1\"]\nassert list({fn}(\"255.255.255.255\")) == [\"255.255.255.255\"]\nassert list(itertools.islice({fn}(\"1.255.255.254\"), 3)) == [\"1.255.255.254\", \"1.255.255.255\", \"2.0.0.0\"]\n",
+          "behavior": "state.invariant",
+          "part": 1
+        },
+        {
+          "name": "Part 1: strict parsing",
+          "visibility": "unshown",
+          "behavior": "protocol.validation",
+          "failureMessage": "The constructor must raise ValueError for anything but four dot-separated decimal segments from 0 to 255 without leading zeros, and accept every valid address.",
+          "hiddenCode": "\nimport ipaddress, itertools, random, time\n\nMAX_ADDR = 2 ** 32 - 1\n\ndef bounds(s):\n    ip_part, slash, prefix = s.partition(\"/\")\n    start = int(ipaddress.IPv4Address(ip_part))\n    if not slash:\n        return start, 0, MAX_ADDR\n    net = ipaddress.IPv4Network(f\"{ip_part}/{prefix}\", strict=False)\n    return start, int(net.network_address), int(net.broadcast_address)\n\ndef expected(s, reverse=False, step=1, count=10 ** 6):\n    start, lo, hi = bounds(s)\n    out, cur = [], start\n    while len(out) < count and lo <= cur <= hi:\n        out.append(str(ipaddress.IPv4Address(cur)))\n        cur += -step if reverse else step\n    return out\n\ndef addr(value):\n    return str(ipaddress.IPv4Address(value))\n\ndef raises(make, error=ValueError):\n    try:\n        make()\n    except error:\n        return True\n    return False\n\ndef drained_twice(it):\n    for _ in range(3):\n        assert raises(lambda: next(it), StopIteration), \"an exhausted iterator must keep raising StopIteration\"\n\nBAD = [\"\", \"1.2.3\", \"1.2.3.4.5\", \"1.2.3.256\", \"1.2.3.1000\", \"01.2.3.4\", \"1.2.3.04\", \"1.2.03.4\", \"1.2.00.4\",\n       \"1.2.3.-4\", \"1.2.3.+4\", \"1.2.3.a\", \"1..3.4\", \".1.2.3\", \"1.2.3.\", \" 1.2.3.4\", \"1.2.3.4 \", \"1.2.3.4\\n\",\n       \"1.2.3.٣\", \"1.2.3.４\", \"1.2.3.4_0\", \"1.2.3.0x1\", \"256.0.0.0\", \"1,2,3,4\"]\nfor s in BAD:\n    assert raises(lambda: {fn}(s)), f\"{s!r} should raise ValueError\"\nfor s in [\"0.0.0.0\", \"10.0.0.255\", \"255.255.255.255\", \"100.20.3.0\", \"9.99.199.249\"]:\n    assert next({fn}(s)) == s\n",
+          "part": 1
+        },
+        {
+          "name": "Part 1: random starts and the last address",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "From a random start the addresses must come in increasing numeric order, carrying across segments, and stop right after 255.255.255.255.",
+          "hiddenCode": "\nimport ipaddress, itertools, random, time\n\nMAX_ADDR = 2 ** 32 - 1\n\ndef bounds(s):\n    ip_part, slash, prefix = s.partition(\"/\")\n    start = int(ipaddress.IPv4Address(ip_part))\n    if not slash:\n        return start, 0, MAX_ADDR\n    net = ipaddress.IPv4Network(f\"{ip_part}/{prefix}\", strict=False)\n    return start, int(net.network_address), int(net.broadcast_address)\n\ndef expected(s, reverse=False, step=1, count=10 ** 6):\n    start, lo, hi = bounds(s)\n    out, cur = [], start\n    while len(out) < count and lo <= cur <= hi:\n        out.append(str(ipaddress.IPv4Address(cur)))\n        cur += -step if reverse else step\n    return out\n\ndef addr(value):\n    return str(ipaddress.IPv4Address(value))\n\ndef raises(make, error=ValueError):\n    try:\n        make()\n    except error:\n        return True\n    return False\n\ndef drained_twice(it):\n    for _ in range(3):\n        assert raises(lambda: next(it), StopIteration), \"an exhausted iterator must keep raising StopIteration\"\n\nrng = random.Random(1)\nfor _ in range(500):\n    seed = addr(rng.getrandbits(32))\n    assert list(itertools.islice({fn}(seed), 40)) == expected(seed, count=40), seed\nfor gap in range(0, 300, 7):\n    seed = addr(MAX_ADDR - gap)\n    it = {fn}(seed)\n    assert list(it) == expected(seed), seed\n    drained_twice(it)\n",
+          "part": 1
+        },
+        {
+          "name": "Part 1: nothing is built up front",
+          "visibility": "unshown",
+          "behavior": "performance.complexity",
+          "failureMessage": "Starting at 0.0.0.0 and reading a few addresses must be instant; keep an integer cursor instead of building the range.",
+          "hiddenCode": "\nimport ipaddress, itertools, random, time\n\nMAX_ADDR = 2 ** 32 - 1\n\ndef bounds(s):\n    ip_part, slash, prefix = s.partition(\"/\")\n    start = int(ipaddress.IPv4Address(ip_part))\n    if not slash:\n        return start, 0, MAX_ADDR\n    net = ipaddress.IPv4Network(f\"{ip_part}/{prefix}\", strict=False)\n    return start, int(net.network_address), int(net.broadcast_address)\n\ndef expected(s, reverse=False, step=1, count=10 ** 6):\n    start, lo, hi = bounds(s)\n    out, cur = [], start\n    while len(out) < count and lo <= cur <= hi:\n        out.append(str(ipaddress.IPv4Address(cur)))\n        cur += -step if reverse else step\n    return out\n\ndef addr(value):\n    return str(ipaddress.IPv4Address(value))\n\ndef raises(make, error=ValueError):\n    try:\n        make()\n    except error:\n        return True\n    return False\n\ndef drained_twice(it):\n    for _ in range(3):\n        assert raises(lambda: next(it), StopIteration), \"an exhausted iterator must keep raising StopIteration\"\n\nstart = time.perf_counter()\nit = {fn}(\"0.0.0.0\")\nassert [next(it) for _ in range(3)] == [\"0.0.0.0\", \"0.0.0.1\", \"0.0.0.2\"]\nelapsed = time.perf_counter() - start\nassert elapsed < 0.5, f\"took {elapsed:.2f}s\"\nstart = time.perf_counter()\nit = {fn}(\"10.0.0.0\")\nfor _ in range(200000):\n    next(it)\nassert next(it) == \"10.3.13.64\"\nelapsed = time.perf_counter() - start\nassert elapsed < 3, f\"200,000 calls took {elapsed:.2f}s\"\n",
+          "part": 1
+        },
+        {
+          "name": "Part 2: the worked example",
+          "code": "\nit = {fn}(\"192.0.2.1\", reverse=True)\nassert [next(it) for _ in range(4)] == [\"192.0.2.1\", \"192.0.2.0\", \"192.0.1.255\", \"192.0.1.254\"]\nassert list({fn}(\"0.0.0.0\", reverse=True)) == [\"0.0.0.0\"]\nassert list({fn}(\"0.0.0.2\", reverse=True)) == [\"0.0.0.2\", \"0.0.0.1\", \"0.0.0.0\"]\n",
+          "behavior": "state.invariant",
+          "part": 2
+        },
+        {
+          "name": "Part 2: both directions against an oracle",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "In reverse the addresses must come in decreasing order, borrowing across segments, and stop right after 0.0.0.0; reverse=False must not change Part 1.",
+          "hiddenCode": "\nimport ipaddress, itertools, random, time\n\nMAX_ADDR = 2 ** 32 - 1\n\ndef bounds(s):\n    ip_part, slash, prefix = s.partition(\"/\")\n    start = int(ipaddress.IPv4Address(ip_part))\n    if not slash:\n        return start, 0, MAX_ADDR\n    net = ipaddress.IPv4Network(f\"{ip_part}/{prefix}\", strict=False)\n    return start, int(net.network_address), int(net.broadcast_address)\n\ndef expected(s, reverse=False, step=1, count=10 ** 6):\n    start, lo, hi = bounds(s)\n    out, cur = [], start\n    while len(out) < count and lo <= cur <= hi:\n        out.append(str(ipaddress.IPv4Address(cur)))\n        cur += -step if reverse else step\n    return out\n\ndef addr(value):\n    return str(ipaddress.IPv4Address(value))\n\ndef raises(make, error=ValueError):\n    try:\n        make()\n    except error:\n        return True\n    return False\n\ndef drained_twice(it):\n    for _ in range(3):\n        assert raises(lambda: next(it), StopIteration), \"an exhausted iterator must keep raising StopIteration\"\n\nrng = random.Random(2)\nfor _ in range(400):\n    seed = addr(rng.getrandbits(32))\n    reverse = rng.random() < 0.5\n    assert list(itertools.islice({fn}(seed, reverse=reverse), 30)) == expected(seed, reverse, count=30), (seed, reverse)\nfor gap in range(0, 300, 7):\n    it = {fn}(addr(gap), reverse=True)\n    assert list(it) == expected(addr(gap), True), gap\n    drained_twice(it)\nassert list({fn}(\"255.255.255.255\", reverse=False)) == [\"255.255.255.255\"]\nassert list(itertools.islice({fn}(\"3.0.0.0\", reverse=True), 2)) == [\"3.0.0.0\", \"2.255.255.255\"]\n",
+          "part": 2
+        },
+        {
+          "name": "Part 3: the worked example",
+          "code": "\nforward = list({fn}(\"203.0.113.100/28\"))\nassert forward[0] == \"203.0.113.100\" and forward[-1] == \"203.0.113.111\" and len(forward) == 12\nbackward = list({fn}(\"203.0.113.100/28\", reverse=True))\nassert backward[0] == \"203.0.113.100\" and backward[-1] == \"203.0.113.96\" and len(backward) == 5\nassert list({fn}(\"198.51.100.77/32\")) == [\"198.51.100.77\"]\nassert list({fn}(\"198.51.100.16/31\")) == [\"198.51.100.16\", \"198.51.100.17\"]\nit = {fn}(\"10.20.30.40/0\")\nassert [next(it) for _ in range(3)] == [\"10.20.30.40\", \"10.20.30.41\", \"10.20.30.42\"]\n",
+          "behavior": "state.invariant",
+          "part": 3
+        },
+        {
+          "name": "Part 3: prefix parsing",
+          "visibility": "unshown",
+          "behavior": "protocol.validation",
+          "failureMessage": "The prefix must be 0 to 32 in plain decimal without a leading zero; anything else, including a netmask or a second slash, raises ValueError.",
+          "hiddenCode": "\nimport ipaddress, itertools, random, time\n\nMAX_ADDR = 2 ** 32 - 1\n\ndef bounds(s):\n    ip_part, slash, prefix = s.partition(\"/\")\n    start = int(ipaddress.IPv4Address(ip_part))\n    if not slash:\n        return start, 0, MAX_ADDR\n    net = ipaddress.IPv4Network(f\"{ip_part}/{prefix}\", strict=False)\n    return start, int(net.network_address), int(net.broadcast_address)\n\ndef expected(s, reverse=False, step=1, count=10 ** 6):\n    start, lo, hi = bounds(s)\n    out, cur = [], start\n    while len(out) < count and lo <= cur <= hi:\n        out.append(str(ipaddress.IPv4Address(cur)))\n        cur += -step if reverse else step\n    return out\n\ndef addr(value):\n    return str(ipaddress.IPv4Address(value))\n\ndef raises(make, error=ValueError):\n    try:\n        make()\n    except error:\n        return True\n    return False\n\ndef drained_twice(it):\n    for _ in range(3):\n        assert raises(lambda: next(it), StopIteration), \"an exhausted iterator must keep raising StopIteration\"\n\nBAD = [\"1.2.3.4/\", \"1.2.3.4/33\", \"1.2.3.4/100\", \"1.2.3.4/-1\", \"1.2.3.4/+8\", \"1.2.3.4/1/2\", \"1.2.3.4/8\\n\",\n       \"1.2.3.4/ 8\", \"1.2.3.4/08\", \"1.2.3.4/00\", \"1.2.3.4/255.0.0.0\", \"1.2.3.4/٣\", \"/8\", \"1.2.3/8\", \"01.2.3.4/8\"]\nfor s in BAD:\n    assert raises(lambda: {fn}(s)), f\"{s!r} should raise ValueError\"\nfor prefix in range(33):\n    s = f\"1.2.3.4/{prefix}\"\n    assert next({fn}(s)) == \"1.2.3.4\", s\n",
+          "part": 3
+        },
+        {
+          "name": "Part 3: every prefix against an oracle",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "Inside a block, iteration must start at the given address and stop right after the block's last address forward, or its first address in reverse, for every prefix from /0 to /32.",
+          "hiddenCode": "\nimport ipaddress, itertools, random, time\n\nMAX_ADDR = 2 ** 32 - 1\n\ndef bounds(s):\n    ip_part, slash, prefix = s.partition(\"/\")\n    start = int(ipaddress.IPv4Address(ip_part))\n    if not slash:\n        return start, 0, MAX_ADDR\n    net = ipaddress.IPv4Network(f\"{ip_part}/{prefix}\", strict=False)\n    return start, int(net.network_address), int(net.broadcast_address)\n\ndef expected(s, reverse=False, step=1, count=10 ** 6):\n    start, lo, hi = bounds(s)\n    out, cur = [], start\n    while len(out) < count and lo <= cur <= hi:\n        out.append(str(ipaddress.IPv4Address(cur)))\n        cur += -step if reverse else step\n    return out\n\ndef addr(value):\n    return str(ipaddress.IPv4Address(value))\n\ndef raises(make, error=ValueError):\n    try:\n        make()\n    except error:\n        return True\n    return False\n\ndef drained_twice(it):\n    for _ in range(3):\n        assert raises(lambda: next(it), StopIteration), \"an exhausted iterator must keep raising StopIteration\"\n\nrng = random.Random(3)\nfor _ in range(600):\n    suffix = rng.choice([\"\", f\"/{rng.randint(0, 32)}\", f\"/{rng.randint(24, 32)}\"])\n    reverse = rng.random() < 0.5\n    _, lo, hi = bounds(addr(rng.getrandbits(32)) + suffix)\n    gap = rng.randint(0, min(40, hi - lo))\n    seed = addr(lo + gap if reverse else hi - gap) + suffix\n    it = {fn}(seed, reverse=reverse)\n    assert list(it) == expected(seed, reverse), (seed, reverse)\n    drained_twice(it)\n    seed = addr(rng.getrandbits(32)) + suffix\n    assert list(itertools.islice({fn}(seed, reverse=reverse), 5)) == expected(seed, reverse, count=5), (seed, reverse)\n",
+          "part": 3
+        },
+        {
+          "name": "Part 4: the worked example",
+          "code": "\nassert list({fn}(\"203.0.113.16/28\", step=3)) == [\n    \"203.0.113.16\", \"203.0.113.19\", \"203.0.113.22\", \"203.0.113.25\", \"203.0.113.28\", \"203.0.113.31\"]\nassert list({fn}(\"203.0.113.30/28\", reverse=True, step=4)) == [\n    \"203.0.113.30\", \"203.0.113.26\", \"203.0.113.22\", \"203.0.113.18\"]\ntry:\n    {fn}(\"203.0.113.16/28\", step=0)\n    raise AssertionError(\"step=0 should raise ValueError\")\nexcept ValueError:\n    pass\n",
+          "behavior": "state.invariant",
+          "part": 4
+        },
+        {
+          "name": "Part 4: steps that jump past the end",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "A step must stop iteration as soon as the next address would leave the range, even when it jumps over the last address; step <= 0 raises ValueError.",
+          "hiddenCode": "\nimport ipaddress, itertools, random, time\n\nMAX_ADDR = 2 ** 32 - 1\n\ndef bounds(s):\n    ip_part, slash, prefix = s.partition(\"/\")\n    start = int(ipaddress.IPv4Address(ip_part))\n    if not slash:\n        return start, 0, MAX_ADDR\n    net = ipaddress.IPv4Network(f\"{ip_part}/{prefix}\", strict=False)\n    return start, int(net.network_address), int(net.broadcast_address)\n\ndef expected(s, reverse=False, step=1, count=10 ** 6):\n    start, lo, hi = bounds(s)\n    out, cur = [], start\n    while len(out) < count and lo <= cur <= hi:\n        out.append(str(ipaddress.IPv4Address(cur)))\n        cur += -step if reverse else step\n    return out\n\ndef addr(value):\n    return str(ipaddress.IPv4Address(value))\n\ndef raises(make, error=ValueError):\n    try:\n        make()\n    except error:\n        return True\n    return False\n\ndef drained_twice(it):\n    for _ in range(3):\n        assert raises(lambda: next(it), StopIteration), \"an exhausted iterator must keep raising StopIteration\"\n\nfor bad in (0, -1, -100):\n    assert raises(lambda: {fn}(\"1.2.3.4\", step=bad)), bad\nrng = random.Random(4)\nfor _ in range(600):\n    suffix = rng.choice([\"\", f\"/{rng.randint(0, 32)}\", f\"/{rng.randint(22, 32)}\"])\n    reverse, step = rng.random() < 0.5, rng.choice([1, 2, 3, 7, 256, 1000])\n    _, lo, hi = bounds(addr(rng.getrandbits(32)) + suffix)\n    gap = rng.randint(0, min(30 * step, hi - lo))\n    seed = addr(lo + gap if reverse else hi - gap) + suffix\n    it = {fn}(seed, reverse=reverse, step=step)\n    assert list(it) == expected(seed, reverse, step), (seed, reverse, step)\n    drained_twice(it)\nassert list({fn}(\"8.8.8.8\", step=2 ** 40)) == [\"8.8.8.8\"]\nassert list({fn}(\"8.8.8.8\", reverse=True, step=2 ** 40)) == [\"8.8.8.8\"]\n",
+          "part": 4
+        },
+        {
+          "name": "Part 5: the worked example",
+          "code": "\nit = {fn}(\"203.0.113.16/28\")\nassert it.next_batch(5) == [\"203.0.113.16\", \"203.0.113.17\", \"203.0.113.18\", \"203.0.113.19\", \"203.0.113.20\"]\nrest = it.next_batch(100)\nassert len(rest) == 11 and rest[-1] == \"203.0.113.31\"\nassert it.next_batch(5) == []\n",
+          "behavior": "state.invariant",
+          "part": 5
+        },
+        {
+          "name": "Part 5: batches mixed with next()",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "next_batch must return exactly what the same number of next() calls would, never raise StopIteration, return [] once exhausted, treat size 0 as a no-op and reject a negative size.",
+          "hiddenCode": "\nimport ipaddress, itertools, random, time\n\nMAX_ADDR = 2 ** 32 - 1\n\ndef bounds(s):\n    ip_part, slash, prefix = s.partition(\"/\")\n    start = int(ipaddress.IPv4Address(ip_part))\n    if not slash:\n        return start, 0, MAX_ADDR\n    net = ipaddress.IPv4Network(f\"{ip_part}/{prefix}\", strict=False)\n    return start, int(net.network_address), int(net.broadcast_address)\n\ndef expected(s, reverse=False, step=1, count=10 ** 6):\n    start, lo, hi = bounds(s)\n    out, cur = [], start\n    while len(out) < count and lo <= cur <= hi:\n        out.append(str(ipaddress.IPv4Address(cur)))\n        cur += -step if reverse else step\n    return out\n\ndef addr(value):\n    return str(ipaddress.IPv4Address(value))\n\ndef raises(make, error=ValueError):\n    try:\n        make()\n    except error:\n        return True\n    return False\n\ndef drained_twice(it):\n    for _ in range(3):\n        assert raises(lambda: next(it), StopIteration), \"an exhausted iterator must keep raising StopIteration\"\n\nassert {fn}(\"1.2.3.4\").next_batch(0) == []\nit = {fn}(\"1.2.3.4\")\nit.next_batch(0)\nassert next(it) == \"1.2.3.4\", \"size 0 must not move the iterator\"\nassert raises(lambda: {fn}(\"1.2.3.4\").next_batch(-1))\nrng = random.Random(5)\nfor _ in range(500):\n    seed = f\"{addr(rng.getrandbits(32))}/{rng.randint(25, 32)}\"\n    reverse, step = rng.random() < 0.5, rng.randint(1, 4)\n    it, got = {fn}(seed, reverse=reverse, step=step), []\n    while True:\n        if rng.random() < 0.3:\n            try:\n                got.append(next(it))\n            except StopIteration:\n                break\n        else:\n            size = rng.randint(0, 10)\n            batch = it.next_batch(size)\n            assert isinstance(batch, list)\n            got += batch\n            if size and len(batch) < size:\n                break\n    assert got == expected(seed, reverse, step), (seed, reverse, step)\n    assert it.next_batch(0) == [] and it.next_batch(3) == []\n    assert raises(lambda: it.next_batch(-1))\n    drained_twice(it)\n",
+          "part": 5
+        }
+      ],
+      "parts": [
+        {
+          "title": "Forward iteration",
+          "descriptionEn": "**Signature:** `IPV4Iterator(address)`, `iter(it) -> it`, `next(it) -> str`\n\n- `address` is an address `\"a.b.c.d\"` as described above.\n- `next()` returns addresses in increasing order, starting with `address` itself and ending with `255.255.255.255`. After that it raises `StopIteration`.\n\n**Example**, from `\"192.0.2.254\"`:\n- `192.0.2.254`, `192.0.2.255`, then `192.0.3.0` (the last segment passed 255 and carried into the one before), then `192.0.3.1`\n- from `\"255.255.255.255\"` the iterator returns that one address and stops"
+        },
+        {
+          "title": "Reverse iteration",
+          "descriptionEn": "Keep Part 1 and add a direction.\n\n**Signature:** `IPV4Iterator(address, reverse=False)`\n\n- `reverse=False` keeps Part 1's behavior.\n- `reverse=True` returns addresses in decreasing order, starting with `address` and ending with `0.0.0.0`, then raises `StopIteration`.\n\n**Example**, from `\"192.0.2.1\"` with `reverse=True`:\n- `192.0.2.1`, `192.0.2.0`, then `192.0.1.255` (borrowed from the segment before), then `192.0.1.254`\n- from `\"0.0.0.0\"` with `reverse=True` the iterator returns that one address and stops"
+        },
+        {
+          "title": "Confined to a block",
+          "descriptionEn": "Keep Parts 1–2. `address` may now also be `\"a.b.c.d/prefix\"`, a block of addresses.\n\n- `prefix` is an integer from `0` to `32`, written with the same rules as a segment: digits only, no leading zero unless it is exactly `0`. Anything else raises `ValueError`.\n- The block's first address is the number of `a.b.c.d` with its lowest `32 - prefix` bits set to 0. Its last address is the same number with those bits set to 1. The block is every address between them, both included.\n- Iteration still starts at `a.b.c.d` itself, which may be anywhere in the block. Forward iteration stops after the block's last address, and reverse iteration after its first.\n- Without `/prefix`, the range is still `0.0.0.0` to `255.255.255.255`.\n\n**Example**, `\"203.0.113.100/28\"` is the block `203.0.113.96` to `203.0.113.111`:\n- forward: `203.0.113.100` up to `203.0.113.111`, 12 addresses\n- reverse: `203.0.113.100` down to `203.0.113.96`, 5 addresses\n- `\"198.51.100.77/32\"` gives only `198.51.100.77`; `\"198.51.100.16/31\"` gives `198.51.100.16`, `198.51.100.17`\n- `\"10.20.30.40/0\"` starts at `10.20.30.40` and, forward, runs up to `255.255.255.255`"
+        },
+        {
+          "title": "Step size",
+          "descriptionEn": "Keep Parts 1–3 and add a step.\n\n**Signature:** `IPV4Iterator(address, reverse=False, step=1)`\n\n- `step` is a positive integer; `step <= 0` raises `ValueError`.\n- The first address returned is still `address`. Each later `next()` moves `step` addresses in the chosen direction.\n- Iteration stops as soon as the next address would fall outside the range (the block, or the whole address space), even if a step jumps past the end without landing on it.\n\n**Example:**\n- `\"203.0.113.16/28\"` with `step=3`: `.16`, `.19`, `.22`, `.25`, `.28`, `.31`; the next would be `.34`, outside the block, so it stops\n- `\"203.0.113.30/28\"` with `reverse=True, step=4`: `.30`, `.26`, `.22`, `.18`; the next would be `.14`, below the block's first address `.16`\n- `IPV4Iterator(\"203.0.113.16/28\", step=0)` raises `ValueError`"
+        },
+        {
+          "title": "Batch reads",
+          "descriptionEn": "Keep Parts 1–4 and add a batch read.\n\n**Signature:** `next_batch(size) -> list[str]`\n\n- `next_batch(size)` returns what `size` calls to `next()` would return, in the same order, and moves the iterator just as far.\n- It never raises `StopIteration`: near the end it returns fewer than `size` addresses, and once nothing is left it returns `[]`.\n- `size` is a non-negative integer; `size < 0` raises `ValueError`. `size == 0` returns `[]` and moves nothing, even on an exhausted iterator.\n\n**Example**, `it = IPV4Iterator(\"203.0.113.16/28\")`:\n- `it.next_batch(5)` returns `203.0.113.16` to `203.0.113.20`\n- `it.next_batch(100)` returns the remaining 11, ending with `203.0.113.31`\n- `it.next_batch(5)` returns `[]`"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "If each address were a single number, what would \"the next address\" be, and would you still need to handle a segment passing 255 yourself? Which strings does int() accept that the rules forbid, such as \" 7\", \"+7\", \"007\" or other scripts' digits?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Parse once: split on \".\", require exactly four parts, check each against a strict pattern such as 0 or a 1-9 followed by up to two digits, then range-check and combine with value = (value << 8) | segment. Keep one integer cursor and an upper bound. next() checks cursor > bound, formats the cursor with shifts 24, 16, 8 and 0, then adds 1."
+        }
+      ],
+      "modelConnections": [
+        "Cluster schedulers and Kubernetes network plugins hand out pod and node IPs by walking CIDR blocks.",
+        "Distributed training jobs build their rendezvous host lists from address ranges, where an off-by-one drops or duplicates a worker."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Treating an address as one 32-bit integer turns carry and borrow into plain addition and subtraction.",
+          "Masking the low bits gives a block's first and last address in O(1).",
+          "A cursor and two bounds use O(1) memory, however large the range."
+        ],
+        "cons": [
+          "Building the whole range as strings up front would take hundreds of gigabytes for the full space.",
+          "Lenient parsing such as int() on each segment accepts spaces, signs and other scripts' digits.",
+          "A shared cursor is not thread-safe; concurrent callers need a lock or separate sub-ranges."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why turn an address into one 32-bit integer instead of incrementing the four segments?",
+          "hint": "Write 192.0.2.255 as one number, add 1 and turn it back into four segments. Did you have to think about a carry at all?"
+        },
+        {
+          "stage": "concept",
+          "question": "Which inputs does a lenient parser such as int() on each segment wrongly accept?",
+          "hint": "Call int() on \" 7\", \"+7\", \"007\", \"7_0\" and \"\\u0663\". Which of them return a number, and which of those does the address format allow?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why must the iterator not build the list of addresses up front, and how much memory would the full space take?",
+          "hint": "Count how many addresses start at 0.0.0.0, then estimate the bytes for one short str plus one list slot. Compare that with what the iterator needs to remember between calls."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How do you get a block's first and last address from a prefix, and what happens at /0 in a language with 32-bit integers?",
+          "hint": "Write a prefix as a number of low bits to clear. What do you get when you clear them, and when you set them? Then ask what shifting a 32-bit value by 32 does in C or Java."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "With a step larger than 1, why is checking for equality with the last address not enough to stop?",
+          "hint": "Take a block ending at .31 and a step of 3 starting at .16. List the positions the cursor visits after .31 and check which comparison notices it left the block."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How should a batch read behave near the end, and what does a size of 0 mean?",
+          "hint": "Picture the last few addresses in the range and a batch of size 10. What should the caller get back, and what would it do if the call raised instead? Then try size 0."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What goes wrong if two threads share one iterator, and how would you fix it?",
+          "hint": "Two threads call next() at once on the same cursor. Write down the reads and writes each makes, and find an order where both return the same address."
+        }
+      ]
     }
   ]
 }

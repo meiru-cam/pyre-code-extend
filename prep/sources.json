@@ -202,5 +202,13 @@
       "durable_kv"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/ipv4-cidr-iterator",
+    "exercises": [
+      "ipv4_iterator"
+    ],
+    "round": "coding"
   }
 ]
