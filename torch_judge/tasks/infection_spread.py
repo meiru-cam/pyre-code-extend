@@ -5,7 +5,7 @@ from ._interview import interview
 # A slow model written straight from the statement: rewrite the whole grid once per day.
 # It shares no code with the reference, so random grids can be checked against it.
 _HELPERS = r"""
-import random, time
+import random
 
 STEPS = ((1, 0), (-1, 0), (0, 1), (0, -1))
 
@@ -74,7 +74,7 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Rules for every part:**
 - `Outbreak(grid)` takes `grid`, a list of rows of equal length holding integers. `0` is a healthy cell and `1` an infected one; later parts add more states.
-- The neighbours of a cell are the cells directly above, below, left and right of it inside the grid. Diagonal cells are not neighbours.
+- Each cell has up to four neighbours: the cells that share an edge with it. Cells touching only at a corner are not neighbours.
 - Day 0 is the input grid. Day `t + 1` is computed from day `t` all at once: a cell infected on day `t + 1` spreads nothing until the step to day `t + 2`.
 - The grid may be empty (`[]`). No method may modify `grid`.
 
@@ -82,17 +82,17 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Background — context only. Everything above this line is the requirement.**
 
-**Why this shows up in interviews:** the first part is a short graph search, and each later rule checks whether the simulation was built so it can grow.
+**Why this shows up in interviews:** the first part is a short graph search, and each later part adds one requirement.
 
 **Where it is used:** epidemic models, wildfire spread and other cellular automata.
 
-Adapted from the infection spread question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, on one class.""",
+Adapted from the infection spread question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, on one class, with the order of phases and the moment deaths are counted spelled out.""",
     "parts": [
         {
             "title": "Spread",
             "description_en": r"""**Signature:** `days_until_all_infected() -> int`
 
-- A healthy cell becomes infected on day `t + 1` if at least one of its neighbours is infected on day `t`. Infected cells stay infected.
+- Any healthy cell with an infected neighbour on day `t` is itself infected on day `t + 1`, and stays so.
 - Return the first day on which no cell is healthy.
 - Return `0` when no cell is healthy on day 0, which includes the empty grid.
 - Return `-1` when that day never comes.
@@ -105,7 +105,7 @@ Adapted from the infection spread question in Schuture/OpenAI-Interview-Notes (C
             "title": "Immune cells",
             "description_en": r"""Keep Part 1 and add a third state:
 
-- `2` is an immune cell. It never changes and never counts as an infected neighbour, so the infection cannot pass through it.
+- `2` marks an immune cell. Its state never changes, and it never infects anything, so it blocks the spread like a wall.
 - `days_until_all_infected` keeps its meaning, so it returns `-1` when an immune wall shuts some healthy cell off.
 - Each cell is processed a constant number of times: grids of 10,000 cells must finish within a second, even when the infection takes thousands of days to wind through them.
 
@@ -121,7 +121,7 @@ Keep Parts 1–2 and add recovery. `recover_after` is an integer `>= 1`. Let `t0
 
 - Recovery first: every infected cell with `t - t0 >= recover_after` becomes immune (`2`).
 - Spread second: every healthy cell with a neighbour still infected after the recovery phase becomes infected, with `t0 = t`.
-- Return the first day on which no cell is infected, or `0` if none is infected on day 0. Healthy cells may be left over.
+- Return the earliest day with zero infected cells, or `0` if the input has none. Some cells may stay healthy forever.
 
 **Example:**
 - `Outbreak([[0, 0, 1]]).days_until_outbreak_ends(2)` is `4`
@@ -134,8 +134,8 @@ Keep Parts 1–2 and add recovery. `recover_after` is an integer `>= 1`. Let `t0
 Keep Parts 1–3. `simulate` runs the Part 3 rules with two more:
 
 - Spread threshold: in the spread phase a healthy cell becomes infected only when at least `spread_threshold` of its neighbours are infected. With `1` this is Part 3.
-- Deaths: a new state `3` is a dead cell. It never changes and never spreads.
-- When `death_threshold` is not `None`, a cell infected with at least `death_threshold` infected neighbours on that day is doomed: when its `recover_after` days are up it dies instead of becoming immune.
+- Deaths: a new state `3` is a dead cell. It never changes and never spreads. The input grid never contains `3`.
+- When `death_threshold` is not `None`, a cell is doomed if the count that infected it, the same one the spread threshold checks (neighbours still infected after the recovery phase, not cells infected in this same step), is at least `death_threshold`: when its `recover_after` days are up it dies instead of becoming immune.
 - That count is taken only on the day the cell is infected. Neighbours infected later change nothing.
 - Return `(first day with no infected cell, number of cells that died)`.
 
@@ -147,7 +147,7 @@ Keep Parts 1–3. `simulate` runs the Part 3 rules with two more:
             "title": "One intervention",
             "description_en": r"""**Signature:** `min_deaths(recover_after, death_threshold, spread_threshold=1) -> int`
 
-Keep Parts 1–4. Before day 0 you may burn one whole row, one whole column, or nothing:
+Keep Parts 1–4. Before day 0 you get one optional intervention: burn a single row or a single column completely, or do nothing:
 
 - Every cell of a burnt line becomes dead (`3`), whatever it held, and counts as a death.
 - The Part 4 rules then run to the end with the given thresholds.
@@ -270,12 +270,15 @@ assert outbreak.simulate(2)[0] == outbreak.days_until_outbreak_ends(2)
         {"name": "Part 4: the death count is taken once", "part": 4, "visibility": "unshown", "behavior": "state.invariant",
          "failure_message": "Whether a cell dies depends only on its infected neighbours on the day it is infected, not on neighbours infected later.",
          "code": r"""
-# The middle cell is infected on day 1 by one neighbour; its other neighbour is infected on day 2.
+# Cell (0, 1) is infected on day 1 by one neighbour; its other neighbour, (0, 2), is infected on day 2.
 outbreak = {fn}([[1, 0, 0, 0]])
 assert outbreak.simulate(3, death_threshold=2) == (6, 0)
 assert outbreak.simulate(3, death_threshold=1) == (6, 3)
 assert outbreak.simulate(2, death_threshold=5) == (5, 0), "nobody has five neighbours"
 assert outbreak.simulate(2, spread_threshold=5) == (2, 0)
+# One cell has three infected neighbours before the recovery phase but only two after it.
+late = {fn}([[0, 1, 0, 1], [1, 0, 0, 0], [0, 2, 0, 0], [2, 1, 0, 1]])
+assert late.simulate(4, spread_threshold=2, death_threshold=3) == (8, 0), "count neighbours after recovery"
 """},
         {"name": "Part 4: random grids match a reference", "part": 4, "visibility": "unshown", "behavior": "state.invariant",
          "failure_message": "On a random grid, (day the outbreak ends, deaths) differed from a day-by-day simulation with the two thresholds.",
@@ -287,8 +290,10 @@ for seed in range(400):
     spread = rng.randint(1, 3)
     death = rng.choice([None, 1, 2, 3])
     expected = slow_simulate(grid, recover_after, spread, death)
+    before = frozen(grid)
     got = {fn}(grid).simulate(recover_after, spread_threshold=spread, death_threshold=death)
     assert tuple(got) == expected, (seed, grid, recover_after, spread, death, got, expected)
+    assert frozen(grid) == before, "simulate must not change the input grid"
 """},
         {"name": "Part 5: the worked example", "part": 5, "behavior": "state.invariant", "code": r"""
 outbreak = {fn}([[1, 0, 0, 0], [1, 0, 0, 0], [0, 1, 0, 0]])
@@ -321,7 +326,8 @@ for seed in range(150):
     assert {fn}(grid).min_deaths(recover_after, death, spread_threshold=spread) == expected, (seed, grid)
 """},
     ],
-    "solution": r'''from collections import Counter, deque
+    "solution": r'''# Adapted from Schuture/OpenAI-Interview-Notes (code under the MIT License).
+from collections import Counter, deque
 
 HEALTHY, INFECTED, IMMUNE, DEAD = 0, 1, 2, 3
 _STEPS = ((1, 0), (-1, 0), (0, 1), (0, -1))
@@ -407,7 +413,7 @@ class Outbreak:
             "How do you tell from the search that some healthy cell can never be infected?",
         ],
         deep_dive=[
-            "What does rescanning the whole grid every day cost on a long winding grid, and what does the search cost instead?",
+            "Why should a cell be marked as reached when it enters the queue rather than when it leaves it?",
         ],
         tradeoffs=[
             "Once cells recover after a fixed number of days, why does a plain breadth-first search stop being enough?",

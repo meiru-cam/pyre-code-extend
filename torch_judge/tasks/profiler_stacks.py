@@ -5,7 +5,7 @@ from ._interview import interview
 # A model that names every frame first, then derives events from each frame's first and last
 # sample. It never walks two stacks side by side the way the reference does.
 _HELPERS = r"""
-import itertools, random, time, weakref
+import itertools, random, weakref
 
 def frame_ids(samples):
     ids, prev, prev_ids, fresh = [], [], [], itertools.count()
@@ -86,11 +86,11 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Background — context only. Everything above this line is the requirement.**
 
-**Why this shows up in interviews:** the conversion is a short loop once the common-prefix rule is clear, and the later parts test streaming and indexing.
+**Why this shows up in interviews:** the conversion is a short loop once the common-prefix rule is clear, and each later part adds one requirement.
 
 **Where it is used:** sampling profilers such as py-spy and perf, and the flame graphs and trace viewers built on them.
 
-Adapted from the call stacks from profiler samples question in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, on one class.""",
+Adapted from the call stacks from profiler samples question in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, on one class, with the debounce end rule stated as the sample count its reference code uses.""",
     "parts": [
         {
             "title": "Samples to events",
@@ -245,6 +245,7 @@ assert profiler.match_suffix(["crash"]) == ["A", "B", "C"]
 assert profiler.match_suffix(["load", "crash"]) == "UNKNOWN"
 assert profiler.match_suffix(["boot", "load", "parse", "crash"]) == ["A"]
 assert profiler.match_suffix(["x", "boot", "load", "parse", "crash"]) == "UNKNOWN"
+assert {fn}(known_traces=[("odd", ["$ids", "None"])]).match_suffix(["$ids", "None"]) == ["odd"]
 """},
         {"name": "Part 3: random traces match a scan", "part": 3, "visibility": "unshown", "behavior": "state.invariant",
          "failure_message": "On random traces, match_suffix differed from checking each trace's last frames directly.",
@@ -292,18 +293,19 @@ def _common_prefix(a, b):
 
 class StackProfiler:
     def __init__(self, known_traces=()):
-        # A trie over reversed traces; every node lists the ids of all traces that pass through it.
+        # A trie over reversed traces; every node lists, under the key None, the ids of all traces
+        # that pass through it. Frames are strings, so None never collides with one.
         self._trie = {}
         for trace_id, frames in known_traces:
             node = self._trie
             for frame in reversed(frames):
                 node = node.setdefault(frame, {})
-                node.setdefault("$ids", []).append(trace_id)
+                node.setdefault(None, []).append(trace_id)
         stack = [self._trie]
         while stack:
             node = stack.pop()
             for key, child in node.items():
-                if key == "$ids":
+                if key is None:
                     child.sort()
                 else:
                     stack.append(child)
@@ -347,7 +349,7 @@ class StackProfiler:
             if frame not in node:
                 return "UNKNOWN"
             node = node[frame]
-        return list(node["$ids"])
+        return list(node[None])
 ''',
     "interview_questions": interview(
         concept=[

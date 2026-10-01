@@ -96,11 +96,11 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Background — context only. Everything above this line is the requirement.**
 
-**Why this shows up in interviews:** the first part looks like a dictionary of sets, and the snapshot rule hides a copying trap that later parts make expensive.
+**Why this shows up in interviews:** the first part looks like a dictionary of sets, and each later part adds one requirement.
 
 **Where it is used:** social graphs, and any store that serves reads as of a fixed version while writes continue.
 
-Adapted from the social network question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, with the history part rebuilt on the same class.""",
+Adapted from the social network question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, with a cost requirement added to the lists and the history part rebuilt on the same class as cheap snapshots.""",
     "parts": [
         {
             "title": "Users, follows and snapshots",
@@ -159,7 +159,7 @@ Keep Parts 1–3 and add:
     ],
     "hints": [
         {"level": 1, "kind": "questions", "content": "What structure gives you a user's followees with O(1) membership and no duplicates? If a snapshot stores the network's dictionary, what happens to it on the next follow? What exactly does copying the outer dictionary copy?"},
-        {"level": 2, "kind": "analysis", "content": "Keep a dict from each user to the set of users they follow. A snapshot keeps its own copy of the users and of every inner set, so later follows cannot reach it. Check both users exist before any change, and ignore self-follows."},
+        {"level": 2, "kind": "analysis", "content": "Keep a dict from each user to the set of users they follow. The simplest correct snapshot holds its own copy of the users and of every inner set, so later follows cannot reach it. Check both users exist before any change, and ignore self-follows."},
     ],
     "model_connections": [
         "Social graphs such as Twitter's follow graph serve timelines and \"who to follow\" from a frozen version while new follows keep arriving.",
@@ -360,13 +360,15 @@ def network(n):
         net.follow(f"u{i}", f"u{(i + 7) % n}")
     return net
 small, big = network(5), network(20000)
+assert big.create_snapshot().get_following("u0") == ["u1", "u7"]
 def snapshots(net):
     return lambda: [net.create_snapshot() for _ in range(300)]
 ratio = best_of_three(snapshots(big)) / best_of_three(snapshots(small))
 assert ratio < 20, f"snapshots of the big network took {ratio:.0f}x as long"
 """},
     ],
-    "solution": r'''import bisect
+    "solution": r'''# Adapted from Schuture/OpenAI-Interview-Notes (code under the MIT License).
+import bisect
 from collections import Counter
 
 
@@ -451,7 +453,7 @@ class Snapshot:
     "interview_questions": interview(
         concept=[
             "Which structure do you use for each user's followees, and what does it give follow and is_following?",
-            "Why must a snapshot copy every inner set, and not only the outer dictionary?",
+            "What must a snapshot hold so that later calls cannot change its answers, and why is copying only the outer dictionary not enough?",
         ],
         deep_dive=[
             "What happens to a snapshot that stored a reference to the live network's dictionary, and how would a test catch it?",

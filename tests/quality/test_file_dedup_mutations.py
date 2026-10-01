@@ -43,6 +43,8 @@ MUTATIONS = [
     ("empty files dropped", 1, [("if keys[path] is not None:", "if keys[path]:")]),
     ("unreadable file raises", 1, [("            return f.read(SAMPLE_SIZE)\n    except OSError:\n        return None",
                                      "            return f.read(SAMPLE_SIZE)\n    except FileNotFoundError:\n        return None")]),
+    ("read errors escape", 1, [("    try:\n        with open(path, \"rb\") as f:\n            return f.read(SAMPLE_SIZE)\n    except OSError:\n        return None",
+                                 "    try:\n        f = open(path, \"rb\")\n    except OSError:\n        return None\n    with f:\n        return f.read(SAMPLE_SIZE)")]),
     ("sample trusted as proof", 1, [("        groups = _regroup(groups, _digest, pool)\n", "")]),
     ("no size filter", 2, [("groups = [paths for paths in by_size.values() if len(paths) >= 2]",
                             "groups = [[path for paths in by_size.values() for path in paths]]")]),

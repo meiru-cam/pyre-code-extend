@@ -4,9 +4,10 @@ from ._interview import interview
 
 # Every case builds a real tree in a temporary directory. ReadMonitor replaces the built-in
 # open while a call runs, so a case can count the bytes read, refuse a file, or slow reads down,
-# without depending on file permissions or on the machine's disk.
+# without depending on file permissions or on the machine's disk. The swap is process-wide; it is
+# safe because the grader runs one case at a time under its stdout lock.
 _HELPERS = r"""
-import builtins, hashlib, io, itertools, os, random, tempfile, threading, time
+import builtins, io, os, random, tempfile, threading, time
 
 REAL_OPEN = builtins.open
 
@@ -54,6 +55,8 @@ class _CountingFile(io.FileIO):
         try:
             if monitor.delay:
                 time.sleep(monitor.delay)
+            if os.path.realpath(self.name) in monitor.broken:
+                raise OSError(5, "Input/output error", self.name)
             data = read()
         finally:
             with monitor.lock:
@@ -69,9 +72,11 @@ class _CountingFile(io.FileIO):
         return self._track(lambda: super(_CountingFile, self).readall())
 
 class ReadMonitor:
-    def __init__(self, root, delay=0.0, deny=()):
+    def __init__(self, root, delay=0.0, deny=(), broken=()):
+        # deny: opening raises PermissionError. broken: opening works, reading raises OSError.
         self.root = os.path.realpath(root)
         self.delay, self.deny = delay, {os.path.realpath(d) for d in deny}
+        self.broken = {os.path.realpath(b) for b in broken}
         self.bytes = self.active = self.peak = self.largest = 0
         self.lock = threading.Lock()
     def open(self, file, mode="r", *args, **kwargs):
@@ -114,11 +119,11 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Background — context only. Everything above this line is the requirement.**
 
-**Why this shows up in interviews:** the first version fits in a few lines, and the follow-ups test whether you can avoid reading data you do not need.
+**Why this shows up in interviews:** the first version fits in a few lines, and each later part adds one requirement.
 
 **Where it is used:** backup tools, storage deduplication and cleanup utilities such as fdupes and rmlint.
 
-Adapted from the file deduplication question in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, on one function.""",
+Adapted from the file deduplication question in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, on one function. The process-pool option was dropped, and the chunk size and sample size are now requirements.""",
     "parts": [
         {
             "title": "Correct grouping",
@@ -151,7 +156,7 @@ the result is `[[a.txt, docs/b.txt], [docs/old/d.txt, docs/old/e.txt], [docs/y.t
 
 Keep Parts 1–2 and add:
 
-- Reads of different files run concurrently on a thread pool with `max_workers` workers. `None` lets the pool choose.
+- Reads of different files, samples and full reads alike, run concurrently on a thread pool with `max_workers` workers. `None` lets the pool choose.
 - With `max_workers=1` at most one read is ever in progress; with more workers, slow reads overlap.
 - The result is exactly the same as with one worker, whatever order the reads finish in.
 
@@ -214,13 +219,16 @@ with tempfile.TemporaryDirectory() as outside, tempfile.TemporaryDirectory() as 
     assert {fn}(root) == [[p(root, "a.txt"), p(root, "sub/c.txt")]]
 """},
         {"name": "Part 1: unreadable files are skipped", "part": 1, "visibility": "unshown", "behavior": "edge.empty_or_boundary",
-         "failure_message": "A file that cannot be opened must be left out of every group without stopping the walk or raising.",
+         "failure_message": "A file that cannot be opened, or fails while being read, must be left out of every group without stopping the walk or raising.",
          "code": _HELPERS + r"""
 with tempfile.TemporaryDirectory() as root:
     make_tree(root, {"a": b"dup", "b": b"dup", "c": b"dup", "d": b"pair", "e": b"pair"})
     with ReadMonitor(root, deny=[p(root, "b"), p(root, "e")]):
         result = {fn}(root)
     assert result == [[p(root, "a"), p(root, "c")]], result
+    with ReadMonitor(root, broken=[p(root, "a"), p(root, "d")]):
+        result = {fn}(root)
+    assert result == [[p(root, "b"), p(root, "c")]], f"a file that fails while being read must be skipped: {result}"
 """},
         {"name": "Part 1: random trees match a byte-for-byte comparison", "part": 1, "visibility": "unshown", "behavior": "state.invariant",
          "failure_message": "On a random tree, the groups or their order differed from comparing every pair of files byte for byte.",
@@ -314,7 +322,8 @@ for seed in range(12):
         assert many == one == brute_force(root), seed
 """},
     ],
-    "solution": r'''import hashlib
+    "solution": r'''# Adapted from Schuture/Anthropic-Interview-Notes (code under the MIT License).
+import hashlib
 import os
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor

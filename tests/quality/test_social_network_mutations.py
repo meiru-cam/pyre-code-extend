@@ -103,6 +103,11 @@ MUTATIONS = [
     ("k ignored", 3, [("key=lambda c: (-score[c], c))[:k]", "key=lambda c: (-score[c], c))")]),
     ("unfollow when not following starts one", 4, [("self._following_at(follower, followee, self._version) == following:",
                                                      "following and self._following_at(follower, followee, self._version):")]),
+    ("unfollow erases history", 4, [(
+        "        self._events.setdefault((follower, followee), []).append(self._version)\n",
+        "        if following:\n            self._events.setdefault((follower, followee), []).append(self._version)\n"
+        "        else:\n            self._events.pop((follower, followee))\n",
+    )]),
     ("unfollow skips the user check", 4, [(
         "    def unfollow(self, follower, followee):\n        self._set(follower, followee, False)\n",
         "    def unfollow(self, follower, followee):\n        if follower in self._joined and followee in self._joined:\n            self._set(follower, followee, False)\n",
