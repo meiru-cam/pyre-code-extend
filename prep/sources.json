@@ -106,5 +106,13 @@
       "memoize_lru"
     ],
     "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/oa-bank-system",
+    "exercises": [
+      "bank_system"
+    ],
+    "round": "coding"
   }
 ]

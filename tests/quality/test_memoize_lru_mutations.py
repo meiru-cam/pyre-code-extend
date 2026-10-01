@@ -11,17 +11,19 @@ from pathlib import Path
 
 import pytest
 
-from grading_service.main import _execute_tests
 from torch_judge.tasks import get_task
 from torch_judge.tasks._schema import validate_task
-from tests.quality.mutation_runner import Mutation, assert_mutations_rejected
+from tests.quality.parts_gate import (
+    assert_first_fails_in_part,
+    assert_part_mutations_rejected,
+    first_failing_part,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 TASK_ID = "memoize_lru"
 
 _CALL_BODY = "        key = self.generate_key(*args, **kwargs)\n        with self._lock:\n            if key in self.cache:"
 
-# (name, first part that must fail, [(text in the reference, replacement), ...]).
 MUTATIONS = [
     ("keyword order matters", 1, [("tuple(sorted(kwargs.items()))", "tuple(kwargs.items())")]),
     ("positional and keyword flattened", 1, [(
@@ -77,33 +79,14 @@ class _NoLock:
 """
 
 
-def _mutant(original: str, edits: list[tuple[str, str]]) -> str:
-    code = original
-    for old, new in edits:
-        assert old in code, f"mutation target drifted: {old[:60]!r}"
-        code = code.replace(old, new, 1)
-    return code + _NO_LOCK
-
-
-def _first_failing_part(task: dict, code: str) -> int | None:
-    response = _execute_tests(code, task, capture_output=False)
-    assert response.error is None, response.error
-    parts = [task["tests"][r.testIndex]["part"] for r in response.results if not r.passed]
-    return min(parts) if parts else None
-
-
 @pytest.mark.parametrize("repeat", range(3))
 def test_mutations_rejected(repeat):
-    original = get_task(TASK_ID)["solution"]
-    mutations = [Mutation(name, _mutant(original, edits)) for name, _, edits in MUTATIONS]
-    rejected = assert_mutations_rejected(TASK_ID, mutations, require_unshown=False)
-    assert set(rejected) == {name for name, _, _ in MUTATIONS}
+    assert_part_mutations_rejected(TASK_ID, MUTATIONS, _NO_LOCK)
 
 
 @pytest.mark.parametrize(("name", "part", "edits"), MUTATIONS, ids=[m[0] for m in MUTATIONS])
 def test_each_mutation_first_fails_in_its_part(name, part, edits):
-    task = get_task(TASK_ID)
-    assert _first_failing_part(task, _mutant(task["solution"], edits)) == part
+    assert_first_fails_in_part(TASK_ID, part, edits, _NO_LOCK)
 
 
 def test_starter_is_the_buggy_skeleton_and_fails_part_1():
@@ -111,7 +94,7 @@ def test_starter_is_the_buggy_skeleton_and_fails_part_1():
     starters = json.loads((ROOT / "web/src/lib/starters.json").read_text())
     starter = starters[TASK_ID]
     assert "popitem(last=False)" in starter and "len(key) == 1" in starter
-    assert _first_failing_part(task, starter) == 1
+    assert first_failing_part(task, starter) == 1
 
 
 def test_task_metadata_is_valid():

@@ -16,5 +16,13 @@
     "Why an append-only log instead of rewriting the cache to disk on every call, and what does compaction buy back?": "Compare the bytes written per call in each design as the cache grows, then what the log costs after many hits.",
     "How does recovery tell a torn final record from a good one, and why must later writes start after the last good record?": "Think about what a crash mid-write leaves on disk, and what replay sees if a new record follows that fragment.",
     "Compare one lock around the whole call with a lock around the bookkeeping plus single-flight. What does each cost?": "Consider a slow func: who waits under each design, and what stops two threads computing the same missing key?"
+  },
+  "bank_system": {
+    "What does each account need to store for these three methods, and why should a failed call change nothing?": "List the fields the three methods read and write, then picture a caller retrying after a None.",
+    "Is withdrawing exactly the whole balance allowed, and what comparison expresses that?": "Reread when withdraw must refuse, then pick between greater-than and greater-or-equal.",
+    "How do you keep the validate-then-mutate order in every method, so a refused call never half-applies?": "Put every check before the first write, and see which methods have more than one check.",
+    "How would you rank accounts by outgoing total, and what does sorting on every call cost compared with keeping a sorted structure?": "Compare how often totals change with how often the ranking is read, and the sort key that handles ties.",
+    "Why hold money for a pending transfer instead of moving it at once, and what makes the available balance cheap to compute?": "Think about what the target may still do, and which transfers count against the source at a given time.",
+    "What history must an account keep so get_balance can answer any past time, and how does a merge fit into it?": "Consider appending (timestamp, balance) on every change and searching it, then treat the merge credit as one more change."
   }
 }
