@@ -1,0 +1,19 @@
+{
+  "title": "Infection Spread (Grid Cellular Automaton)",
+  "summary": "A grid infection spreads one step per day and every part adds a rule: immune walls, recovery after D days, neighbour thresholds and deaths. Multi-source BFS first, then a synchronous simulation.",
+  "round": "coding",
+  "kind": "Coding",
+  "difficulty": "Medium",
+  "frequency": "very-high",
+  "format": "5 parts / 60 min",
+  "topics": [
+    "bfs",
+    "simulation",
+    "grid"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/coding/infection-spread",
+  "rubric": [],
+  "exercises": [
+    "infection_spread"
+  ]
+}

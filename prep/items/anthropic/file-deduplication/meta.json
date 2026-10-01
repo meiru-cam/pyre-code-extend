@@ -1,0 +1,20 @@
+{
+  "title": "File Deduplication",
+  "summary": "Walk a directory tree and group the files whose contents are byte-identical; then make the search efficient on large trees with a size, prefix-hash and full-hash filter; then parallelise the hashing so the concurrent result matches the sequential one exactly.",
+  "round": "coding",
+  "kind": "Coding · filesystem, hashing",
+  "difficulty": "Medium",
+  "frequency": "very-high",
+  "format": "3 parts / 55 min",
+  "topics": [
+    "filesystem",
+    "hashing",
+    "io",
+    "concurrency"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/coding/file-deduplication",
+  "rubric": [],
+  "exercises": [
+    "file_dedup"
+  ]
+}

@@ -130,5 +130,37 @@
       "in_memory_database"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/infection-spread",
+    "exercises": [
+      "infection_spread"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/social-network",
+    "exercises": [
+      "social_network"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/file-deduplication",
+    "exercises": [
+      "file_dedup"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/stack-trace-reconstruction",
+    "exercises": [
+      "profiler_stacks"
+    ],
+    "round": "coding"
   }
 ]

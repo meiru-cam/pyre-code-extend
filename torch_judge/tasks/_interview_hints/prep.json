@@ -40,5 +40,37 @@
     "How do you compare values so that None never matches and every int sorts below every str?": "Consider a small key that puts the type first, and handle None before any comparison happens.",
     "How do you sort by several columns, each with its own direction, and keep ties in insertion order?": "Think about Python's stable sort applied once per column, starting from the least significant one.",
     "When does a hash index beat a sorted index, and what does every index cost on insert?": "Match each operator to the structure that answers it, then count the work an insert adds per index."
+  },
+  "infection_spread": {
+    "Why does a breadth-first search started from every infected cell at once give each cell its infection day?": "Think about what the queue holds after its first level is processed, and what a cell's distance to the nearest infected cell means in days.",
+    "How do you tell from the search that some healthy cell can never be infected?": "Keep a count of healthy cells you have not reached yet, and look at that count when the queue runs dry.",
+    "Why should a cell be marked as reached when it enters the queue rather than when it leaves it?": "Picture two queued cells that share a healthy neighbour, and count how many times that neighbour would enter the queue.",
+    "Once cells recover after a fixed number of days, why does a plain breadth-first search stop being enough?": "Picture a cell that the search reaches on day 3 but that recovered neighbours can no longer reach; ask what the queue would have to remember.",
+    "Why must the spread phase count every cell's infected neighbours before it infects any of them?": "Imagine updating cells in place in row order: which cells would see a neighbour that only became infected this same day?",
+    "Is burning the line with the most infected cells a good rule, and what does the exact search over lines cost?": "Try a line that is full of infected cells but sits where the infection has already been, and count what each burn costs on its own."
+  },
+  "social_network": {
+    "Which structure do you use for each user's followees, and what does it give follow and is_following?": "Think about which operations follow and is_following need, and which built-in collection ignores a second insert of the same item.",
+    "What must a snapshot hold so that later calls cannot change its answers, and why is copying only the outer dictionary not enough?": "Write down which objects the snapshot and the network would share after copying only the outer dictionary, then picture the next follow.",
+    "What happens to a snapshot that stored a reference to the live network's dictionary, and how would a test catch it?": "Picture taking a snapshot, calling follow, and then asking the snapshot about that new pair.",
+    "How do you make the follower list cost the size of its answer instead of the size of the graph?": "Ask what get_followers has to scan without a second index, and when that index could be built once.",
+    "How do you count each candidate's score so that one followed user adds at most one point?": "Look at what a user's followee collection guarantees about repeats, and count through how many different users each candidate is reached.",
+    "How can a snapshot cost O(1) to take and still answer for its own moment after later follows and unfollows?": "Think about recording, for each pair, the versions at which the follow started and ended, and what a snapshot would then need to store."
+  },
+  "file_dedup": {
+    "What do you use as the grouping key for a file's content, and why not the content itself?": "Think about a short fixed-size value computed from the bytes that you can use as a dictionary key, and what holding every file's content in memory would cost.",
+    "How does your walk treat symbolic links to files and to directories?": "Check what os.walk does with a link to a directory by default, and what still shows up in its list of file names.",
+    "Where can reading a file fail, and how do you keep one bad file from breaking the whole result?": "List the calls that touch the file itself, and decide what a failure in each one should mean for that file and for the rest.",
+    "Why compare sizes before reading anything, and why is a matching sample still not proof of a duplicate?": "Ask what a stat call costs compared with a read, and what two files with the same first few kilobytes may still differ in.",
+    "Why do threads speed up reading files despite the GIL, and when would processes be the better pool?": "Think about what a thread does while the operating system fetches bytes from storage, and what work would keep every thread busy instead.",
+    "When would you add a byte-for-byte comparison after the hashes match?": "Consider who acts on the result: what is the cost of wrongly calling two files the same if one of them gets deleted?"
+  },
+  "profiler_stacks": {
+    "Why are frames identified by their position along the common prefix rather than by name?": "Picture a recursive function that appears twice in one stack, and ask how a name alone would tell the two calls apart.",
+    "In which order do you emit the ends and the starts at one sample, and why?": "Think about how calls nest: which frame must already be on the stack before another can start, and which must return first.",
+    "What does a sample's timestamp tell you about when a call really started or returned?": "Consider a call that starts and returns between two samples, and what the samples can and cannot show about it.",
+    "What state does a streaming, debounced converter need, and why does it stay bounded by the stack depth?": "List what one sample can change, and ask which facts about earlier samples you still need once it is processed.",
+    "What does debouncing cost you, and how would you choose k?": "Count how many samples late every event becomes, and picture a call that genuinely lasts only one sample.",
+    "How does reversing the traces turn suffix matching into a trie lookup, and what does the index cost in memory?": "Write a suffix query backwards and compare it with a prefix lookup; then count how many ids each trace adds along its path."
   }
 }
