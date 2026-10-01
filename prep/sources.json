@@ -98,5 +98,13 @@
       "time_map"
     ],
     "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/lru-cache-bugfix-durability",
+    "exercises": [
+      "memoize_lru"
+    ],
+    "round": "coding"
   }
 ]

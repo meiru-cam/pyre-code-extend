@@ -1,0 +1,21 @@
+{
+  "title": "Memoising LRU Cache: Bug Fix and Durability",
+  "summary": "Fix three bugs in a functools.lru_cache-style memoising wrapper, centred on how positional and keyword arguments turn into a cache key; then make the cache survive a process crash with an append-only log and periodic snapshotting; then make it thread-safe, with single-flight so concurrent callers never compute the same missing key twice.",
+  "round": "coding",
+  "kind": "Coding · debugging, persistence",
+  "difficulty": "Medium",
+  "frequency": "high",
+  "format": "3 parts / 55 min",
+  "topics": [
+    "caching",
+    "hashing",
+    "persistence",
+    "concurrency",
+    "serialization"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/coding/lru-cache-bugfix-durability",
+  "rubric": [],
+  "exercises": [
+    "memoize_lru"
+  ]
+}

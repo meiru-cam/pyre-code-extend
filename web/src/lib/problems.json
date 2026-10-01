@@ -19492,6 +19492,215 @@
           "hint": "Compare how long a get holds the lock with the overhead of a read-write lock in Python, and note what the GIL already serializes."
         }
       ]
+    },
+    {
+      "id": "memoize_lru",
+      "title": "LRU Memoizer: Bugfix, Durability, Threads",
+      "titleZh": "LRU Memoizer: Bugfix, Durability, Threads",
+      "difficulty": "Hard",
+      "functionName": "Memoize",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "`Memoize(func, capacity)` wraps `func` and caches what it returns, in the style of `functools.lru_cache`, holding at most `capacity` entries and evicting the least recently used one first.\n\nThe requirement arrives in parts, the way an interviewer adds them. Each part keeps every earlier behavior, so one `Memoize` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** reading someone else's code and finding the bug is a separate skill from writing code, and an LRU cache is small enough to read in a minute. The later parts check that the fix holds up as the requirements grow.\n\n**Where it is used:** `functools.lru_cache`, HTTP and DNS caches, and model-serving caches all key results by their arguments and evict by recency.\n\nAdapted from the LRU cache bug-fix question in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, with every part on one class.",
+      "descriptionZh": "`Memoize(func, capacity)` wraps `func` and caches what it returns, in the style of `functools.lru_cache`, holding at most `capacity` entries and evicting the least recently used one first.\n\nThe requirement arrives in parts, the way an interviewer adds them. Each part keeps every earlier behavior, so one `Memoize` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** reading someone else's code and finding the bug is a separate skill from writing code, and an LRU cache is small enough to read in a minute. The later parts check that the fix holds up as the requirements grow.\n\n**Where it is used:** `functools.lru_cache`, HTTP and DNS caches, and model-serving caches all key results by their arguments and evict by recency.\n\nAdapted from the LRU cache bug-fix question in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, with every part on one class.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Part 1: the worked example",
+          "code": "\ncalls = []\ndef f(*args, **kwargs):\n    calls.append((args, kwargs))\n    return (args, kwargs)\n\ncache = {fn}(f, capacity=2)\ncache(1, b=2, c=3)\ncache(1, c=3, b=2)\nassert len(calls) == 1, \"reordered kwargs must hit the same entry\"\ncache((1, 2))\ncache(1, 2)\nassert len(calls) == 3, \"f((1, 2)) and f(1, 2) are different calls\"\ncache((1, 2))\nassert len(calls) == 3, \"f((1, 2)) is still cached\"\ncache(1, 3)\ncache((1, 2))\nassert len(calls) == 4, \"the hit on f((1, 2)) made it recent, so f(1, 2) was evicted instead\"\ncache(1, 2)\nassert len(calls) == 5\nassert (cache.hits, cache.misses) == (3, 5)\n",
+          "behavior": "state.invariant",
+          "part": 1
+        },
+        {
+          "name": "Part 1: keyword order does not matter",
+          "code": "\nn = [0]\ndef f(**kw):\n    n[0] += 1\n    return sorted(kw)\ncache = {fn}(f, capacity=4)\nassert cache(a=1, b=2, c=3) == [\"a\", \"b\", \"c\"]\nassert cache(c=3, a=1, b=2) == [\"a\", \"b\", \"c\"]\nassert cache(b=2, c=3, a=1) == [\"a\", \"b\", \"c\"]\nassert n[0] == 1\n",
+          "behavior": "state.invariant",
+          "part": 1
+        },
+        {
+          "name": "Part 1: positional and keyword arguments never mix",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "Two different calls shared one cache entry; keep positional and keyword arguments apart in the key and never unwrap a one-element key.",
+          "hiddenCode": "\nseen = []\ndef f(*args, **kwargs):\n    seen.append((args, kwargs))\n    return len(seen)\ncache = {fn}(f, capacity=10)\ndistinct = [\n    lambda: cache(1, 2),\n    lambda: cache((1, 2)),\n    lambda: cache(1, b=2),\n    lambda: cache(1, (\"b\", 2)),\n    lambda: cache(b=2),\n    lambda: cache((\"b\", 2)),\n    lambda: cache(1),\n    lambda: cache((1,)),\n]\nresults = [call() for call in distinct]\nassert len(seen) == len(distinct), f\"only {len(seen)} of {len(distinct)} distinct calls reached func\"\nassert [call() for call in distinct] == results\nassert len(seen) == len(distinct)\n",
+          "part": 1
+        },
+        {
+          "name": "Part 1: a hit refreshes recency",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "A hit must mark its entry as most recently used, so eviction picks an entry untouched for longer.",
+          "hiddenCode": "\ncalls = []\ncache = {fn}(lambda x: calls.append(x) or x, capacity=3)\nfor x in (1, 2, 3):\n    cache(x)\ncache(1)\ncache(2)\ncache(4)\nbefore = len(calls)\ncache(1); cache(2); cache(4)\nassert len(calls) == before, \"1, 2 and 4 should all still be cached\"\ncache(3)\nassert len(calls) == before + 1, \"3 was the least recently used entry and should have been evicted\"\n",
+          "part": 1
+        },
+        {
+          "name": "Part 1: capacity, counters and unhashable arguments",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "Keep at most capacity entries, count hits and misses, and let an unhashable argument raise TypeError.",
+          "hiddenCode": "\ncache = {fn}(lambda x: x * 10, capacity=1)\nassert cache(1) == 10 and cache(1) == 10 and cache(2) == 20 and cache(1) == 10\nassert (cache.hits, cache.misses) == (1, 3)\ntry:\n    cache([1, 2])\nexcept TypeError:\n    pass\nelse:\n    raise AssertionError(\"a list argument must raise TypeError\")\n",
+          "part": 1
+        },
+        {
+          "name": "Part 2: recovery after a crash keeps entries and order",
+          "code": "\nimport os, tempfile\n\ndef counting(fn):\n    def wrapper(*args, **kwargs):\n        wrapper.calls += 1\n        return fn(*args, **kwargs)\n    wrapper.calls = 0\n    return wrapper\n\nworkdir = tempfile.mkdtemp()\nlog = os.path.join(workdir, \"cache.log\")\n\nsquare = counting(lambda n: n * n)\nw = {fn}(square, capacity=2, path=log)\nassert w(3) == 9 and w(4) == 16 and w(3) == 9\ndel w\n\nsquare2 = counting(lambda n: n * n)\nr = {fn}(square2, capacity=2, path=log)\nassert (r.hits, r.misses) == (0, 0)\n# The hit on 3 made it more recent than 4, so a new entry must evict 4, not 3.\nr(5)\nassert square2.calls == 1\nassert r(3) == 9 and square2.calls == 1, \"3 should still be cached: recovery lost the use of 3\"\nassert r(4) == 16 and square2.calls == 2, \"4 was least recently used and should have been evicted\"\n",
+          "behavior": "checkpoint.recovery",
+          "part": 2
+        },
+        {
+          "name": "Part 2: a torn last record is discarded",
+          "visibility": "unshown",
+          "behavior": "checkpoint.recovery",
+          "failureMessage": "A record cut short by a crash must be detected and dropped, recovering the state from before that call, and later calls must append after the last good record.",
+          "hiddenCode": "\nimport os, tempfile\n\ndef counting(fn):\n    def wrapper(*args, **kwargs):\n        wrapper.calls += 1\n        return fn(*args, **kwargs)\n    wrapper.calls = 0\n    return wrapper\n\nworkdir = tempfile.mkdtemp()\nlog = os.path.join(workdir, \"cache.log\")\n\nimport shutil\nw = {fn}(lambda n: n + 100, capacity=3, path=log)\nfor n in (1, 2, 3, 1):\n    w(n)\nbefore = os.path.getsize(log)\nw(4)\nafter = os.path.getsize(log)\nassert after > before + 1\nfor cut in sorted({before + 1, (before + after) // 2, after - 1}):\n    torn = os.path.join(workdir, f\"torn{cut}.log\")\n    shutil.copyfile(log, torn)\n    with open(torn, \"r+b\") as fh:\n        fh.truncate(cut)\n    f = counting(lambda n: n + 100)\n    r = {fn}(f, capacity=3, path=torn)\n    assert r(2) == 102 and r(3) == 103 and r(1) == 101 and f.calls == 0, f\"cut at {cut}: entries before the torn call were lost\"\n    assert r(4) == 104 and f.calls == 1, f\"cut at {cut}: the torn call must count as never made\"\n    del r\n    f2 = counting(lambda n: n + 100)\n    again = {fn}(f2, capacity=3, path=torn)\n    assert again(4) == 104 and f2.calls == 0, f\"cut at {cut}: a call after recovery was not persisted\"\n",
+          "part": 2
+        },
+        {
+          "name": "Part 2: a corrupted record is caught by its checksum",
+          "visibility": "unshown",
+          "behavior": "checkpoint.recovery",
+          "failureMessage": "Recovery must verify each record's checksum and discard a damaged record and everything after it, without raising.",
+          "hiddenCode": "\nimport os, tempfile\n\ndef counting(fn):\n    def wrapper(*args, **kwargs):\n        wrapper.calls += 1\n        return fn(*args, **kwargs)\n    wrapper.calls = 0\n    return wrapper\n\nworkdir = tempfile.mkdtemp()\nlog = os.path.join(workdir, \"cache.log\")\n\nw = {fn}(lambda s: s.upper(), capacity=4, path=log)\nw(\"a\"); w(\"b\")\nbefore = os.path.getsize(log)\nw(\"cccccccccccccccccccc\")\nafter = os.path.getsize(log)\nwith open(log, \"r+b\") as fh:\n    fh.seek((before + after) // 2 + 2)\n    byte = fh.read(1)\n    fh.seek(-1, 1)\n    fh.write(bytes([byte[0] ^ 0x5A]))\nf = counting(lambda s: s.upper())\nr = {fn}(f, capacity=4, path=log)\nassert r(\"cccccccccccccccccccc\") == \"CCCCCCCCCCCCCCCCCCCC\" and f.calls == 1, \"the damaged call must count as never made\"\n# Capacity 4 now holds a, b, c and x1. A damaged record recovered as some other entry\n# would have taken a slot, so x1 would have evicted \"a\".\nr(\"x1\")\nassert r(\"a\") == \"A\" and r(\"b\") == \"B\" and f.calls == 2, \"recovery kept an entry from the damaged record\"\n",
+          "part": 2
+        },
+        {
+          "name": "Part 2: argument types round-trip exactly",
+          "visibility": "unshown",
+          "behavior": "checkpoint.recovery",
+          "failureMessage": "Recovered keys must equal the original keys, so a tuple argument must come back as a tuple and keyword arguments by name.",
+          "hiddenCode": "\nimport os, tempfile\n\ndef counting(fn):\n    def wrapper(*args, **kwargs):\n        wrapper.calls += 1\n        return fn(*args, **kwargs)\n    wrapper.calls = 0\n    return wrapper\n\nworkdir = tempfile.mkdtemp()\nlog = os.path.join(workdir, \"cache.log\")\n\nw = {fn}(lambda *a, **k: [list(a), sorted(k)], capacity=8, path=log)\ncalls = [((1, (2, 3)), {}), (((1, 2),), {}), ((1, 2), {}), ((), {\"x\": (1, \"y\"), \"z\": None}), ((\"s\", 1.5, True), {})]\nexpected = [w(*a, **k) for a, k in calls]\ndel w\nf = counting(lambda *a, **k: [list(a), sorted(k)])\nr = {fn}(f, capacity=8, path=log)\nfor (a, k), value in zip(calls, expected):\n    assert r(*a, **k) == value\nassert f.calls == 0, f\"{f.calls} recovered calls missed the cache\"\n",
+          "part": 2
+        },
+        {
+          "name": "Part 2: no path writes nothing",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "With path=None the cache must not create or write any file.",
+          "hiddenCode": "\nimport os, tempfile\n\ndef counting(fn):\n    def wrapper(*args, **kwargs):\n        wrapper.calls += 1\n        return fn(*args, **kwargs)\n    wrapper.calls = 0\n    return wrapper\n\nworkdir = tempfile.mkdtemp()\nlog = os.path.join(workdir, \"cache.log\")\n\nhere = os.getcwd()\nos.chdir(workdir)\ntry:\n    c = {fn}(lambda x: x, capacity=2)\n    c(1); c(1); c(2)\n    c2 = {fn}(lambda x: x, capacity=2, path=None)\n    c2(1)\n    assert os.listdir(workdir) == [], os.listdir(workdir)\nfinally:\n    os.chdir(here)\n",
+          "part": 2
+        },
+        {
+          "name": "Part 2: each call appends a bounded record",
+          "visibility": "unshown",
+          "behavior": "performance.complexity",
+          "failureMessage": "Recording one call must cost space proportional to that call, not to the cache; append one record instead of rewriting the file.",
+          "hiddenCode": "\nimport os, tempfile\n\ndef counting(fn):\n    def wrapper(*args, **kwargs):\n        wrapper.calls += 1\n        return fn(*args, **kwargs)\n    wrapper.calls = 0\n    return wrapper\n\nworkdir = tempfile.mkdtemp()\nlog = os.path.join(workdir, \"cache.log\")\n\nw = {fn}(lambda n: n, capacity=1000, path=log)\nsizes = [0]\nfor n in range(10000, 10300):\n    w(n)\n    sizes.append(os.path.getsize(log))\nfirst = sizes[2] - sizes[1]\nlast = sizes[-1] - sizes[-2]\nassert last <= 2 * first + 16, f\"record grew from {first} to {last} bytes as the cache filled\"\n",
+          "part": 2
+        },
+        {
+          "name": "Part 2: compact shrinks the log and keeps the state",
+          "visibility": "unshown",
+          "behavior": "checkpoint.recovery",
+          "failureMessage": "compact() must leave a file whose size depends only on the cached entries, from which recovery gives the same entries and order.",
+          "hiddenCode": "\nimport os, tempfile\n\ndef counting(fn):\n    def wrapper(*args, **kwargs):\n        wrapper.calls += 1\n        return fn(*args, **kwargs)\n    wrapper.calls = 0\n    return wrapper\n\nworkdir = tempfile.mkdtemp()\nlog = os.path.join(workdir, \"cache.log\")\n\nfresh = os.path.join(workdir, \"fresh.log\")\nf0 = {fn}(lambda n: -n, capacity=3, path=fresh)\nfor n in (1, 2, 3):\n    f0(n)\nfresh_size = os.path.getsize(fresh)\n\nw = {fn}(lambda n: -n, capacity=3, path=log)\nfor n in (1, 2, 3):\n    w(n)\nfor _ in range(300):\n    w(2); w(1)\ngrown = os.path.getsize(log)\nw.compact()\ncompacted = os.path.getsize(log)\nassert compacted <= 3 * fresh_size, f\"compacted log is {compacted} bytes; three entries take {fresh_size}\"\nassert compacted < grown\nw(4)\ndel w\nf = counting(lambda n: -n)\nr = {fn}(f, capacity=3, path=log)\nassert r(1) == -1 and r(2) == -2 and r(4) == -4 and f.calls == 0\nr(5)\nr(3)\nassert f.calls == 2, \"3 was evicted before the crash and must stay evicted\"\n",
+          "part": 2
+        },
+        {
+          "name": "Part 3: one computation per key",
+          "code": "\nimport threading\nrelease = threading.Event()\nstarted = threading.Event()\nruns = []\ndef slow(x):\n    runs.append(x)\n    started.set()\n    assert release.wait(5)\n    return x * 2\n\ncache = {fn}(slow, capacity=8)\nresults = []\ndef caller():\n    results.append(cache(21))\npool = [threading.Thread(target=caller, daemon=True) for _ in range(6)]\npool[0].start()\nassert started.wait(5)\nfor t in pool[1:]:\n    t.start()\nrelease.set()\nfor t in pool:\n    t.join(5)\nassert not any(t.is_alive() for t in pool), \"a caller is still waiting\"\nassert runs == [21], f\"func ran {len(runs)} times for one key\"\nassert results == [42] * 6\n",
+          "behavior": "concurrency.thread_safety",
+          "part": 3
+        },
+        {
+          "name": "Part 3: other keys do not wait on a slow func",
+          "visibility": "unshown",
+          "behavior": "concurrency.thread_safety",
+          "failureMessage": "A call for one key blocked behind func running for another key; run func outside every lock the cache holds.",
+          "hiddenCode": "\nimport threading\nrelease = threading.Event()\nstarted = threading.Event()\ndef f(x):\n    if x == \"slow\":\n        started.set()\n        release.wait(5)\n    return x\ncache = {fn}(f, capacity=8)\ncache(\"cached\")\nblocker = threading.Thread(target=lambda: cache(\"slow\"), daemon=True)\nblocker.start()\nassert started.wait(5)\ndone = []\nother = threading.Thread(target=lambda: done.append((cache(\"fast\"), cache(\"cached\"))), daemon=True)\nother.start()\nother.join(2)\nfinished = not other.is_alive()\nrelease.set()\nblocker.join(5)\nassert finished, \"calls for other keys waited on the slow func\"\nassert done == [(\"fast\", \"cached\")]\n",
+          "part": 3
+        },
+        {
+          "name": "Part 3: a failure reaches every waiter and caches nothing",
+          "visibility": "unshown",
+          "behavior": "concurrency.thread_safety",
+          "failureMessage": "When func raises, every thread waiting on that call must get the same exception, and nothing may be cached.",
+          "hiddenCode": "\nimport threading\nrelease = threading.Event()\nstarted = threading.Event()\nruns = []\ndef flaky(x):\n    runs.append(x)\n    if len(runs) == 1:\n        started.set()\n        release.wait(5)\n        raise ValueError(\"boom\")\n    return x\n\ncache = {fn}(flaky, capacity=4)\noutcomes = []\ndef caller():\n    try:\n        outcomes.append(cache(7))\n    except ValueError as error:\n        outcomes.append(str(error))\npool = [threading.Thread(target=caller, daemon=True) for _ in range(4)]\npool[0].start()\nassert started.wait(5)\nfor t in pool[1:]:\n    t.start()\nrelease.set()\nfor t in pool:\n    t.join(5)\nassert not any(t.is_alive() for t in pool), \"a waiter never returned after func raised\"\nassert outcomes == [\"boom\"] * 4, outcomes\nassert cache(7) == 7 and runs == [7, 7], \"the failed call must not be cached\"\n",
+          "part": 3
+        },
+        {
+          "name": "Part 3: concurrent mixed keys stay consistent",
+          "visibility": "unshown",
+          "behavior": "concurrency.thread_safety",
+          "failureMessage": "Under concurrent calls the cache returned a wrong value, raised, or exceeded capacity; guard every update of the shared state with a lock.",
+          "hiddenCode": "\nimport random, threading, time\n\nclass SlowKey(int):\n    # Hashing yields the thread, so unguarded cache updates interleave.\n    def __hash__(self):\n        time.sleep(random.random() * 0.0003)\n        return int.__hash__(self)\n\ncache = {fn}(lambda k: int(k) * 3, capacity=5)\nerrors = []\ndef worker(seed):\n    rng = random.Random(seed)\n    try:\n        for _ in range(60):\n            k = rng.randrange(12)\n            assert cache(SlowKey(k)) == k * 3\n    except Exception as error:\n        errors.append(error)\npool = [threading.Thread(target=worker, args=(s,), daemon=True) for s in range(8)]\nfor t in pool: t.start()\nfor t in pool: t.join(20)\nassert not errors, errors[:3]\nassert len(cache.cache) <= 5, f\"cache holds {len(cache.cache)} entries for capacity 5\"\n",
+          "part": 3
+        }
+      ],
+      "parts": [
+        {
+          "title": "Fix three bugs",
+          "descriptionEn": "The starter code has three bugs: two in `generate_key`, one in `__call__`. Fix them so that all of these hold.\n\n**Signature:** `Memoize(func, capacity)`, called as `cache(*args, **kwargs)`, with counters `hits` and `misses`\n\n- A call whose arguments match an earlier cached call returns the cached value without calling `func`, and counts as a hit. Any other call calls `func`, caches the result and counts as a miss.\n- Two calls match exactly when they pass equal positional arguments in the same positions and equal keyword arguments, compared by name and value in any order.\n- `f(1, 2)` and `f((1, 2))` never match. `f(1, b=2)` and `f(1, (\"b\", 2))` never match. A positional argument never matches a keyword argument.\n- At most `capacity` entries are kept. Adding one more evicts the least recently used entry.\n- A hit counts as a use, exactly like a miss.\n- An unhashable argument, such as a `list`, raises `TypeError`.\n\n**Example** (`capacity=2`):\n- `cache(1, b=2, c=3)` miss, then `cache(1, c=3, b=2)` hit\n- `cache((1, 2))` miss, then `cache(1, 2)` miss; the first entry is evicted\n- `cache((1, 2))` hit, then `cache(1, 3)` miss; `f(1, 2)` is evicted, not `f((1, 2))`"
+        },
+        {
+          "title": "Survive a crash",
+          "descriptionEn": "A crash, meaning the process killed at any instant, must lose no call that finished before it. Keep Part 1 and add:\n\n**Signature:** `Memoize(func, capacity, path=None)`, `compact() -> None`\n\n- With `path=None`, nothing is written anywhere and `Memoize` behaves exactly as in Part 1.\n- With a `path`, every call appends one record to the file at exactly `path` before returning: a miss records the new entry, a hit records the use. Flush and `os.fsync` the file before returning.\n- Recording a call costs time and space proportional to that call only, never to `capacity` or to earlier calls. The file is append-only.\n- Creating `Memoize(func, capacity, path)` on an existing file recovers, inside `__init__`, the same entries, values and least-to-most-recently-used order the crashed instance had after its last finished call.\n- A record cut short or corrupted by the crash is detected from a length and a checksum. It and everything after it are discarded without raising, and later calls append after the last good record.\n- `hits` and `misses` are not persisted. They start at 0.\n- Arguments and return values are JSON values: `None`, `bool`, `int`, `float`, `str`, `list`, `dict` with `str` keys, and `tuple` in arguments. Argument values round-trip exactly, tuples included; a returned tuple may come back as a list.\n- `compact()` rewrites `path` so its size depends only on the entries currently cached. It writes a temporary file next to `path` and replaces `path` atomically."
+        },
+        {
+          "title": "Concurrent callers",
+          "descriptionEn": "Several threads now call the same `Memoize` at once. Keep Parts 1–2 and guarantee, for any number of threads and any scheduling:\n\n- Every call behaves as if it happened at a single instant, and the cache never holds more than `capacity` entries.\n- For one key, `func` is never running more than once at a time. A thread that asks for a key whose value is being computed waits for that result instead of calling `func` again.\n- A call for a key never waits on a running `func` for a different key: `func` runs without holding any lock the cache uses.\n- If `func` raises, every thread waiting on that call gets the same exception, and nothing is cached or recorded."
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which two calls in the example produce the same flattened tuple of arguments? Does the key keep a boundary between positional and keyword arguments? Which OrderedDict call marks an entry as recently used, and does the hit path make it?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "A key that is just args + kwargs.items() loses where positional ends and keyword begins, and unwrapping a one-element key makes f((1, 2)) look like f(1, 2). Build the key as a pair of the args tuple and the sorted kwargs items, never unwrap it, and call move_to_end on a hit before returning."
+        }
+      ],
+      "modelConnections": [
+        "functools.lru_cache builds its key from args plus a sentinel-separated kwargs tuple, the same boundary the Part 1 fix restores.",
+        "Write-ahead logs in databases frame each record with a length and a checksum and truncate at the first bad record on recovery, which is what Part 2 asks for.",
+        "Request coalescing in CDNs and Go's singleflight package let one caller compute a missing value while the others wait for it, the Part 3 guarantee."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "An append-only log makes each call's durability cost independent of the cache size.",
+          "Length plus checksum framing lets recovery stop cleanly at a torn write instead of trusting partial bytes.",
+          "Single-flight avoids running an expensive or side-effecting func twice for the same key."
+        ],
+        "cons": [
+          "fsync on every call bounds throughput by disk latency; batching trades durability for speed.",
+          "The log grows until compact() runs, and choosing when to compact is left to the caller.",
+          "Waiters share the leader's exception, so one failure fails every concurrent caller of that key."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What does an LRU cache evict, and why must a hit count as a use?",
+          "hint": "Name the entry that goes first, then picture a value read on every request but inserted long ago."
+        },
+        {
+          "stage": "concept",
+          "question": "What two properties must a memoization key have, and which calls should share one?",
+          "hint": "Think about what a dict needs from its keys, and when two calls are really the same call."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through the key the starter builds for f(1, 2), f((1, 2)) and f(1, b=2). Which pairs collide, and how does your key keep them apart?",
+          "hint": "Write out the tuple the starter returns for each call, including the one-element case, then ask what would mark where keywords begin."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why an append-only log instead of rewriting the cache to disk on every call, and what does compaction buy back?",
+          "hint": "Compare the bytes written per call in each design as the cache grows, then what the log costs after many hits."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How does recovery tell a torn final record from a good one, and why must later writes start after the last good record?",
+          "hint": "Think about what a crash mid-write leaves on disk, and what replay sees if a new record follows that fragment."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Compare one lock around the whole call with a lock around the bookkeeping plus single-flight. What does each cost?",
+          "hint": "Consider a slow func: who waits under each design, and what stops two threads computing the same missing key?"
+        }
+      ]
     }
   ]
 }

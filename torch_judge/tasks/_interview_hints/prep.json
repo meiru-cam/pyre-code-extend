@@ -8,5 +8,13 @@
     "Would a read-write lock that lets concurrent gets run together help here? Why or why not?": "Compare how long a get holds the lock with the overhead of a read-write lock in Python, and note what the GIL already serializes.",
     "What should get return when the key exists but every recorded timestamp is later than the query?": "Look at what the binary search returns in that case, and what one step to its left would point at.",
     "Which binary-search variant finds the latest timestamp at or before t, and how does it treat an exact match?": "Compare where bisect_left and bisect_right land when the query equals a stored timestamp, then step one to the left."
+  },
+  "memoize_lru": {
+    "What does an LRU cache evict, and why must a hit count as a use?": "Name the entry that goes first, then picture a value read on every request but inserted long ago.",
+    "What two properties must a memoization key have, and which calls should share one?": "Think about what a dict needs from its keys, and when two calls are really the same call.",
+    "Walk through the key the starter builds for f(1, 2), f((1, 2)) and f(1, b=2). Which pairs collide, and how does your key keep them apart?": "Write out the tuple the starter returns for each call, including the one-element case, then ask what would mark where keywords begin.",
+    "Why an append-only log instead of rewriting the cache to disk on every call, and what does compaction buy back?": "Compare the bytes written per call in each design as the cache grows, then what the log costs after many hits.",
+    "How does recovery tell a torn final record from a good one, and why must later writes start after the last good record?": "Think about what a crash mid-write leaves on disk, and what replay sees if a new record follows that fragment.",
+    "Compare one lock around the whole call with a lock around the bookkeeping plus single-flight. What does each cost?": "Consider a slow func: who waits under each design, and what stops two threads computing the same missing key?"
   }
 }
