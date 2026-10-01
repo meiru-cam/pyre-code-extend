@@ -382,7 +382,8 @@ class TimeMap:
 ''',
     "interview_questions": interview(
         # Concept and deep-dive questions are answered before coding, so they stay inside
-        # part 1; questions about later parts wait for the tradeoffs stage after coding.
+        # part 1. Questions about later parts sit in tradeoffs, which a multi-part
+        # exercise shows only once every part is unlocked.
         concept=[
             "What data structure do you keep per key, and why does it make get logarithmic?",
             "What should get return when the key exists but every recorded timestamp is later than the query?",

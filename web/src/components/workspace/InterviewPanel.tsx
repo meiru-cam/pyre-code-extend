@@ -17,15 +17,17 @@ interface InterviewPanelProps {
   questions: readonly InterviewQuestion[];
   record: InterviewRecord;
   onChange: (record: InterviewRecord) => void;
+  /** False hides the tradeoffs stage, e.g. while a multi-part exercise still has locked parts. */
+  showTradeoffs?: boolean;
 }
 
 const STAGE_ORDER: readonly InterviewStage[] = ['concept', 'deep_dive', 'tradeoffs'];
 
-export function InterviewPanel({ questions, record, onChange }: InterviewPanelProps) {
+export function InterviewPanel({ questions, record, onChange, showTradeoffs = true }: InterviewPanelProps) {
   const unlocked = isInterviewUnlocked(record);
   const missing = missingGatedAnswers(questions, record.answers);
   // Tradeoff questions follow the code, as they would in an interview.
-  const stages = unlocked ? STAGE_ORDER : GATED_STAGES;
+  const stages = unlocked && showTradeoffs ? STAGE_ORDER : GATED_STAGES;
 
   const update = (answers: string[], status = record.status) => {
     onChange({ status, answers, updatedAt: new Date().toISOString() });

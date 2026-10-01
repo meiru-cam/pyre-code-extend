@@ -161,3 +161,31 @@ describe('DescriptionTab parts', () => {
     expect(splitAtDivider('no divider')).toEqual(['no divider', '']);
   });
 });
+
+
+describe('DescriptionTab tradeoffs on multi-part exercises', () => {
+  afterEach(cleanup);
+
+  const withInterview: Problem = {
+    ...parted,
+    interviewQuestions: [
+      { stage: 'concept', question: 'What structure per key?' },
+      { stage: 'deep_dive', question: 'Which bisect variant?' },
+      { stage: 'tradeoffs', question: 'One lock or one per key?' },
+    ],
+  };
+  const answered = {
+    record: { status: 'skipped' as const, answers: ['', '', ''], updatedAt: '' },
+    onChange: () => {},
+  };
+
+  it('hides tradeoff questions while a part is still locked', () => {
+    render(React.createElement(DescriptionTab, { problem: withInterview, unlockedPart: 2, interview: answered }));
+    expect(screen.queryByText('One lock or one per key?')).toBeNull();
+  });
+
+  it('shows them once every part is unlocked', () => {
+    render(React.createElement(DescriptionTab, { problem: withInterview, unlockedPart: 3, interview: answered }));
+    expect(screen.getByText('One lock or one per key?')).toBeTruthy();
+  });
+});
