@@ -122,5 +122,13 @@
       "spreadsheet"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/in-memory-database",
+    "exercises": [
+      "in_memory_database"
+    ],
+    "round": "coding"
   }
 ]

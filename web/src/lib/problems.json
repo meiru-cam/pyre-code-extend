@@ -20075,6 +20075,186 @@
           "hint": "Consider collecting every affected cell first and evaluating them in dependency order."
         }
       ]
+    },
+    {
+      "id": "in_memory_database",
+      "title": "In-Memory Database with Indexes",
+      "titleZh": "In-Memory Database with Indexes",
+      "difficulty": "Hard",
+      "functionName": "Database",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Build `Database`, which keeps tables in memory and answers queries through method calls. There is no SQL text to parse.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior, so one `Database` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- A table has a fixed, ordered list of column names, set when it is created.\n- A row is a `dict` with exactly the table's columns as keys. A value is an `int`, a `str`, or `None` for no value.\n- Any method given a table or column that does not exist raises `KeyError`. This includes columns named in a query, even on an empty table.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** each part is small, but the comparison rules, stable multi-column sorting and index maintenance interact. A clean split between filtering, ordering and access paths is what lets part 4 go in without rewriting part 2.\n\n**Where it is used:** every relational database separates the access path (scan or index) from filtering and sorting; SQLite and Postgres choose between a scan and an index per query.\n\nAdapted from the in-memory database question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded.",
+      "descriptionZh": "Build `Database`, which keeps tables in memory and answers queries through method calls. There is no SQL text to parse.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior, so one `Database` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- A table has a fixed, ordered list of column names, set when it is created.\n- A row is a `dict` with exactly the table's columns as keys. A value is an `int`, a `str`, or `None` for no value.\n- Any method given a table or column that does not exist raises `KeyError`. This includes columns named in a query, even on an empty table.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** each part is small, but the comparison rules, stable multi-column sorting and index maintenance interact. A clean split between filtering, ordering and access paths is what lets part 4 go in without rewriting part 2.\n\n**Where it is used:** every relational database separates the access path (scan or index) from filtering and sorting; SQLite and Postgres choose between a scan and an index per query.\n\nAdapted from the in-memory database question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Part 1: tables, insertion, projection",
+          "code": "\nROWS = [\n    {\"id\": 101, \"name\": \"Ana\", \"dept\": \"eng\", \"salary\": 95000},\n    {\"id\": 102, \"name\": \"Bo\", \"dept\": \"sales\", \"salary\": 71000},\n    {\"id\": 103, \"name\": \"Cy\", \"dept\": \"eng\", \"salary\": 88000},\n    {\"id\": 104, \"name\": \"Dee\", \"dept\": \"ops\", \"salary\": 60000},\n    {\"id\": 105, \"name\": \"Eli\", \"dept\": \"eng\", \"salary\": 88000},\n    {\"id\": 106, \"name\": \"Fo\", \"dept\": \"sales\", \"salary\": 71000},\n    {\"id\": 107, \"name\": \"Gia\", \"dept\": \"ops\", \"salary\": None},\n    {\"id\": 108, \"name\": \"Hu\", \"dept\": \"ops\", \"salary\": None},\n]\n\ndef employees(db):\n    db.create_table(\"employees\", [\"id\", \"name\", \"dept\", \"salary\"])\n    for row in ROWS:\n        db.insert(\"employees\", row)\n    return db\n\ndef raises(kind, fn, *args, **kwargs):\n    try:\n        fn(*args, **kwargs)\n    except kind:\n        return True\n    return False\n\ndb = employees({fn}())\ngot = db.select(\"employees\", [\"id\", \"name\"])\nassert got == [{\"id\": r[\"id\"], \"name\": r[\"name\"]} for r in ROWS]\nassert db.select(\"employees\") == ROWS\nassert list(db.select(\"employees\")[0]) == [\"id\", \"name\", \"dept\", \"salary\"]\n",
+          "behavior": "contract.signature",
+          "part": 1
+        },
+        {
+          "name": "Part 1: missing tables and columns",
+          "visibility": "unshown",
+          "behavior": "protocol.validation",
+          "failureMessage": "Raise KeyError for an unknown table or column, a duplicate table, or an unknown row key (checked before missing ones, which raise ValueError).",
+          "hiddenCode": "\nROWS = [\n    {\"id\": 101, \"name\": \"Ana\", \"dept\": \"eng\", \"salary\": 95000},\n    {\"id\": 102, \"name\": \"Bo\", \"dept\": \"sales\", \"salary\": 71000},\n    {\"id\": 103, \"name\": \"Cy\", \"dept\": \"eng\", \"salary\": 88000},\n    {\"id\": 104, \"name\": \"Dee\", \"dept\": \"ops\", \"salary\": 60000},\n    {\"id\": 105, \"name\": \"Eli\", \"dept\": \"eng\", \"salary\": 88000},\n    {\"id\": 106, \"name\": \"Fo\", \"dept\": \"sales\", \"salary\": 71000},\n    {\"id\": 107, \"name\": \"Gia\", \"dept\": \"ops\", \"salary\": None},\n    {\"id\": 108, \"name\": \"Hu\", \"dept\": \"ops\", \"salary\": None},\n]\n\ndef employees(db):\n    db.create_table(\"employees\", [\"id\", \"name\", \"dept\", \"salary\"])\n    for row in ROWS:\n        db.insert(\"employees\", row)\n    return db\n\ndef raises(kind, fn, *args, **kwargs):\n    try:\n        fn(*args, **kwargs)\n    except kind:\n        return True\n    return False\n\ndb = {fn}()\ndb.create_table(\"t\", [\"a\", \"b\"])\nassert raises(KeyError, db.create_table, \"t\", [\"c\"])\nassert raises(KeyError, db.select, \"nope\")\nassert raises(KeyError, db.insert, \"nope\", {\"a\": 1, \"b\": 2})\nassert raises(KeyError, db.select, \"t\", [\"a\", \"zz\"]), \"an unknown column must raise even on an empty table\"\nassert raises(KeyError, db.insert, \"t\", {\"a\": 1, \"b\": 2, \"c\": 3})\nassert raises(KeyError, db.insert, \"t\", {\"a\": 1, \"c\": 3}), \"an unknown key is checked before a missing one\"\nassert raises(ValueError, db.insert, \"t\", {\"a\": 1})\nassert db.select(\"t\") == []\n",
+          "part": 1
+        },
+        {
+          "name": "Part 1: stored rows are private copies",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "insert must store a copy and select must return copies, so no caller can change the table by editing a dict.",
+          "hiddenCode": "\ndb = {fn}()\ndb.create_table(\"t\", [\"a\", \"b\"])\nrow = {\"a\": 1, \"b\": \"x\"}\ndb.insert(\"t\", row)\nrow[\"a\"] = 99\nout = db.select(\"t\")\nout[0][\"b\"] = \"changed\"\nassert db.select(\"t\") == [{\"a\": 1, \"b\": \"x\"}]\n",
+          "part": 1
+        },
+        {
+          "name": "Part 2: filtering with WHERE",
+          "code": "\nROWS = [\n    {\"id\": 101, \"name\": \"Ana\", \"dept\": \"eng\", \"salary\": 95000},\n    {\"id\": 102, \"name\": \"Bo\", \"dept\": \"sales\", \"salary\": 71000},\n    {\"id\": 103, \"name\": \"Cy\", \"dept\": \"eng\", \"salary\": 88000},\n    {\"id\": 104, \"name\": \"Dee\", \"dept\": \"ops\", \"salary\": 60000},\n    {\"id\": 105, \"name\": \"Eli\", \"dept\": \"eng\", \"salary\": 88000},\n    {\"id\": 106, \"name\": \"Fo\", \"dept\": \"sales\", \"salary\": 71000},\n    {\"id\": 107, \"name\": \"Gia\", \"dept\": \"ops\", \"salary\": None},\n    {\"id\": 108, \"name\": \"Hu\", \"dept\": \"ops\", \"salary\": None},\n]\n\ndef employees(db):\n    db.create_table(\"employees\", [\"id\", \"name\", \"dept\", \"salary\"])\n    for row in ROWS:\n        db.insert(\"employees\", row)\n    return db\n\ndef raises(kind, fn, *args, **kwargs):\n    try:\n        fn(*args, **kwargs)\n    except kind:\n        return True\n    return False\n\ndb = employees({fn}())\nassert db.select(\"employees\", [\"name\"], where=[(\"dept\", \"=\", \"eng\"), (\"salary\", \">=\", 90000)]) == [{\"name\": \"Ana\"}]\nassert db.select(\"employees\", [\"name\"], where=[(\"salary\", \"<\", 70000)]) == [{\"name\": \"Dee\"}]\nassert db.select(\"employees\", [\"name\"], where=[]) == db.select(\"employees\", [\"name\"])\n",
+          "behavior": "state.invariant",
+          "part": 2
+        },
+        {
+          "name": "Part 2: None and mixed types",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "A condition with None on either side is false for every operator, an int never equals a str, and every int is smaller than every str.",
+          "hiddenCode": "\nROWS = [\n    {\"id\": 101, \"name\": \"Ana\", \"dept\": \"eng\", \"salary\": 95000},\n    {\"id\": 102, \"name\": \"Bo\", \"dept\": \"sales\", \"salary\": 71000},\n    {\"id\": 103, \"name\": \"Cy\", \"dept\": \"eng\", \"salary\": 88000},\n    {\"id\": 104, \"name\": \"Dee\", \"dept\": \"ops\", \"salary\": 60000},\n    {\"id\": 105, \"name\": \"Eli\", \"dept\": \"eng\", \"salary\": 88000},\n    {\"id\": 106, \"name\": \"Fo\", \"dept\": \"sales\", \"salary\": 71000},\n    {\"id\": 107, \"name\": \"Gia\", \"dept\": \"ops\", \"salary\": None},\n    {\"id\": 108, \"name\": \"Hu\", \"dept\": \"ops\", \"salary\": None},\n]\n\ndef employees(db):\n    db.create_table(\"employees\", [\"id\", \"name\", \"dept\", \"salary\"])\n    for row in ROWS:\n        db.insert(\"employees\", row)\n    return db\n\ndef raises(kind, fn, *args, **kwargs):\n    try:\n        fn(*args, **kwargs)\n    except kind:\n        return True\n    return False\n\ndb = employees({fn}())\nnames = lambda where: [r[\"name\"] for r in db.select(\"employees\", [\"name\"], where=where)]\nassert names([(\"salary\", \"!=\", 60000)]) == [\"Ana\", \"Bo\", \"Cy\", \"Eli\", \"Fo\"]\nassert names([(\"salary\", \"=\", None)]) == []\nassert names([(\"salary\", \"!=\", None)]) == []\nassert names([(\"salary\", \"<\", \"0\")]) == [\"Ana\", \"Bo\", \"Cy\", \"Dee\", \"Eli\", \"Fo\"]\nassert names([(\"id\", \"=\", \"101\")]) == []\nassert names([(\"id\", \"!=\", \"101\")]) == [r[\"name\"] for r in ROWS]\nassert names([(\"name\", \">\", 5)]) == [r[\"name\"] for r in ROWS]\nassert raises(KeyError, db.select, \"employees\", where=[(\"bonus\", \"=\", 1)])\n",
+          "part": 2
+        },
+        {
+          "name": "Part 2: random filters match a reference",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "A random WHERE returned different rows than the comparison rules give.",
+          "hiddenCode": "\nimport random, functools\n\ndef rank(v):\n    return (0, v) if isinstance(v, int) else (1, v)\n\ndef holds(a, op, b):\n    if a is None or b is None:\n        return False\n    a, b = rank(a), rank(b)\n    return {\"=\": a == b, \"!=\": a != b, \"<\": a < b, \"<=\": a <= b, \">\": a > b, \">=\": a >= b}[op]\n\ndef oracle_select(rows, columns, where, order_by):\n    kept = [r for r in rows if all(holds(r[c], op, v) for c, op, v in (where or []))]\n    def compare(x, y):\n        for column, ascending in order_by or []:\n            kx = (0,) if x[column] is None else (1,) + rank(x[column])\n            ky = (0,) if y[column] is None else (1,) + rank(y[column])\n            if kx != ky:\n                return (-1 if kx < ky else 1) * (1 if ascending else -1)\n        return 0\n    kept = sorted(kept, key=functools.cmp_to_key(compare))\n    return [{c: r[c] for c in columns} for r in kept]\n\ndef random_rows(rng, n):\n    values = [None, 0, 1, 2, 5, 10, -3, \"\", \"a\", \"b\", \"ab\", \"z\", \"0\"]\n    return [{\"k\": i, \"x\": rng.choice(values), \"y\": rng.choice(values), \"s\": rng.choice(values)} for i in range(n)]\n\ndef random_where(rng):\n    ops = [\"=\", \"!=\", \"<\", \"<=\", \">\", \">=\"]\n    values = [None, 0, 1, 2, 5, \"\", \"a\", \"ab\", \"0\"]\n    return [(rng.choice(\"xys\"), rng.choice(ops), rng.choice(values)) for _ in range(rng.randint(0, 2))]\n\ndef random_order(rng):\n    return [(c, rng.random() < 0.5) for c in rng.sample(\"xys\", rng.randint(0, 3))]\n\nfor seed in range(150):\n    rng = random.Random(seed)\n    rows = random_rows(rng, 25)\n    db = {fn}()\n    db.create_table(\"t\", [\"k\", \"x\", \"y\", \"s\"])\n    for r in rows:\n        db.insert(\"t\", r)\n    where = random_where(rng)\n    assert db.select(\"t\", [\"k\"], where=where) == oracle_select(rows, [\"k\"], where, []), (seed, where)\n",
+          "part": 2
+        },
+        {
+          "name": "Part 3: sorting with ORDER BY",
+          "code": "\nROWS = [\n    {\"id\": 101, \"name\": \"Ana\", \"dept\": \"eng\", \"salary\": 95000},\n    {\"id\": 102, \"name\": \"Bo\", \"dept\": \"sales\", \"salary\": 71000},\n    {\"id\": 103, \"name\": \"Cy\", \"dept\": \"eng\", \"salary\": 88000},\n    {\"id\": 104, \"name\": \"Dee\", \"dept\": \"ops\", \"salary\": 60000},\n    {\"id\": 105, \"name\": \"Eli\", \"dept\": \"eng\", \"salary\": 88000},\n    {\"id\": 106, \"name\": \"Fo\", \"dept\": \"sales\", \"salary\": 71000},\n    {\"id\": 107, \"name\": \"Gia\", \"dept\": \"ops\", \"salary\": None},\n    {\"id\": 108, \"name\": \"Hu\", \"dept\": \"ops\", \"salary\": None},\n]\n\ndef employees(db):\n    db.create_table(\"employees\", [\"id\", \"name\", \"dept\", \"salary\"])\n    for row in ROWS:\n        db.insert(\"employees\", row)\n    return db\n\ndef raises(kind, fn, *args, **kwargs):\n    try:\n        fn(*args, **kwargs)\n    except kind:\n        return True\n    return False\n\ndb = employees({fn}())\nnames = lambda order: [r[\"name\"] for r in db.select(\"employees\", order_by=order)]\nassert names([(\"salary\", True)]) == [\"Gia\", \"Hu\", \"Dee\", \"Bo\", \"Fo\", \"Cy\", \"Eli\", \"Ana\"]\nassert names([(\"dept\", True), (\"salary\", False)]) == [\"Ana\", \"Cy\", \"Eli\", \"Dee\", \"Gia\", \"Hu\", \"Bo\", \"Fo\"]\nassert names([]) == [r[\"name\"] for r in ROWS]\n",
+          "behavior": "events.ordering",
+          "part": 3
+        },
+        {
+          "name": "Part 3: stable ties and None placement",
+          "visibility": "unshown",
+          "behavior": "events.ordering",
+          "failureMessage": "Ties must keep insertion order, None sorts below every value (first ascending, last descending), and ints sort below strs.",
+          "hiddenCode": "\nROWS = [\n    {\"id\": 101, \"name\": \"Ana\", \"dept\": \"eng\", \"salary\": 95000},\n    {\"id\": 102, \"name\": \"Bo\", \"dept\": \"sales\", \"salary\": 71000},\n    {\"id\": 103, \"name\": \"Cy\", \"dept\": \"eng\", \"salary\": 88000},\n    {\"id\": 104, \"name\": \"Dee\", \"dept\": \"ops\", \"salary\": 60000},\n    {\"id\": 105, \"name\": \"Eli\", \"dept\": \"eng\", \"salary\": 88000},\n    {\"id\": 106, \"name\": \"Fo\", \"dept\": \"sales\", \"salary\": 71000},\n    {\"id\": 107, \"name\": \"Gia\", \"dept\": \"ops\", \"salary\": None},\n    {\"id\": 108, \"name\": \"Hu\", \"dept\": \"ops\", \"salary\": None},\n]\n\ndef employees(db):\n    db.create_table(\"employees\", [\"id\", \"name\", \"dept\", \"salary\"])\n    for row in ROWS:\n        db.insert(\"employees\", row)\n    return db\n\ndef raises(kind, fn, *args, **kwargs):\n    try:\n        fn(*args, **kwargs)\n    except kind:\n        return True\n    return False\n\ndb = {fn}()\ndb.create_table(\"t\", [\"k\", \"v\"])\nfor k, v in enumerate([3, None, \"b\", 3, \"a\", None, -1, \"b\"]):\n    db.insert(\"t\", {\"k\": k, \"v\": v})\nkeys = lambda order: [r[\"k\"] for r in db.select(\"t\", [\"k\"], order_by=order)]\nassert keys([(\"v\", True)]) == [1, 5, 6, 0, 3, 4, 2, 7]\nassert keys([(\"v\", False)]) == [2, 7, 4, 0, 3, 6, 1, 5]\nassert raises(KeyError, db.select, \"t\", order_by=[(\"w\", True)])\n",
+          "part": 3
+        },
+        {
+          "name": "Part 3: random queries match a reference",
+          "visibility": "unshown",
+          "behavior": "events.ordering",
+          "failureMessage": "A random WHERE plus ORDER BY returned different rows or a different order than the rules give.",
+          "hiddenCode": "\nimport random, functools\n\ndef rank(v):\n    return (0, v) if isinstance(v, int) else (1, v)\n\ndef holds(a, op, b):\n    if a is None or b is None:\n        return False\n    a, b = rank(a), rank(b)\n    return {\"=\": a == b, \"!=\": a != b, \"<\": a < b, \"<=\": a <= b, \">\": a > b, \">=\": a >= b}[op]\n\ndef oracle_select(rows, columns, where, order_by):\n    kept = [r for r in rows if all(holds(r[c], op, v) for c, op, v in (where or []))]\n    def compare(x, y):\n        for column, ascending in order_by or []:\n            kx = (0,) if x[column] is None else (1,) + rank(x[column])\n            ky = (0,) if y[column] is None else (1,) + rank(y[column])\n            if kx != ky:\n                return (-1 if kx < ky else 1) * (1 if ascending else -1)\n        return 0\n    kept = sorted(kept, key=functools.cmp_to_key(compare))\n    return [{c: r[c] for c in columns} for r in kept]\n\ndef random_rows(rng, n):\n    values = [None, 0, 1, 2, 5, 10, -3, \"\", \"a\", \"b\", \"ab\", \"z\", \"0\"]\n    return [{\"k\": i, \"x\": rng.choice(values), \"y\": rng.choice(values), \"s\": rng.choice(values)} for i in range(n)]\n\ndef random_where(rng):\n    ops = [\"=\", \"!=\", \"<\", \"<=\", \">\", \">=\"]\n    values = [None, 0, 1, 2, 5, \"\", \"a\", \"ab\", \"0\"]\n    return [(rng.choice(\"xys\"), rng.choice(ops), rng.choice(values)) for _ in range(rng.randint(0, 2))]\n\ndef random_order(rng):\n    return [(c, rng.random() < 0.5) for c in rng.sample(\"xys\", rng.randint(0, 3))]\n\nfor seed in range(150):\n    rng = random.Random(seed)\n    rows = random_rows(rng, 25)\n    db = {fn}()\n    db.create_table(\"t\", [\"k\", \"x\", \"y\", \"s\"])\n    for r in rows:\n        db.insert(\"t\", r)\n    where, order = random_where(rng), random_order(rng)\n    assert db.select(\"t\", [\"k\", \"x\"], where=where, order_by=order) == oracle_select(rows, [\"k\", \"x\"], where, order), (seed, where, order)\n",
+          "part": 3
+        },
+        {
+          "name": "Part 4: an index changes nothing visible",
+          "code": "\nROWS = [\n    {\"id\": 101, \"name\": \"Ana\", \"dept\": \"eng\", \"salary\": 95000},\n    {\"id\": 102, \"name\": \"Bo\", \"dept\": \"sales\", \"salary\": 71000},\n    {\"id\": 103, \"name\": \"Cy\", \"dept\": \"eng\", \"salary\": 88000},\n    {\"id\": 104, \"name\": \"Dee\", \"dept\": \"ops\", \"salary\": 60000},\n    {\"id\": 105, \"name\": \"Eli\", \"dept\": \"eng\", \"salary\": 88000},\n    {\"id\": 106, \"name\": \"Fo\", \"dept\": \"sales\", \"salary\": 71000},\n    {\"id\": 107, \"name\": \"Gia\", \"dept\": \"ops\", \"salary\": None},\n    {\"id\": 108, \"name\": \"Hu\", \"dept\": \"ops\", \"salary\": None},\n]\n\ndef employees(db):\n    db.create_table(\"employees\", [\"id\", \"name\", \"dept\", \"salary\"])\n    for row in ROWS:\n        db.insert(\"employees\", row)\n    return db\n\ndef raises(kind, fn, *args, **kwargs):\n    try:\n        fn(*args, **kwargs)\n    except kind:\n        return True\n    return False\n\ndb = employees({fn}())\nqueries = [[(\"dept\", \"=\", \"eng\")], [(\"salary\", \">\", 70000)], [(\"salary\", \"<=\", 88000), (\"dept\", \"!=\", \"ops\")]]\nbefore = [db.select(\"employees\", [\"name\"], where=w) for w in queries]\ndb.create_index(\"employees\", \"dept\", \"hash\")\ndb.create_index(\"employees\", \"salary\", \"sorted\")\nassert [db.select(\"employees\", [\"name\"], where=w) for w in queries] == before\ndb.insert(\"employees\", {\"id\": 109, \"name\": \"Ivy\", \"dept\": \"eng\", \"salary\": 70500})\nassert db.select(\"employees\", [\"name\"], where=[(\"dept\", \"=\", \"eng\")]) == [{\"name\": n} for n in (\"Ana\", \"Cy\", \"Eli\", \"Ivy\")]\nassert db.select(\"employees\", [\"name\"], where=[(\"salary\", \">\", 70000), (\"salary\", \"<\", 71000)]) == [{\"name\": \"Ivy\"}]\n",
+          "behavior": "state.invariant",
+          "part": 4
+        },
+        {
+          "name": "Part 4: an index avoids a full scan",
+          "visibility": "unshown",
+          "behavior": "performance.complexity",
+          "failureMessage": "With a matching index, select still compared values in every row; read the candidate rows from the index instead.",
+          "hiddenCode": "\nclass Counted(str):\n    compares = 0\n    def _count(self):\n        Counted.compares += 1\n    def __eq__(self, other): self._count(); return str.__eq__(self, other)\n    def __ne__(self, other): self._count(); return str.__ne__(self, other)\n    def __lt__(self, other): self._count(); return str.__lt__(self, other)\n    def __le__(self, other): self._count(); return str.__le__(self, other)\n    def __gt__(self, other): self._count(); return str.__gt__(self, other)\n    def __ge__(self, other): self._count(); return str.__ge__(self, other)\n    __hash__ = str.__hash__\n\nn = 2000\ndb = {fn}()\ndb.create_table(\"t\", [\"k\", \"tag\", \"code\"])\nfor i in range(n):\n    db.insert(\"t\", {\"k\": i, \"tag\": Counted(f\"t{i % 200:03d}\"), \"code\": Counted(f\"c{i:05d}\")})\ndb.create_index(\"t\", \"tag\", \"hash\")\ndb.create_index(\"t\", \"code\", \"sorted\")\nfor where, expected in (\n    ([(\"tag\", \"=\", \"t007\")], [i for i in range(n) if i % 200 == 7]),\n    ([(\"code\", \">=\", \"c01990\")], list(range(1990, n))),\n    ([(\"tag\", \"=\", \"t007\"), (\"k\", \"!=\", 7)], [i for i in range(n) if i % 200 == 7 and i != 7]),\n):\n    Counted.compares = 0\n    got = [r[\"k\"] for r in db.select(\"t\", [\"k\"], where=where)]\n    assert got == expected, where\n    assert Counted.compares < n // 4, f\"{where}: {Counted.compares} comparisons for {n} rows\"\n",
+          "part": 4
+        },
+        {
+          "name": "Part 4: random queries with indexes match a reference",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "With indexes in place, a random query returned different rows or a different order than without them.",
+          "hiddenCode": "\nimport random, functools\n\ndef rank(v):\n    return (0, v) if isinstance(v, int) else (1, v)\n\ndef holds(a, op, b):\n    if a is None or b is None:\n        return False\n    a, b = rank(a), rank(b)\n    return {\"=\": a == b, \"!=\": a != b, \"<\": a < b, \"<=\": a <= b, \">\": a > b, \">=\": a >= b}[op]\n\ndef oracle_select(rows, columns, where, order_by):\n    kept = [r for r in rows if all(holds(r[c], op, v) for c, op, v in (where or []))]\n    def compare(x, y):\n        for column, ascending in order_by or []:\n            kx = (0,) if x[column] is None else (1,) + rank(x[column])\n            ky = (0,) if y[column] is None else (1,) + rank(y[column])\n            if kx != ky:\n                return (-1 if kx < ky else 1) * (1 if ascending else -1)\n        return 0\n    kept = sorted(kept, key=functools.cmp_to_key(compare))\n    return [{c: r[c] for c in columns} for r in kept]\n\ndef random_rows(rng, n):\n    values = [None, 0, 1, 2, 5, 10, -3, \"\", \"a\", \"b\", \"ab\", \"z\", \"0\"]\n    return [{\"k\": i, \"x\": rng.choice(values), \"y\": rng.choice(values), \"s\": rng.choice(values)} for i in range(n)]\n\ndef random_where(rng):\n    ops = [\"=\", \"!=\", \"<\", \"<=\", \">\", \">=\"]\n    values = [None, 0, 1, 2, 5, \"\", \"a\", \"ab\", \"0\"]\n    return [(rng.choice(\"xys\"), rng.choice(ops), rng.choice(values)) for _ in range(rng.randint(0, 2))]\n\ndef random_order(rng):\n    return [(c, rng.random() < 0.5) for c in rng.sample(\"xys\", rng.randint(0, 3))]\n\nfor seed in range(150):\n    rng = random.Random(seed)\n    rows = random_rows(rng, 30)\n    db = {fn}()\n    db.create_table(\"t\", [\"k\", \"x\", \"y\", \"s\"])\n    for r in rows[:15]:\n        db.insert(\"t\", r)\n    for column in rng.sample(\"xys\", 2):\n        db.create_index(\"t\", column, rng.choice([\"hash\", \"sorted\"]))\n    if rng.random() < 0.5:\n        db.create_index(\"t\", \"x\", \"sorted\")\n    for r in rows[15:]:\n        db.insert(\"t\", r)\n    where, order = random_where(rng), random_order(rng)\n    assert db.select(\"t\", [\"k\"], where=where, order_by=order) == oracle_select(rows, [\"k\"], where, order), (seed, where, order)\n",
+          "part": 4
+        }
+      ],
+      "parts": [
+        {
+          "title": "Tables, insertion, projection",
+          "descriptionEn": "**Signature:** `create_table(table, columns) -> None`, `insert(table, row) -> None`, `select(table, columns=None) -> list[dict]`\n\n- `create_table` makes an empty table. It raises `KeyError` if the table already exists.\n- `insert` appends a copy of `row`. It raises `KeyError` if `row` has a key that is not a column, checked first, then `ValueError` if a column is missing from `row`.\n- `select` returns every row in insertion order, keeping only `columns`, or every column when `columns` is `None`. The rows returned are copies.\n\n**Example:**\n- `create_table(\"employees\", [\"id\", \"name\", \"dept\", \"salary\"])`, then insert eight rows\n- `select(\"employees\", [\"id\", \"name\"])` returns `[{\"id\": 101, \"name\": \"Ana\"}, …]` in insertion order"
+        },
+        {
+          "title": "Filtering with WHERE",
+          "descriptionEn": "Keep Part 1 and add a `where` parameter:\n\n**Signature:** `select(table, columns=None, where=None)`, where `where` is a list of `(column, operator, value)` that must all hold\n\n- `operator` is one of `=`, `!=`, `<`, `<=`, `>`, `>=`. `None` or `[]` means no filtering.\n- A condition is false whenever the row's value or `value` is `None`, for every operator, `!=` included.\n- Two values of the same type compare as Python compares them. An `int` never equals a `str`, and every `int` is smaller than every `str`.\n\n**Example:**\n- `where=[(\"dept\", \"=\", \"eng\"), (\"salary\", \">=\", 90000)]` keeps only Ana\n- `where=[(\"salary\", \"<\", 70000)]` keeps only Dee: rows with `None` salary never match"
+        },
+        {
+          "title": "Sorting with ORDER BY",
+          "descriptionEn": "Keep Parts 1–2 and add an `order_by` parameter:\n\n**Signature:** `select(table, columns=None, where=None, order_by=None)`, where `order_by` is a list of `(column, ascending)`, most significant first\n\n- Values compare as in Part 2, and `None` is smaller than every `int` and `str`. So `None` comes first in an ascending column and last in a descending one.\n- Rows that tie on every `order_by` column keep their insertion order.\n- `None` or `[]` keeps insertion order.\n\n**Example:**\n- `order_by=[(\"salary\", True)]` gives Gia, Hu, Dee, Bo, Fo, Cy, Eli, Ana\n- `order_by=[(\"dept\", True), (\"salary\", False)]` gives Ana, Cy, Eli, Dee, Gia, Hu, Bo, Fo"
+        },
+        {
+          "title": "Indexes",
+          "descriptionEn": "Keep Parts 1–3 and add:\n\n**Signature:** `create_index(table, column, kind) -> None`, with `kind` either `\"hash\"` or `\"sorted\"`\n\n- `create_index` builds the index from the rows already in the table. Creating an index that exists rebuilds it. Every later `insert` keeps every index of the table up to date.\n- A `\"hash\"` index serves `=` conditions. A `\"sorted\"` index serves `<`, `<=`, `>` and `>=`.\n- `select` returns the same rows in the same order with or without an index.\n- If any condition names an indexed column with an operator its index serves, `select` must not look at every row of the table, even if other conditions in the same `where` have no index. `!=` and unindexed conditions are checked row by row on the rows the index returned."
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "What does a table need besides its rows to check an insert? In what order must insert run its two checks? What does select hand back if the caller later edits the dicts it returned, or the dict it inserted?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Store each table as its column list plus a list of row dicts. In insert, look for unknown keys before missing ones and append dict(row). In select, validate every requested column against the schema before touching rows, then build a fresh dict per row with only those keys, so no caller can reach the stored rows."
+        }
+      ],
+      "modelConnections": [
+        "Relational engines such as SQLite plan each query by choosing between a full scan and an index, then apply the remaining predicates to the candidate rows, which is part 4.",
+        "SQL defines comparisons with NULL as unknown, so NULL never satisfies a WHERE condition; part 2 adopts the same rule for None."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "A hash index turns an equality lookup from O(n) into O(1) plus the matching rows.",
+          "A sorted index answers range conditions with two binary searches.",
+          "Python's stable sort makes multi-column ORDER BY a sequence of single-column sorts."
+        ],
+        "cons": [
+          "Every index slows every insert and costs memory proportional to the table.",
+          "Index candidates must be re-sorted into insertion order before ORDER BY, which costs O(k log k).",
+          "Mixed int and str values need a type-aware comparison key everywhere values are compared."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What does a table store besides its rows, and which checks does insert run, in which order?",
+          "hint": "Think about what insert compares a row against, and reread which error wins when a row is wrong in two ways."
+        },
+        {
+          "stage": "concept",
+          "question": "Why should insert store a copy of the row and select return copies?",
+          "hint": "Picture the caller editing the dict it inserted, or one it got back from select, and what the table would then hold."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How does select validate the requested columns before it reads any row, and what happens on an empty table?",
+          "hint": "Check every name against the schema up front, so the answer does not depend on whether a row exists."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How do you compare values so that None never matches and every int sorts below every str?",
+          "hint": "Consider a small key that puts the type first, and handle None before any comparison happens."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How do you sort by several columns, each with its own direction, and keep ties in insertion order?",
+          "hint": "Think about Python's stable sort applied once per column, starting from the least significant one."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "When does a hash index beat a sorted index, and what does every index cost on insert?",
+          "hint": "Match each operator to the structure that answers it, then count the work an insert adds per index."
+        }
+      ]
     }
   ]
 }
