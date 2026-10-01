@@ -17,7 +17,7 @@ log = os.path.join(workdir, "cache.log")
 """
 
 TASK = {
-    "title": "LRU Memoizer: Bugfix, Durability, Threads",
+    "title": "LRU Memoizer",
     "difficulty": "Hard",
     "version": 1,
     "function_name": "Memoize",
@@ -31,18 +31,18 @@ The requirement arrives in parts, the way an interviewer adds them. Each part ke
 
 **Why this shows up in interviews:** reading someone else's code and finding the bug is a separate skill from writing code, and an LRU cache is small enough to read in a minute. The later parts check that the fix holds up as the requirements grow.
 
-**Where it is used:** `functools.lru_cache`, HTTP and DNS caches, and model-serving caches all key results by their arguments and evict by recency.
+**Where it is used:** `functools.lru_cache` and most application caches key results by their arguments and evict by recency.
 
 Adapted from the LRU cache bug-fix question in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, with every part on one class.""",
     "parts": [
         {
             "title": "Fix three bugs",
-            "description_en": r"""The starter code has three bugs: two in `generate_key`, one in `__call__`. Fix them so that all of these hold.
+            "description_en": r"""The starter `Memoize` is broken in three places. Repair it so that every rule below holds.
 
-**Signature:** `Memoize(func, capacity)`, called as `cache(*args, **kwargs)`, with counters `hits` and `misses`
+**Signature:** `Memoize(func, capacity)`, called as `cache(*args, **kwargs)`, with counters `hits` and `misses`, and `cache`, the `OrderedDict` of entries from least to most recently used
 
 - A call whose arguments match an earlier cached call returns the cached value without calling `func`, and counts as a hit. Any other call calls `func`, caches the result and counts as a miss.
-- Two calls match exactly when they pass equal positional arguments in the same positions and equal keyword arguments, compared by name and value in any order.
+- A call is a hit only for a call with the same positional arguments, position for position, and the same set of keyword names and values. The order the keywords are written in does not matter.
 - `f(1, 2)` and `f((1, 2))` never match. `f(1, b=2)` and `f(1, ("b", 2))` never match. A positional argument never matches a keyword argument.
 - At most `capacity` entries are kept. Adding one more evicts the least recently used entry.
 - A hit counts as a use, exactly like a miss.
@@ -65,7 +65,7 @@ Adapted from the LRU cache bug-fix question in Schuture/Anthropic-Interview-Note
 - Creating `Memoize(func, capacity, path)` on an existing file recovers, inside `__init__`, the same entries, values and least-to-most-recently-used order the crashed instance had after its last finished call.
 - A record cut short or corrupted by the crash is detected from a length and a checksum. It and everything after it are discarded without raising, and later calls append after the last good record.
 - `hits` and `misses` are not persisted. They start at 0.
-- Arguments and return values are JSON values: `None`, `bool`, `int`, `float`, `str`, `list`, `dict` with `str` keys, and `tuple` in arguments. Argument values round-trip exactly, tuples included; a returned tuple may come back as a list.
+- Argument values are `None`, `bool`, `int`, `float`, `str`, or tuples of these, nested; they round-trip exactly. Return values may also be lists and dicts with `str` keys; a returned tuple may come back as a list.
 - `compact()` rewrites `path` so its size depends only on the entries currently cached. It writes a temporary file next to `path` and replaces `path` atomically.""",
         },
         {
@@ -314,7 +314,7 @@ r(3)
 assert f.calls == 2, "3 was evicted before the crash and must stay evicted"
 """},
         {"name": "Part 3: one computation per key", "part": 3, "behavior": "concurrency.thread_safety", "code": r"""
-import threading
+import threading, time
 release = threading.Event()
 started = threading.Event()
 runs = []
@@ -333,6 +333,8 @@ pool[0].start()
 assert started.wait(5)
 for t in pool[1:]:
     t.start()
+# Give the other callers time to reach the in-flight call before it finishes.
+time.sleep(0.3)
 release.set()
 for t in pool:
     t.join(5)
@@ -343,7 +345,7 @@ assert results == [42] * 6
         {"name": "Part 3: other keys do not wait on a slow func", "part": 3, "visibility": "unshown", "behavior": "concurrency.thread_safety",
          "failure_message": "A call for one key blocked behind func running for another key; run func outside every lock the cache holds.",
          "code": r"""
-import threading
+import threading, time
 release = threading.Event()
 started = threading.Event()
 def f(x):
@@ -369,7 +371,7 @@ assert done == [("fast", "cached")]
         {"name": "Part 3: a failure reaches every waiter and caches nothing", "part": 3, "visibility": "unshown", "behavior": "concurrency.thread_safety",
          "failure_message": "When func raises, every thread waiting on that call must get the same exception, and nothing may be cached.",
          "code": r"""
-import threading
+import threading, time
 release = threading.Event()
 started = threading.Event()
 runs = []
@@ -393,6 +395,8 @@ pool[0].start()
 assert started.wait(5)
 for t in pool[1:]:
     t.start()
+# Give the other callers time to reach the in-flight call before it finishes.
+time.sleep(0.3)
 release.set()
 for t in pool:
     t.join(5)

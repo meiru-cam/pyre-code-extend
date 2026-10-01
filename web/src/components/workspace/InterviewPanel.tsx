@@ -104,7 +104,9 @@ export function InterviewPanel({ questions, record, onChange, showTradeoffs = tr
           </span>
         </summary>
         <p className="mt-2 mb-4 text-[13px] text-text-2">
-          Tradeoff questions are open now. Compare with the reference pros and cons below. Edits save automatically.
+          {showTradeoffs
+            ? 'Tradeoff questions are open now. Compare with the reference pros and cons below. Edits save automatically.'
+            : 'Tradeoff questions open once every part is unlocked. Edits save automatically.'}
         </p>
         {questionsView}
       </details>

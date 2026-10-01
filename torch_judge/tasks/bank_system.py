@@ -1,4 +1,4 @@
-"""A bank ledger whose operations arrive one level at a time, as in an online assessment."""
+"""A bank ledger whose operations arrive one part at a time, as in an online assessment."""
 
 from ._interview import interview
 
@@ -119,11 +119,11 @@ def agrees_with_oracle(make_bank, kinds, seeds):
 """
 
 TASK = {
-    "title": "Bank Ledger in Four Levels",
+    "title": "Bank Ledger",
     "difficulty": "Hard",
     "version": 1,
     "function_name": "Bank",
-    "description_en": r"""Build `Bank`, an in-memory ledger of accounts. It is the shape of a timed online assessment: four levels, each adding methods to the same class.
+    "description_en": r"""Build `Bank`, an in-memory ledger of accounts. It has the shape of a timed online assessment: each part adds methods to the same class.
 
 The requirement arrives in parts. Each part keeps every earlier behavior, so one `Bank` class passes all parts at the end. Pass every test of the current part to reveal the next one.
 
@@ -136,9 +136,9 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Background — context only. Everything above this line is the requirement.**
 
-**Why this shows up in interviews:** online assessments grade with hidden tests per level and a clock. The skill is keeping the data model flexible enough that level 4 does not force a rewrite of level 1.
+**Why this shows up in interviews:** online assessments grade each stage against cases you cannot see, on a clock. The skill is keeping the first data model flexible enough that later stages extend it instead of rewriting it.
 
-**Where it is used:** ledgers keep holds separate from settled balances, and point-in-time balance queries come from an append-only history of balance changes.
+**Where it is used:** account ledgers in payment and banking systems.
 
 Adapted from the bank system online-assessment question in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded.""",
     "parts": [
@@ -209,11 +209,11 @@ Adapted from the bank system online-assessment question in Schuture/Anthropic-In
         },
     ],
     "hints": [
-        {"level": 1, "kind": "questions", "content": "What does each account need to store, and which method creates that record? Which comparison decides that a withdrawal is too large, and is withdrawing the whole balance allowed? Where would a per-account number that only grows fit in that record?"},
-        {"level": 2, "kind": "analysis", "content": "Keep one small record per account id in a dict and route every balance change through one helper that also appends (timestamp, new balance) to that account's history. Validate first and mutate last, so a failed call returns early without touching anything. Rank with sorted using the key (-total, account_id)."},
+        {"level": 1, "kind": "questions", "content": "What does each account need to store, and which method creates that record? Which comparison decides that a withdrawal is too large, and is withdrawing the whole balance allowed? What should a call do first, so that a refused call changes nothing?"},
+        {"level": 2, "kind": "analysis", "content": "Keep one small record per account id in a dict. Route every balance change through one helper, so that each later requirement changes one place. In each method, validate first and mutate last, returning the failure value before touching anything."},
     ],
     "model_connections": [
-        "Card networks place an authorization hold that reduces the available balance until the merchant captures or the hold expires, which is the Level 3 transfer.",
+        "Card networks place an authorization hold that reduces the available balance until the merchant captures or the hold expires, which is the part 3 transfer.",
         "Point-in-time balance queries in ledgers read an append-only history with binary search, as get_balance does.",
     ],
     "pro_con_analysis": {
@@ -407,6 +407,11 @@ class _Account:
         self.times = [timestamp]
         self.balances = [0]
 
+    def change(self, timestamp, delta):
+        self.balance += delta
+        self.times.append(timestamp)
+        self.balances.append(self.balance)
+
 
 class _Transfer:
     def __init__(self, source, target, amount, created):
@@ -425,11 +430,6 @@ class Bank:
         self._live = {}
         self._transfers = {}
 
-    def _change(self, account, timestamp, delta):
-        account.balance += delta
-        account.times.append(timestamp)
-        account.balances.append(account.balance)
-
     def _available(self, account_id, timestamp):
         held = sum(t.amount for t in self._transfers.values()
                    if t.source == account_id and t.pending(timestamp))
@@ -445,14 +445,14 @@ class Bank:
         account = self._live.get(account_id)
         if account is None:
             return None
-        self._change(account, timestamp, amount)
+        account.change(timestamp, amount)
         return account.balance
 
     def withdraw(self, timestamp, account_id, amount):
         account = self._live.get(account_id)
         if account is None or amount > self._available(account_id, timestamp):
             return None
-        self._change(account, timestamp, -amount)
+        account.change(timestamp, -amount)
         account.outgoing += amount
         return account.balance
 
@@ -474,15 +474,15 @@ class Bank:
         if t is None or t.target != account_id or not t.pending(timestamp):
             return False
         t.accepted = True
-        self._change(self._live[t.source], timestamp, -t.amount)
-        self._change(self._live[t.target], timestamp, t.amount)
+        self._live[t.source].change(timestamp, -t.amount)
+        self._live[t.target].change(timestamp, t.amount)
         return True
 
     def merge_accounts(self, timestamp, a, b):
         if a == b or a not in self._live or b not in self._live:
             return False
         keep, gone = self._live[a], self._live.pop(b)
-        self._change(keep, timestamp, gone.balance)
+        keep.change(timestamp, gone.balance)
         keep.outgoing += gone.outgoing
         for t in self._transfers.values():
             if t.pending(timestamp):

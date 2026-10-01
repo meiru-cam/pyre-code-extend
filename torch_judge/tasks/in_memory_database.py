@@ -67,7 +67,7 @@ def random_order(rng):
 """
 
 TASK = {
-    "title": "In-Memory Database with Indexes",
+    "title": "In-Memory Database",
     "difficulty": "Hard",
     "version": 1,
     "function_name": "Database",
@@ -84,9 +84,9 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Background — context only. Everything above this line is the requirement.**
 
-**Why this shows up in interviews:** each part is small, but the comparison rules, stable multi-column sorting and index maintenance interact. A clean split between filtering, ordering and access paths is what lets part 4 go in without rewriting part 2.
+**Why this shows up in interviews:** each part is small, but they interact. Keeping each concern in its own function is what lets a later part go in without rewriting an earlier one.
 
-**Where it is used:** every relational database separates the access path (scan or index) from filtering and sorting; SQLite and Postgres choose between a scan and an index per query.
+**Where it is used:** the query layer of every relational database, from SQLite to Postgres.
 
 Adapted from the in-memory database question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded.""",
     "parts": [
@@ -110,7 +110,7 @@ Adapted from the in-memory database question in Schuture/OpenAI-Interview-Notes 
 
 - `operator` is one of `=`, `!=`, `<`, `<=`, `>`, `>=`. `None` or `[]` means no filtering.
 - A condition is false whenever the row's value or `value` is `None`, for every operator, `!=` included.
-- Two values of the same type compare as Python compares them. An `int` never equals a `str`, and every `int` is smaller than every `str`.
+- Values of one type use Python's own comparison. Across types, ints and strs are never equal, and any int ranks below any str.
 
 **Example:**
 - `where=[("dept", "=", "eng"), ("salary", ">=", 90000)]` keeps only Ana
@@ -144,7 +144,7 @@ Adapted from the in-memory database question in Schuture/OpenAI-Interview-Notes 
     ],
     "hints": [
         {"level": 1, "kind": "questions", "content": "What does a table need besides its rows to check an insert? In what order must insert run its two checks? What does select hand back if the caller later edits the dicts it returned, or the dict it inserted?"},
-        {"level": 2, "kind": "analysis", "content": "Store each table as its column list plus a list of row dicts. In insert, look for unknown keys before missing ones and append dict(row). In select, validate every requested column against the schema before touching rows, then build a fresh dict per row with only those keys, so no caller can reach the stored rows."},
+        {"level": 2, "kind": "analysis", "content": "Store each table as its column list plus a list of row dicts. In insert, look for unknown keys before missing ones, then append a new dict with the keys in column order. In select, validate every requested column against the schema before touching rows, then build a fresh dict per row with only those keys, so no caller can reach the stored rows."},
     ],
     "model_connections": [
         "Relational engines such as SQLite plan each query by choosing between a full scan and an index, then apply the remaining predicates to the candidate rows, which is part 4.",
@@ -215,6 +215,8 @@ assert names([("id", "=", "101")]) == []
 assert names([("id", "!=", "101")]) == [r["name"] for r in ROWS]
 assert names([("name", ">", 5)]) == [r["name"] for r in ROWS]
 assert raises(KeyError, db.select, "employees", where=[("bonus", "=", 1)])
+db.create_table("empty", ["a"])
+assert raises(KeyError, db.select, "empty", where=[("b", "=", 1)]), "an unknown where column must raise even on an empty table"
 """},
         {"name": "Part 2: random filters match a reference", "part": 2, "visibility": "unshown", "behavior": "state.invariant",
          "failure_message": "A random WHERE returned different rows than the comparison rules give.",
@@ -247,6 +249,8 @@ keys = lambda order: [r["k"] for r in db.select("t", ["k"], order_by=order)]
 assert keys([("v", True)]) == [1, 5, 6, 0, 3, 4, 2, 7]
 assert keys([("v", False)]) == [2, 7, 4, 0, 3, 6, 1, 5]
 assert raises(KeyError, db.select, "t", order_by=[("w", True)])
+db.create_table("empty", ["a"])
+assert raises(KeyError, db.select, "empty", order_by=[("b", True)]), "an unknown order_by column must raise even on an empty table"
 """},
         {"name": "Part 3: random queries match a reference", "part": 3, "visibility": "unshown", "behavior": "events.ordering",
          "failure_message": "A random WHERE plus ORDER BY returned different rows or a different order than the rules give.",
@@ -268,6 +272,8 @@ before = [db.select("employees", ["name"], where=w) for w in queries]
 db.create_index("employees", "dept", "hash")
 db.create_index("employees", "salary", "sorted")
 assert [db.select("employees", ["name"], where=w) for w in queries] == before
+assert raises(KeyError, db.create_index, "nope", "dept", "hash")
+assert raises(KeyError, db.create_index, "employees", "bonus", "sorted")
 db.insert("employees", {"id": 109, "name": "Ivy", "dept": "eng", "salary": 70500})
 assert db.select("employees", ["name"], where=[("dept", "=", "eng")]) == [{"name": n} for n in ("Ana", "Cy", "Eli", "Ivy")]
 assert db.select("employees", ["name"], where=[("salary", ">", 70000), ("salary", "<", 71000)]) == [{"name": "Ivy"}]
@@ -349,21 +355,32 @@ class _Table:
     def __init__(self, columns):
         self.columns = list(columns)
         self.rows = []
-        self.hash = {}    # column -> {rank: [row ids]}
-        self.sorted = {}  # column -> sorted [(rank, row id)]
+        self.hash_indexes = {}    # column -> {rank: [row ids]}
+        self.sorted_indexes = {}  # column -> sorted [(rank, row id)]
 
     def check(self, column):
         if column not in self.columns:
             raise KeyError(column)
 
-    def index_row(self, row_id):
+    def index_row(self, row_id, columns=None):
+        """Add one row to every index, or only to the indexes on `columns`."""
         row = self.rows[row_id]
-        for column, buckets in self.hash.items():
-            if row[column] is not None:
+        for column, buckets in self.hash_indexes.items():
+            if row[column] is not None and (columns is None or column in columns):
                 buckets.setdefault(_rank(row[column]), []).append(row_id)
-        for column, entries in self.sorted.items():
-            if row[column] is not None:
+        for column, entries in self.sorted_indexes.items():
+            if row[column] is not None and (columns is None or column in columns):
                 bisect.insort(entries, (_rank(row[column]), row_id))
+
+    def build_index(self, column, kind):
+        if kind == "hash":
+            self.hash_indexes[column] = {}
+        elif kind == "sorted":
+            self.sorted_indexes[column] = []
+        else:
+            raise ValueError(kind)
+        for row_id in range(len(self.rows)):
+            self.index_row(row_id, columns={column})
 
     def candidates(self, where):
         """Row ids an index can narrow to, or None when a full scan is needed."""
@@ -371,10 +388,10 @@ class _Table:
             if value is None:
                 return []
             key = _rank(value)
-            if op == "=" and column in self.hash:
-                return list(self.hash[column].get(key, []))
-            if op in ("<", "<=", ">", ">=") and column in self.sorted:
-                entries = self.sorted[column]
+            if op == "=" and column in self.hash_indexes:
+                return list(self.hash_indexes[column].get(key, []))
+            if op in ("<", "<=", ">", ">=") and column in self.sorted_indexes:
+                entries = self.sorted_indexes[column]
                 low = bisect.bisect_left(entries, (key,))
                 high = bisect.bisect_right(entries, (key, float("inf")))
                 chosen = {"<": entries[:low], "<=": entries[:high], ">": entries[high:], ">=": entries[low:]}[op]
@@ -409,22 +426,7 @@ class Database:
     def create_index(self, table, column, kind):
         t = self._table(table)
         t.check(column)
-        if kind == "hash":
-            t.hash[column] = {}
-        elif kind == "sorted":
-            t.sorted[column] = []
-        else:
-            raise ValueError(kind)
-        index = t.hash[column] if kind == "hash" else t.sorted[column]
-        for row_id, row in enumerate(t.rows):
-            if row[column] is None:
-                continue
-            if kind == "hash":
-                index.setdefault(_rank(row[column]), []).append(row_id)
-            else:
-                index.append((_rank(row[column]), row_id))
-        if kind == "sorted":
-            index.sort()
+        t.build_index(column, kind)
 
     def select(self, table, columns=None, where=None, order_by=None):
         t = self._table(table)

@@ -7,7 +7,7 @@ from ._interview import interview
 _HELPERS = r"""
 import random, re, time
 
-def raises(name, fn, *args):
+def raises_named(name, fn, *args):
     try:
         fn(*args)
     except Exception as error:
@@ -65,10 +65,10 @@ TASK = {
 The requirement arrives in parts. Each part keeps every earlier behavior, so one `Spreadsheet` class passes all parts at the end. Pass every test of the current part to reveal the next one.
 
 **Rules for every part:**
-- A cell name is one or more uppercase letters `A`–`Z` followed by one or more digits, such as `A1` or `AB12`. `a1`, `A` and `A1B` are not cell names.
+- A cell name is a run of capital letters `A`–`Z`, then a run of digits, and nothing more. `B7` and `ZZ10` are names; `b7`, `B` and `B7C` are not.
 - A cell holds an `int` or a formula: `=` followed by terms joined by exactly one `+` or `-` each, like `=R1 + 20 - S3` or `=5`.
-- A term is a cell name or a non-negative integer of at most 18 digits. Spaces may surround terms and operators, but not sit inside a term.
-- Nothing else is allowed: no `*`, `/`, parentheses, or operator before the first term or after the last.
+- Each term is a cell name or an unsigned integer with at most 18 digits. Spaces are allowed between terms and operators, never inside a term.
+- Any other character, such as `*`, `/` or a parenthesis, makes the formula invalid, and so does a sign before the first term or after the last.
 - A cell that was never set reads as `0`.
 - Define two exception classes, `FormulaError` and `CycleError`. `set` and `get` raise `FormulaError` for a bad cell name, and `set` raises it for a bad value.
 
@@ -76,9 +76,9 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Background — context only. Everything above this line is the requirement.**
 
-**Why this shows up in interviews:** the first version is a recursive evaluator. Later requirements turn it into a dependency graph with cycle detection and ordered recomputation, which is where most bugs hide.
+**Why this shows up in interviews:** the first version is short. The later parts test whether its design holds up as the requirements grow.
 
-**Where it is used:** spreadsheet engines, build systems and reactive UI frameworks all keep a graph of what reads what and recompute only what a change reaches.
+**Where it is used:** spreadsheet engines and build systems.
 
 Adapted from the spreadsheet dependencies question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, on one class, with part 1's cycle rule relaxed so that the parts build on each other.""",
     "parts": [
@@ -155,10 +155,10 @@ assert sheet.get("Z99") == 0
          "code": _HELPERS + r"""
 sheet = {fn}()
 for bad in ("a1", "A", "A1B", "1A", "", "A 1", "Ä1"):
-    assert raises("FormulaError", sheet.set, bad, 1), f"set({bad!r}, 1) must raise FormulaError"
-    assert raises("FormulaError", sheet.get, bad), f"get({bad!r}) must raise FormulaError"
+    assert raises_named("FormulaError", sheet.set, bad, 1), f"set({bad!r}, 1) must raise FormulaError"
+    assert raises_named("FormulaError", sheet.get, bad), f"get({bad!r}) must raise FormulaError"
 for bad in ("=-R1", "=R1 - -S3", "=R1 2", "=", "=  ", "R1", "=R1*2", "=(1)", "=R1+", "=1234567890123456789", "=r1", 3.5, None, [1]):
-    assert raises("FormulaError", sheet.set, "A1", bad), f"set('A1', {bad!r}) must raise FormulaError"
+    assert raises_named("FormulaError", sheet.set, "A1", bad), f"set('A1', {bad!r}) must raise FormulaError"
 for good in ("=5", "= R1 + 20 - S3 ", "=AB12", "=123456789012345678", "=0-0+B2"):
     sheet.set("A1", good)
 sheet.set("A1", -7)
@@ -170,13 +170,13 @@ assert sheet.get("A1") == -7
 sheet = {fn}()
 sheet.set("U1", "=U2")
 sheet.set("W1", "=U1 + 1")
-if not raises("CycleError", sheet.set, "U2", "=U1"):
-    assert raises("CycleError", sheet.get, "U1"), "get on a cycle must raise CycleError"
-    assert raises("CycleError", sheet.get, "W1"), "get on a cell that reads a cycle must raise CycleError"
+if not raises_named("CycleError", sheet.set, "U2", "=U1"):
+    assert raises_named("CycleError", sheet.get, "U1"), "get on a cycle must raise CycleError"
+    assert raises_named("CycleError", sheet.get, "W1"), "get on a cell that reads a cycle must raise CycleError"
 sheet.set("C1", "=C3 + 1")
 sheet.set("C2", "=C1")
-if not raises("CycleError", sheet.set, "C3", "=C2"):
-    assert raises("CycleError", sheet.get, "C3")
+if not raises_named("CycleError", sheet.set, "C3", "=C2"):
+    assert raises_named("CycleError", sheet.get, "C3")
 """},
         {"name": "Part 1: random acyclic sheets match a reference", "part": 1, "visibility": "unshown", "behavior": "state.invariant",
          "failure_message": "A random sheet without cycles evaluated to a different value than the rules give.",
@@ -201,7 +201,7 @@ for seed in range(60):
 sheet = {fn}()
 sheet.set("U1", "=U2")
 assert sheet.get("U1") == 0
-assert raises("CycleError", sheet.set, "U2", "=U1"), "set must reject a cycle"
+assert raises_named("CycleError", sheet.set, "U2", "=U1"), "set must reject a cycle"
 assert sheet.get("U1") == 0 and sheet.get("U2") == 0
 sheet.set("U2", 5)
 assert sheet.get("U1") == 5
@@ -213,7 +213,7 @@ sheet = {fn}()
 sheet.set("A1", 1)
 sheet.set("B1", "=A1 + 1")
 sheet.set("C1", "=B1 + 1")
-assert raises("CycleError", sheet.set, "A1", "=C1 + D1"), "set must reject a cycle"
+assert raises_named("CycleError", sheet.set, "A1", "=C1 + D1"), "set must reject a cycle"
 assert (sheet.get("A1"), sheet.get("B1"), sheet.get("C1")) == (1, 2, 3)
 sheet.set("D1", 50)
 assert sheet.get("A1") == 1, "the rejected formula left a dependency on D1 behind"
@@ -249,7 +249,7 @@ for seed in range(60):
     cells = [f"D{i}" for i in range(10)]
     for cell in rng.sample(cells, len(cells)):
         value = rng.randint(-9, 9) if rng.random() < 0.3 else random_formula(rng, cells)
-        rejected = raises("CycleError", sheet.set, cell, value)
+        rejected = raises_named("CycleError", sheet.set, cell, value)
         assert rejected == (oracle.set(cell, value) == "cycle"), (seed, cell, value)
         for c in cells:
             assert sheet.get(c) == oracle.get(c), (seed, c)
@@ -271,10 +271,10 @@ assert sheet.get("D1") == 0
          "failure_message": "A formula that reads its own cell is a cycle; set must raise CycleError and leave the cell as it was.",
          "code": _HELPERS + r"""
 sheet = {fn}()
-assert raises("CycleError", sheet.set, "H2", "=H2")
+assert raises_named("CycleError", sheet.set, "H2", "=H2")
 assert sheet.get("H2") == 0
 sheet.set("H3", 4)
-assert raises("CycleError", sheet.set, "H3", "=1 + H3 - 1")
+assert raises_named("CycleError", sheet.set, "H3", "=1 + H3 - 1")
 assert sheet.get("H3") == 4
 """},
         {"name": "Part 3: later cells, diamonds, and literals turned formulas", "part": 3, "visibility": "unshown", "behavior": "state.invariant",
@@ -308,7 +308,7 @@ for seed in range(80):
     for _ in range(40):
         cell = rng.choice(cells)
         value = rng.randint(-9, 9) if rng.random() < 0.3 else random_formula(rng, cells)
-        rejected = raises("CycleError", sheet.set, cell, value)
+        rejected = raises_named("CycleError", sheet.set, cell, value)
         assert rejected == (oracle.set(cell, value) == "cycle"), (seed, cell, value)
         for c in cells:
             assert sheet.get(c) == oracle.get(c), (seed, c)

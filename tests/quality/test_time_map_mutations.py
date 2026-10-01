@@ -80,6 +80,7 @@ MUTATIONS = [
 ]
 
 
+# Concurrency cases race real threads, so repeat to show the gate does not pass by luck.
 @pytest.mark.parametrize("repeat", range(3))
 def test_mutations_rejected(repeat):
     assert_part_mutations_rejected(TASK_ID, MUTATIONS, _NO_LOCK)

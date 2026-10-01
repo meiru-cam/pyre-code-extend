@@ -32,14 +32,13 @@ MUTATIONS = [
     ("range hits in value order", 4, [("                return sorted(row_id for _, row_id in chosen)", "                return [row_id for _, row_id in chosen]")]),
     ("<= misses equal values", 4, [('"<=": entries[:high]', '"<=": entries[:low]')]),
     ("rebuilding duplicates entries", 4, [
-        ("            t.hash[column] = {}\n", "            t.hash.setdefault(column, {})\n"),
-        ("            t.sorted[column] = []\n", "            t.sorted.setdefault(column, [])\n"),
+        ("            self.hash_indexes[column] = {}\n", "            self.hash_indexes.setdefault(column, {})\n"),
+        ("            self.sorted_indexes[column] = []\n", "            self.sorted_indexes.setdefault(column, [])\n"),
     ]),
 ]
 
 
-@pytest.mark.parametrize("repeat", range(3))
-def test_mutations_rejected(repeat):
+def test_mutations_rejected():
     assert_part_mutations_rejected(TASK_ID, MUTATIONS)
 
 

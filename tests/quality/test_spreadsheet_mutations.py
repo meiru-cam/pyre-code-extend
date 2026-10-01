@@ -63,8 +63,7 @@ MUTATIONS = [
 ]
 
 
-@pytest.mark.parametrize("repeat", range(3))
-def test_mutations_rejected(repeat):
+def test_mutations_rejected():
     assert_part_mutations_rejected(TASK_ID, MUTATIONS)
 
 

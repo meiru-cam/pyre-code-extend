@@ -1,4 +1,4 @@
-"""Mutation gate for the four-level bank ledger exercise."""
+"""Mutation gate for the multi-part bank ledger exercise."""
 
 from __future__ import annotations
 
@@ -17,8 +17,8 @@ MUTATIONS = [
         "if account is None or amount >= self._available(account_id, timestamp):",
     )]),
     ("deposit to a missing account", 1, [(
-        "        account = self._live.get(account_id)\n        if account is None:\n            return None\n        self._change(account, timestamp, amount)",
-        "        account = self._live.setdefault(account_id, _Account(timestamp))\n        self._change(account, timestamp, amount)",
+        "        account = self._live.get(account_id)\n        if account is None:\n            return None\n        account.change(timestamp, amount)",
+        "        account = self._live.setdefault(account_id, _Account(timestamp))\n        account.change(timestamp, amount)",
     )]),
     ("ties sorted descending", 2, [("key=lambda item: (-item[1].outgoing, item[0])", "key=lambda item: (-item[1].outgoing, [-ord(c) for c in item[0]])")]),
     ("outgoing never counted", 2, [("        account.outgoing += amount\n", "")]),
@@ -38,15 +38,14 @@ MUTATIONS = [
     ("merge leaves incoming transfers on b", 4, [("                if t.target == b:\n                    t.target = a\n", "")]),
     ("merge leaves outgoing transfers on b", 4, [("                if t.source == b:\n                    t.source = a\n", "")]),
     ("merge credit missing from history", 4, [(
-        "        self._change(keep, timestamp, gone.balance)\n",
+        "        keep.change(timestamp, gone.balance)\n",
         "        keep.balance += gone.balance\n",
     )]),
     ("history ignores the creation time", 4, [("        return account.balances[index - 1] if index else None", "        return account.balances[max(index - 1, 0)]")]),
 ]
 
 
-@pytest.mark.parametrize("repeat", range(3))
-def test_mutations_rejected(repeat):
+def test_mutations_rejected():
     assert_part_mutations_rejected(TASK_ID, MUTATIONS)
 
 
