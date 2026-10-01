@@ -186,5 +186,13 @@
       "monster_battle"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/cluster-count-topology",
+    "exercises": [
+      "cluster_count"
+    ],
+    "round": "coding"
   }
 ]

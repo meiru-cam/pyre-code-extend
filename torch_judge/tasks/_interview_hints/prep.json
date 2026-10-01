@@ -96,5 +96,13 @@
     "How do you represent which element beats which so that adding a fifth element is a one-line change?": "Think about a mapping from each element to the one it beats, and how both directions of the rule can be read from it.",
     "How do you add smart targeting without changing the output of battles that do not ask for it?": "Consider a default argument that keeps the old behaviour, and which single decision in the loop it should change.",
     "Why does picking the attacker by maximum damage need an explicit rule for ties?": "Check what Python's max returns when several items share the largest key, and whether that matches the rule."
+  },
+  "cluster_count": {
+    "What does a machine store between forwarding a request and hearing from its last child?": "List what has to survive between the moment a request arrives and the moment the last child answers, and key it so two queries cannot collide.",
+    "Why record each child's answer by child id instead of keeping a running total?": "Picture the same child's answer arriving twice and ask what a running total would do with it.",
+    "Why can the code not assume children answer in the order they were asked?": "Think about two children at different depths and which one's answer can reach the parent first.",
+    "How do you put the children's subtrees back in children_ids order when answers arrive in any order?": "Consider storing answers by child id and building the list only when every child has answered.",
+    "Which messages can be repeated or lost, and what state makes each case harmless?": "Walk through a lost request, a lost answer, and a repeated request, and name the state that makes each one safe.",
+    "How do you choose the resend timeout, and what goes wrong if it is too short or too long?": "Compare the time a deep subtree needs to answer with the timeout, and count the extra messages each choice causes."
   }
 }
