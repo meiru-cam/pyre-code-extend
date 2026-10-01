@@ -154,5 +154,13 @@
       "file_dedup"
     ],
     "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/stack-trace-reconstruction",
+    "exercises": [
+      "profiler_stacks"
+    ],
+    "round": "coding"
   }
 ]

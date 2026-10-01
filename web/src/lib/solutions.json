@@ -1062,6 +1062,15 @@
       }
     ]
   },
+  "profiler_stacks": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "# Adapted from Schuture/Anthropic-Interview-Notes (code under the MIT License).\n\n\ndef _common_prefix(a, b):\n    n = 0\n    while n < len(a) and n < len(b) and a[n] == b[n]:\n        n += 1\n    return n\n\n\nclass StackProfiler:\n    def __init__(self, known_traces=()):\n        # A trie over reversed traces; every node lists the ids of all traces that pass through it.\n        self._trie = {}\n        for trace_id, frames in known_traces:\n            node = self._trie\n            for frame in reversed(frames):\n                node = node.setdefault(frame, {})\n                node.setdefault(\"$ids\", []).append(trace_id)\n        stack = [self._trie]\n        while stack:\n            node = stack.pop()\n            for key, child in node.items():\n                if key == \"$ids\":\n                    child.sort()\n                else:\n                    stack.append(child)\n\n    def events(self, samples, end_time):\n        out, prev = [], []\n        for ts, stack in samples:\n            p = _common_prefix(prev, stack)\n            for depth in range(len(prev) - 1, p - 1, -1):\n                out.append((\"end\", ts, prev[depth], depth))\n            for depth in range(p, len(stack)):\n                out.append((\"start\", ts, stack[depth], depth))\n            prev = stack\n        for depth in range(len(prev) - 1, -1, -1):\n            out.append((\"end\", end_time, prev[depth], depth))\n        return out\n\n    def debounced_events(self, samples, k):\n        prev, streak = [], []  # streak[d]: consecutive samples position d has held its current frame\n        confirmed = 0          # positions below this have had their start emitted\n        closing = {}           # depth -> [name, samples since a confirmed frame there left]\n        for ts, stack in samples:\n            p = _common_prefix(prev, stack)\n            for entry in closing.values():\n                entry[1] += 1\n            for depth in range(len(prev) - 1, p - 1, -1):\n                if depth < confirmed:\n                    closing[depth] = [prev[depth], 1]\n            confirmed = min(confirmed, p)\n            for depth in sorted((d for d, (_, gone) in closing.items() if gone >= k), reverse=True):\n                yield (\"end\", ts, closing.pop(depth)[0], depth)\n            streak = [streak[d] + 1 if d < p else 1 for d in range(len(stack))]\n            while confirmed < len(stack) and streak[confirmed] >= k:\n                yield (\"start\", ts, stack[confirmed], confirmed)\n                confirmed += 1\n            prev = stack\n\n    def match_suffix(self, frames):\n        node = self._trie\n        for frame in reversed(frames):\n            if frame not in node:\n                return \"UNKNOWN\"\n            node = node[frame]\n        return list(node[\"$ids\"])",
+        "role": "solution"
+      }
+    ]
+  },
   "qk_norm": {
     "cells": [
       {

@@ -64,5 +64,13 @@
     "Why compare sizes before reading anything, and why is a matching sample still not proof of a duplicate?": "Ask what a stat call costs compared with a read, and what two files with the same first few kilobytes may still differ in.",
     "Why do threads speed up reading files despite the GIL, and when would processes be the better pool?": "Think about what a thread does while the operating system fetches bytes from storage, and what work would keep every thread busy instead.",
     "When would you add a byte-for-byte comparison after the hashes match?": "Consider who acts on the result: what is the cost of wrongly calling two files the same if one of them gets deleted?"
+  },
+  "profiler_stacks": {
+    "Why are frames identified by their position along the common prefix rather than by name?": "Picture a recursive function that appears twice in one stack, and ask how a name alone would tell the two calls apart.",
+    "In which order do you emit the ends and the starts at one sample, and why?": "Think about how calls nest: which frame must already be on the stack before another can start, and which must return first.",
+    "What does a sample's timestamp tell you about when a call really started or returned?": "Consider a call that starts and returns between two samples, and what the samples can and cannot show about it.",
+    "What state does a streaming, debounced converter need, and why does it stay bounded by the stack depth?": "List what one sample can change, and ask which facts about earlier samples you still need once it is processed.",
+    "What does debouncing cost you, and how would you choose k?": "Count how many samples late every event becomes, and picture a call that genuinely lasts only one sample.",
+    "How does reversing the traces turn suffix matching into a trie lookup, and what does the index cost in memory?": "Write a suffix query backwards and compare it with a prefix lookup; then count how many ids each trace adds along its path."
   }
 }

@@ -1,0 +1,22 @@
+{
+  "title": "Call Stacks from Profiler Samples",
+  "summary": "Convert timestamped call-stack samples from a profiler into function start/end events using the longest common prefix between consecutive samples; then stream the same conversion in O(depth) memory with a debounce rule for noisy frames; then index known complete stack traces in a trie so a truncated crash trace can be matched against them by its trailing frames.",
+  "round": "coding",
+  "kind": "Coding · stacks, string processing",
+  "difficulty": "Medium",
+  "frequency": "high",
+  "format": "3 parts / 55 min",
+  "topics": [
+    "call-stack",
+    "longest-common-prefix",
+    "streaming",
+    "debounce",
+    "trie",
+    "recursion"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/coding/stack-trace-reconstruction",
+  "rubric": [],
+  "exercises": [
+    "profiler_stacks"
+  ]
+}
