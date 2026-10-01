@@ -104,5 +104,14 @@
     "Why record each child's answer by child id instead of keeping a running total, both for ordering subtrees and for repeated answers?": "Consider storing answers by child id and building the list only when every child has answered. Then think about putting the answers back in children_ids order.",
     "Which messages can be repeated or lost, and what state makes each case harmless?": "Walk through a lost request, a lost answer, and a repeated request, and name the state that makes each one safe.",
     "How do you choose the resend timeout, and what goes wrong if it is too short or too long?": "Compare the time a deep subtree needs to answer with the timeout, and count the extra messages each choice causes."
+  },
+  "durable_kv": {
+    "Why does a format like key + \":\" + value + newline break, and what does a length prefix change?": "Try storing the key \"a:b\" with that format and parse it back. Then ask what the reader would need to know before reading a string so that it never has to look for a separator at all.",
+    "Should a string's length prefix count characters or bytes, and what goes wrong with the other choice?": "Encode an emoji and compare len() of the str with len() of its bytes. Which of the two numbers tells the reader where the next field starts?",
+    "Which strings fail to encode with plain UTF-8, and how do you make them round-trip?": "Try \"\\ud800\".encode(\"utf-8\") and read the error. Look up the error handlers that str.encode and bytes.decode accept.",
+    "Only single writes are atomic. How do you make a save that spans several files all-or-nothing?": "List the calls a save makes and imagine the process dying between any two. Which single call could decide whether the old or the new data is current?",
+    "Which files can an interrupted save leave behind, and how does the next save find and remove them?": "Picture a save that died halfway through, then a later save that finished. Which files from the first one does nothing point to any more, and how would the second save recognise them?",
+    "How does a log record let load() tell a complete record from a torn or damaged one, and why should the checksum cover the length?": "Write out the bytes of a record, then zero its last few bytes or cut it short. Which fields would a reader check, and what would twelve zero bytes look like to it?",
+    "Why must load() cut a damaged tail off the log instead of just skipping it?": "Recover from a torn tail, append one new record, then reload. Where does the new record sit relative to the damaged bytes, and will the reader ever reach it?"
   }
 }

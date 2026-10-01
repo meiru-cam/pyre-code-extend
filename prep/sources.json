@@ -194,5 +194,13 @@
       "cluster_count"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/durable-kv-store",
+    "exercises": [
+      "durable_kv"
+    ],
+    "round": "coding"
   }
 ]
