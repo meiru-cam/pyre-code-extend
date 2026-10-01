@@ -99,9 +99,9 @@
   },
   "cluster_count": {
     "What does a machine store between forwarding a request and hearing from its last child?": "List what has to survive between the moment a request arrives and the moment the last child answers, and key it so two queries cannot collide.",
-    "Why record each child's answer by child id instead of keeping a running total?": "Picture the same child's answer arriving twice and ask what a running total would do with it.",
-    "Why can the code not assume children answer in the order they were asked?": "Think about two children at different depths and which one's answer can reach the parent first.",
-    "How do you put the children's subtrees back in children_ids order when answers arrive in any order?": "Consider storing answers by child id and building the list only when every child has answered.",
+    "How does a machine know that every one of its children has answered?": "Think about what the machine could keep that shrinks by one with each answer and is empty exactly when it may reply.",
+    "Two queries with different request ids reach the same machine at once: what keeps their state apart?": "Consider what you would key every piece of per-query state by, and what would collide without that key.",
+    "Why record each child's answer by child id instead of keeping a running total, both for ordering subtrees and for repeated answers?": "Consider storing answers by child id and building the list only when every child has answered. Then think about putting the answers back in children_ids order.",
     "Which messages can be repeated or lost, and what state makes each case harmless?": "Walk through a lost request, a lost answer, and a repeated request, and name the state that makes each one safe.",
     "How do you choose the resend timeout, and what goes wrong if it is too short or too long?": "Compare the time a deep subtree needs to answer with the timeout, and count the extra messages each choice causes."
   }

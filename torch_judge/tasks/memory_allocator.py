@@ -72,15 +72,15 @@ TASK = {
 The requirement arrives in parts. Each part keeps every earlier behavior, so one `MemoryAllocator` class passes all parts at the end. Pass every test of the current part to reveal the next one.
 
 **Rules for every part:**
-- The address space is the integers `0` to `capacity - 1`. Each address is either allocated or free.
+- The address space is the integers `0` to `capacity - 1`, and at any moment every one of them is in use or available.
 - A block is a run of addresses that are all allocated or all free and cannot be extended. Two free blocks never touch: freed space always joins the free blocks next to it.
-- Errors are the built-in `ValueError` and `MemoryError`.
+- Errors are the built-in `ValueError` and `MemoryError`. A call that raises changes nothing.
 
 ────────────────────────────────
 
 **Background — context only. Everything above this line is the requirement.**
 
-**Why this shows up in interviews:** the first version is a careful list walk, and the next part tests whether you can index the same data two ways at once.
+**Why this shows up in interviews:** the first version is a careful list walk, and each later part adds one requirement.
 
 **Where it is used:** heap allocators such as glibc malloc, GPU memory pools, and any system that carves a large buffer into pieces.
 
@@ -92,7 +92,7 @@ Adapted from the memory allocator question in Schuture/OpenAI-Interview-Notes (C
 
 - `MemoryAllocator(capacity)` starts with everything free and raises `ValueError` if `capacity <= 0`.
 - `allocate(size)` picks the free block with the lowest start address among those holding at least `size` bytes, takes `size` bytes from its low end, and returns their start address. What is left of that block stays free.
-- `allocate` raises `ValueError` if `size <= 0`, and `MemoryError` if no free block is large enough.
+- A non-positive `size` is a `ValueError`; a request that no free block can hold is a `MemoryError`.
 - `free(address, size)` releases a block that `allocate(size)` returned and that is still allocated. Anything else raises `ValueError`: an address never returned, a second free, a wrong size, or `size <= 0`.
 - A released block joins a free block that touches it on the left, on the right, or both.
 - `free_blocks()` returns every free block as `(start, size)`, in address order.
@@ -110,7 +110,7 @@ Adapted from the memory allocator question in Schuture/OpenAI-Interview-Notes (C
 - `capacity` can be up to `10**9`, so nothing may cost time per byte.
 - With 20,000 scattered free bytes below it, allocating and freeing a block takes about as long as with 200.
 
-**Example:** with `capacity = 30`, `allocate(12), allocate(3), allocate(6), allocate(9)` return `0, 12, 15, 21`. After `free(0, 12)` and `free(15, 6)`, `allocate(5)` returns `0`, though `(15, 6)` fits more tightly.""",
+**Example:** with `capacity = 40`, `allocate(10), allocate(4), allocate(8), allocate(18)` return `0, 10, 14, 22`. After `free(0, 10)` and `free(14, 8)`, `allocate(7)` returns `0`, though `(14, 8)` fits more tightly.""",
         },
     ],
     "hints": [
@@ -204,15 +204,16 @@ for seed in range(150):
         assert blocks(allocator) == model.free_blocks(), seed
 """},
         {"name": "Part 2: first fit, not best fit", "part": 2, "behavior": "state.invariant", "code": _HELPERS + r"""
-allocator = {fn}(30)
-assert (allocator.allocate(12), allocator.allocate(3), allocator.allocate(6), allocator.allocate(9)) == (0, 12, 15, 21)
-allocator.free(0, 12)
-allocator.free(15, 6)
-assert blocks(allocator) == [(0, 12), (15, 6)]
-assert allocator.allocate(5) == 0
-big = {fn}(10**9)
-assert big.allocate(10**9 - 1) == 0
-assert blocks(big) == [(10**9 - 1, 1)]
+allocator = {fn}(40)
+assert (allocator.allocate(10), allocator.allocate(4), allocator.allocate(8), allocator.allocate(18)) == (0, 10, 14, 22)
+allocator.free(0, 10)
+allocator.free(14, 8)
+assert blocks(allocator) == [(0, 10), (14, 8)]
+assert allocator.allocate(7) == 0
+# Kept to 10**7 so a per-byte design fails on time instead of exhausting the grader's memory.
+big = {fn}(10**7)
+assert big.allocate(10**7 - 1) == 0
+assert blocks(big) == [(10**7 - 1, 1)]
 """},
         {"name": "Part 2: allocate and free do not scan the free blocks", "part": 2, "visibility": "unshown", "behavior": "performance.complexity",
          "failure_message": "Allocating and freeing past 20,000 small free blocks was much slower than past 200; find the first fit and the neighbours with a tree search, not a walk.",

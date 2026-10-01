@@ -116,7 +116,7 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Where it is used:** cluster membership and monitoring, and distributed aggregation over a spanning tree, as in sensor networks and gossip protocols.
 
-Adapted from the cluster count and topology question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, on one class whose queries all carry a `request_id`.""",
+Adapted from the cluster count and topology question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, on one class whose queries all carry a `request_id`, with the resend window fixed at 3 to 10 ticks so it can be tested.""",
     "parts": [
         {
             "title": "Count the machines",
@@ -403,13 +403,13 @@ class ClusterNode:
     "interview_questions": interview(
         concept=[
             "What does a machine store between forwarding a request and hearing from its last child?",
-            "Why record each child's answer by child id instead of keeping a running total?",
+            "How does a machine know that every one of its children has answered?",
         ],
         deep_dive=[
-            "Why can the code not assume children answer in the order they were asked?",
+            "Two queries with different request ids reach the same machine at once: what keeps their state apart?",
         ],
         tradeoffs=[
-            "How do you put the children's subtrees back in children_ids order when answers arrive in any order?",
+            "Why record each child's answer by child id instead of keeping a running total, both for ordering subtrees and for repeated answers?",
             "Which messages can be repeated or lost, and what state makes each case harmless?",
             "How do you choose the resend timeout, and what goes wrong if it is too short or too long?",
         ],

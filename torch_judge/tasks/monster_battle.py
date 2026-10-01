@@ -69,7 +69,7 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Rules for every part:**
 - A team is a tuple `(name, monsters)`, where `monsters` is a non-empty list in a fixed order. A monster is a tuple `(name, hp, attack)` with positive integers.
-- A monster is alive while its HP is above 0. A team is beaten when none of its monsters is alive.
+- A monster with HP of 0 or less is out of the fight. A team is beaten once all of its monsters are out.
 - Team A attacks first, then the teams alternate, one attack each, whatever happens.
 - On a turn, the attacker comes from the attacking team and the defender is the first alive monster of the other team. The defender loses HP equal to the damage; the attacker loses nothing.
 - The battle stops as soon as a team is beaten. Never modify the arguments.
@@ -78,11 +78,11 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Background — context only. Everything above this line is the requirement.**
 
-**Why this shows up in interviews:** the simulation is easy, and the exercise is about clean objects and an exact output format that later rules extend.
+**Why this shows up in interviews:** the simulation is easy, the exercise is about clean objects and an exact output format, and each later part adds one requirement.
 
 **Where it is used:** turn-based games and any rules engine whose output is checked line by line.
 
-Adapted from the monster battle question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, on one function with plain tuples, with elements and smart targeting made opt-in so the parts build on each other.""",
+Adapted from the monster battle question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, on one function with plain tuples, with later rules made opt-in so the parts build on each other.""",
     "parts": [
         {
             "title": "Plain attacks",
@@ -104,19 +104,19 @@ Adapted from the monster battle question in Schuture/OpenAI-Interview-Notes (CC 
         },
         {
             "title": "Elements",
-            "description_en": r"""Keep Part 1. A monster may have a fourth field, its element: `"Ember"`, `"Tide"`, `"Bramble"` or `"Spark"`. Any other value raises `ValueError`.
+            "description_en": r"""Keep Part 1. A monster may have a fourth field, its element: `"Ember"`, `"Tide"`, `"Bramble"` or `"Spark"`. If any monster has another value, `run_battle` raises `ValueError` before the first attack.
 
 - Each element is strong against one other: Ember beats Bramble, Bramble beats Tide, Tide beats Spark, Spark beats Ember.
 - When the attacker and the defender both have an element, the multiplier is `2` if the attacker's element beats the defender's, `0.5` if the defender's beats the attacker's, and `1` otherwise, including the same element. Without both elements it is `1`.
 - Damage is `attack` times the multiplier, rounded down, and never less than `1`.
-- When both have an element, the hit line names the multiplier after the damage: `for 18 damage (2x).`, `(0.5x)` or `(1x)`. Otherwise the line is exactly as in Part 1.
+- When both have an element, the hit line names the multiplier after the damage: `for 14 damage (2x).`, `(0.5x)` or `(1x)`. Otherwise the line is exactly as in Part 1.
 
-**Example:** `run_battle(("Forge", [("Cinder", 30, 9, "Ember")]), ("Grove", [("Moss", 26, 7, "Bramble")]))` returns:
-- `Match start: Forge takes on Grove`
-- `Cinder hits Moss for 18 damage (2x). Moss has 8 HP left.`
-- `Moss hits Cinder for 3 damage (0.5x). Cinder has 27 HP left.`
-- `Cinder hits Moss for 18 damage (2x). Moss is defeated!`
-- `Match over: Forge wins!`""",
+**Example:** `run_battle(("Kiln", [("Flint", 28, 7, "Ember")]), ("Glade", [("Fern", 20, 5, "Bramble")]))` returns:
+- `Match start: Kiln takes on Glade`
+- `Flint hits Fern for 14 damage (2x). Fern has 6 HP left.`
+- `Fern hits Flint for 2 damage (0.5x). Flint has 26 HP left.`
+- `Flint hits Fern for 14 damage (2x). Fern is defeated!`
+- `Match over: Kiln wins!`""",
         },
         {
             "title": "Smart attackers",
@@ -189,12 +189,12 @@ for seed in range(300):
     assert {fn}(a, b) == slow_battle(a, b), (seed, a, b)
 """},
         {"name": "Part 2: the worked example", "part": 2, "behavior": "events.ordering", "code": r"""
-assert {fn}(("Forge", [("Cinder", 30, 9, "Ember")]), ("Grove", [("Moss", 26, 7, "Bramble")])) == [
-    "Match start: Forge takes on Grove",
-    "Cinder hits Moss for 18 damage (2x). Moss has 8 HP left.",
-    "Moss hits Cinder for 3 damage (0.5x). Cinder has 27 HP left.",
-    "Cinder hits Moss for 18 damage (2x). Moss is defeated!",
-    "Match over: Forge wins!",
+assert {fn}(("Kiln", [("Flint", 28, 7, "Ember")]), ("Glade", [("Fern", 20, 5, "Bramble")])) == [
+    "Match start: Kiln takes on Glade",
+    "Flint hits Fern for 14 damage (2x). Fern has 6 HP left.",
+    "Fern hits Flint for 2 damage (0.5x). Flint has 26 HP left.",
+    "Flint hits Fern for 14 damage (2x). Fern is defeated!",
+    "Match over: Kiln wins!",
 ]
 """},
         {"name": "Part 2: the whole element table", "part": 2, "visibility": "unshown", "behavior": "state.invariant",

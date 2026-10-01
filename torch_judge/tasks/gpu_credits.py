@@ -193,11 +193,14 @@ for seed in range(200):
     rng = random.Random(seed)
     calls = sorted(random_calls(rng, rng.randint(1, 15)), key=call_ts)
     ledger, model = {fn}(), Replay()
-    for name, args in calls:
+    for i, (name, args) in enumerate(calls):
         getattr(ledger, name)(*args)
         getattr(model, name)(*args)
         t = call_ts((name, args))
-        for q in (t, t + rng.randint(0, 3)):
+        later = t + rng.randint(0, 3)
+        if i + 1 < len(calls):
+            later = min(later, call_ts(calls[i + 1]))  # queries never run ahead of the next call
+        for q in (t, later):
             assert ledger.get_balance(q) == model.get_balance(q), (seed, q)
         if rng.random() < 0.2:
             break
@@ -251,12 +254,19 @@ def workload(n):
             calls.append(("add_credit", (f"g{ts}", rng.randint(1, 50), ts, rng.randint(0, 300))))
         else:
             calls.append(("subtract", (rng.randint(1, 60), ts)))
+    calls.append(("add_credit", ("last", 10**9, 10 * n, 10)))
+    model = Replay()
+    for call in calls:
+        getattr(model, call[0])(*call[1])
+    expected = model.get_balance(10 * n)
+    assert expected is not None
     def run():
         ledger = {fn}()
         for call in calls:
             getattr(ledger, call[0])(*call[1])
             ledger.get_balance(call_ts(call))
             ledger.get_balance(call_ts(call) + 5)
+        assert ledger.get_balance(10 * n) == expected
     return run
 ratio = best_of_three(workload(3000)) / best_of_three(workload(300))
 assert ratio < 40, f"10x the calls took {ratio:.0f}x as long"
@@ -283,7 +293,8 @@ for seed in range(150):
             assert ledger.get_balance(back) == model.get_balance(back), (seed, back)
 """},
     ],
-    "solution": r'''import heapq
+    "solution": r'''# Adapted from Schuture/OpenAI-Interview-Notes (code under the MIT License).
+import heapq
 
 
 class GPUCreditLedger:
