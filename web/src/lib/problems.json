@@ -19606,7 +19606,7 @@
           "visibility": "unshown",
           "behavior": "concurrency.thread_safety",
           "failureMessage": "A call for one key blocked behind func running for another key; run func outside every lock the cache holds.",
-          "hiddenCode": "\nimport threading, time\nrelease = threading.Event()\nstarted = threading.Event()\ndef f(x):\n    if x == \"slow\":\n        started.set()\n        release.wait(5)\n    return x\ncache = {fn}(f, capacity=8)\ncache(\"cached\")\nblocker = threading.Thread(target=lambda: cache(\"slow\"), daemon=True)\nblocker.start()\nassert started.wait(5)\ndone = []\nother = threading.Thread(target=lambda: done.append((cache(\"fast\"), cache(\"cached\"))), daemon=True)\nother.start()\nother.join(2)\nfinished = not other.is_alive()\nrelease.set()\nblocker.join(5)\nassert finished, \"calls for other keys waited on the slow func\"\nassert done == [(\"fast\", \"cached\")]\n",
+          "hiddenCode": "\nimport threading\nrelease = threading.Event()\nstarted = threading.Event()\ndef f(x):\n    if x == \"slow\":\n        started.set()\n        release.wait(5)\n    return x\ncache = {fn}(f, capacity=8)\ncache(\"cached\")\nblocker = threading.Thread(target=lambda: cache(\"slow\"), daemon=True)\nblocker.start()\nassert started.wait(5)\ndone = []\nother = threading.Thread(target=lambda: done.append((cache(\"fast\"), cache(\"cached\"))), daemon=True)\nother.start()\nother.join(2)\nfinished = not other.is_alive()\nrelease.set()\nblocker.join(5)\nassert finished, \"calls for other keys waited on the slow func\"\nassert done == [(\"fast\", \"cached\")]\n",
           "part": 3
         },
         {
@@ -20166,6 +20166,14 @@
           "behavior": "performance.complexity",
           "failureMessage": "With a matching index, select still compared values in every row; read the candidate rows from the index instead.",
           "hiddenCode": "\nclass Counted(str):\n    compares = 0\n    def _count(self):\n        Counted.compares += 1\n    def __eq__(self, other): self._count(); return str.__eq__(self, other)\n    def __ne__(self, other): self._count(); return str.__ne__(self, other)\n    def __lt__(self, other): self._count(); return str.__lt__(self, other)\n    def __le__(self, other): self._count(); return str.__le__(self, other)\n    def __gt__(self, other): self._count(); return str.__gt__(self, other)\n    def __ge__(self, other): self._count(); return str.__ge__(self, other)\n    __hash__ = str.__hash__\n\nn = 2000\ndb = {fn}()\ndb.create_table(\"t\", [\"k\", \"tag\", \"code\"])\nfor i in range(n):\n    db.insert(\"t\", {\"k\": i, \"tag\": Counted(f\"t{i % 200:03d}\"), \"code\": Counted(f\"c{i:05d}\")})\ndb.create_index(\"t\", \"tag\", \"hash\")\ndb.create_index(\"t\", \"code\", \"sorted\")\nfor where, expected in (\n    ([(\"tag\", \"=\", \"t007\")], [i for i in range(n) if i % 200 == 7]),\n    ([(\"code\", \">=\", \"c01990\")], list(range(1990, n))),\n    ([(\"tag\", \"=\", \"t007\"), (\"k\", \"!=\", 7)], [i for i in range(n) if i % 200 == 7 and i != 7]),\n):\n    Counted.compares = 0\n    got = [r[\"k\"] for r in db.select(\"t\", [\"k\"], where=where)]\n    assert got == expected, where\n    assert Counted.compares < n // 4, f\"{where}: {Counted.compares} comparisons for {n} rows\"\n",
+          "part": 4
+        },
+        {
+          "name": "Part 4: both kinds of index on one column",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "Building one kind of index must not touch another index on the same column; each row must still come back once.",
+          "hiddenCode": "\ndb = {fn}()\ndb.create_table(\"t\", [\"k\", \"x\"])\nfor k, x in enumerate([3, 1, 2, None, 2]):\n    db.insert(\"t\", {\"k\": k, \"x\": x})\ndb.create_index(\"t\", \"x\", \"sorted\")\ndb.create_index(\"t\", \"x\", \"hash\")\ndb.insert(\"t\", {\"k\": 5, \"x\": 2})\nassert [r[\"k\"] for r in db.select(\"t\", [\"k\"], where=[(\"x\", \">=\", 2)])] == [0, 2, 4, 5]\nassert [r[\"k\"] for r in db.select(\"t\", [\"k\"], where=[(\"x\", \"=\", 2)])] == [2, 4, 5]\ndb.create_index(\"t\", \"x\", \"sorted\")\nassert [r[\"k\"] for r in db.select(\"t\", [\"k\"], where=[(\"x\", \"=\", 2)])] == [2, 4, 5]\nassert [r[\"k\"] for r in db.select(\"t\", [\"k\"], where=[(\"x\", \"<\", 3)])] == [1, 2, 4, 5]\n",
           "part": 4
         },
         {

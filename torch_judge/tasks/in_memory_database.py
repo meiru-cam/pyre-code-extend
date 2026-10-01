@@ -310,6 +310,22 @@ for where, expected in (
     assert got == expected, where
     assert Counted.compares < n // 4, f"{where}: {Counted.compares} comparisons for {n} rows"
 """},
+        {"name": "Part 4: both kinds of index on one column", "part": 4, "visibility": "unshown", "behavior": "state.invariant",
+         "failure_message": "Building one kind of index must not touch another index on the same column; each row must still come back once.",
+         "code": r"""
+db = {fn}()
+db.create_table("t", ["k", "x"])
+for k, x in enumerate([3, 1, 2, None, 2]):
+    db.insert("t", {"k": k, "x": x})
+db.create_index("t", "x", "sorted")
+db.create_index("t", "x", "hash")
+db.insert("t", {"k": 5, "x": 2})
+assert [r["k"] for r in db.select("t", ["k"], where=[("x", ">=", 2)])] == [0, 2, 4, 5]
+assert [r["k"] for r in db.select("t", ["k"], where=[("x", "=", 2)])] == [2, 4, 5]
+db.create_index("t", "x", "sorted")
+assert [r["k"] for r in db.select("t", ["k"], where=[("x", "=", 2)])] == [2, 4, 5]
+assert [r["k"] for r in db.select("t", ["k"], where=[("x", "<", 3)])] == [1, 2, 4, 5]
+"""},
         {"name": "Part 4: random queries with indexes match a reference", "part": 4, "visibility": "unshown", "behavior": "state.invariant",
          "failure_message": "With indexes in place, a random query returned different rows or a different order than without them.",
          "code": _ORACLE + r"""
@@ -362,15 +378,20 @@ class _Table:
         if column not in self.columns:
             raise KeyError(column)
 
-    def index_row(self, row_id, columns=None):
-        """Add one row to every index, or only to the indexes on `columns`."""
-        row = self.rows[row_id]
-        for column, buckets in self.hash_indexes.items():
-            if row[column] is not None and (columns is None or column in columns):
-                buckets.setdefault(_rank(row[column]), []).append(row_id)
-        for column, entries in self.sorted_indexes.items():
-            if row[column] is not None and (columns is None or column in columns):
-                bisect.insort(entries, (_rank(row[column]), row_id))
+    def _add(self, row_id, column, kind):
+        value = self.rows[row_id][column]
+        if value is None:
+            return
+        if kind == "hash":
+            self.hash_indexes[column].setdefault(_rank(value), []).append(row_id)
+        else:
+            bisect.insort(self.sorted_indexes[column], (_rank(value), row_id))
+
+    def index_row(self, row_id):
+        for column in self.hash_indexes:
+            self._add(row_id, column, "hash")
+        for column in self.sorted_indexes:
+            self._add(row_id, column, "sorted")
 
     def build_index(self, column, kind):
         if kind == "hash":
@@ -380,7 +401,7 @@ class _Table:
         else:
             raise ValueError(kind)
         for row_id in range(len(self.rows)):
-            self.index_row(row_id, columns={column})
+            self._add(row_id, column, kind)
 
     def candidates(self, where):
         """Row ids an index can narrow to, or None when a full scan is needed."""

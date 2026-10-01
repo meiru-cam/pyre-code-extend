@@ -345,7 +345,7 @@ assert results == [42] * 6
         {"name": "Part 3: other keys do not wait on a slow func", "part": 3, "visibility": "unshown", "behavior": "concurrency.thread_safety",
          "failure_message": "A call for one key blocked behind func running for another key; run func outside every lock the cache holds.",
          "code": r"""
-import threading, time
+import threading
 release = threading.Event()
 started = threading.Event()
 def f(x):

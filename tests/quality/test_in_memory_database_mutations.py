@@ -31,6 +31,10 @@ MUTATIONS = [
     ("insert skips the indexes", 4, [("        t.index_row(len(t.rows) - 1)\n", "")]),
     ("range hits in value order", 4, [("                return sorted(row_id for _, row_id in chosen)", "                return [row_id for _, row_id in chosen]")]),
     ("<= misses equal values", 4, [('"<=": entries[:high]', '"<=": entries[:low]')]),
+    ("building one kind refills the other", 4, [(
+        "            self._add(row_id, column, kind)\n",
+        "            if column in self.hash_indexes and kind == \"sorted\":\n                self._add(row_id, column, \"hash\")\n            if column in self.sorted_indexes and kind == \"hash\":\n                self._add(row_id, column, \"sorted\")\n            self._add(row_id, column, kind)\n",
+    )]),
     ("rebuilding duplicates entries", 4, [
         ("            self.hash_indexes[column] = {}\n", "            self.hash_indexes.setdefault(column, {})\n"),
         ("            self.sorted_indexes[column] = []\n", "            self.sorted_indexes.setdefault(column, [])\n"),
