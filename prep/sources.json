@@ -210,5 +210,13 @@
       "ipv4_iterator"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/shard-rebalance",
+    "exercises": [
+      "shard_rebalance"
+    ],
+    "round": "coding"
   }
 ]

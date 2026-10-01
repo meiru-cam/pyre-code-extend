@@ -1244,6 +1244,15 @@
       }
     ]
   },
+  "shard_rebalance": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "# Adapted from Schuture/OpenAI-Interview-Notes (code under the MIT License).\nimport bisect\nimport hashlib\nimport heapq\n\nVIRTUAL_NODES = 160\n\n\ndef _point(text):\n    return int.from_bytes(hashlib.md5(text.encode()).digest()[:8], \"big\")  # stable across processes\n\n\nclass ShardManager:\n    def __init__(self):\n        self._ring = []  # sorted (point, shard id): VIRTUAL_NODES points per shard\n        self._shards = set()\n\n    def rebalance(self, limit, shards):\n        # Up to `limit` lanes, each holding kept shards that never overlap; the heap holds the key\n        # from which each lane is free. A shard takes the lane that frees up first.\n        free, kept = [], []\n        for sid, start, end in sorted(shards, key=lambda s: (s[1], s[2], s[0])):\n            lane = heapq.heappop(free) if len(free) == limit else start  # an unused lane is free now\n            new_start = max(start, lane)\n            if new_start > end:\n                heapq.heappush(free, lane)  # hand the lane back unused\n                continue\n            kept.append([sid, new_start, end])\n            heapq.heappush(free, end + 1)\n\n        # Shifts never open a hole, so the only holes are those already in the input.\n        kept.sort(key=lambda s: (s[1], s[2], s[0]))\n        reach = owner = None\n        for shard in kept:\n            if owner is not None and shard[1] > reach + 1:\n                owner[2] = shard[1] - 1\n            if owner is None or shard[2] > reach:  # strict: ties keep the smaller (start, id)\n                reach, owner = shard[2], shard\n        kept.sort(key=lambda s: (s[1], s[2], s[0]))\n        return [tuple(s) for s in kept]\n\n    def add_shard(self, shard_id):\n        if shard_id in self._shards:\n            raise ValueError(f\"shard already present: {shard_id!r}\")\n        self._shards.add(shard_id)\n        points = [(_point(f\"{shard_id}#{v}\"), shard_id) for v in range(VIRTUAL_NODES)]\n        self._ring = sorted(self._ring + points)\n\n    def remove_shard(self, shard_id):\n        if shard_id not in self._shards:\n            raise ValueError(f\"no such shard: {shard_id!r}\")\n        self._shards.remove(shard_id)\n        self._ring = [entry for entry in self._ring if entry[1] != shard_id]\n\n    def locate(self, key):\n        if not self._ring:\n            raise LookupError(\"no shards\")\n        i = bisect.bisect_left(self._ring, (_point(str(key)),))  # the first point clockwise\n        return self._ring[i % len(self._ring)][1]                 # wrap past the largest",
+        "role": "solution"
+      }
+    ]
+  },
   "simpo_ipo_loss": {
     "cells": [
       {

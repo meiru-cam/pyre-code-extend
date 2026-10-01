@@ -22031,6 +22031,191 @@
           "hint": "Two threads call next() at once on the same cursor. Write down the reads and writes each makes, and find an order where both return the same address."
         }
       ]
+    },
+    {
+      "id": "shard_rebalance",
+      "title": "Shard Rebalancing",
+      "titleZh": "Shard Rebalancing",
+      "difficulty": "Medium",
+      "functionName": "ShardManager",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Build `ShardManager`, which decides which shard owns which integer keys.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior, so one `ShardManager` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- A shard is a tuple `(id, start, end)`: a string id, distinct within one call, and the closed range of keys `start` to `end`, both included, with `start <= end`.\n- A key's coverage is the number of shards whose range contains it.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** the rule reads like a simulation over keys, and the work is seeing that it is a greedy over intervals that never needs to look at a single key. Each later part adds one requirement.\n\n**Where it is used:** range-sharded databases such as Bigtable, HBase and CockroachDB split, merge and move key ranges between servers.\n\nAdapted from the shard rebalancing question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, with the rule split into parts on one class.",
+      "descriptionZh": "Build `ShardManager`, which decides which shard owns which integer keys.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior, so one `ShardManager` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- A shard is a tuple `(id, start, end)`: a string id, distinct within one call, and the closed range of keys `start` to `end`, both included, with `start <= end`.\n- A key's coverage is the number of shards whose range contains it.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** the rule reads like a simulation over keys, and the work is seeing that it is a greedy over intervals that never needs to look at a single key. Each later part adds one requirement.\n\n**Where it is used:** range-sharded databases such as Bigtable, HBase and CockroachDB split, merge and move key ranges between servers.\n\nAdapted from the shard rebalancing question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, with the rule split into parts on one class.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Part 1: the worked example",
+          "code": "\nshards = [(\"a\", 0, 30), (\"b\", 0, 32), (\"c\", 0, 34), (\"d\", 0, 90), (\"e\", 1, 32), (\"f\", 91, 100)]\noriginal = list(shards)\nresult = [tuple(s) for s in {fn}().rebalance(2, shards)]\nassert result == [(\"a\", 0, 30), (\"b\", 0, 32), (\"c\", 31, 34), (\"d\", 33, 90), (\"f\", 91, 100)], result\nassert shards == original, \"the input must not change\"\n",
+          "behavior": "state.invariant",
+          "part": 1
+        },
+        {
+          "name": "Part 1: every small input without holes",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "On small inputs without holes, the kept shards differ from applying the rule key by key: sort by (start, end, id), move each start to the first key covered fewer than limit times by the shards kept so far, drop the shard if there is none.",
+          "hiddenCode": "\nimport builtins, collections, itertools, random, time\n\ndef slow_rebalance(limit, shards, fill_holes=True):\n    kept = []\n    for sid, start, end in sorted(shards, key=lambda s: (s[1], s[2], s[0])):\n        for k in range(start, end + 1):\n            if sum(1 for _, a, b in kept if a <= k <= b) < limit:\n                kept.append([sid, k, end])\n                break\n    if fill_holes and kept:\n        lo, hi = min(s[1] for s in shards), max(s[2] for s in shards)\n        for k in range(lo, hi + 1):\n            if not any(a <= k <= b for _, a, b in kept):\n                owner = min((s for s in kept if s[2] == k - 1), key=lambda s: (s[1], s[0]))\n                owner[2] = k\n    return sorted((tuple(s) for s in kept), key=lambda s: (s[1], s[2], s[0]))\n\ndef has_hole(shards):\n    if not shards:\n        return False\n    lo, hi = min(s[1] for s in shards), max(s[2] for s in shards)\n    return any(not any(a <= k <= b for _, a, b in shards) for k in range(lo, hi + 1))\n\ndef random_shards(rng, n, span):\n    ids = rng.sample(\"abcdefghijklmnop\", n)\n    return [(ids[i], *sorted((rng.randint(0, span), rng.randint(0, span)))) for i in range(n)]\n\ndef as_tuples(result):\n    return [tuple(s) for s in result]\n\nchecked = 0\nfor n in (1, 2, 3):\n    for combo in itertools.product(itertools.combinations_with_replacement(range(4), 2), repeat=n):\n        shards = [(\"ABC\"[i], *combo[i]) for i in range(n)]\n        if has_hole(shards):\n            continue\n        for limit in (1, 2, 3):\n            got = as_tuples({fn}().rebalance(limit, shards))\n            assert got == slow_rebalance(limit, shards), (limit, shards, got)\n            checked += 1\nrng = random.Random(1)\nwhile checked < 6000:\n    shards = random_shards(rng, rng.randint(1, 9), rng.choice([12, 40]))\n    if has_hole(shards):\n        continue\n    limit = rng.randint(1, 4)\n    got = as_tuples({fn}().rebalance(limit, shards))\n    assert got == slow_rebalance(limit, shards), (limit, shards, got)\n    checked += 1\n",
+          "part": 1
+        },
+        {
+          "name": "Part 1: limit 1, ties and nested ranges",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "Ties in start and end are processed in id order, a range inside a fuller one is dropped, limit 1 leaves no overlap, and an empty input gives an empty list.",
+          "hiddenCode": "\nimport builtins, collections, itertools, random, time\n\ndef slow_rebalance(limit, shards, fill_holes=True):\n    kept = []\n    for sid, start, end in sorted(shards, key=lambda s: (s[1], s[2], s[0])):\n        for k in range(start, end + 1):\n            if sum(1 for _, a, b in kept if a <= k <= b) < limit:\n                kept.append([sid, k, end])\n                break\n    if fill_holes and kept:\n        lo, hi = min(s[1] for s in shards), max(s[2] for s in shards)\n        for k in range(lo, hi + 1):\n            if not any(a <= k <= b for _, a, b in kept):\n                owner = min((s for s in kept if s[2] == k - 1), key=lambda s: (s[1], s[0]))\n                owner[2] = k\n    return sorted((tuple(s) for s in kept), key=lambda s: (s[1], s[2], s[0]))\n\ndef has_hole(shards):\n    if not shards:\n        return False\n    lo, hi = min(s[1] for s in shards), max(s[2] for s in shards)\n    return any(not any(a <= k <= b for _, a, b in shards) for k in range(lo, hi + 1))\n\ndef random_shards(rng, n, span):\n    ids = rng.sample(\"abcdefghijklmnop\", n)\n    return [(ids[i], *sorted((rng.randint(0, span), rng.randint(0, span)))) for i in range(n)]\n\ndef as_tuples(result):\n    return [tuple(s) for s in result]\n\nmanager = {fn}()\nassert as_tuples(manager.rebalance(3, [])) == []\nassert as_tuples(manager.rebalance(1, [(\"solo\", 7, 7)])) == [(\"solo\", 7, 7)]\nsame = [(\"q\", 0, 5), (\"p\", 0, 5), (\"r\", 0, 5)]\nassert as_tuples(manager.rebalance(2, same)) == [(\"p\", 0, 5), (\"q\", 0, 5)], \"ties go to the smaller id\"\nassert as_tuples(manager.rebalance(1, [(\"a\", 0, 4), (\"b\", 2, 6), (\"c\", 7, 9)])) == [(\"a\", 0, 4), (\"b\", 5, 6), (\"c\", 7, 9)]\nassert as_tuples(manager.rebalance(1, [(\"outer\", 0, 20), (\"inner\", 5, 9)])) == [(\"outer\", 0, 20)]\nassert as_tuples(manager.rebalance(2, [(\"outer\", 0, 20), (\"inner\", 5, 9)])) == [(\"outer\", 0, 20), (\"inner\", 5, 9)]\nassert as_tuples(manager.rebalance(10, [(\"a\", 0, 1), (\"b\", 0, 1)])) == [(\"a\", 0, 1), (\"b\", 0, 1)]\n",
+          "part": 1
+        },
+        {
+          "name": "Part 2: the worked example",
+          "code": "\nshards = [(\"a\", 0, 4), (\"b\", 0, 4), (\"c\", 2, 9), (\"f\", 3, 6), (\"d\", 5, 9), (\"e\", 14, 16)]\nresult = [tuple(s) for s in {fn}().rebalance(2, shards)]\nassert result == [(\"a\", 0, 4), (\"b\", 0, 4), (\"f\", 5, 6), (\"c\", 5, 13), (\"d\", 7, 9), (\"e\", 14, 16)], result\n",
+          "behavior": "state.invariant",
+          "part": 2
+        },
+        {
+          "name": "Part 2: random inputs with holes",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "Every uncovered run of keys must go to the kept shard ending just before it, the one with the smallest start and then id among ties, and the result must be sorted by the final ranges.",
+          "hiddenCode": "\nimport builtins, collections, itertools, random, time\n\ndef slow_rebalance(limit, shards, fill_holes=True):\n    kept = []\n    for sid, start, end in sorted(shards, key=lambda s: (s[1], s[2], s[0])):\n        for k in range(start, end + 1):\n            if sum(1 for _, a, b in kept if a <= k <= b) < limit:\n                kept.append([sid, k, end])\n                break\n    if fill_holes and kept:\n        lo, hi = min(s[1] for s in shards), max(s[2] for s in shards)\n        for k in range(lo, hi + 1):\n            if not any(a <= k <= b for _, a, b in kept):\n                owner = min((s for s in kept if s[2] == k - 1), key=lambda s: (s[1], s[0]))\n                owner[2] = k\n    return sorted((tuple(s) for s in kept), key=lambda s: (s[1], s[2], s[0]))\n\ndef has_hole(shards):\n    if not shards:\n        return False\n    lo, hi = min(s[1] for s in shards), max(s[2] for s in shards)\n    return any(not any(a <= k <= b for _, a, b in shards) for k in range(lo, hi + 1))\n\ndef random_shards(rng, n, span):\n    ids = rng.sample(\"abcdefghijklmnop\", n)\n    return [(ids[i], *sorted((rng.randint(0, span), rng.randint(0, span)))) for i in range(n)]\n\ndef as_tuples(result):\n    return [tuple(s) for s in result]\n\nrng = random.Random(2)\nholes = 0\nfor trial in range(6000):\n    shards = random_shards(rng, rng.randint(1, 8), rng.choice([12, 40]))\n    holes += has_hole(shards)\n    limit = rng.randint(1, 4)\n    got = as_tuples({fn}().rebalance(limit, shards))\n    assert got == slow_rebalance(limit, shards), (limit, shards, got)\nassert holes > 500\ntie = [(\"y\", 0, 3), (\"x\", 0, 3), (\"w\", 6, 8)]\nassert as_tuples({fn}().rebalance(2, tie)) == [(\"y\", 0, 3), (\"x\", 0, 5), (\"w\", 6, 8)]\n",
+          "part": 2
+        },
+        {
+          "name": "Part 3: the worked example",
+          "code": "\nresult = [tuple(s) for s in {fn}().rebalance(1, [(\"x\", -10**9, 10**9), (\"y\", 0, 10**9), (\"z\", 5, 10)])]\nassert result == [(\"x\", -10**9, 10**9)], result\nresult = [tuple(s) for s in {fn}().rebalance(2, [(\"x\", -10**9, 10**9), (\"y\", 0, 10**9), (\"z\", 5, 10)])]\nassert result == [(\"x\", -10**9, 10**9), (\"y\", 0, 10**9)], result\n",
+          "behavior": "performance.complexity",
+          "part": 3
+        },
+        {
+          "name": "Part 3: 20,000 wide shards",
+          "visibility": "unshown",
+          "behavior": "performance.complexity",
+          "failureMessage": "20,000 shards took far more than ten times as long as 2,000, or the result broke the limit or left a key uncovered; use a heap of at most limit free keys instead of comparing against every kept shard.",
+          "hiddenCode": "\nimport builtins, collections, itertools, random, time\n\ndef slow_rebalance(limit, shards, fill_holes=True):\n    kept = []\n    for sid, start, end in sorted(shards, key=lambda s: (s[1], s[2], s[0])):\n        for k in range(start, end + 1):\n            if sum(1 for _, a, b in kept if a <= k <= b) < limit:\n                kept.append([sid, k, end])\n                break\n    if fill_holes and kept:\n        lo, hi = min(s[1] for s in shards), max(s[2] for s in shards)\n        for k in range(lo, hi + 1):\n            if not any(a <= k <= b for _, a, b in kept):\n                owner = min((s for s in kept if s[2] == k - 1), key=lambda s: (s[1], s[0]))\n                owner[2] = k\n    return sorted((tuple(s) for s in kept), key=lambda s: (s[1], s[2], s[0]))\n\ndef has_hole(shards):\n    if not shards:\n        return False\n    lo, hi = min(s[1] for s in shards), max(s[2] for s in shards)\n    return any(not any(a <= k <= b for _, a, b in shards) for k in range(lo, hi + 1))\n\ndef random_shards(rng, n, span):\n    ids = rng.sample(\"abcdefghijklmnop\", n)\n    return [(ids[i], *sorted((rng.randint(0, span), rng.randint(0, span)))) for i in range(n)]\n\ndef as_tuples(result):\n    return [tuple(s) for s in result]\n\ndef workload(n, seed):\n    rng = random.Random(seed)\n    shards = []\n    for i in range(n):\n        lo = rng.randint(-10**9, 10**9)\n        shards.append((f\"s{i}\", lo, lo + rng.randint(0, 10**6)))\n    return shards\n\ndef check(limit, shards, result):\n    lo, hi = min(s[1] for s in shards), max(s[2] for s in shards)\n    events = sorted([(s[1], 1) for s in result] + [(s[2] + 1, -1) for s in result])\n    assert events[0][0] == lo and events[-1][0] == hi + 1\n    active, position = 0, lo\n    for key, delta in events:\n        assert key == position or active >= 1, f\"keys {position}..{key - 1} are uncovered\"\n        active, position = active + delta, key\n        assert active <= limit, f\"coverage {active} above {limit} at {key}\"\n    starts = {s[0]: s for s in shards}\n    for sid, start, end in result:\n        assert start >= starts[sid][1] and end >= starts[sid][2]\n\ndef best_of_three(limit, shards):\n    best = float(\"inf\")\n    for _ in range(3):\n        begin = time.perf_counter()\n        result = as_tuples({fn}().rebalance(limit, shards))\n        best = min(best, time.perf_counter() - begin)\n    check(limit, shards, result)\n    return best\n\nsmall, big = workload(2000, 1), workload(20000, 2)\nratio = best_of_three(3, big) / best_of_three(3, small)\nassert ratio < 30, f\"10x the shards took {ratio:.0f}x as long\"\n",
+          "part": 3
+        },
+        {
+          "name": "Part 4: the worked example",
+          "code": "\nimport builtins, collections, random\n\ndef owners(router, keys):\n    return {k: router.locate(k) for k in keys}\n\ndef router_with(ids):\n    router = {fn}()\n    for sid in ids:\n        router.add_shard(sid)\n    return router\n\nkeys = range(30000)\nrouter = router_with([\"red\", \"green\", \"blue\"])\nbefore = owners(router, keys)\nshare = collections.Counter(before.values())\nassert all(0.25 < share[s] / len(keys) < 0.42 for s in [\"red\", \"green\", \"blue\"]), share\nrouter.add_shard(\"gold\")\nafter_add = owners(router, keys)\nmoved = [k for k in keys if before[k] != after_add[k]]\nassert all(after_add[k] == \"gold\" for k in moved), \"a key moved to a shard other than the new one\"\nassert 0.17 < len(moved) / len(keys) < 0.33, len(moved)\nrouter.remove_shard(\"green\")\nafter_remove = owners(router, keys)\nmoved = {k for k in keys if after_add[k] != after_remove[k]}\nassert moved == {k for k in keys if after_add[k] == \"green\"}\n",
+          "behavior": "routing.selection",
+          "part": 4
+        },
+        {
+          "name": "Part 4: errors",
+          "visibility": "unshown",
+          "behavior": "protocol.validation",
+          "failureMessage": "add_shard of a present id and remove_shard of an absent id raise ValueError, and locate with no shards raises LookupError.",
+          "hiddenCode": "\nimport builtins, collections, random\n\ndef owners(router, keys):\n    return {k: router.locate(k) for k in keys}\n\ndef router_with(ids):\n    router = {fn}()\n    for sid in ids:\n        router.add_shard(sid)\n    return router\n\nrouter = {fn}()\ntry:\n    router.locate(1)\n    raise AssertionError(\"locate with no shards should raise LookupError\")\nexcept LookupError:\n    pass\nrouter.add_shard(\"a\")\nassert router.locate(12345) == \"a\"\nfor bad in [lambda: router.add_shard(\"a\"), lambda: router.remove_shard(\"b\")]:\n    try:\n        bad()\n        raise AssertionError(\"expected ValueError\")\n    except ValueError:\n        pass\nrouter.remove_shard(\"a\")\ntry:\n    router.locate(1)\n    raise AssertionError(\"locate after removing the last shard should raise LookupError\")\nexcept LookupError:\n    pass\nrouter.add_shard(\"a\")\nassert router.locate(-7) == \"a\"\n",
+          "part": 4
+        },
+        {
+          "name": "Part 4: only keys that must move do",
+          "visibility": "unshown",
+          "behavior": "routing.selection",
+          "failureMessage": "After add_shard(x) every key that changed owner must belong to x, after remove_shard(x) every key that changed owner must have belonged to x, and the owners must not depend on the order shards were added.",
+          "hiddenCode": "\nimport builtins, collections, random\n\ndef owners(router, keys):\n    return {k: router.locate(k) for k in keys}\n\ndef router_with(ids):\n    router = {fn}()\n    for sid in ids:\n        router.add_shard(sid)\n    return router\n\nkeys = range(-2000, 10000)\nrng = random.Random(4)\nrouter, present, previous = {fn}(), [], None\nfor step in range(25):\n    if present and (len(present) > 6 or rng.random() < 0.4):\n        x = rng.choice(present)\n        present.remove(x)\n        router.remove_shard(x)\n    else:\n        x = f\"shard-{step}\"\n        present.append(x)\n        router.add_shard(x)\n    now = owners(router, keys) if present else None\n    if previous and now:\n        for k in keys:\n            if now[k] != previous[k]:\n                assert (now[k] == x) if x in present else (previous[k] == x), (step, x, k)\n    previous = now\nids = [f\"n{i}\" for i in range(8)]\nforward, backward = router_with(ids), router_with(ids[::-1])\nassert owners(forward, keys) == owners(backward, keys), \"owners depend on the order shards were added\"\n",
+          "part": 4
+        },
+        {
+          "name": "Part 4: keys spread about evenly",
+          "visibility": "unshown",
+          "behavior": "routing.normalization",
+          "failureMessage": "With 20 shards, some shard owned under half or over 1.5x its fair share of 40,000 keys; one hash point per shard spreads too unevenly, so give each shard many points.",
+          "hiddenCode": "\nimport builtins, collections, random\n\ndef owners(router, keys):\n    return {k: router.locate(k) for k in keys}\n\ndef router_with(ids):\n    router = {fn}()\n    for sid in ids:\n        router.add_shard(sid)\n    return router\n\nids = [f\"shard-{i}\" for i in range(20)]\nrouter = router_with(ids)\ncount = collections.Counter(router.locate(k) for k in range(40000))\nfair = [count[s] * len(ids) / 40000 for s in ids]\nassert min(fair) > 0.5 and max(fair) < 1.5, [round(f, 2) for f in fair]\n",
+          "part": 4
+        },
+        {
+          "name": "Part 4: the same owners in a new process",
+          "visibility": "unshown",
+          "behavior": "routing.selection",
+          "failureMessage": "The owners changed when str hashing was seeded differently, as it is in a new process; use hashlib or zlib.crc32 instead of the built-in hash().",
+          "hiddenCode": "\nimport builtins, collections, random\n\ndef owners(router, keys):\n    return {k: router.locate(k) for k in keys}\n\ndef router_with(ids):\n    router = {fn}()\n    for sid in ids:\n        router.add_shard(sid)\n    return router\n\nreal_hash = builtins.hash\n\ndef reseeded(value):\n    if value is None or isinstance(value, (bool, int, float)):\n        return real_hash(value)\n    return real_hash((value, \"another process\"))\n\nids = [\"red\", \"green\", \"blue\", \"gold\", \"plum\"]\nkeys = range(5000)\nhere = owners(router_with(ids), keys)\nbuiltins.hash = reseeded\ntry:\n    there = owners(router_with(ids), keys)\nfinally:\n    builtins.hash = real_hash\nassert here == there, \"owners depend on the process's string hash seed\"\n",
+          "part": 4
+        }
+      ],
+      "parts": [
+        {
+          "title": "Cap the overlap",
+          "descriptionEn": "**Signature:** `ShardManager().rebalance(limit, shards) -> list[tuple]`, with `limit >= 1`\n\nGo through the shards one at a time, sorted by `start`, then `end`, then `id`:\n- Count coverage over the shards kept so far, with the ranges they were kept with.\n- Move the shard's start forward to the first key in its range whose coverage is below `limit`. If its own start qualifies, it stays.\n- If no key in its range qualifies, drop the shard.\n- Otherwise keep it with range `(new start, end)`.\n\nReturn the kept shards as `(id, start, end)` tuples, sorted by `(start, end, id)`. Do not modify the input.\n\nIn this part the input shards together cover every key from the smallest `start` to the largest `end`.\n\n**Example**, `limit = 2`, input `a (0, 30)`, `b (0, 32)`, `c (0, 34)`, `d (0, 90)`, `e (1, 32)`, `f (91, 100)`:\n- `a` and `b` are kept as they are\n- `c` starts at `31`: `a` and `b` already cover `0` to `30` twice\n- `d` starts at `33`: every key up to `32` is covered twice\n- `e` is dropped: every key from `1` to `32` is covered twice\n- result: `[(\"a\", 0, 30), (\"b\", 0, 32), (\"c\", 31, 34), (\"d\", 33, 90), (\"f\", 91, 100)]`"
+        },
+        {
+          "title": "Close the holes",
+          "descriptionEn": "Keep Part 1. The input may now leave holes: keys between the smallest `start` and the largest `end` that no input shard covers.\n\n- After every shard has been processed, take each maximal run of keys in that span that no kept shard covers.\n- Extend the end of the kept shard that ends at the key just before the run, up to the run's last key.\n- If several kept shards end there, extend the one with the smallest `start`, then the smallest `id`.\n- Sort the result by the final `(start, end, id)`.\n\n**Example**, `limit = 2`, input `a (0, 4)`, `b (0, 4)`, `c (2, 9)`, `f (3, 6)`, `d (5, 9)`, `e (14, 16)`:\n- after Part 1's rule: `a (0, 4)`, `b (0, 4)`, `c (5, 9)`, `f (5, 6)`, `d (7, 9)`, `e (14, 16)`\n- keys `10` to `13` are a hole; `c` and `d` both end at `9`, and `c` has the smaller start\n- result: `[(\"a\", 0, 4), (\"b\", 0, 4), (\"f\", 5, 6), (\"c\", 5, 13), (\"d\", 7, 9), (\"e\", 14, 16)]`"
+        },
+        {
+          "title": "Large keys",
+          "descriptionEn": "Keep Parts 1–2. Keys may now be anywhere from `-10**9` to `10**9`, and there may be 20,000 shards.\n\n- `rebalance` must run in `O(n log n)` time for `n` shards, however wide the ranges are. It cannot visit keys one by one.\n\n**Example**, `limit = 1`: `[(\"x\", -10**9, 10**9), (\"y\", 0, 10**9), (\"z\", 5, 10)]` returns `[(\"x\", -10**9, 10**9)]` at once."
+        },
+        {
+          "title": "Route keys by hashing",
+          "descriptionEn": "Keep Parts 1–3. Rebalancing ranges can move many shards' boundaries when one shard changes. Add a second way to assign keys, where the shard set changes one shard at a time and each key goes to exactly one shard. It does not use `rebalance`.\n\n**Signature:** `add_shard(shard_id) -> None`, `remove_shard(shard_id) -> None`, `locate(key) -> str`\n\n- `add_shard` raises `ValueError` if the id is already present; `remove_shard` raises `ValueError` if it is absent. `locate(key)` returns the id of the shard that owns the integer `key`, and raises `LookupError` when there are no shards.\n- `locate` depends only on the key and the current set of shard ids: not on the order they were added, and not on the process. Do not use the built-in `hash()`, whose result for a `str` changes between processes; `hashlib` and `zlib.crc32` are fine.\n- Only keys that must move do: after `add_shard(x)`, every key whose owner changed is now owned by `x`. After `remove_shard(x)`, every key whose owner changed was owned by `x`.\n- Keys spread about evenly: with `N` shards, each owns roughly `1/N` of them.\n\n**Example**, over the keys `0` to `29,999`:\n- add `\"red\"`, `\"green\"` and `\"blue\"`: each owns roughly a third of the keys\n- add `\"gold\"`: roughly a quarter of the keys change owner, and all of them now belong to `\"gold\"`\n- remove `\"green\"`: exactly the keys `\"green\"` owned change owner"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Think of limit lanes, each holding kept shards that never overlap. When a shard arrives in start order, which lane frees up first, and from which key? Is the first key where coverage drops below limit always where that lane frees up, or the shard's own start?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Keep a min-heap of at most limit keys: the key from which each lane is free. For each shard in (start, end, id) order, take the smallest; an unused lane counts as free at the shard's start. The new start is max(start, that key). If it is past end, put the key back and drop the shard; otherwise keep it and push end + 1."
+        }
+      ],
+      "modelConnections": [
+        "Range-partitioned stores for training data and features rebalance key ranges when shards grow uneven.",
+        "Inference fleets route a user or session to a replica with consistent or rendezvous hashing, so adding a replica moves few sessions and their KV caches."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "A heap of at most limit free keys turns the shift rule into O(n log n), with no key ever visited.",
+          "Shifting starts forward keeps every kept shard's end where it was, so no new holes appear.",
+          "Consistent hashing with virtual nodes moves only about 1/N of the keys when a shard joins or leaves."
+        ],
+        "cons": [
+          "The processing order decides who yields: long shards that sort later absorb all the shifts.",
+          "Range rebalancing balances coverage, not load; a hot range still needs splitting.",
+          "Hash routing balances key counts, not traffic, and loses range scans over adjacent keys."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why is the first key where coverage drops below limit exactly where the earliest-free lane frees up?",
+          "hint": "Draw the kept shards as bars on limit separate rows, never overlapping within a row. When the next shard arrives in start order, which row's last bar ends first, and where can the new bar begin?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why does a kept shard's range never need checking again after its start is moved?",
+          "hint": "Take a kept shard whose start was moved. Can a shard processed later, which starts at or after it, push its coverage above limit inside that range? Consider which row the later shard goes on."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How does a heap of at most limit keys replace counting coverage key by key?",
+          "hint": "Store one number per row: the first key at which it is free. Which of those numbers do you need for each new shard, and which structure hands you the smallest quickly?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Can moving starts forward ever open a hole, and where can holes come from?",
+          "hint": "Follow a key that a moved start skipped over, and the keys of a dropped shard. How many kept shards still cover them? Now compare with a key no input shard covers."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "With one hash point per shard, why are the shares uneven, and how do virtual nodes fix it?",
+          "hint": "Hash 3 shards to one point each on a circle and look at the gaps between them. How large is the largest gap likely to be, and what happens to the gaps if each shard gets 100 points?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why must the hash not be Python's built-in hash() for strings?",
+          "hint": "Run python -c \"print(hash('red'))\" twice in a terminal. What does that mean for a key's owner after the service restarts?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How does rendezvous hashing compare with a hash ring for locate cost and key movement?",
+          "hint": "For each key, score every shard by hashing the pair (key, shard) and pick the highest. Count the hashes one locate costs, and work out which keys move when a shard leaves."
+        }
+      ]
     }
   ]
 }
