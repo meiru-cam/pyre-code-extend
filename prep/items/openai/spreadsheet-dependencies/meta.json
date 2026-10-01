@@ -1,0 +1,20 @@
+{
+  "title": "Spreadsheet with Cell Dependencies (OpenSheet)",
+  "summary": "Cells hold numbers or formulas over other cells. Evaluate on demand with cycle detection first, then keep values fresh eagerly through a dependency graph so that reads become constant time.",
+  "round": "coding",
+  "kind": "Coding",
+  "difficulty": "Medium",
+  "frequency": "rare",
+  "format": "3 parts",
+  "topics": [
+    "graph",
+    "dfs",
+    "topological-sort",
+    "recursion"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/coding/spreadsheet-dependencies",
+  "rubric": [],
+  "exercises": [
+    "spreadsheet"
+  ]
+}

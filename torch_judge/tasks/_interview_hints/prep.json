@@ -8,5 +8,37 @@
     "Would a read-write lock that lets concurrent gets run together help here? Why or why not?": "Compare how long a get holds the lock with the overhead of a read-write lock in Python, and note what the GIL already serializes.",
     "What should get return when the key exists but every recorded timestamp is later than the query?": "Look at what the binary search returns in that case, and what one step to its left would point at.",
     "Which binary-search variant finds the latest timestamp at or before t, and how does it treat an exact match?": "Compare where bisect_left and bisect_right land when the query equals a stored timestamp, then step one to the left."
+  },
+  "memoize_lru": {
+    "What does an LRU cache evict, and why must a hit count as a use?": "Name the entry that goes first, then picture a value read on every request but inserted long ago.",
+    "What two properties must a memoization key have, and which calls should share one?": "Think about what a dict needs from its keys, and when two calls are really the same call.",
+    "Walk through the key the starter builds for f(1, 2), f((1, 2)) and f(1, b=2). Which pairs collide, and how does your key keep them apart?": "Write out the tuple the starter returns for each call, including the one-element case, then ask what would mark where keywords begin.",
+    "Why an append-only log instead of rewriting the cache to disk on every call, and what does compaction buy back?": "Compare the bytes written per call in each design as the cache grows, then what the log costs after many hits.",
+    "How does recovery tell a torn final record from a good one, and why must later writes start after the last good record?": "Think about what a crash mid-write leaves on disk, and what replay sees if a new record follows that fragment.",
+    "Compare one lock around the whole call with a lock around the bookkeeping plus single-flight. What does each cost?": "Consider a slow func: who waits under each design, and what stops two threads computing the same missing key?"
+  },
+  "bank_system": {
+    "What does each account need to store for these three methods, and why should a failed call change nothing?": "List the fields the three methods read and write, then picture a caller retrying after a None.",
+    "Is withdrawing exactly the whole balance allowed, and what comparison expresses that?": "Reread when withdraw must refuse, then pick between greater-than and greater-or-equal.",
+    "How do you keep the validate-then-mutate order in every method, so a refused call never half-applies?": "Put every check before the first write, and see which methods have more than one check.",
+    "How would you rank accounts by outgoing total, and what does sorting on every call cost compared with keeping a sorted structure?": "Compare how often totals change with how often the ranking is read, and the sort key that handles ties.",
+    "Why hold money for a pending transfer instead of moving it at once, and what makes the available balance cheap to compute?": "Think about what the target may still do, and which transfers count against the source at a given time.",
+    "What history must an account keep so get_balance can answer any past time, and how does a merge fit into it?": "Consider appending (timestamp, balance) on every change and searching it, then treat the merge credit as one more change."
+  },
+  "spreadsheet": {
+    "How do you validate a cell name and a formula so that exactly the stated shapes are accepted?": "Think about anchoring a pattern to the whole string, and what a term is before writing the operators between terms.",
+    "How does get evaluate a formula whose terms are themselves formula cells?": "Each cell term is another get, so consider recursion and what an unset cell contributes.",
+    "How does a recursive get notice a cycle, and why is a set of visited cells not enough on its own?": "Separate cells on the current path from cells already finished, and picture a diamond with no cycle.",
+    "Compare evaluating on get with recomputing on set: which reads and writes does each make cheap?": "Count the work per get and per set in each design for a long chain, then think about which one happens more often.",
+    "Why must set check for a cycle before changing any state, and how do you check it?": "Picture a rejected set that already rewired edges, then ask whether the new references can reach the cell being set.",
+    "In a diamond, how do you make sure the bottom cell is recomputed once, after both of its inputs?": "Consider collecting every affected cell first and evaluating them in dependency order."
+  },
+  "in_memory_database": {
+    "What does a table store besides its rows, and which checks does insert run, in which order?": "Think about what insert compares a row against, and reread which error wins when a row is wrong in two ways.",
+    "Why should insert store a copy of the row and select return copies?": "Picture the caller editing the dict it inserted, or one it got back from select, and what the table would then hold.",
+    "How does select validate the requested columns before it reads any row, and what happens on an empty table?": "Check every name against the schema up front, so the answer does not depend on whether a row exists.",
+    "How do you compare values so that None never matches and every int sorts below every str?": "Consider a small key that puts the type first, and handle None before any comparison happens.",
+    "How do you sort by several columns, each with its own direction, and keep ties in insertion order?": "Think about Python's stable sort applied once per column, starting from the least significant one.",
+    "When does a hash index beat a sorted index, and what does every index cost on insert?": "Match each operator to the structure that answers it, then count the work an insert adds per index."
   }
 }

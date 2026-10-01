@@ -1,0 +1,19 @@
+{
+  "title": "In-Memory SQL-like Database",
+  "summary": "An in-memory table store driven by method calls: create and insert with column projection, WHERE as AND-ed comparisons, ORDER BY over several columns each with its own direction, then hash and sorted indexes that must return exactly what a full scan would.",
+  "round": "coding",
+  "kind": "Coding",
+  "difficulty": "Medium",
+  "frequency": "rare",
+  "format": "4 parts",
+  "topics": [
+    "data-structure",
+    "oop-design",
+    "sql"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/coding/in-memory-database",
+  "rubric": [],
+  "exercises": [
+    "in_memory_database"
+  ]
+}

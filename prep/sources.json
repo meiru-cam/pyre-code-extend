@@ -98,5 +98,37 @@
       "time_map"
     ],
     "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/lru-cache-bugfix-durability",
+    "exercises": [
+      "memoize_lru"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/oa-bank-system",
+    "exercises": [
+      "bank_system"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/spreadsheet-dependencies",
+    "exercises": [
+      "spreadsheet"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/in-memory-database",
+    "exercises": [
+      "in_memory_database"
+    ],
+    "round": "coding"
   }
 ]

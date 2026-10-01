@@ -182,6 +182,7 @@ describe('DescriptionTab tradeoffs on multi-part exercises', () => {
   it('hides tradeoff questions while a part is still locked', () => {
     render(React.createElement(DescriptionTab, { problem: withInterview, unlockedPart: 2, interview: answered }));
     expect(screen.queryByText('One lock or one per key?')).toBeNull();
+    expect(screen.getByText(/open once every part is unlocked/)).toBeTruthy();
   });
 
   it('shows them once every part is unlocked', () => {

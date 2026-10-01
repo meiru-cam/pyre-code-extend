@@ -1,0 +1,21 @@
+{
+  "title": "Online Assessment: Banking System",
+  "summary": "Build a bank-account class across four gated levels: deposits and withdrawals with exact return values, a leaderboard ranked by outgoing spend, a two-step transfer that holds funds until the recipient accepts or the hold expires, and an account merge whose effects a later point-in-time balance query must report correctly, including for an account id that is merged away and reused.",
+  "round": "coding",
+  "kind": "Online assessment · 4 levels",
+  "difficulty": "Medium",
+  "frequency": "medium",
+  "format": "4 levels / 90 min",
+  "topics": [
+    "oop-design",
+    "ledger",
+    "state-machine",
+    "timestamps",
+    "merge"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/coding/oa-bank-system",
+  "rubric": [],
+  "exercises": [
+    "bank_system"
+  ]
+}
