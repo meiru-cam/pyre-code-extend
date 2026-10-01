@@ -130,5 +130,13 @@
       "in_memory_database"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/infection-spread",
+    "exercises": [
+      "infection_spread"
+    ],
+    "round": "coding"
   }
 ]
