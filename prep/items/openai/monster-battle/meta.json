@@ -1,0 +1,18 @@
+{
+  "title": "Monster Battle",
+  "summary": "A turn-based fight between two teams built in three steps: plain attacks, an elemental chart that scales damage, and picking the attacker that hits hardest, each step added without rewriting the battle loop.",
+  "round": "coding",
+  "kind": "Coding · object-oriented design",
+  "difficulty": "Medium",
+  "frequency": "high",
+  "format": "3 parts",
+  "topics": [
+    "oop-design",
+    "simulation"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/coding/monster-battle",
+  "rubric": [],
+  "exercises": [
+    "monster_battle"
+  ]
+}

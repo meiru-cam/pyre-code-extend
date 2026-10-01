@@ -1,0 +1,20 @@
+{
+  "title": "Cluster Node Count & Topology (Tree Messaging)",
+  "summary": "Machines form a tree and can only message their parent and children. Write the one receive handler that lets the root count the cluster, then gather the full topology, then cope with duplicated or lost messages.",
+  "round": "coding",
+  "kind": "Coding",
+  "difficulty": "Medium",
+  "frequency": "high",
+  "format": "3 parts",
+  "topics": [
+    "tree",
+    "message-passing",
+    "distributed-systems",
+    "idempotency"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/coding/cluster-count-topology",
+  "rubric": [],
+  "exercises": [
+    "cluster_count"
+  ]
+}

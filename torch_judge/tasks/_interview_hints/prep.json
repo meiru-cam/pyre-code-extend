@@ -72,5 +72,37 @@
     "What state does a streaming, debounced converter need, and why does it stay bounded by the stack depth?": "List what one sample can change, and ask which facts about earlier samples you still need once it is processed.",
     "What does debouncing cost you, and how would you choose k?": "Count how many samples late every event becomes, and picture a call that genuinely lasts only one sample.",
     "How does reversing the traces turn suffix matching into a trie lookup, and what does the index cost in memory?": "Write a suffix query backwards and compare it with a prefix lookup; then count how many ids each trace adds along its path."
+  },
+  "memory_allocator": {
+    "How do you represent the free space so that first fit and merging are both straightforward?": "Think about which order makes the lowest fitting address easy to find, and which order makes a block's neighbours easy to find.",
+    "How does free decide whether a call matches a live allocation?": "Consider what allocate could record about each block it hands out, and what free can then look up in one step.",
+    "When a block is released, which free blocks can it touch, and how many merge cases are there?": "Write the released range next to the free block just before it and the one just after it, and list which of them can touch it.",
+    "Why does a tree ordered by size answer best fit but not first fit?": "Picture a tree sorted by size and ask what it knows about addresses; then compare with what first fit asks for.",
+    "How does storing each subtree's largest block let one tree answer first fit in O(log n)?": "Think about what a node could store about its whole subtree that tells you, before descending, whether any block there is big enough.",
+    "Why is a sorted Python list with bisect still O(n) per insertion, and when is that acceptable anyway?": "Separate finding the position from moving the elements after it, and ask how many free blocks you expect in practice."
+  },
+  "gpu_credits": {
+    "Which grants does a subtract at time t drain, and in what order?": "Write down each grant's window as two numbers, then ask which windows contain the subtract's time and which one closes first.",
+    "Where does a new grant's amount go when there is outstanding debt, and why does that debt not return later?": "Follow one grant that arrives while debt is outstanding: split its amount into what clears debt and what stays, and ask what expiring later can take back.",
+    "What structure gives you the soonest-expiring usable grant quickly, and how do expired grants leave it?": "Think about a structure whose top is always the smallest key, and what you can safely discard from the top before each call.",
+    "How do you answer correctly when a call arrives after a query about a later time?": "Picture a subtract arriving after a query about a later time, and what that query would have needed to know.",
+    "What does replaying every call per query cost, and how does a cursor over sorted calls avoid it?": "Count the work of one query if it starts from an empty ledger, then ask what state could carry over between queries made in time order.",
+    "When does the incremental cursor have to be thrown away, and what does the rebuild cost?": "List what a cursor assumes about calls it has already passed, and what a call or query behind it breaks."
+  },
+  "monster_battle": {
+    "Which objects would you model, and which of them owns the HP that changes during the battle?": "List what each monster knows and what changes during a fight, and decide where each piece of state lives.",
+    "How do you make sure the battle stops on the attack that beats a team, and not one turn later?": "Trace the attack that brings the last defender to 0 HP, and check what your loop does right after it.",
+    "How do you keep the log format exact, and how would you test it?": "Write the expected log for a two-monster fight by hand first, then compare it with yours line by line.",
+    "How do you represent which element beats which so that adding a fifth element is a one-line change?": "Think about a mapping from each element to the one it beats, and how both directions of the rule can be read from it.",
+    "How do you add smart targeting without changing the output of battles that do not ask for it?": "Consider a default argument that keeps the old behaviour, and which single decision in the loop it should change.",
+    "Why does picking the attacker by maximum damage need an explicit rule for ties?": "Check what Python's max returns when several items share the largest key, and whether that matches the rule."
+  },
+  "cluster_count": {
+    "What does a machine store between forwarding a request and hearing from its last child?": "List what has to survive between the moment a request arrives and the moment the last child answers, and key it so two queries cannot collide.",
+    "How does a machine know that every one of its children has answered?": "Think about what the machine could keep that shrinks by one with each answer and is empty exactly when it may reply.",
+    "Two queries with different request ids reach the same machine at once: what keeps their state apart?": "Consider what you would key every piece of per-query state by, and what would collide without that key.",
+    "Why record each child's answer by child id instead of keeping a running total, both for ordering subtrees and for repeated answers?": "Consider storing answers by child id and building the list only when every child has answered. Then think about putting the answers back in children_ids order.",
+    "Which messages can be repeated or lost, and what state makes each case harmless?": "Walk through a lost request, a lost answer, and a repeated request, and name the state that makes each one safe.",
+    "How do you choose the resend timeout, and what goes wrong if it is too short or too long?": "Compare the time a deep subtree needs to answer with the timeout, and count the extra messages each choice causes."
   }
 }

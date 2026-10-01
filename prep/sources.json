@@ -162,5 +162,37 @@
       "profiler_stacks"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/memory-allocator",
+    "exercises": [
+      "memory_allocator"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/gpu-credits",
+    "exercises": [
+      "gpu_credits"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/monster-battle",
+    "exercises": [
+      "monster_battle"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/cluster-count-topology",
+    "exercises": [
+      "cluster_count"
+    ],
+    "round": "coding"
   }
 ]
