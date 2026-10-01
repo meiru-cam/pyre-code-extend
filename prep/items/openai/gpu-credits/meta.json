@@ -1,0 +1,19 @@
+{
+  "title": "GPU Credits",
+  "summary": "A ledger of credit grants that each expire. Spending drains the grant that expires soonest, events can arrive out of order, and balances are queried for arbitrary timestamps.",
+  "round": "coding",
+  "kind": "Coding",
+  "difficulty": "Medium",
+  "frequency": "high",
+  "format": "3 parts",
+  "topics": [
+    "data-structure",
+    "simulation",
+    "heap"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/coding/gpu-credits",
+  "rubric": [],
+  "exercises": [
+    "gpu_credits"
+  ]
+}

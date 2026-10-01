@@ -186,5 +186,6 @@
   "social_network": "class SocialNetwork:\n\n    def __init__(self):\n        pass\n\n    def add_user(self, user_id):\n        pass\n\n    def follow(self, follower, followee):\n        pass\n\n    def create_snapshot(self):\n        pass",
   "file_dedup": "def find_duplicate_files(root_path):\n    pass",
   "profiler_stacks": "class StackProfiler:\n\n    def __init__(self):\n        pass\n\n    def events(self, samples, end_time):\n        pass",
-  "memory_allocator": "class MemoryAllocator:\n\n    def __init__(self, capacity):\n        pass\n\n    def allocate(self, size):\n        pass\n\n    def free(self, address, size):\n        pass\n\n    def free_blocks(self):\n        pass"
+  "memory_allocator": "class MemoryAllocator:\n\n    def __init__(self, capacity):\n        pass\n\n    def allocate(self, size):\n        pass\n\n    def free(self, address, size):\n        pass\n\n    def free_blocks(self):\n        pass",
+  "gpu_credits": "class GPUCreditLedger:\n\n    def __init__(self):\n        pass\n\n    def add_credit(self, credit_id, amount, timestamp, expiration):\n        pass\n\n    def subtract(self, amount, timestamp):\n        pass\n\n    def get_balance(self, timestamp):\n        pass"
 }

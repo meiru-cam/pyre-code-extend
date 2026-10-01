@@ -21141,6 +21141,162 @@
           "hint": "Separate finding the position from moving the elements after it, and ask how many free blocks you expect in practice."
         }
       ]
+    },
+    {
+      "id": "gpu_credits",
+      "title": "GPU Credit Ledger",
+      "titleZh": "GPU Credit Ledger",
+      "difficulty": "Medium",
+      "functionName": "GPUCreditLedger",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Build `GPUCreditLedger`, which issues GPU credits in expiring grants, spends them, and reports the balance at any time.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior, so one `GPUCreditLedger` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- `add_credit(credit_id, amount, timestamp, expiration)` issues a grant of `amount` credits. It can be used at every time from `timestamp` to `timestamp + expiration`, both included.\n- `subtract(amount, timestamp)` spends `amount`. It takes credit from the usable grants in order of their last usable time, soonest first, moving on when one runs out. Spent credit is gone.\n- If the usable grants hold less than `amount`, the rest becomes debt. A grant issued later pays off the debt first, and only what is left becomes usable credit. Debt paid this way is never returned.\n- `get_balance(timestamp)` considers only calls with a timestamp at or before it, applied in timestamp order. It returns the credit left in grants usable at that time minus the debt, or `None` if that is negative. With nothing usable and no debt it returns `0`.\n- Amounts, timestamps and expirations are non-negative integers, amounts at least `1`. No two `add_credit` or `subtract` calls share a timestamp.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** the rules are fiddly but each is small, and each later part adds one requirement.\n\n**Where it is used:** cloud credit and prepaid billing systems, where promotional grants expire and usage arrives late.\n\nAdapted from the GPU credits question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, on one class.",
+      "descriptionZh": "Build `GPUCreditLedger`, which issues GPU credits in expiring grants, spends them, and reports the balance at any time.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior, so one `GPUCreditLedger` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- `add_credit(credit_id, amount, timestamp, expiration)` issues a grant of `amount` credits. It can be used at every time from `timestamp` to `timestamp + expiration`, both included.\n- `subtract(amount, timestamp)` spends `amount`. It takes credit from the usable grants in order of their last usable time, soonest first, moving on when one runs out. Spent credit is gone.\n- If the usable grants hold less than `amount`, the rest becomes debt. A grant issued later pays off the debt first, and only what is left becomes usable credit. Debt paid this way is never returned.\n- `get_balance(timestamp)` considers only calls with a timestamp at or before it, applied in timestamp order. It returns the credit left in grants usable at that time minus the debt, or `None` if that is negative. With nothing usable and no debt it returns `0`.\n- Amounts, timestamps and expirations are non-negative integers, amounts at least `1`. No two `add_credit` or `subtract` calls share a timestamp.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** the rules are fiddly but each is small, and each later part adds one requirement.\n\n**Where it is used:** cloud credit and prepaid billing systems, where promotional grants expire and usage arrives late.\n\nAdapted from the GPU credits question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, on one class.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Part 1: the worked example",
+          "code": "\nledger = {fn}()\nledger.add_credit(\"a\", 8, 0, 30)\nassert ledger.get_balance(0) == 8\nledger.add_credit(\"b\", 4, 5, 10)\nledger.subtract(6, 10)\nassert ledger.get_balance(10) == 6\nassert ledger.get_balance(15) == 6\nassert ledger.get_balance(30) == 6\nassert ledger.get_balance(31) == 0\nledger.subtract(3, 40)\nassert ledger.get_balance(40) is None\nledger.add_credit(\"c\", 5, 50, 10)\nassert ledger.get_balance(50) == 2\nassert ledger.get_balance(61) == 0\n",
+          "behavior": "state.invariant",
+          "part": 1
+        },
+        {
+          "name": "Part 1: boundaries and long debt",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "A grant is usable at both ends of its window, an empty ledger reads 0, and debt stays until later grants pay it off in full.",
+          "hiddenCode": "\nledger = {fn}()\nassert ledger.get_balance(0) == 0\nledger.add_credit(\"z\", 3, 2, 0)\nassert ledger.get_balance(2) == 3 and ledger.get_balance(3) == 0\nledger.subtract(10, 4)\nassert ledger.get_balance(4) is None\nledger.add_credit(\"p\", 4, 5, 100)\nassert ledger.get_balance(5) is None, \"6 of debt are still outstanding\"\nledger.add_credit(\"q\", 6, 6, 100)\nassert ledger.get_balance(6) == 0\nledger.add_credit(\"r\", 10**12, 7, 1)\nledger.subtract(1, 8)\nassert ledger.get_balance(8) == 10**12 - 1\nassert ledger.get_balance(200) == 0, \"repaid debt does not come back when the grants expire\"\n",
+          "part": 1
+        },
+        {
+          "name": "Part 1: the soonest-expiring grant is drained first",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "subtract must drain usable grants in order of their last usable time, skipping expired ones and spilling into the next.",
+          "hiddenCode": "\nledger = {fn}()\nledger.add_credit(\"long\", 5, 0, 100)\nledger.add_credit(\"short\", 5, 1, 10)\nledger.add_credit(\"gone\", 5, 2, 1)\nledger.subtract(7, 5)\nassert ledger.get_balance(5) == 3\nassert ledger.get_balance(12) == 3, \"short was emptied first, then 2 came from long\"\nledger.subtract(1, 101)\nassert ledger.get_balance(101) is None\n",
+          "part": 1
+        },
+        {
+          "name": "Part 1: random in-order calls match a replay",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "On random calls arriving in time order, a balance differed from replaying the calls.",
+          "hiddenCode": "\nimport random, time\n\nclass Replay:\n    def __init__(self):\n        self.calls = []\n    def add_credit(self, credit_id, amount, timestamp, expiration):\n        self.calls.append((timestamp, amount, timestamp + expiration))\n    def subtract(self, amount, timestamp):\n        self.calls.append((timestamp, -amount, None))\n    def get_balance(self, timestamp):\n        grants, debt = [], 0  # grants: [expires at, remaining]\n        for ts, amount, end in sorted(self.calls):\n            if ts > timestamp:\n                break\n            grants = [g for g in grants if g[0] >= ts]\n            if amount > 0:\n                paid = min(debt, amount)\n                debt -= paid\n                grants.append([end, amount - paid])\n            else:\n                need = -amount\n                for grant in sorted(grants, key=lambda g: g[0]):\n                    take = min(grant[1], need)\n                    grant[1] -= take\n                    need -= take\n                debt += need\n        value = sum(g[1] for g in grants if g[0] >= timestamp) - debt\n        return None if value < 0 else value\n\ndef random_calls(rng, n, span=60):\n    stamps = rng.sample(range(span), n)\n    calls = []\n    for i, ts in enumerate(stamps):\n        if rng.random() < 0.55:\n            calls.append((\"add_credit\", (f\"g{i}\", rng.randint(1, 9), ts, rng.randint(0, 25))))\n        else:\n            calls.append((\"subtract\", (rng.randint(1, 12), ts)))\n    return calls\n\ndef call_ts(call):\n    name, args = call\n    return args[2] if name == \"add_credit\" else args[1]\n\ndef best_of_three(fn):\n    best = float(\"inf\")\n    for _ in range(3):\n        start = time.perf_counter()\n        fn()\n        best = min(best, time.perf_counter() - start)\n    return best\n\nfor seed in range(200):\n    rng = random.Random(seed)\n    calls = sorted(random_calls(rng, rng.randint(1, 15)), key=call_ts)\n    ledger, model = {fn}(), Replay()\n    for name, args in calls:\n        getattr(ledger, name)(*args)\n        getattr(model, name)(*args)\n        t = call_ts((name, args))\n        for q in (t, t + rng.randint(0, 3)):\n            assert ledger.get_balance(q) == model.get_balance(q), (seed, q)\n        if rng.random() < 0.2:\n            break\n",
+          "part": 1
+        },
+        {
+          "name": "Part 2: the worked example",
+          "code": "\nledger = {fn}()\nledger.subtract(5, 20)\nassert ledger.get_balance(10) == 0\nledger.add_credit(\"a\", 7, 15, 20)\nassert ledger.get_balance(15) == 7\nassert ledger.get_balance(20) == 2\nassert ledger.get_balance(12) == 0\n",
+          "behavior": "state.invariant",
+          "part": 2
+        },
+        {
+          "name": "Part 2: a late grant changes earlier answers",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "A call that arrives late must be applied at its own timestamp, so it can change the answer for a time already queried.",
+          "hiddenCode": "\nledger = {fn}()\nledger.add_credit(\"a\", 4, 0, 50)\nledger.subtract(10, 30)\nassert ledger.get_balance(30) is None\nledger.add_credit(\"late\", 10, 20, 50)\nassert ledger.get_balance(30) == 4, \"a (last usable at 50) is drained first, then 6 from late\"\nassert ledger.get_balance(51) == 4 and ledger.get_balance(71) == 0\nledger.subtract(1, 10)\nassert ledger.get_balance(10) == 3\nassert ledger.get_balance(30) == 3, \"a holds only 3 at time 30, so late gives 7\"\nassert ledger.get_balance(51) == 3\n",
+          "part": 2
+        },
+        {
+          "name": "Part 2: random shuffled calls match a replay",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "On random calls arriving in any order, a balance differed from replaying the calls in timestamp order.",
+          "hiddenCode": "\nimport random, time\n\nclass Replay:\n    def __init__(self):\n        self.calls = []\n    def add_credit(self, credit_id, amount, timestamp, expiration):\n        self.calls.append((timestamp, amount, timestamp + expiration))\n    def subtract(self, amount, timestamp):\n        self.calls.append((timestamp, -amount, None))\n    def get_balance(self, timestamp):\n        grants, debt = [], 0  # grants: [expires at, remaining]\n        for ts, amount, end in sorted(self.calls):\n            if ts > timestamp:\n                break\n            grants = [g for g in grants if g[0] >= ts]\n            if amount > 0:\n                paid = min(debt, amount)\n                debt -= paid\n                grants.append([end, amount - paid])\n            else:\n                need = -amount\n                for grant in sorted(grants, key=lambda g: g[0]):\n                    take = min(grant[1], need)\n                    grant[1] -= take\n                    need -= take\n                debt += need\n        value = sum(g[1] for g in grants if g[0] >= timestamp) - debt\n        return None if value < 0 else value\n\ndef random_calls(rng, n, span=60):\n    stamps = rng.sample(range(span), n)\n    calls = []\n    for i, ts in enumerate(stamps):\n        if rng.random() < 0.55:\n            calls.append((\"add_credit\", (f\"g{i}\", rng.randint(1, 9), ts, rng.randint(0, 25))))\n        else:\n            calls.append((\"subtract\", (rng.randint(1, 12), ts)))\n    return calls\n\ndef call_ts(call):\n    name, args = call\n    return args[2] if name == \"add_credit\" else args[1]\n\ndef best_of_three(fn):\n    best = float(\"inf\")\n    for _ in range(3):\n        start = time.perf_counter()\n        fn()\n        best = min(best, time.perf_counter() - start)\n    return best\n\nfor seed in range(200):\n    rng = random.Random(seed)\n    calls = random_calls(rng, rng.randint(1, 15))\n    ledger, model = {fn}(), Replay()\n    for name, args in calls:\n        getattr(ledger, name)(*args)\n        getattr(model, name)(*args)\n        for _ in range(3):\n            q = rng.randrange(-2, 90)\n            assert ledger.get_balance(q) == model.get_balance(q), (seed, q)\n",
+          "part": 2
+        },
+        {
+          "name": "Part 3: in-order queries do not replay",
+          "visibility": "unshown",
+          "behavior": "performance.complexity",
+          "failureMessage": "3,000 calls each followed by a query took far more than ten times as long as 300; keep a cursor and apply each call once instead of replaying per query.",
+          "hiddenCode": "\nimport random, time\n\nclass Replay:\n    def __init__(self):\n        self.calls = []\n    def add_credit(self, credit_id, amount, timestamp, expiration):\n        self.calls.append((timestamp, amount, timestamp + expiration))\n    def subtract(self, amount, timestamp):\n        self.calls.append((timestamp, -amount, None))\n    def get_balance(self, timestamp):\n        grants, debt = [], 0  # grants: [expires at, remaining]\n        for ts, amount, end in sorted(self.calls):\n            if ts > timestamp:\n                break\n            grants = [g for g in grants if g[0] >= ts]\n            if amount > 0:\n                paid = min(debt, amount)\n                debt -= paid\n                grants.append([end, amount - paid])\n            else:\n                need = -amount\n                for grant in sorted(grants, key=lambda g: g[0]):\n                    take = min(grant[1], need)\n                    grant[1] -= take\n                    need -= take\n                debt += need\n        value = sum(g[1] for g in grants if g[0] >= timestamp) - debt\n        return None if value < 0 else value\n\ndef random_calls(rng, n, span=60):\n    stamps = rng.sample(range(span), n)\n    calls = []\n    for i, ts in enumerate(stamps):\n        if rng.random() < 0.55:\n            calls.append((\"add_credit\", (f\"g{i}\", rng.randint(1, 9), ts, rng.randint(0, 25))))\n        else:\n            calls.append((\"subtract\", (rng.randint(1, 12), ts)))\n    return calls\n\ndef call_ts(call):\n    name, args = call\n    return args[2] if name == \"add_credit\" else args[1]\n\ndef best_of_three(fn):\n    best = float(\"inf\")\n    for _ in range(3):\n        start = time.perf_counter()\n        fn()\n        best = min(best, time.perf_counter() - start)\n    return best\n\ndef workload(n):\n    rng = random.Random(n)\n    calls = []\n    for ts in range(0, 10 * n, 10):\n        if rng.random() < 0.5:\n            calls.append((\"add_credit\", (f\"g{ts}\", rng.randint(1, 50), ts, rng.randint(0, 300))))\n        else:\n            calls.append((\"subtract\", (rng.randint(1, 60), ts)))\n    def run():\n        ledger = {fn}()\n        for call in calls:\n            getattr(ledger, call[0])(*call[1])\n            ledger.get_balance(call_ts(call))\n            ledger.get_balance(call_ts(call) + 5)\n    return run\nratio = best_of_three(workload(3000)) / best_of_three(workload(300))\nassert ratio < 40, f\"10x the calls took {ratio:.0f}x as long\"\n",
+          "part": 3
+        },
+        {
+          "name": "Part 3: every arrival order still matches a replay",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "Mixing in-order queries with late calls and earlier queries gave a balance different from replaying the calls.",
+          "hiddenCode": "\nimport random, time\n\nclass Replay:\n    def __init__(self):\n        self.calls = []\n    def add_credit(self, credit_id, amount, timestamp, expiration):\n        self.calls.append((timestamp, amount, timestamp + expiration))\n    def subtract(self, amount, timestamp):\n        self.calls.append((timestamp, -amount, None))\n    def get_balance(self, timestamp):\n        grants, debt = [], 0  # grants: [expires at, remaining]\n        for ts, amount, end in sorted(self.calls):\n            if ts > timestamp:\n                break\n            grants = [g for g in grants if g[0] >= ts]\n            if amount > 0:\n                paid = min(debt, amount)\n                debt -= paid\n                grants.append([end, amount - paid])\n            else:\n                need = -amount\n                for grant in sorted(grants, key=lambda g: g[0]):\n                    take = min(grant[1], need)\n                    grant[1] -= take\n                    need -= take\n                debt += need\n        value = sum(g[1] for g in grants if g[0] >= timestamp) - debt\n        return None if value < 0 else value\n\ndef random_calls(rng, n, span=60):\n    stamps = rng.sample(range(span), n)\n    calls = []\n    for i, ts in enumerate(stamps):\n        if rng.random() < 0.55:\n            calls.append((\"add_credit\", (f\"g{i}\", rng.randint(1, 9), ts, rng.randint(0, 25))))\n        else:\n            calls.append((\"subtract\", (rng.randint(1, 12), ts)))\n    return calls\n\ndef call_ts(call):\n    name, args = call\n    return args[2] if name == \"add_credit\" else args[1]\n\ndef best_of_three(fn):\n    best = float(\"inf\")\n    for _ in range(3):\n        start = time.perf_counter()\n        fn()\n        best = min(best, time.perf_counter() - start)\n    return best\n\nfor seed in range(150):\n    rng = random.Random(500 + seed)\n    calls = sorted(random_calls(rng, rng.randint(2, 20)), key=call_ts)\n    late = [calls.pop(rng.randrange(len(calls))) for _ in range(rng.randint(0, 2))]\n    ledger, model = {fn}(), Replay()\n    for i, (name, args) in enumerate(calls):\n        getattr(ledger, name)(*args)\n        getattr(model, name)(*args)\n        q = call_ts((name, args)) + rng.randint(0, 4)\n        assert ledger.get_balance(q) == model.get_balance(q), (seed, q)\n        if late and rng.random() < 0.3:\n            extra = late.pop()\n            getattr(ledger, extra[0])(*extra[1])\n            getattr(model, extra[0])(*extra[1])\n        if rng.random() < 0.2:\n            back = rng.randrange(0, 70)\n            assert ledger.get_balance(back) == model.get_balance(back), (seed, back)\n",
+          "part": 3
+        }
+      ],
+      "parts": [
+        {
+          "title": "Calls in time order",
+          "descriptionEn": "**Signature:** `add_credit(credit_id, amount, timestamp, expiration) -> None`, `subtract(amount, timestamp) -> None`, `get_balance(timestamp) -> int | None`\n\n- In this part every call, queries included, arrives in non-decreasing order of `timestamp`.\n\n**Example:**\n- `add_credit(\"a\", 8, 0, 30)`: usable from 0 to 30; `get_balance(0)` is `8`\n- `add_credit(\"b\", 4, 5, 10)`: usable from 5 to 15\n- `subtract(6, 10)` empties `b` first, then takes 2 from `a`; `get_balance(10)` is `6`\n- `get_balance(31)` is `0`: `a` has expired\n- `subtract(3, 40)` leaves a debt of 3; `get_balance(40)` is `None`\n- `add_credit(\"c\", 5, 50, 10)` pays the debt and keeps 2; `get_balance(50)` is `2`"
+        },
+        {
+          "title": "Calls in any order",
+          "descriptionEn": "Keep Part 1. Now `add_credit`, `subtract` and `get_balance` may arrive in any order of `timestamp`.\n\n- `get_balance(timestamp)` still answers as if every call made so far with a timestamp at or before it had been applied in timestamp order.\n- A call that arrives late changes later answers, including ones about times already queried.\n\n**Example:**\n- `subtract(5, 20)` arrives first; `get_balance(10)` is `0`\n- `add_credit(\"a\", 7, 15, 20)` arrives next; `get_balance(15)` is `7` and `get_balance(20)` is `2`"
+        },
+        {
+          "title": "Fast queries",
+          "descriptionEn": "Keep Parts 1–2 and make the common case fast. `U` is the number of `add_credit` and `subtract` calls, and `Q` the number of `get_balance` calls.\n\n- When queries arrive in non-decreasing order of `timestamp`, each after every call at or before its time, all `Q` queries together cost `O(U log U + Q)`, not a replay per query.\n- Any other order may take a slower path but must return the same answers as Part 2.\n\n**Example:** 3,000 calls, each followed by a query at its own timestamp, take about ten times as long as 300 such calls, not a hundred times."
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which grants are usable at a given time, and which one should a subtract drain first? What happens to the part of a subtract nothing could cover? When a new grant arrives while debt is outstanding, where does its amount go first?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Keep a min-heap of [last usable time, remaining] for the grants issued so far, and a debt counter. Before each call, pop grants whose last usable time is before the call's timestamp. add_credit pays debt first and pushes the rest; subtract drains from the heap top and adds any shortfall to debt."
+        }
+      ],
+      "modelConnections": [
+        "Cloud providers grant promotional and committed-use credits that expire, and their billing pipelines must apply late usage records to the right grant.",
+        "Event-sourced ledgers rebuild balances by replaying a time-ordered log, and keep checkpoints so they do not replay from the start each time."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "A min-heap keyed by expiry drains the soonest-expiring grant first and drops expired grants in O(log n).",
+          "Replaying calls in timestamp order makes late arrivals correct with no special cases.",
+          "Advancing one cursor through sorted calls makes in-order queries cost amortised O(log U) each."
+        ],
+        "cons": [
+          "Replaying everything per query costs O(U log U) per call, which is too slow for long histories.",
+          "The incremental cursor is invalidated by a call behind it, so out-of-order traffic falls back to a rebuild.",
+          "Keeping every call for rebuilds grows memory with the history; real systems checkpoint and compact."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Which grants does a subtract at time t drain, and in what order?",
+          "hint": "Write down each grant's window as two numbers, then ask which windows contain the subtract's time and which one closes first."
+        },
+        {
+          "stage": "concept",
+          "question": "Where does a new grant's amount go when there is outstanding debt, and why does that debt not return later?",
+          "hint": "Follow one grant that arrives while debt is outstanding: split its amount into what clears debt and what stays, and ask what expiring later can take back."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What structure gives you the soonest-expiring usable grant quickly, and how do expired grants leave it?",
+          "hint": "Think about a structure whose top is always the smallest key, and what you can safely discard from the top before each call."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How do you answer correctly when a call arrives after a query about a later time?",
+          "hint": "Picture a subtract arriving after a query about a later time, and what that query would have needed to know."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What does replaying every call per query cost, and how does a cursor over sorted calls avoid it?",
+          "hint": "Count the work of one query if it starts from an empty ledger, then ask what state could carry over between queries made in time order."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "When does the incremental cursor have to be thrown away, and what does the rebuild cost?",
+          "hint": "List what a cursor assumes about calls it has already passed, and what a call or query behind it breaks."
+        }
+      ]
     }
   ]
 }

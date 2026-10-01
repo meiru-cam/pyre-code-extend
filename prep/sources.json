@@ -170,5 +170,13 @@
       "memory_allocator"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/gpu-credits",
+    "exercises": [
+      "gpu_credits"
+    ],
+    "round": "coding"
   }
 ]

@@ -80,5 +80,13 @@
     "Why does a tree ordered by size answer best fit but not first fit?": "Picture a tree sorted by size and ask what it knows about addresses; then compare with what first fit asks for.",
     "How does storing each subtree's largest block let one tree answer first fit in O(log n)?": "Think about what a node could store about its whole subtree that tells you, before descending, whether any block there is big enough.",
     "Why is a sorted Python list with bisect still O(n) per insertion, and when is that acceptable anyway?": "Separate finding the position from moving the elements after it, and ask how many free blocks you expect in practice."
+  },
+  "gpu_credits": {
+    "Which grants does a subtract at time t drain, and in what order?": "Write down each grant's window as two numbers, then ask which windows contain the subtract's time and which one closes first.",
+    "Where does a new grant's amount go when there is outstanding debt, and why does that debt not return later?": "Follow one grant that arrives while debt is outstanding: split its amount into what clears debt and what stays, and ask what expiring later can take back.",
+    "What structure gives you the soonest-expiring usable grant quickly, and how do expired grants leave it?": "Think about a structure whose top is always the smallest key, and what you can safely discard from the top before each call.",
+    "How do you answer correctly when a call arrives after a query about a later time?": "Picture a subtract arriving after a query about a later time, and what that query would have needed to know.",
+    "What does replaying every call per query cost, and how does a cursor over sorted calls avoid it?": "Count the work of one query if it starts from an empty ledger, then ask what state could carry over between queries made in time order.",
+    "When does the incremental cursor have to be thrown away, and what does the rebuild cost?": "List what a cursor assumes about calls it has already passed, and what a call or query behind it breaks."
   }
 }
