@@ -218,5 +218,13 @@
       "shard_rebalance"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/text-editor",
+    "exercises": [
+      "text_editor"
+    ],
+    "round": "coding"
   }
 ]

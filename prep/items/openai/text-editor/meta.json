@@ -1,0 +1,20 @@
+{
+  "title": "Text Editor: Buffer, Undo, Autocomplete",
+  "summary": "A text buffer built up in four stages: character-offset insert/delete/read, an undo/redo history over individual API calls, trie-backed prefix autocomplete over the buffer's own vocabulary, and a minimal CRDT that keeps replicas in agreement under out-of-order and repeated delivery.",
+  "round": "coding",
+  "kind": "Coding · object-oriented design",
+  "difficulty": "Medium",
+  "frequency": "medium",
+  "format": "4 parts",
+  "topics": [
+    "data-structure",
+    "stack",
+    "trie",
+    "collaboration"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/coding/text-editor",
+  "rubric": [],
+  "exercises": [
+    "text_editor"
+  ]
+}

@@ -192,5 +192,6 @@
   "cluster_count": "class ClusterNode:\n\n    def __init__(self, node_id, parent_id, children_ids, network):\n        self.node_id = node_id\n        self.parent_id = parent_id\n        self.children_ids = list(children_ids)\n        self.network = network\n        self.results = {}\n        network.register(self)\n\n    def send(self, to_id, message):\n        self.network.send_async_message(self.node_id, to_id, message)\n\n    def receive_message(self, from_id, message):\n        pass",
   "durable_kv": "class KVStore:\n\n    def __init__(self, fs):\n        pass\n\n    def put(self, key, value):\n        pass\n\n    def get(self, key):\n        pass\n\n    def save(self):\n        pass\n\n    def load(self):\n        pass",
   "ipv4_iterator": "class IPV4Iterator:\n\n    def __init__(self, address):\n        pass\n\n    def __iter__(self):\n        return self\n\n    def __next__(self):\n        pass",
-  "shard_rebalance": "class ShardManager:\n\n    def __init__(self):\n        pass\n\n    def rebalance(self, limit, shards):\n        pass"
+  "shard_rebalance": "class ShardManager:\n\n    def __init__(self):\n        pass\n\n    def rebalance(self, limit, shards):\n        pass",
+  "text_editor": "class TextBuffer:\n\n    def __init__(self, text=\"\"):\n        pass\n\n    def __len__(self):\n        pass\n\n    def text(self):\n        pass\n\n    def insert(self, pos, text):\n        pass\n\n    def delete(self, start, end):\n        pass\n\n    def read(self, start, end):\n        pass"
 }
