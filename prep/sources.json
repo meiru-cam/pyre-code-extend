@@ -146,5 +146,13 @@
       "social_network"
     ],
     "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/file-deduplication",
+    "exercises": [
+      "file_dedup"
+    ],
+    "round": "coding"
   }
 ]

@@ -640,6 +640,15 @@
       }
     ]
   },
+  "file_dedup": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import hashlib\nimport os\nfrom collections import defaultdict\nfrom concurrent.futures import ThreadPoolExecutor\n\nSAMPLE_SIZE = 4096\nCHUNK_SIZE = 1 << 20\n\n\ndef _regular_files(root_path):\n    for dirpath, _dirnames, filenames in os.walk(root_path):  # never follows directory links\n        for name in filenames:\n            path = os.path.join(dirpath, name)\n            if not os.path.islink(path) and os.path.isfile(path):\n                yield path\n\n\ndef _sample(path):\n    try:\n        with open(path, \"rb\") as f:\n            return f.read(SAMPLE_SIZE)\n    except OSError:\n        return None\n\n\ndef _digest(path):\n    hasher = hashlib.sha256()\n    try:\n        with open(path, \"rb\") as f:\n            while chunk := f.read(CHUNK_SIZE):\n                hasher.update(chunk)\n    except OSError:\n        return None\n    return hasher.digest()\n\n\ndef _regroup(groups, key_of, pool):\n    \"\"\"Splits every group by key_of(path), reading in parallel, and drops what ends up alone.\"\"\"\n    paths = [path for group in groups for path in group]\n    keys = dict(zip(paths, pool.map(key_of, paths)))\n    out = []\n    for group in groups:\n        by_key = defaultdict(list)\n        for path in group:\n            if keys[path] is not None:\n                by_key[keys[path]].append(path)\n        out.extend(g for g in by_key.values() if len(g) >= 2)\n    return out\n\n\ndef find_duplicate_files(root_path, max_workers=None):\n    by_size = defaultdict(list)\n    for path in _regular_files(root_path):\n        try:\n            by_size[os.path.getsize(path)].append(path)\n        except OSError:\n            continue\n    groups = [paths for paths in by_size.values() if len(paths) >= 2]\n    with ThreadPoolExecutor(max_workers=max_workers) as pool:\n        groups = _regroup(groups, _sample, pool)\n        groups = _regroup(groups, _digest, pool)\n    return sorted((sorted(group) for group in groups), key=lambda group: group[0])",
+        "role": "solution"
+      }
+    ]
+  },
   "focal_loss": {
     "cells": [
       {

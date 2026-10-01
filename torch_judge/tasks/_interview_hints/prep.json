@@ -56,5 +56,13 @@
     "How do you make the follower list cost the size of its answer instead of the size of the graph?": "Ask what get_followers has to scan without a second index, and when that index could be built once.",
     "How do you count each candidate's score so that one followed user adds at most one point?": "Look at what a user's followee collection guarantees about repeats, and count through how many different users each candidate is reached.",
     "How can a snapshot cost O(1) to take and still answer for its own moment after later follows and unfollows?": "Think about recording, for each pair, the versions at which the follow started and ended, and what a snapshot would then need to store."
+  },
+  "file_dedup": {
+    "What do you use as the grouping key for a file's content, and why not the content itself?": "Think about a short fixed-size value computed from the bytes that you can use as a dictionary key, and what holding every file's content in memory would cost.",
+    "How does your walk treat symbolic links to files and to directories?": "Check what os.walk does with a link to a directory by default, and what still shows up in its list of file names.",
+    "Where can reading a file fail, and how do you keep one bad file from breaking the whole result?": "List the calls that touch the file itself, and decide what a failure in each one should mean for that file and for the rest.",
+    "Why compare sizes before reading anything, and why is a matching sample still not proof of a duplicate?": "Ask what a stat call costs compared with a read, and what two files with the same first few kilobytes may still differ in.",
+    "Why do threads speed up reading files despite the GIL, and when would processes be the better pool?": "Think about what a thread does while the operating system fetches bytes from storage, and what work would keep every thread busy instead.",
+    "When would you add a byte-for-byte comparison after the hashes match?": "Consider who acts on the result: what is the cost of wrongly calling two files the same if one of them gets deleted?"
   }
 }
