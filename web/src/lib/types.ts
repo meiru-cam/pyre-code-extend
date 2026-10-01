@@ -7,6 +7,14 @@ export interface Test {
   failureMessage?: string;
   /** Unshown cases only: the evaluator code, revealed in the results pane after grading. */
   hiddenCode?: string;
+  /** Multi-part exercises only: the part (1-based) whose requirement this case checks. */
+  part?: number;
+}
+
+/** One stage of a multi-part exercise, revealed after every earlier part passes. */
+export interface ProblemPart {
+  title: string;
+  descriptionEn: string;
 }
 
 export interface HintLevel {
@@ -78,6 +86,7 @@ export interface Problem {
   interviewQuestions?: InterviewQuestion[];
   designNoteRubric?: { field: DesignNoteFieldName; label: string }[];
   sources?: SourceRef[];
+  parts?: ProblemPart[];
 }
 
 export interface TestResult {

@@ -241,14 +241,15 @@ RL_BEHAVIOR_CATEGORIES = frozenset({
 
 
 ML_FUNDAMENTALS_BEHAVIOR_CATEGORIES = frozenset({"metrics.averaging", "metrics.ties", "optim.state"})
+PRACTICAL_CODING_BEHAVIOR_CATEGORIES = frozenset({"performance.complexity", "concurrency.thread_safety"})
 
 
 def test_behavior_categories_match_spec_count():
-    """The 27 categories of the advanced-curriculum spec, the RL path's 8, and ML fundamentals' 3."""
-    assert RL_BEHAVIOR_CATEGORIES <= BEHAVIOR_CATEGORIES
-    assert ML_FUNDAMENTALS_BEHAVIOR_CATEGORIES <= BEHAVIOR_CATEGORIES
-    assert len(BEHAVIOR_CATEGORIES - RL_BEHAVIOR_CATEGORIES - ML_FUNDAMENTALS_BEHAVIOR_CATEGORIES) == 27
-    assert len(BEHAVIOR_CATEGORIES) == 38
+    """The advanced-curriculum spec's 27, the RL path's 8, ML fundamentals' 3, practical coding's 2."""
+    extensions = RL_BEHAVIOR_CATEGORIES | ML_FUNDAMENTALS_BEHAVIOR_CATEGORIES | PRACTICAL_CODING_BEHAVIOR_CATEGORIES
+    assert extensions <= BEHAVIOR_CATEGORIES
+    assert len(BEHAVIOR_CATEGORIES - extensions) == 27
+    assert len(BEHAVIOR_CATEGORIES) == 40
 
 
 def test_rl_behavior_categories_are_namespaced():
@@ -298,3 +299,52 @@ def test_interview_questions_accept_ordered_stages():
 def test_interview_questions_reject_bad_shapes(questions, message):
     with pytest.raises(TaskValidationError, match=message):
         validate_task("t", _with_interview(questions))
+
+
+def make_parted_task() -> dict:
+    task = make_legacy_task()
+    task["parts"] = [
+        {"title": "Basic", "description_en": "Store values."},
+        {"title": "Clock", "description_en": "Default to the clock."},
+    ]
+    task["tests"] = [
+        {"name": "basic", "code": "assert True", "part": 1},
+        {"name": "clock", "code": "assert True", "part": 2,
+         "visibility": "unshown", "behavior": "state.invariant", "failure_message": "Use the clock."},
+    ]
+    return task
+
+
+def test_parted_task_validates():
+    validate_task("time_map", make_parted_task())
+
+
+@pytest.mark.parametrize(
+    ("mutate", "field"),
+    [
+        (lambda t: t.update(parts=t["parts"][:1]), "parts"),
+        (lambda t: t["parts"][1].update(extra="x"), "parts[1]"),
+        (lambda t: t["parts"][1].update(title="Basic"), "parts"),
+        (lambda t: t["tests"][1].update(part=3), "tests[1].part"),
+        (lambda t: t["tests"][0].pop("part"), "tests[0].part"),
+        (lambda t: t["tests"].reverse(), "tests"),
+        (lambda t: t["tests"][1].update(part=1), "tests"),
+        (lambda t: t["tests"][0].update(visibility="unshown", behavior="state.invariant",
+                                        failure_message="x"), "tests"),
+    ],
+    ids=["one part", "extra key", "duplicate title", "part out of range", "missing part", "out of order",
+         "part without tests", "part 1 all unshown"],
+)
+def test_parted_task_rejects(mutate, field):
+    task = make_parted_task()
+    mutate(task)
+    with pytest.raises(TaskValidationError) as error:
+        validate_task("time_map", task)
+    assert error.value.field == field
+
+
+def test_part_on_a_test_needs_declared_parts():
+    task = make_legacy_task()
+    task["tests"][0]["part"] = 1
+    with pytest.raises(TaskValidationError, match="declare 'parts'"):
+        validate_task("relu", task)

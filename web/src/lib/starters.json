@@ -176,5 +176,6 @@
   "posed_frame_context": "import math\n\n\nclass SpatialFrameMemory:\n    def add(self, frame_id, position, yaw):\n        pass\n\n    def context(self, position, yaw, k, recent=2, max_angle=90.0, angle_weight=1.0):\n        pass",
   "lora_merge": "class MergeableLoRALinear(nn.Module):\n\n    def __init__(self, in_features, out_features, rank, alpha=1.0):\n        super().__init__()\n        pass\n\n    def merge(self):\n        pass\n\n    def unmerge(self):\n        pass\n\n    def forward(self, x):\n        pass",
   "dora": "class DoRALinear(nn.Module):\n\n    def __init__(self, in_features, out_features, rank, alpha=1.0):\n        super().__init__()\n        pass\n\n    def forward(self, x):\n        pass",
-  "prefix_tuning": "class PrefixAttention(nn.Module):\n\n    def __init__(self, d_model, num_heads, num_prefix):\n        super().__init__()\n        pass\n\n    def forward(self, x, attention_mask=None):\n        pass"
+  "prefix_tuning": "class PrefixAttention(nn.Module):\n\n    def __init__(self, d_model, num_heads, num_prefix):\n        super().__init__()\n        pass\n\n    def forward(self, x, attention_mask=None):\n        pass",
+  "time_map": "class TimeMap:\n\n    def __init__(self):\n        pass\n\n    def set(self, key, value, timestamp):\n        pass\n\n    def get(self, key, timestamp):\n        pass"
 }

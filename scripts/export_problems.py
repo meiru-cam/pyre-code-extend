@@ -30,10 +30,11 @@ _OPTIONAL_FIELDS = (
 
 
 def _test_entry(test: dict[str, Any]) -> dict[str, Any]:
+    entry: dict[str, Any]
     if test.get("visibility") == "unshown":
         # The inputs stay hidden, but the one-line diagnosis does not: it says what the
         # case checks without showing how, so a passing case is still readable.
-        return {
+        entry = {
             "name": test["name"],
             "visibility": "unshown",
             "behavior": test["behavior"],
@@ -42,9 +43,12 @@ def _test_entry(test: dict[str, Any]) -> dict[str, Any]:
             # unshown; the results pane reveals it only once the case has been graded.
             "hiddenCode": test["code"],
         }
-    entry: dict[str, Any] = {"name": test["name"], "code": test["code"]}
-    if "behavior" in test:
-        entry["behavior"] = test["behavior"]
+    else:
+        entry = {"name": test["name"], "code": test["code"]}
+        if "behavior" in test:
+            entry["behavior"] = test["behavior"]
+    if "part" in test:
+        entry["part"] = test["part"]
     return entry
 
 
@@ -63,6 +67,11 @@ def _problem_entry(task_id: str, task: dict[str, Any]) -> dict[str, Any]:
         "version": task.get("version", 1),
         "tests": [_test_entry(test) for test in task["tests"]],
     }
+    if "parts" in task:
+        entry["parts"] = [
+            {"title": part["title"], "descriptionEn": part["description_en"]}
+            for part in task["parts"]
+        ]
     for task_key, output_key in _OPTIONAL_FIELDS:
         if task_key in task:
             entry[output_key] = task[task_key]

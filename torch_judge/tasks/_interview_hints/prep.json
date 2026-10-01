@@ -1,0 +1,12 @@
+{
+  "time_map": {
+    "What data structure do you keep per key, and why does it make get logarithmic?": "Think about what order the timestamps arrive in for one key, and which standard-library search works on a sorted list.",
+    "Why inject a clock instead of calling time.time() inside set and get?": "Picture writing a test for 'the value 40 seconds later' against the real clock, then name what a fake clock removes.",
+    "Walk through what set does when the requested timestamp is not larger than the key's last one, and why appending at last + 1 keeps get correct.": "Cover the one number per key the decision uses, and what the sorted list still guarantees after the bump.",
+    "Which steps of set must happen atomically for part 4, and what goes wrong if the clock is read outside the lock?": "List the read-compare-append steps, then interleave two threads between them and see which timestamps they record.",
+    "Compare one lock for the whole store with one lock per key: what does each cost, and when does the per-key version win?": "Weigh contention across unrelated keys against the extra map of locks, and who guards creating a key's lock.",
+    "Would a read-write lock that lets concurrent gets run together help here? Why or why not?": "Compare how long a get holds the lock with the overhead of a read-write lock in Python, and note what the GIL already serializes.",
+    "What should get return when the key exists but every recorded timestamp is later than the query?": "Look at what the binary search returns in that case, and what one step to its left would point at.",
+    "Which binary-search variant finds the latest timestamp at or before t, and how does it treat an exact match?": "Compare where bisect_left and bisect_right land when the query equals a stored timestamp, then step one to the left."
+  }
+}

@@ -21,6 +21,13 @@ import type { Problem, ProgressMap, SubmissionResult, LearningPath, LearningPath
 import { loadCodeDraft, saveCodeDraft } from '@/lib/codeDraft';
 import { visibleTestIndices } from '@/lib/hints';
 import {
+  loadUnlockedPart,
+  partCount,
+  saveUnlockedPart,
+  resultThroughPart,
+  unlockedAfter,
+} from '@/lib/parts';
+import {
   emptyInterviewRecord,
   interviewQuestionsFor,
   isInterviewUnlocked,
@@ -70,6 +77,8 @@ function WorkspacePageNew() {
   const [pathData, setPathData] = useState<(Omit<LearningPath, 'problems'> & { problems: LearningPathProblemSummary[] }) | null>(null);
   const [feedbackResult, setFeedbackResult] = useState<SubmissionResult | null>(null);
   const [interviewRecord, setInterviewRecord] = useState<InterviewRecord | null>(null);
+  // Multi-part exercises reveal one part at a time; 0 means the exercise has no parts.
+  const [unlockedPart, setUnlockedPart] = useState(0);
   const interviewUnlocked = isInterviewUnlocked(interviewRecord);
   const codeReadyRef = useRef(false);
 
@@ -80,6 +89,8 @@ function WorkspacePageNew() {
       .then((r) => r.json())
       .then((data) => {
         setProblem(data);
+        const parts = partCount(data);
+        setUnlockedPart(parts ? loadUnlockedPart(id, data.version ?? 1, parts) : 0);
         const questions = interviewQuestionsFor(data);
         setInterviewRecord(
           loadInterviewRecord(id, data.version ?? 1, questions) ?? emptyInterviewRecord(questions),
@@ -159,19 +170,38 @@ function WorkspacePageNew() {
     if (problem) saveInterviewRecord(id, problem.version ?? 1, record);
   };
 
+  const parts = problem ? partCount(problem) : 0;
+  // unlockedPart is what this browser has unlocked; shownPart also opens every part once the
+  // exercise is solved, e.g. on another device.
+  const shownPart = parts && progress[id]?.status === 'solved' ? parts : unlockedPart;
+
+  // Run and Submit grade every part. Unlock as far as the code passes, then show only the
+  // unlocked parts' cases. The first failing part is always unlocked, so a failure is never hidden.
+  const unlockAndShow = (result: SubmissionResult): SubmissionResult => {
+    if (!problem || !parts || !result.results) return result;
+    const next = unlockedAfter(problem.tests, result, parts, unlockedPart);
+    if (next > unlockedPart) {
+      setUnlockedPart(next);
+      saveUnlockedPart(id, problem.version ?? 1, next);
+    }
+    return resultThroughPart(problem.tests, result, Math.max(next, shownPart));
+  };
+
   const handleRun = async () => {
     if (!problem || isRunning || !interviewUnlocked) return;
     setIsRunning(true);
     setRunResult(null);
     try {
-      const testIndices = visibleTestIndices(problem.tests).slice(0, 2);
+      const testIndices = parts
+        ? problem.tests.map((_, index) => index)
+        : visibleTestIndices(problem.tests).slice(0, 2);
       const res = await fetch('/api/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ taskId: id, code: currentCode, testIndices }),
       });
       const data = await res.json();
-      setRunResult(data);
+      setRunResult(unlockAndShow(data));
       setBottomTab('testresults');
     } catch {
       setRunResult({ passed: 0, total: 0, allPassed: false, results: [], totalTimeMs: 0, error: t('networkError') });
@@ -191,10 +221,11 @@ function WorkspacePageNew() {
         body: JSON.stringify({ taskId: id, code: currentCode }),
       });
       const data: SubmissionResult = await res.json();
-      setSubmissionResult(data);
-      setRunResult(data);
+      const shown = unlockAndShow(data);
+      setSubmissionResult(shown);
+      setRunResult(shown);
       setBottomTab('testresults');
-      setFeedbackResult(data);
+      setFeedbackResult(shown);
       fetch('/api/progress').then((r) => r.json()).then((d) => setProgress(d.progress || {}));
       fetch(`/api/submissions/${id}`).then((r) => r.json()).then((d: SubmissionHistory[]) => setSubmissionHistory(d)).catch(() => {});
     } catch {
@@ -261,6 +292,7 @@ function WorkspacePageNew() {
             problem={problem}
             implementationStatus={progress[id]?.status ?? 'todo'}
             interview={{ record: interviewRecord, onChange: handleInterviewChange }}
+            unlockedPart={shownPart}
           />
         </Tabs.Content>
         <Tabs.Content value="solution" className="flex-1 overflow-y-auto">
@@ -308,7 +340,7 @@ function WorkspacePageNew() {
         }
         bottom={
           <div className="flex flex-col h-full">
-            <TestPanel tests={problem.tests} functionName={problem.functionName} />
+            <TestPanel tests={problem.tests} functionName={problem.functionName} unlockedPart={shownPart} />
             <ActionBar onSubmit={handleSubmit} onRun={handleRun} isSubmitting={isSubmitting} isRunning={isRunning} disabled={!interviewUnlocked} attemptCount={submissionHistory.length} />
           </div>
         }

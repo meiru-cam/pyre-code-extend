@@ -90,5 +90,13 @@
     "exercises": [
       "bpe"
     ]
+  },
+  {
+    "company": "openai",
+    "item": "coding/time-based-kv-store",
+    "exercises": [
+      "time_map"
+    ],
+    "round": "coding"
   }
 ]

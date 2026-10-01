@@ -19280,6 +19280,218 @@
           "section": "Section 4.1 (Prefix-tuning method) and Section 4.3 (Parametrization of P)"
         }
       ]
+    },
+    {
+      "id": "time_map",
+      "title": "Time-Travel Key-Value Store",
+      "titleZh": "Time-Travel Key-Value Store",
+      "difficulty": "Medium",
+      "functionName": "TimeMap",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Build `TimeMap`, a key-value store that keeps every value a key has held and answers \"what was this key's value at time t?\".\n\nThe requirement arrives in parts, the way an interviewer adds them. Each part keeps every earlier behavior, so one `TimeMap` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** the first part is a warm-up (a sorted list per key plus binary search). The later parts add one requirement at a time and test whether your design absorbs each one with a small change.\n\n**Where it is used:** config and feature-flag histories, metrics stores and MVCC databases all answer \"value as of time t\" with the same per-key sorted history.\n\nAdapted from the time-based key-value store question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, with part 1 narrowed so that the parts build on each other.",
+      "descriptionZh": "Build `TimeMap`, a key-value store that keeps every value a key has held and answers \"what was this key's value at time t?\".\n\nThe requirement arrives in parts, the way an interviewer adds them. Each part keeps every earlier behavior, so one `TimeMap` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** the first part is a warm-up (a sorted list per key plus binary search). The later parts add one requirement at a time and test whether your design absorbs each one with a small change.\n\n**Where it is used:** config and feature-flag histories, metrics stores and MVCC databases all answer \"value as of time t\" with the same per-key sorted history.\n\nAdapted from the time-based key-value store question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, with part 1 narrowed so that the parts build on each other.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Part 1: latest value at or before t",
+          "code": "\ntm = {fn}()\ntm.set(\"probe\", 68.0, 100)\ntm.set(\"probe\", 71.5, 140)\nassert tm.get(\"probe\", 130) == 68.0\nassert tm.get(\"probe\", 140) == 71.5\nassert tm.get(\"probe\", 10**9) == 71.5\n",
+          "behavior": "state.invariant",
+          "part": 1
+        },
+        {
+          "name": "Part 1: missing key or too early",
+          "code": "\ntm = {fn}()\nassert tm.get(\"probe\", 100) is None\ntm.set(\"probe\", 68.0, 100)\nassert tm.get(\"probe\", 99.999) is None\nassert tm.get(\"other\", 100) is None\n",
+          "behavior": "edge.empty_or_boundary",
+          "part": 1
+        },
+        {
+          "name": "Part 1: keys are independent",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "A set on one key changed what get returns for another key; keep one history per key.",
+          "hiddenCode": "\ntm = {fn}()\ntm.set(\"a\", \"a1\", 1)\ntm.set(\"b\", \"b1\", 2)\ntm.set(\"a\", \"a2\", 3)\nassert tm.get(\"a\", 2) == \"a1\"\nassert tm.get(\"b\", 1) is None\nassert tm.get(\"b\", 3) == \"b1\"\nassert tm.get(\"a\", 3) == \"a2\"\n",
+          "part": 1
+        },
+        {
+          "name": "Part 1: exact and in-between timestamps",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "get must include a value recorded exactly at the queried timestamp and pick the latest one not after it.",
+          "hiddenCode": "\ntm = {fn}()\nfor t in range(0, 100, 10):\n    tm.set(\"k\", f\"v{t}\", t)\nfor q in range(0, 100):\n    assert tm.get(\"k\", q) == f\"v{q - q % 10}\", q\nassert tm.get(\"k\", 9.5) == \"v0\"\nassert tm.get(\"k\", 10.0) == \"v10\"\nassert tm.get(\"k\", -1) is None\n",
+          "part": 1
+        },
+        {
+          "name": "Part 1: get is logarithmic",
+          "visibility": "unshown",
+          "behavior": "performance.complexity",
+          "failureMessage": "get compared too many timestamps; binary-search the key's sorted history instead of scanning it.",
+          "hiddenCode": "\nclass Stamp(float):\n    compares = 0\n    def _count(self):\n        Stamp.compares += 1\n    def __lt__(self, other): self._count(); return float(self) < float(other)\n    def __le__(self, other): self._count(); return float(self) <= float(other)\n    def __gt__(self, other): self._count(); return float(self) > float(other)\n    def __ge__(self, other): self._count(); return float(self) >= float(other)\n    def __eq__(self, other): self._count(); return float(self) == float(other)\n    __hash__ = float.__hash__\n\ntm = {fn}()\nn = 4096\nfor i in range(n):\n    tm.set(\"k\", i, Stamp(i))\nStamp.compares = 0\nfor q in (0, 1000, 2047, 3000, 4095, 5000):\n    assert tm.get(\"k\", Stamp(q)) == min(q, n - 1)\nassert Stamp.compares <= 6 * 40, f\"{Stamp.compares} comparisons for 6 lookups in 4096 entries\"\n",
+          "part": 1
+        },
+        {
+          "name": "Part 2: timestamps default to the clock",
+          "code": "\nclass ManualClock:\n    def __init__(self, start=0.0):\n        self._now = start\n    def now(self):\n        return self._now\n    def advance(self, dt):\n        self._now += dt\n\nclock = ManualClock(1000.0)\ntm = {fn}(clock=clock)\ntm.set(\"probe\", 68.0)\nclock.advance(40.0)\ntm.set(\"probe\", 71.5)\nassert tm.get(\"probe\") == 71.5\nassert tm.get(\"probe\", 1000.0) == 68.0\n",
+          "behavior": "contract.signature",
+          "part": 2
+        },
+        {
+          "name": "Part 2: explicit timestamps beat the clock",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "An explicit timestamp must be used as given even when a clock is injected.",
+          "hiddenCode": "\nclass ManualClock:\n    def __init__(self, start=0.0):\n        self._now = start\n    def now(self):\n        return self._now\n    def advance(self, dt):\n        self._now += dt\n\nclock = ManualClock(500.0)\ntm = {fn}(clock=clock)\ntm.set(\"k\", \"early\", 100.0)\ntm.set(\"k\", \"now\")\nassert tm.get(\"k\", 100.0) == \"early\"\nassert tm.get(\"k\", 499.0) == \"early\"\nassert tm.get(\"k\") == \"now\"\ntm.set(\"j\", \"x\", timestamp=None)\nassert tm.get(\"j\", 500.0) == \"x\"\n",
+          "part": 2
+        },
+        {
+          "name": "Part 2: the clock is read at call time",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Read clock.now() on every call that omits the timestamp, not once when the store is built.",
+          "hiddenCode": "\nclass ManualClock:\n    def __init__(self, start=0.0):\n        self._now = start\n    def now(self):\n        return self._now\n    def advance(self, dt):\n        self._now += dt\n\nclock = ManualClock(0.0)\ntm = {fn}(clock=clock)\nclock.advance(10.0)\ntm.set(\"k\", \"a\")\nassert tm.get(\"k\", 9.0) is None\nclock.advance(5.0)\nassert tm.get(\"k\") == \"a\"\nclock.advance(-10.0)\nassert tm.get(\"k\") is None\n",
+          "part": 2
+        },
+        {
+          "name": "Part 2: default clock is real time",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Without a clock argument, fall back to a clock whose now() returns time.time().",
+          "hiddenCode": "\nimport time\ntm = {fn}()\nbefore = time.time()\ntm.set(\"k\", \"v\")\nassert tm.get(\"k\", before - 60) is None\nassert tm.get(\"k\", time.time() + 60) == \"v\"\nassert tm.get(\"k\") == \"v\"\n",
+          "part": 2
+        },
+        {
+          "name": "Part 3: backward timestamps become last + 1",
+          "code": "\nclass ManualClock:\n    def __init__(self, start=0.0):\n        self._now = start\n    def now(self):\n        return self._now\n    def advance(self, dt):\n        self._now += dt\n\nclock = ManualClock(100.0)\ntm = {fn}(clock=clock)\nassert tm.set(\"probe\", 68.0) == 100.0\nassert tm.set(\"probe\", 70.0, 100.0) == 101.0\nassert tm.get(\"probe\", 100.0) == 68.0\nassert tm.get(\"probe\", 101.0) == 70.0\nclock.advance(-50.0)\nassert tm.set(\"probe\", 65.0) == 102.0\nassert tm.get(\"probe\", 102.0) == 65.0\n",
+          "behavior": "events.ordering",
+          "part": 3
+        },
+        {
+          "name": "Part 3: each key keeps its own last timestamp",
+          "visibility": "unshown",
+          "behavior": "events.ordering",
+          "failureMessage": "Compare a set only with the last timestamp recorded for the same key.",
+          "hiddenCode": "\ntm = {fn}()\nassert tm.set(\"busy\", 1, 50) == 50\nassert tm.set(\"busy\", 2, 50) == 51\nassert tm.set(\"quiet\", 3, 10) == 10\nassert tm.set(\"quiet\", 4, 11) == 11\nassert tm.get(\"quiet\", 10) == 3\n",
+          "part": 3
+        },
+        {
+          "name": "Part 3: returns the requested timestamp when it is new",
+          "visibility": "unshown",
+          "behavior": "events.ordering",
+          "failureMessage": "set must return the timestamp it recorded, which is the requested one when it is later than the key's last.",
+          "hiddenCode": "\ntm = {fn}()\nassert tm.set(\"k\", \"a\", 1.5) == 1.5\nassert tm.set(\"k\", \"b\", 7.25) == 7.25\nassert tm.set(\"k\", \"c\", 3) == 8.25\nassert tm.set(\"k\", \"d\", 8.25) == 9.25\nassert tm.set(\"k\", \"e\", 100) == 100\n# Later by less than 1 is still later: record it as requested, not at last + 1.\nassert tm.set(\"k\", \"f\", 100.5) == 100.5\nassert [tm.get(\"k\", t) for t in (1.5, 7.25, 8.25, 9.25, 100, 100.5)] == [\"a\", \"b\", \"c\", \"d\", \"e\", \"f\"]\n",
+          "part": 3
+        },
+        {
+          "name": "Part 3: nothing is overwritten",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "A repeated or backward timestamp must append a new entry at last + 1, not replace an existing one.",
+          "hiddenCode": "\nclass ManualClock:\n    def __init__(self, start=0.0):\n        self._now = start\n    def now(self):\n        return self._now\n    def advance(self, dt):\n        self._now += dt\n\nclock = ManualClock(10.0)\ntm = {fn}(clock=clock)\nrecorded = [tm.set(\"k\", i) for i in range(5)]\nassert recorded == [10.0, 11.0, 12.0, 13.0, 14.0]\nassert [tm.get(\"k\", t) for t in recorded] == [0, 1, 2, 3, 4]\n",
+          "part": 3
+        },
+        {
+          "name": "Part 4: concurrent sets on one key stay strictly increasing",
+          "code": "\nimport random, threading, time\n\ndef pause():\n    # A random sleep hands the GIL to another thread and shuffles who resumes first.\n    time.sleep(random.random() * 0.0004)\n\nclass SlowStamp(float):\n    def __lt__(self, other): pause(); return float(self) < float(other)\n    def __le__(self, other): pause(); return float(self) <= float(other)\n    def __gt__(self, other): pause(); return float(self) > float(other)\n    def __ge__(self, other): pause(); return float(self) >= float(other)\n\nclass SlowKey(str):\n    # Every dict lookup on this key yields, including between two writes that belong together.\n    def __hash__(self):\n        pause()\n        return str.__hash__(self)\n    __eq__ = str.__eq__\n\nclass SlowClock:\n    def now(self):\n        pause()\n        return SlowStamp(1000.0)\n\nHOT = SlowKey(\"hot\")\ntm = {fn}(clock=SlowClock())\nthreads, per_thread = 8, 15\nrecorded = [[] for _ in range(threads)]\nerrors = []\n\ndef worker(i):\n    try:\n        for j in range(per_thread):\n            recorded[i].append((tm.set(HOT, (i, j)), (i, j)))\n    except Exception as error:\n        errors.append(error)\n\npool = [threading.Thread(target=worker, args=(i,)) for i in range(threads)]\nfor t in pool: t.start()\nfor t in pool: t.join()\nassert not errors, errors\nstamps = [stamp for per in recorded for stamp, _ in per]\nassert len(set(stamps)) == len(stamps), \"two sets on one key recorded the same timestamp\"\nassert sorted(stamps) == [1000.0 + k for k in range(threads * per_thread)]\nfor per in recorded:\n    for stamp, value in per:\n        assert tm.get(HOT, stamp) == value, \"a value was paired with another set's timestamp\"\n",
+          "behavior": "concurrency.thread_safety",
+          "part": 4
+        },
+        {
+          "name": "Part 4: readers only see stored values",
+          "visibility": "unshown",
+          "behavior": "concurrency.thread_safety",
+          "failureMessage": "Under concurrent calls, get returned a value no set stored for that key or raised; guard reads and writes with the same lock.",
+          "hiddenCode": "\nimport sys, threading\nold = sys.getswitchinterval()\nsys.setswitchinterval(1e-6)\ntry:\n    tm = {fn}()\n    errors = []\n    def writer(key):\n        try:\n            for i in range(1500):\n                tm.set(key, (key, i), 0)\n        except Exception as error:\n            errors.append(error)\n    def reader(key):\n        try:\n            for i in range(1500):\n                value = tm.get(key, i)\n                assert value is None or value[0] == key, value\n        except Exception as error:\n            errors.append(error)\n    pool = [threading.Thread(target=f, args=(k,)) for k in (\"a\", \"b\") for f in (writer, reader)]\n    for t in pool: t.start()\n    for t in pool: t.join()\nfinally:\n    sys.setswitchinterval(old)\nassert not errors, errors[:3]\nfor key in (\"a\", \"b\"):\n    assert [tm.get(key, t) for t in range(1500)] == [(key, t) for t in range(1500)]\n",
+          "part": 4
+        }
+      ],
+      "parts": [
+        {
+          "title": "Basic store",
+          "descriptionEn": "**Signature:** `TimeMap()`, `set(key, value, timestamp) -> None`, `get(key, timestamp) -> value | None`\n\n- `set` records that `key` holds `value` from `timestamp` on. A timestamp is an `int` or a `float`.\n- `get` returns the value recorded at the largest timestamp less than or equal to `timestamp`.\n- `get` returns `None` for a key that was never set, or when every recorded timestamp for the key is later than `timestamp`.\n- Keys are independent: a `set` on one key never changes what `get` returns for another.\n- For one key, `set` calls arrive with strictly increasing timestamps.\n- `get` must take time logarithmic in the number of values recorded for that key.\n\n**Example:**\n- `tm.set(\"probe\", 68.0, 100)`, then `tm.set(\"probe\", 71.5, 140)`\n- `tm.get(\"probe\", 130)` returns `68.0`; `tm.get(\"probe\", 140)` returns `71.5`\n- `tm.get(\"probe\", 90)` returns `None`; `tm.get(\"other\", 140)` returns `None`"
+        },
+        {
+          "title": "Injectable clock",
+          "descriptionEn": "Tests must not depend on the real clock. Keep every Part 1 behavior and add:\n\n**Signature:** `TimeMap(clock=None)`, `set(key, value, timestamp=None)`, `get(key, timestamp=None)`\n\n- A clock is any object with a method `now() -> float`.\n- When `timestamp` is omitted or `None`, `set` and `get` use `clock.now()` at the moment of the call.\n- An explicit `timestamp` always wins over the clock.\n- With no clock given, `TimeMap` uses the real time, `time.time()`.\n\n**Example** (a test clock whose `now()` returns a number the test controls):\n- `clock.now()` is `1000`: `tm.set(\"probe\", 68.0)` records at `1000`\n- the clock moves to `1040`: `tm.set(\"probe\", 71.5)`, then `tm.get(\"probe\")` returns `71.5`\n- `tm.get(\"probe\", 1000)` returns `68.0`"
+        },
+        {
+          "title": "Strictly increasing timestamps",
+          "descriptionEn": "The Part 1 assumption goes away: a `set` may now carry a timestamp that is not larger than the last one recorded for its key, either passed explicitly or because the clock moved backward. Keep Parts 1–2 and add:\n\n**Signature:** `set(key, value, timestamp=None) -> float`, returning the timestamp actually recorded.\n\n- Let `last` be the largest timestamp recorded for `key` so far.\n- If the key has no values yet, or the requested timestamp is greater than `last`, record at the requested timestamp.\n- Otherwise record at `last + 1`. Nothing is inserted before or overwritten.\n- Each key has its own `last`.\n\n**Example:**\n- `tm.set(\"probe\", 68.0, 100)` returns `100`\n- `tm.set(\"probe\", 70.0, 100)` returns `101`; `tm.get(\"probe\", 100)` is still `68.0`\n- the clock reads `50`: `tm.set(\"probe\", 65.0)` returns `102`"
+        },
+        {
+          "title": "Concurrent callers",
+          "descriptionEn": "Several threads now call `set` and `get` on the same `TimeMap` at once, on the same key or different keys. Keep Parts 1–3 and guarantee, for any number of threads and any scheduling:\n\n- Each `set` and `get` behaves as if it happened at a single instant. A call without `timestamp` reads the clock inside that instant.\n- For each key, the recorded timestamps stay strictly increasing, even when threads set the same key at the same time. No two `set` calls on one key return the same timestamp.\n- `get(key, ...)` returns `None` or a value that some `set` on that key stored. Never another key's value, and never a half-written entry.\n- No call raises because of another thread's call."
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "What per-key structure lets you find the last timestamp at or before t without scanning? If timestamps arrive in order, where does each new one go? Is there one code path every write goes through, so that a new requirement changes only that path?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Keep two parallel lists per key, timestamps and values, and append to both. For get, bisect_right on the timestamps gives the insertion point; the answer sits one to the left, or there is none. Route every write through a single block that settles the timestamp, records it and returns it, and every read through a single lookup: each later part then changes one place, not several."
+        }
+      ],
+      "modelConnections": [
+        "Multi-version concurrency control keeps a sorted version list per row and reads the newest version at or before a snapshot timestamp, which is part 1 at database scale.",
+        "Hybrid logical clocks bump a timestamp to last + 1 when the physical clock has not advanced, the same fix part 3 applies per key."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Parallel sorted lists give O(log n) reads with bisect and O(1) appends when writes arrive in order.",
+          "An injected clock makes time-dependent behavior testable without sleeping.",
+          "Enforcing monotonic timestamps inside the store keeps every caller's history consistent."
+        ],
+        "cons": [
+          "Memory grows with every version; a real store needs compaction or a retention window.",
+          "Rewriting a backward timestamp to last + 1 hides clock skew instead of reporting it.",
+          "One store-wide lock serializes unrelated keys; per-key locks add bookkeeping and their own creation race."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What data structure do you keep per key, and why does it make get logarithmic?",
+          "hint": "Think about what order the timestamps arrive in for one key, and which standard-library search works on a sorted list."
+        },
+        {
+          "stage": "concept",
+          "question": "What should get return when the key exists but every recorded timestamp is later than the query?",
+          "hint": "Look at what the binary search returns in that case, and what one step to its left would point at."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Which binary-search variant finds the latest timestamp at or before t, and how does it treat an exact match?",
+          "hint": "Compare where bisect_left and bisect_right land when the query equals a stored timestamp, then step one to the left."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why inject a clock instead of calling time.time() inside set and get?",
+          "hint": "Picture writing a test for 'the value 40 seconds later' against the real clock, then name what a fake clock removes."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Walk through what set does when the requested timestamp is not larger than the key's last one, and why appending at last + 1 keeps get correct.",
+          "hint": "Cover the one number per key the decision uses, and what the sorted list still guarantees after the bump."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Which steps of set must happen atomically for part 4, and what goes wrong if the clock is read outside the lock?",
+          "hint": "List the read-compare-append steps, then interleave two threads between them and see which timestamps they record."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Compare one lock for the whole store with one lock per key: what does each cost, and when does the per-key version win?",
+          "hint": "Weigh contention across unrelated keys against the extra map of locks, and who guards creating a key's lock."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Would a read-write lock that lets concurrent gets run together help here? Why or why not?",
+          "hint": "Compare how long a get holds the lock with the overhead of a read-write lock in Python, and note what the GIL already serializes."
+        }
+      ]
     }
   ]
 }

@@ -63,6 +63,8 @@ BEHAVIOR_CATEGORIES = frozenset({
     "metrics.averaging",
     "metrics.ties",
     "optim.state",
+    "performance.complexity",
+    "concurrency.thread_safety",
 })
 
 
@@ -221,6 +223,37 @@ def _validate_sources(task_id: str, sources: Any) -> None:
                 )
 
 
+def _validate_parts(task_id: str, parts: Any, tests: list[dict]) -> None:
+    """A multi-part task reveals its requirement one part at a time, like an interviewer.
+
+    Parts are cumulative: a correct solution to part k also passes every test of parts
+    1..k-1, so the grader can run parts 1..k together.
+    """
+    if not isinstance(parts, list) or len(parts) < 2:
+        raise TaskValidationError(task_id, "parts", "must be a list of at least two parts")
+    for i, part in enumerate(parts):
+        if not isinstance(part, dict) or set(part) != {"title", "description_en"}:
+            raise TaskValidationError(task_id, f"parts[{i}]", "must be {'title', 'description_en'}")
+        for key in ("title", "description_en"):
+            if not isinstance(part[key], str) or not part[key].strip():
+                raise TaskValidationError(task_id, f"parts[{i}].{key}", "required non-empty string")
+        _reject_math_markup(task_id, f"parts[{i}].description_en", part["description_en"])
+    titles = [part["title"] for part in parts]
+    if len(set(titles)) != len(titles):
+        raise TaskValidationError(task_id, "parts", "part titles must be unique")
+    numbers = [test.get("part") for test in tests]
+    for i, number in enumerate(numbers):
+        if not isinstance(number, int) or isinstance(number, bool) or not 1 <= number <= len(parts):
+            raise TaskValidationError(task_id, f"tests[{i}].part", f"must be an integer in 1..{len(parts)}")
+    if numbers != sorted(numbers):
+        raise TaskValidationError(task_id, "tests", "must be ordered by part")
+    missing = sorted(set(range(1, len(parts) + 1)) - set(numbers))
+    if missing:
+        raise TaskValidationError(task_id, "tests", f"parts without a test: {missing}")
+    if not any(t.get("visibility", "visible") == "visible" for t in tests if t["part"] == 1):
+        raise TaskValidationError(task_id, "tests", "part 1 needs a visible case")
+
+
 def validate_task(task_id: str, task: dict, known_ids: set[str] | None = None) -> None:
     """Validate one TASK dict. Raises TaskValidationError with a precise field."""
     if not isinstance(task, dict):
@@ -258,6 +291,11 @@ def validate_task(task_id: str, task: dict, known_ids: set[str] | None = None) -
         _validate_test(task_id, index, test)
     if not any(test.get("visibility", "visible") == "visible" for test in tests):
         raise TaskValidationError(task_id, "tests", "requires at least one visible case")
+
+    if "parts" in task:
+        _validate_parts(task_id, task["parts"], tests)
+    elif any("part" in test for test in tests):
+        raise TaskValidationError(task_id, "tests", "a test 'part' needs the task to declare 'parts'")
 
     if "advisory_prerequisites" in task:
         prerequisites = task["advisory_prerequisites"]

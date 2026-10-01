@@ -11,9 +11,11 @@ import type { Test } from '@/lib/types';
 interface TestPanelProps {
   tests: Test[];
   functionName: string;
+  /** Multi-part exercises only: the highest unlocked part; 0 means no parts. */
+  unlockedPart?: number;
 }
 
-export function TestPanel({ tests, functionName }: TestPanelProps) {
+export function TestPanel({ tests, functionName, unlockedPart = 0 }: TestPanelProps) {
   const { t } = useLocale();
   const { bottomTab, setBottomTab, runResult } = useProblemStore();
 
@@ -36,7 +38,7 @@ export function TestPanel({ tests, functionName }: TestPanelProps) {
           ))}
         </Tabs.List>
         <Tabs.Content value="testcases" className="flex-1 overflow-hidden">
-          <TestCasesView tests={tests} functionName={functionName} />
+          <TestCasesView tests={tests} functionName={functionName} unlockedPart={unlockedPart} />
         </Tabs.Content>
         <Tabs.Content value="testresults" className="flex-1 overflow-hidden">
           <TestResultsView result={runResult} tests={tests} functionName={functionName} />

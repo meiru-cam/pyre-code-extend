@@ -1,0 +1,19 @@
+{
+  "title": "Time-Travel Key-Value Store",
+  "summary": "Keep several timestamped values per key and answer “what was the value at time t” with binary search; then make it testable with an injected clock, keep each key's timestamps strictly increasing, and make it thread-safe.",
+  "round": "coding",
+  "kind": "Coding",
+  "difficulty": "Medium",
+  "frequency": "rare",
+  "format": "4 parts",
+  "topics": [
+    "binary-search",
+    "testing",
+    "concurrency"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/coding/time-based-kv-store",
+  "rubric": [],
+  "exercises": [
+    "time_map"
+  ]
+}

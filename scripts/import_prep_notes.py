@@ -32,7 +32,8 @@ SOURCE_REPOS = {
 }
 
 # Notes categories are prep rounds as-is, except that "coding" becomes "ml-coding" when the
-# item links to exercises.
+# item links to exercises. A source's own "round" overrides both, e.g. a practical-coding
+# question that links to its multi-part exercise.
 CATEGORIES = frozenset(ROUNDS) - {"ml-coding"}
 
 # Design answers are judged on these even where the reference has no section for them.
@@ -185,7 +186,9 @@ def rubric_for(round_: str, problem: str, reference: str) -> list[str]:
     return heads
 
 
-def import_item(checkout: Path, company: str, rel: str, exercises: list[str]) -> Path:
+def import_item(
+    checkout: Path, company: str, rel: str, exercises: list[str], round_override: str | None = None,
+) -> Path:
     source_dir = checkout / rel
     category, slug = rel.split("/")
     meta = _read_meta(source_dir / "meta.yaml")
@@ -197,6 +200,10 @@ def import_item(checkout: Path, company: str, rel: str, exercises: list[str]) ->
     round_ = category
     if round_ == "coding" and exercises:
         round_ = "ml-coding"
+    if round_override is not None:
+        if round_override not in ROUNDS:
+            raise ValueError(f"{rel}: unknown round {round_override!r}")
+        round_ = round_override
 
     item = {
         "title": meta["title"],
@@ -227,7 +234,9 @@ def main(argv: list[str] | None = None) -> None:
     sources = json.loads(SOURCES.read_text(encoding="utf-8"))
     for source in sources:
         checkout = getattr(args, source["company"])
-        target = import_item(checkout, source["company"], source["item"], source.get("exercises", []))
+        target = import_item(
+            checkout, source["company"], source["item"], source.get("exercises", []), source.get("round"),
+        )
         print(f"Wrote {target.relative_to(ROOT)}", file=sys.stderr)
 
 

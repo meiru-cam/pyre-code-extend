@@ -10,15 +10,19 @@ import type { Test } from '@/lib/types';
 interface TestCasesViewProps {
   tests: Test[];
   functionName: string;
+  /** Multi-part exercises only: the highest unlocked part; 0 means no parts. */
+  unlockedPart?: number;
 }
 
-export function TestCasesView({ tests, functionName }: TestCasesViewProps) {
+export function TestCasesView({ tests, functionName, unlockedPart = 0 }: TestCasesViewProps) {
   const { t } = useLocale();
   const { selectedCaseIndex, setSelectedCaseIndex, customTests, addCustomTest, removeCustomTest, updateCustomTest } = useProblemStore();
 
   const sampleTests = tests
     .filter((test): test is Test & { code: string } => (
       test.visibility !== 'unshown' && typeof test.code === 'string'
+      // A multi-part exercise samples only from parts already unlocked.
+      && (!unlockedPart || (test.part ?? 1) <= unlockedPart)
     ))
     .slice(0, 2);
   const allCases = [

@@ -1236,6 +1236,15 @@
       }
     ]
   },
+  "time_map": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "import bisect\nimport threading\nimport time\n\n\nclass _RealClock:\n    def now(self):\n        return time.time()\n\n\nclass TimeMap:\n    def __init__(self, clock=None):\n        self._clock = clock if clock is not None else _RealClock()\n        self._stamps = {}\n        self._values = {}\n        self._lock = threading.Lock()\n\n    def set(self, key, value, timestamp=None):\n        with self._lock:\n            if timestamp is None:\n                timestamp = self._clock.now()\n            stamps = self._stamps.setdefault(key, [])\n            if stamps and timestamp <= stamps[-1]:\n                timestamp = stamps[-1] + 1\n            stamps.append(timestamp)\n            self._values.setdefault(key, []).append(value)\n            return timestamp\n\n    def get(self, key, timestamp=None):\n        with self._lock:\n            if timestamp is None:\n                timestamp = self._clock.now()\n            stamps = self._stamps.get(key)\n            if not stamps:\n                return None\n            index = bisect.bisect_right(stamps, timestamp)\n            return self._values[key][index - 1] if index else None",
+        "role": "solution"
+      }
+    ]
+  },
   "tool_registry": {
     "cells": [
       {
