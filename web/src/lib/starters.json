@@ -182,5 +182,6 @@
   "bank_system": "class Bank:\n\n    def __init__(self):\n        pass\n\n    def create_account(self, timestamp, account_id):\n        pass\n\n    def deposit(self, timestamp, account_id, amount):\n        pass\n\n    def withdraw(self, timestamp, account_id, amount):\n        pass",
   "spreadsheet": "class FormulaError(ValueError):\n    pass\n\n\nclass CycleError(ValueError):\n    pass\n\n\nclass Spreadsheet:\n\n    def __init__(self):\n        pass\n\n    def set(self, name, value):\n        pass\n\n    def get(self, name):\n        pass",
   "in_memory_database": "class Database:\n\n    def __init__(self):\n        pass\n\n    def create_table(self, table, columns):\n        pass\n\n    def insert(self, table, row):\n        pass\n\n    def select(self, table, columns=None):\n        pass",
-  "infection_spread": "class Outbreak:\n\n    def __init__(self, grid):\n        pass\n\n    def days_until_all_infected(self):\n        pass"
+  "infection_spread": "class Outbreak:\n\n    def __init__(self, grid):\n        pass\n\n    def days_until_all_infected(self):\n        pass",
+  "social_network": "class SocialNetwork:\n\n    def __init__(self):\n        pass\n\n    def add_user(self, user_id):\n        pass\n\n    def follow(self, follower, followee):\n        pass\n\n    def create_snapshot(self):\n        pass"
 }

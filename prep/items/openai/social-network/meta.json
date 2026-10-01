@@ -1,0 +1,20 @@
+{
+  "title": "Follow Graph & Recommendations (Social Network)",
+  "summary": "Maintain who follows whom, with either time-travel queries or immutable snapshots, then recommend accounts two hops away ranked by how many of your followees already follow them.",
+  "round": "coding",
+  "kind": "Coding",
+  "difficulty": "Medium",
+  "frequency": "very-high",
+  "format": "4 parts",
+  "topics": [
+    "graph",
+    "hashmap",
+    "snapshot",
+    "binary-search"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/coding/social-network",
+  "rubric": [],
+  "exercises": [
+    "social_network"
+  ]
+}

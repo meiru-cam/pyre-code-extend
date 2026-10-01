@@ -48,5 +48,13 @@
     "Once cells recover after a fixed number of days, why does a plain breadth-first search stop being enough?": "Picture a cell that the search reaches on day 3 but that recovered neighbours can no longer reach; ask what the queue would have to remember.",
     "Why must the spread phase count every cell's infected neighbours before it infects any of them?": "Imagine updating cells in place in row order: which cells would see a neighbour that only became infected this same day?",
     "Is burning the line with the most infected cells a good rule, and what does the exact search over lines cost?": "Try a line that is full of infected cells but sits where the infection has already been, and count what each burn costs on its own."
+  },
+  "social_network": {
+    "Which structure do you use for each user's followees, and what does it give follow and is_following?": "Think about which operations follow and is_following need, and which built-in collection ignores a second insert of the same item.",
+    "Why must a snapshot copy every inner set, and not only the outer dictionary?": "Write down which objects the snapshot and the network share after copying only the outer dictionary, then picture the next follow.",
+    "What happens to a snapshot that stored a reference to the live network's dictionary, and how would a test catch it?": "Picture taking a snapshot, calling follow, and then asking the snapshot about that new pair.",
+    "How do you make the follower list cost the size of its answer instead of the size of the graph?": "Ask what get_followers has to scan without a second index, and when that index could be built once.",
+    "How do you count each candidate's score so that one followed user adds at most one point?": "Look at what a user's followee collection guarantees about repeats, and count through how many different users each candidate is reached.",
+    "How can a snapshot cost O(1) to take and still answer for its own moment after later follows and unfollows?": "Think about recording, for each pair, the versions at which the follow started and ended, and what a snapshot would then need to store."
   }
 }
