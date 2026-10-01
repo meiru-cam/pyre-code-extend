@@ -1,0 +1,19 @@
+{
+  "title": "Memory Allocator",
+  "summary": "malloc and free over a fixed address range, with first-fit placement and merging of adjacent free blocks. The linear scan is only the opening move; both operations then have to come down to logarithmic time.",
+  "round": "coding",
+  "kind": "Coding",
+  "difficulty": "Hard",
+  "frequency": "high",
+  "format": "75 min",
+  "topics": [
+    "data-structure",
+    "intervals",
+    "balanced-bst"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/coding/memory-allocator",
+  "rubric": [],
+  "exercises": [
+    "memory_allocator"
+  ]
+}

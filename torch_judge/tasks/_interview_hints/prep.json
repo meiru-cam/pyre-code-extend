@@ -72,5 +72,13 @@
     "What state does a streaming, debounced converter need, and why does it stay bounded by the stack depth?": "List what one sample can change, and ask which facts about earlier samples you still need once it is processed.",
     "What does debouncing cost you, and how would you choose k?": "Count how many samples late every event becomes, and picture a call that genuinely lasts only one sample.",
     "How does reversing the traces turn suffix matching into a trie lookup, and what does the index cost in memory?": "Write a suffix query backwards and compare it with a prefix lookup; then count how many ids each trace adds along its path."
+  },
+  "memory_allocator": {
+    "How do you represent the free space so that first fit and merging are both straightforward?": "Think about which order makes the lowest fitting address easy to find, and which order makes a block's neighbours easy to find.",
+    "How does free decide whether a call matches a live allocation?": "Consider what allocate could record about each block it hands out, and what free can then look up in one step.",
+    "When a block is released, which free blocks can it touch, and how many merge cases are there?": "Write the released range next to the free block just before it and the one just after it, and list which of them can touch it.",
+    "Why does a tree ordered by size answer best fit but not first fit?": "Picture a tree sorted by size and ask what it knows about addresses; then compare with what first fit asks for.",
+    "How does storing each subtree's largest block let one tree answer first fit in O(log n)?": "Think about what a node could store about its whole subtree that tells you, before descending, whether any block there is big enough.",
+    "Why is a sorted Python list with bisect still O(n) per insertion, and when is that acceptable anyway?": "Separate finding the position from moving the elements after it, and ask how many free blocks you expect in practice."
   }
 }

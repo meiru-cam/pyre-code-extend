@@ -162,5 +162,13 @@
       "profiler_stacks"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/memory-allocator",
+    "exercises": [
+      "memory_allocator"
+    ],
+    "round": "coding"
   }
 ]

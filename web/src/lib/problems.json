@@ -21005,6 +21005,142 @@
           "hint": "Write a suffix query backwards and compare it with a prefix lookup; then count how many ids each trace adds along its path."
         }
       ]
+    },
+    {
+      "id": "memory_allocator",
+      "title": "First-Fit Memory Allocator",
+      "titleZh": "First-Fit Memory Allocator",
+      "difficulty": "Hard",
+      "functionName": "MemoryAllocator",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Build `MemoryAllocator`, which hands out and takes back ranges of a fixed address space using first fit.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior, so one `MemoryAllocator` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- The address space is the integers `0` to `capacity - 1`. Each address is either allocated or free.\n- A block is a run of addresses that are all allocated or all free and cannot be extended. Two free blocks never touch: freed space always joins the free blocks next to it.\n- Errors are the built-in `ValueError` and `MemoryError`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** the first version is a careful list walk, and the next part tests whether you can index the same data two ways at once.\n\n**Where it is used:** heap allocators such as glibc malloc, GPU memory pools, and any system that carves a large buffer into pieces.\n\nAdapted from the memory allocator question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, on one class, with a `free_blocks` method added so tests can see the free space.",
+      "descriptionZh": "Build `MemoryAllocator`, which hands out and takes back ranges of a fixed address space using first fit.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior, so one `MemoryAllocator` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- The address space is the integers `0` to `capacity - 1`. Each address is either allocated or free.\n- A block is a run of addresses that are all allocated or all free and cannot be extended. Two free blocks never touch: freed space always joins the free blocks next to it.\n- Errors are the built-in `ValueError` and `MemoryError`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** the first version is a careful list walk, and the next part tests whether you can index the same data two ways at once.\n\n**Where it is used:** heap allocators such as glibc malloc, GPU memory pools, and any system that carves a large buffer into pieces.\n\nAdapted from the memory allocator question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, on one class, with a `free_blocks` method added so tests can see the free space.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Part 1: the worked example",
+          "code": "\nimport random, time\n\nclass ByteMap:\n    def __init__(self, capacity):\n        self.used = [False] * capacity\n        self.blocks = {}\n    def allocate(self, size):\n        run = 0\n        for address, used in enumerate(self.used):\n            run = 0 if used else run + 1\n            if run == size:\n                start = address - size + 1\n                self.used[start:address + 1] = [True] * size\n                self.blocks[start] = size\n                return start\n        return \"MemoryError\"\n    def free(self, address, size):\n        if self.blocks.get(address) != size:\n            return \"ValueError\"\n        del self.blocks[address]\n        self.used[address:address + size] = [False] * size\n    def free_blocks(self):\n        out, start = [], None\n        for address, used in enumerate(self.used + [True]):\n            if not used and start is None:\n                start = address\n            elif used and start is not None:\n                out.append((start, address - start))\n                start = None\n        return out\n\ndef outcome(fn, *args):\n    try:\n        return fn(*args)\n    except (ValueError, MemoryError) as error:\n        return type(error).__name__\n\ndef blocks(allocator):\n    return [tuple(block) for block in allocator.free_blocks()]\n\ndef fragmented(make, n):\n    # n free single bytes at even addresses, then one free block of 10 bytes at the end.\n    allocator = make(2 * n + 10)\n    for _ in range(2 * n):\n        allocator.allocate(1)\n    for address in range(0, 2 * n, 2):\n        allocator.free(address, 1)\n    return allocator\n\ndef best_of_three(fn):\n    best = float(\"inf\")\n    for _ in range(3):\n        start = time.perf_counter()\n        fn()\n        best = min(best, time.perf_counter() - start)\n    return best\n\nallocator = {fn}(20)\nassert [allocator.allocate(4) for _ in range(5)] == [0, 4, 8, 12, 16]\nassert blocks(allocator) == []\nallocator.free(4, 4)\nallocator.free(12, 4)\nassert blocks(allocator) == [(4, 4), (12, 4)]\nallocator.free(8, 4)\nassert blocks(allocator) == [(4, 12)]\nassert allocator.allocate(3) == 4\nassert blocks(allocator) == [(7, 9)]\n",
+          "behavior": "state.invariant",
+          "part": 1
+        },
+        {
+          "name": "Part 1: the four merge cases",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "A released block must join the free block on its left, on its right, both, or neither, leaving no two free blocks touching.",
+          "hiddenCode": "\nimport random, time\n\nclass ByteMap:\n    def __init__(self, capacity):\n        self.used = [False] * capacity\n        self.blocks = {}\n    def allocate(self, size):\n        run = 0\n        for address, used in enumerate(self.used):\n            run = 0 if used else run + 1\n            if run == size:\n                start = address - size + 1\n                self.used[start:address + 1] = [True] * size\n                self.blocks[start] = size\n                return start\n        return \"MemoryError\"\n    def free(self, address, size):\n        if self.blocks.get(address) != size:\n            return \"ValueError\"\n        del self.blocks[address]\n        self.used[address:address + size] = [False] * size\n    def free_blocks(self):\n        out, start = [], None\n        for address, used in enumerate(self.used + [True]):\n            if not used and start is None:\n                start = address\n            elif used and start is not None:\n                out.append((start, address - start))\n                start = None\n        return out\n\ndef outcome(fn, *args):\n    try:\n        return fn(*args)\n    except (ValueError, MemoryError) as error:\n        return type(error).__name__\n\ndef blocks(allocator):\n    return [tuple(block) for block in allocator.free_blocks()]\n\ndef fragmented(make, n):\n    # n free single bytes at even addresses, then one free block of 10 bytes at the end.\n    allocator = make(2 * n + 10)\n    for _ in range(2 * n):\n        allocator.allocate(1)\n    for address in range(0, 2 * n, 2):\n        allocator.free(address, 1)\n    return allocator\n\ndef best_of_three(fn):\n    best = float(\"inf\")\n    for _ in range(3):\n        start = time.perf_counter()\n        fn()\n        best = min(best, time.perf_counter() - start)\n    return best\n\nallocator = {fn}(25)\nassert [allocator.allocate(5) for _ in range(5)] == [0, 5, 10, 15, 20]\nallocator.free(5, 5)\nassert blocks(allocator) == [(5, 5)]\nallocator.free(10, 5)\nassert blocks(allocator) == [(5, 10)]\nallocator.free(20, 5)\nassert blocks(allocator) == [(5, 10), (20, 5)]\nallocator.free(15, 5)\nassert blocks(allocator) == [(5, 20)]\nallocator.free(0, 5)\nassert blocks(allocator) == [(0, 25)]\n",
+          "part": 1
+        },
+        {
+          "name": "Part 1: errors",
+          "visibility": "unshown",
+          "behavior": "protocol.validation",
+          "failureMessage": "Bad capacities and sizes raise ValueError, a request nothing fits raises MemoryError, and a free that does not match a live allocation raises ValueError and changes nothing.",
+          "hiddenCode": "\nimport random, time\n\nclass ByteMap:\n    def __init__(self, capacity):\n        self.used = [False] * capacity\n        self.blocks = {}\n    def allocate(self, size):\n        run = 0\n        for address, used in enumerate(self.used):\n            run = 0 if used else run + 1\n            if run == size:\n                start = address - size + 1\n                self.used[start:address + 1] = [True] * size\n                self.blocks[start] = size\n                return start\n        return \"MemoryError\"\n    def free(self, address, size):\n        if self.blocks.get(address) != size:\n            return \"ValueError\"\n        del self.blocks[address]\n        self.used[address:address + size] = [False] * size\n    def free_blocks(self):\n        out, start = [], None\n        for address, used in enumerate(self.used + [True]):\n            if not used and start is None:\n                start = address\n            elif used and start is not None:\n                out.append((start, address - start))\n                start = None\n        return out\n\ndef outcome(fn, *args):\n    try:\n        return fn(*args)\n    except (ValueError, MemoryError) as error:\n        return type(error).__name__\n\ndef blocks(allocator):\n    return [tuple(block) for block in allocator.free_blocks()]\n\ndef fragmented(make, n):\n    # n free single bytes at even addresses, then one free block of 10 bytes at the end.\n    allocator = make(2 * n + 10)\n    for _ in range(2 * n):\n        allocator.allocate(1)\n    for address in range(0, 2 * n, 2):\n        allocator.free(address, 1)\n    return allocator\n\ndef best_of_three(fn):\n    best = float(\"inf\")\n    for _ in range(3):\n        start = time.perf_counter()\n        fn()\n        best = min(best, time.perf_counter() - start)\n    return best\n\nassert outcome({fn}, 0) == \"ValueError\" and outcome({fn}, -4) == \"ValueError\"\nallocator = {fn}(10)\nassert outcome(allocator.allocate, 0) == \"ValueError\"\nassert outcome(allocator.allocate, -1) == \"ValueError\"\nassert outcome(allocator.allocate, 11) == \"MemoryError\"\nassert allocator.allocate(10) == 0\nassert outcome(allocator.allocate, 1) == \"MemoryError\"\nassert outcome(allocator.free, 0, 4) == \"ValueError\", \"wrong size\"\nassert outcome(allocator.free, 3, 7) == \"ValueError\", \"never returned\"\nassert outcome(allocator.free, 0, 0) == \"ValueError\"\nassert blocks(allocator) == []\nallocator.free(0, 10)\nassert outcome(allocator.free, 0, 10) == \"ValueError\", \"second free\"\nassert blocks(allocator) == [(0, 10)]\n",
+          "part": 1
+        },
+        {
+          "name": "Part 1: random calls match a byte map",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "Under random allocate and free calls, an address, an error or the free blocks differed from tracking every byte.",
+          "hiddenCode": "\nimport random, time\n\nclass ByteMap:\n    def __init__(self, capacity):\n        self.used = [False] * capacity\n        self.blocks = {}\n    def allocate(self, size):\n        run = 0\n        for address, used in enumerate(self.used):\n            run = 0 if used else run + 1\n            if run == size:\n                start = address - size + 1\n                self.used[start:address + 1] = [True] * size\n                self.blocks[start] = size\n                return start\n        return \"MemoryError\"\n    def free(self, address, size):\n        if self.blocks.get(address) != size:\n            return \"ValueError\"\n        del self.blocks[address]\n        self.used[address:address + size] = [False] * size\n    def free_blocks(self):\n        out, start = [], None\n        for address, used in enumerate(self.used + [True]):\n            if not used and start is None:\n                start = address\n            elif used and start is not None:\n                out.append((start, address - start))\n                start = None\n        return out\n\ndef outcome(fn, *args):\n    try:\n        return fn(*args)\n    except (ValueError, MemoryError) as error:\n        return type(error).__name__\n\ndef blocks(allocator):\n    return [tuple(block) for block in allocator.free_blocks()]\n\ndef fragmented(make, n):\n    # n free single bytes at even addresses, then one free block of 10 bytes at the end.\n    allocator = make(2 * n + 10)\n    for _ in range(2 * n):\n        allocator.allocate(1)\n    for address in range(0, 2 * n, 2):\n        allocator.free(address, 1)\n    return allocator\n\ndef best_of_three(fn):\n    best = float(\"inf\")\n    for _ in range(3):\n        start = time.perf_counter()\n        fn()\n        best = min(best, time.perf_counter() - start)\n    return best\n\nfor seed in range(150):\n    rng = random.Random(seed)\n    capacity = rng.randint(1, 40)\n    allocator, model = {fn}(capacity), ByteMap(capacity)\n    live = []\n    for _ in range(40):\n        if live and rng.random() < 0.45:\n            address, size = rng.choice(live) if rng.random() < 0.8 else (rng.randrange(capacity), rng.randint(1, 5))\n            expected = model.free(address, size)\n            assert outcome(allocator.free, address, size) == expected, (seed, address, size)\n            if expected is None:\n                live.remove((address, size))\n        else:\n            size = rng.randint(1, 8)\n            expected = model.allocate(size)\n            assert outcome(allocator.allocate, size) == expected, (seed, size)\n            if expected != \"MemoryError\":\n                live.append((expected, size))\n        assert blocks(allocator) == model.free_blocks(), seed\n",
+          "part": 1
+        },
+        {
+          "name": "Part 2: first fit, not best fit",
+          "code": "\nimport random, time\n\nclass ByteMap:\n    def __init__(self, capacity):\n        self.used = [False] * capacity\n        self.blocks = {}\n    def allocate(self, size):\n        run = 0\n        for address, used in enumerate(self.used):\n            run = 0 if used else run + 1\n            if run == size:\n                start = address - size + 1\n                self.used[start:address + 1] = [True] * size\n                self.blocks[start] = size\n                return start\n        return \"MemoryError\"\n    def free(self, address, size):\n        if self.blocks.get(address) != size:\n            return \"ValueError\"\n        del self.blocks[address]\n        self.used[address:address + size] = [False] * size\n    def free_blocks(self):\n        out, start = [], None\n        for address, used in enumerate(self.used + [True]):\n            if not used and start is None:\n                start = address\n            elif used and start is not None:\n                out.append((start, address - start))\n                start = None\n        return out\n\ndef outcome(fn, *args):\n    try:\n        return fn(*args)\n    except (ValueError, MemoryError) as error:\n        return type(error).__name__\n\ndef blocks(allocator):\n    return [tuple(block) for block in allocator.free_blocks()]\n\ndef fragmented(make, n):\n    # n free single bytes at even addresses, then one free block of 10 bytes at the end.\n    allocator = make(2 * n + 10)\n    for _ in range(2 * n):\n        allocator.allocate(1)\n    for address in range(0, 2 * n, 2):\n        allocator.free(address, 1)\n    return allocator\n\ndef best_of_three(fn):\n    best = float(\"inf\")\n    for _ in range(3):\n        start = time.perf_counter()\n        fn()\n        best = min(best, time.perf_counter() - start)\n    return best\n\nallocator = {fn}(30)\nassert (allocator.allocate(12), allocator.allocate(3), allocator.allocate(6), allocator.allocate(9)) == (0, 12, 15, 21)\nallocator.free(0, 12)\nallocator.free(15, 6)\nassert blocks(allocator) == [(0, 12), (15, 6)]\nassert allocator.allocate(5) == 0\nbig = {fn}(10**9)\nassert big.allocate(10**9 - 1) == 0\nassert blocks(big) == [(10**9 - 1, 1)]\n",
+          "behavior": "state.invariant",
+          "part": 2
+        },
+        {
+          "name": "Part 2: allocate and free do not scan the free blocks",
+          "visibility": "unshown",
+          "behavior": "performance.complexity",
+          "failureMessage": "Allocating and freeing past 20,000 small free blocks was much slower than past 200; find the first fit and the neighbours with a tree search, not a walk.",
+          "hiddenCode": "\nimport random, time\n\nclass ByteMap:\n    def __init__(self, capacity):\n        self.used = [False] * capacity\n        self.blocks = {}\n    def allocate(self, size):\n        run = 0\n        for address, used in enumerate(self.used):\n            run = 0 if used else run + 1\n            if run == size:\n                start = address - size + 1\n                self.used[start:address + 1] = [True] * size\n                self.blocks[start] = size\n                return start\n        return \"MemoryError\"\n    def free(self, address, size):\n        if self.blocks.get(address) != size:\n            return \"ValueError\"\n        del self.blocks[address]\n        self.used[address:address + size] = [False] * size\n    def free_blocks(self):\n        out, start = [], None\n        for address, used in enumerate(self.used + [True]):\n            if not used and start is None:\n                start = address\n            elif used and start is not None:\n                out.append((start, address - start))\n                start = None\n        return out\n\ndef outcome(fn, *args):\n    try:\n        return fn(*args)\n    except (ValueError, MemoryError) as error:\n        return type(error).__name__\n\ndef blocks(allocator):\n    return [tuple(block) for block in allocator.free_blocks()]\n\ndef fragmented(make, n):\n    # n free single bytes at even addresses, then one free block of 10 bytes at the end.\n    allocator = make(2 * n + 10)\n    for _ in range(2 * n):\n        allocator.allocate(1)\n    for address in range(0, 2 * n, 2):\n        allocator.free(address, 1)\n    return allocator\n\ndef best_of_three(fn):\n    best = float(\"inf\")\n    for _ in range(3):\n        start = time.perf_counter()\n        fn()\n        best = min(best, time.perf_counter() - start)\n    return best\n\ndef churn(allocator, n):\n    def run():\n        for _ in range(300):\n            address = allocator.allocate(5)\n            assert address == 2 * n\n            allocator.free(address, 5)\n    return run\nsmall, big = fragmented({fn}, 200), fragmented({fn}, 20000)\nratio = best_of_three(churn(big, 20000)) / best_of_three(churn(small, 200))\nassert ratio < 15, f\"allocate past 20,000 free blocks took {ratio:.0f}x as long as past 200\"\nassert len(blocks(big)) == 20001\n",
+          "part": 2
+        },
+        {
+          "name": "Part 2: long random runs match a byte map",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "Over a long random run, an address, an error or the free blocks differed from tracking every byte.",
+          "hiddenCode": "\nimport random, time\n\nclass ByteMap:\n    def __init__(self, capacity):\n        self.used = [False] * capacity\n        self.blocks = {}\n    def allocate(self, size):\n        run = 0\n        for address, used in enumerate(self.used):\n            run = 0 if used else run + 1\n            if run == size:\n                start = address - size + 1\n                self.used[start:address + 1] = [True] * size\n                self.blocks[start] = size\n                return start\n        return \"MemoryError\"\n    def free(self, address, size):\n        if self.blocks.get(address) != size:\n            return \"ValueError\"\n        del self.blocks[address]\n        self.used[address:address + size] = [False] * size\n    def free_blocks(self):\n        out, start = [], None\n        for address, used in enumerate(self.used + [True]):\n            if not used and start is None:\n                start = address\n            elif used and start is not None:\n                out.append((start, address - start))\n                start = None\n        return out\n\ndef outcome(fn, *args):\n    try:\n        return fn(*args)\n    except (ValueError, MemoryError) as error:\n        return type(error).__name__\n\ndef blocks(allocator):\n    return [tuple(block) for block in allocator.free_blocks()]\n\ndef fragmented(make, n):\n    # n free single bytes at even addresses, then one free block of 10 bytes at the end.\n    allocator = make(2 * n + 10)\n    for _ in range(2 * n):\n        allocator.allocate(1)\n    for address in range(0, 2 * n, 2):\n        allocator.free(address, 1)\n    return allocator\n\ndef best_of_three(fn):\n    best = float(\"inf\")\n    for _ in range(3):\n        start = time.perf_counter()\n        fn()\n        best = min(best, time.perf_counter() - start)\n    return best\n\nfor seed in range(20):\n    rng = random.Random(1000 + seed)\n    capacity = rng.randint(100, 400)\n    allocator, model = {fn}(capacity), ByteMap(capacity)\n    live = []\n    for step in range(400):\n        if live and rng.random() < 0.5:\n            address, size = live.pop(rng.randrange(len(live)))\n            assert outcome(allocator.free, address, size) == model.free(address, size)\n        else:\n            size = rng.randint(1, 20)\n            expected = model.allocate(size)\n            assert outcome(allocator.allocate, size) == expected, (seed, step, size)\n            if expected != \"MemoryError\":\n                live.append((expected, size))\n        if step % 20 == 0:\n            assert blocks(allocator) == model.free_blocks(), (seed, step)\n    assert blocks(allocator) == model.free_blocks(), seed\n",
+          "part": 2
+        }
+      ],
+      "parts": [
+        {
+          "title": "First fit",
+          "descriptionEn": "**Signature:** `MemoryAllocator(capacity)`, `allocate(size) -> int`, `free(address, size) -> None`, `free_blocks() -> list[tuple[int, int]]`\n\n- `MemoryAllocator(capacity)` starts with everything free and raises `ValueError` if `capacity <= 0`.\n- `allocate(size)` picks the free block with the lowest start address among those holding at least `size` bytes, takes `size` bytes from its low end, and returns their start address. What is left of that block stays free.\n- `allocate` raises `ValueError` if `size <= 0`, and `MemoryError` if no free block is large enough.\n- `free(address, size)` releases a block that `allocate(size)` returned and that is still allocated. Anything else raises `ValueError`: an address never returned, a second free, a wrong size, or `size <= 0`.\n- A released block joins a free block that touches it on the left, on the right, or both.\n- `free_blocks()` returns every free block as `(start, size)`, in address order.\n\n**Example:** with `capacity = 20`, five calls to `allocate(4)` return `0, 4, 8, 12, 16`. Then:\n- `free(4, 4)`, `free(12, 4)` leave `[(4, 4), (12, 4)]`\n- `free(8, 4)` joins both sides: `[(4, 12)]`\n- `allocate(3)` returns `4`, the lowest block that fits"
+        },
+        {
+          "title": "Logarithmic time",
+          "descriptionEn": "Keep Part 1 and make it fast. `n` is the number of free blocks.\n\n- `allocate` and `free` run in `O(log n)`, with the same results and the same errors as before. Placement stays first fit: the lowest address that fits, not the tightest fit.\n- `capacity` can be up to `10**9`, so nothing may cost time per byte.\n- With 20,000 scattered free bytes below it, allocating and freeing a block takes about as long as with 200.\n\n**Example:** with `capacity = 30`, `allocate(12), allocate(3), allocate(6), allocate(9)` return `0, 12, 15, 21`. After `free(0, 12)` and `free(15, 6)`, `allocate(5)` returns `0`, though `(15, 6)` fits more tightly."
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "What do you store for each free block, and in what order? Which blocks can a released block possibly touch, and how do you find them? What extra record lets free tell a real allocation from a made-up one?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Keep the free blocks as a list of [start, size] sorted by start, and a dict from allocated address to size. allocate walks the list and takes the first block that is big enough; free checks the dict, finds the first block starting after the address, and merges with it and with the one before it when they touch."
+        }
+      ],
+      "modelConnections": [
+        "glibc malloc and similar heap allocators keep free chunks in bins and merge neighbours on free to fight fragmentation.",
+        "Deep learning frameworks such as PyTorch run caching allocators that carve large GPU buffers into blocks and coalesce them when they are released."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "First fit is simple and tends to keep large free blocks at high addresses.",
+          "Merging on free keeps the number of free blocks low, so free space stays usable.",
+          "A balanced tree ordered by address, augmented with each subtree's largest block, answers first fit and neighbour lookups in O(log n)."
+        ],
+        "cons": [
+          "First fit leaves small fragments near the low addresses that every later search must step over.",
+          "An augmented balanced tree is much more code than a list, and Python's constant factors make it slower for small n.",
+          "Recording each allocation's size costs memory per block; real allocators store it in a header next to the block."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "How do you represent the free space so that first fit and merging are both straightforward?",
+          "hint": "Think about which order makes the lowest fitting address easy to find, and which order makes a block's neighbours easy to find."
+        },
+        {
+          "stage": "concept",
+          "question": "How does free decide whether a call matches a live allocation?",
+          "hint": "Consider what allocate could record about each block it hands out, and what free can then look up in one step."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "When a block is released, which free blocks can it touch, and how many merge cases are there?",
+          "hint": "Write the released range next to the free block just before it and the one just after it, and list which of them can touch it."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why does a tree ordered by size answer best fit but not first fit?",
+          "hint": "Picture a tree sorted by size and ask what it knows about addresses; then compare with what first fit asks for."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How does storing each subtree's largest block let one tree answer first fit in O(log n)?",
+          "hint": "Think about what a node could store about its whole subtree that tells you, before descending, whether any block there is big enough."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why is a sorted Python list with bisect still O(n) per insertion, and when is that acceptable anyway?",
+          "hint": "Separate finding the position from moving the elements after it, and ask how many free blocks you expect in practice."
+        }
+      ]
     }
   ]
 }
