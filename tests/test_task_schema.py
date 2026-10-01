@@ -324,6 +324,7 @@ def test_parted_task_validates():
     [
         (lambda t: t.update(parts=t["parts"][:1]), "parts"),
         (lambda t: t["parts"][1].update(extra="x"), "parts[1]"),
+        (lambda t: t["parts"][1].update(title="Basic"), "parts"),
         (lambda t: t["tests"][1].update(part=3), "tests[1].part"),
         (lambda t: t["tests"][0].pop("part"), "tests[0].part"),
         (lambda t: t["tests"].reverse(), "tests"),
@@ -331,7 +332,7 @@ def test_parted_task_validates():
         (lambda t: t["tests"][0].update(visibility="unshown", behavior="state.invariant",
                                         failure_message="x"), "tests"),
     ],
-    ids=["one part", "extra key", "part out of range", "missing part", "out of order",
+    ids=["one part", "extra key", "duplicate title", "part out of range", "missing part", "out of order",
          "part without tests", "part 1 all unshown"],
 )
 def test_parted_task_rejects(mutate, field):

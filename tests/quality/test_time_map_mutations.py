@@ -70,6 +70,10 @@ MUTATIONS = [
         ("            return timestamp\n", "            return requested\n"),
     ]),
     ("bumps from the clock", 3, [("timestamp = stamps[-1] + 1", "timestamp = self._clock.now() + 1")]),
+    ("bumps anything closer than 1", 3, [(
+        "            if stamps and timestamp <= stamps[-1]:\n                timestamp = stamps[-1] + 1\n",
+        "            if stamps:\n                timestamp = max(timestamp, stamps[-1] + 1)\n",
+    )]),
     ("no lock", 4, [("self._lock = threading.Lock()", "self._lock = _NoLock()")]),
 ]
 

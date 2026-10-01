@@ -30,10 +30,11 @@ _OPTIONAL_FIELDS = (
 
 
 def _test_entry(test: dict[str, Any]) -> dict[str, Any]:
+    entry: dict[str, Any]
     if test.get("visibility") == "unshown":
         # The inputs stay hidden, but the one-line diagnosis does not: it says what the
         # case checks without showing how, so a passing case is still readable.
-        return {
+        entry = {
             "name": test["name"],
             "visibility": "unshown",
             "behavior": test["behavior"],
@@ -41,11 +42,11 @@ def _test_entry(test: dict[str, Any]) -> dict[str, Any]:
             # Carried under a separate key so the Test Cases tab still treats the case as
             # unshown; the results pane reveals it only once the case has been graded.
             "hiddenCode": test["code"],
-            **({"part": test["part"]} if "part" in test else {}),
         }
-    entry: dict[str, Any] = {"name": test["name"], "code": test["code"]}
-    if "behavior" in test:
-        entry["behavior"] = test["behavior"]
+    else:
+        entry = {"name": test["name"], "code": test["code"]}
+        if "behavior" in test:
+            entry["behavior"] = test["behavior"]
     if "part" in test:
         entry["part"] = test["part"]
     return entry

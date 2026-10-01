@@ -19289,8 +19289,8 @@
       "functionName": "TimeMap",
       "hint": "",
       "hintZh": "",
-      "descriptionEn": "Build `TimeMap`, a key-value store that keeps every value a key has held and answers \"what was this key's value at time t?\".\n\nThe requirement arrives in parts, the way an interviewer adds them. Each part keeps every earlier behavior, so one `TimeMap` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** the first part is a warm-up (a sorted list per key plus binary search). The later parts test whether the design survives new requirements: a clock you can replace in tests, an invariant the store enforces itself, and concurrent callers.\n\n**Where it is used:** config and feature-flag histories, metrics stores and MVCC databases all answer \"value as of time t\" with the same per-key sorted history.\n\nAdapted from the time-based key-value store question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, with part 1 narrowed so that the parts build on each other.",
-      "descriptionZh": "Build `TimeMap`, a key-value store that keeps every value a key has held and answers \"what was this key's value at time t?\".\n\nThe requirement arrives in parts, the way an interviewer adds them. Each part keeps every earlier behavior, so one `TimeMap` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** the first part is a warm-up (a sorted list per key plus binary search). The later parts test whether the design survives new requirements: a clock you can replace in tests, an invariant the store enforces itself, and concurrent callers.\n\n**Where it is used:** config and feature-flag histories, metrics stores and MVCC databases all answer \"value as of time t\" with the same per-key sorted history.\n\nAdapted from the time-based key-value store question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, with part 1 narrowed so that the parts build on each other.",
+      "descriptionEn": "Build `TimeMap`, a key-value store that keeps every value a key has held and answers \"what was this key's value at time t?\".\n\nThe requirement arrives in parts, the way an interviewer adds them. Each part keeps every earlier behavior, so one `TimeMap` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** the first part is a warm-up (a sorted list per key plus binary search). The later parts add one requirement at a time and test whether your design absorbs each one with a small change.\n\n**Where it is used:** config and feature-flag histories, metrics stores and MVCC databases all answer \"value as of time t\" with the same per-key sorted history.\n\nAdapted from the time-based key-value store question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, with part 1 narrowed so that the parts build on each other.",
+      "descriptionZh": "Build `TimeMap`, a key-value store that keeps every value a key has held and answers \"what was this key's value at time t?\".\n\nThe requirement arrives in parts, the way an interviewer adds them. Each part keeps every earlier behavior, so one `TimeMap` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** the first part is a warm-up (a sorted list per key plus binary search). The later parts add one requirement at a time and test whether your design absorbs each one with a small change.\n\n**Where it is used:** config and feature-flag histories, metrics stores and MVCC databases all answer \"value as of time t\" with the same per-key sorted history.\n\nAdapted from the time-based key-value store question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, with part 1 narrowed so that the parts build on each other.",
       "version": 1,
       "tests": [
         {
@@ -19378,7 +19378,7 @@
           "visibility": "unshown",
           "behavior": "events.ordering",
           "failureMessage": "set must return the timestamp it recorded, which is the requested one when it is later than the key's last.",
-          "hiddenCode": "\ntm = {fn}()\nassert tm.set(\"k\", \"a\", 1.5) == 1.5\nassert tm.set(\"k\", \"b\", 7.25) == 7.25\nassert tm.set(\"k\", \"c\", 3) == 8.25\nassert tm.set(\"k\", \"d\", 8.25) == 9.25\nassert tm.set(\"k\", \"e\", 100) == 100\nassert [tm.get(\"k\", t) for t in (1.5, 7.25, 8.25, 9.25, 100)] == [\"a\", \"b\", \"c\", \"d\", \"e\"]\n",
+          "hiddenCode": "\ntm = {fn}()\nassert tm.set(\"k\", \"a\", 1.5) == 1.5\nassert tm.set(\"k\", \"b\", 7.25) == 7.25\nassert tm.set(\"k\", \"c\", 3) == 8.25\nassert tm.set(\"k\", \"d\", 8.25) == 9.25\nassert tm.set(\"k\", \"e\", 100) == 100\n# Later by less than 1 is still later: record it as requested, not at last + 1.\nassert tm.set(\"k\", \"f\", 100.5) == 100.5\nassert [tm.get(\"k\", t) for t in (1.5, 7.25, 8.25, 9.25, 100, 100.5)] == [\"a\", \"b\", \"c\", \"d\", \"e\", \"f\"]\n",
           "part": 3
         },
         {
@@ -19407,7 +19407,7 @@
       "parts": [
         {
           "title": "Basic store",
-          "descriptionEn": "**Signature:** `TimeMap()`, `set(key, value, timestamp) -> None`, `get(key, timestamp) -> value | None`\n\n- `set` records that `key` holds `value` from `timestamp` on. A timestamp is an `int` or a `float`.\n- `get` returns the value recorded at the largest timestamp less than or equal to `timestamp`.\n- `get` returns `None` for a key that was never set, or when every recorded timestamp for the key is later than `timestamp`.\n- Keys are independent: a `set` on one key never changes what `get` returns for another.\n- For one key, `set` calls arrive with strictly increasing timestamps. Part 3 removes this assumption.\n- `get` must take time logarithmic in the number of values recorded for that key.\n\n**Example:**\n- `tm.set(\"probe\", 68.0, 100)`, then `tm.set(\"probe\", 71.5, 140)`\n- `tm.get(\"probe\", 130)` returns `68.0`; `tm.get(\"probe\", 140)` returns `71.5`\n- `tm.get(\"probe\", 90)` returns `None`; `tm.get(\"other\", 140)` returns `None`"
+          "descriptionEn": "**Signature:** `TimeMap()`, `set(key, value, timestamp) -> None`, `get(key, timestamp) -> value | None`\n\n- `set` records that `key` holds `value` from `timestamp` on. A timestamp is an `int` or a `float`.\n- `get` returns the value recorded at the largest timestamp less than or equal to `timestamp`.\n- `get` returns `None` for a key that was never set, or when every recorded timestamp for the key is later than `timestamp`.\n- Keys are independent: a `set` on one key never changes what `get` returns for another.\n- For one key, `set` calls arrive with strictly increasing timestamps.\n- `get` must take time logarithmic in the number of values recorded for that key.\n\n**Example:**\n- `tm.set(\"probe\", 68.0, 100)`, then `tm.set(\"probe\", 71.5, 140)`\n- `tm.get(\"probe\", 130)` returns `68.0`; `tm.get(\"probe\", 140)` returns `71.5`\n- `tm.get(\"probe\", 90)` returns `None`; `tm.get(\"other\", 140)` returns `None`"
         },
         {
           "title": "Injectable clock",
@@ -19419,19 +19419,19 @@
         },
         {
           "title": "Concurrent callers",
-          "descriptionEn": "Several threads now call `set` and `get` on the same `TimeMap` at once, on the same key or different keys. Keep Parts 1–3 and guarantee, for any number of threads and any scheduling:\n\n- Each `set` and `get` behaves as if it happened at a single instant. A call without `timestamp` reads the clock inside that instant.\n- For each key, the recorded timestamps stay strictly increasing, even when threads set the same key at the same time. No two `set` calls on one key return the same timestamp.\n- `get(key, ...)` returns `None` or a value that some `set` on that key stored. Never another key's value, and never a half-written entry.\n- No call raises because of another thread's call.\n\nA lock around each operation is enough. The interview asks you to compare one lock for the whole store with one lock per key."
+          "descriptionEn": "Several threads now call `set` and `get` on the same `TimeMap` at once, on the same key or different keys. Keep Parts 1–3 and guarantee, for any number of threads and any scheduling:\n\n- Each `set` and `get` behaves as if it happened at a single instant. A call without `timestamp` reads the clock inside that instant.\n- For each key, the recorded timestamps stay strictly increasing, even when threads set the same key at the same time. No two `set` calls on one key return the same timestamp.\n- `get(key, ...)` returns `None` or a value that some `set` on that key stored. Never another key's value, and never a half-written entry.\n- No call raises because of another thread's call."
         }
       ],
       "hints": [
         {
           "level": 1,
           "kind": "questions",
-          "content": "What per-key structure lets you find the last timestamp at or before t without scanning? If timestamps arrive in order, where does each new one go? Where must clock.now() be read so that a later part can make it atomic? In part 3, which single number per key decides the recorded timestamp? In part 4, which steps of set must not interleave with another thread's set on the same key?"
+          "content": "What per-key structure lets you find the last timestamp at or before t without scanning? If timestamps arrive in order, where does each new one go? Is there one code path every write goes through, so that a new requirement changes only that path?"
         },
         {
           "level": 2,
           "kind": "analysis",
-          "content": "Keep two parallel lists per key, timestamps and values, and append to both. For get, bisect_right on the timestamps gives the insertion point; the answer sits one to the left, or there is none. Resolve a missing timestamp from the clock, and default the clock to an object whose now() returns time.time(). For part 3, compare the requested timestamp with timestamps[-1] and record at max(requested, last + 1) when the key exists. For part 4, hold one threading.Lock across the whole of set and get, including the clock read, so the read-compare-append sequence cannot interleave."
+          "content": "Keep two parallel lists per key, timestamps and values, and append to both. For get, bisect_right on the timestamps gives the insertion point; the answer sits one to the left, or there is none. Route every write through a single block that settles the timestamp, records it and returns it, and every read through a single lookup: each later part then changes one place, not several."
         }
       ],
       "modelConnections": [
@@ -19458,16 +19458,26 @@
         },
         {
           "stage": "concept",
+          "question": "What should get return when the key exists but every recorded timestamp is later than the query?",
+          "hint": "Look at what the binary search returns in that case, and what one step to its left would point at."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Which binary-search variant finds the latest timestamp at or before t, and how does it treat an exact match?",
+          "hint": "Compare where bisect_left and bisect_right land when the query equals a stored timestamp, then step one to the left."
+        },
+        {
+          "stage": "tradeoffs",
           "question": "Why inject a clock instead of calling time.time() inside set and get?",
           "hint": "Picture writing a test for 'the value 40 seconds later' against the real clock, then name what a fake clock removes."
         },
         {
-          "stage": "deep_dive",
+          "stage": "tradeoffs",
           "question": "Walk through what set does when the requested timestamp is not larger than the key's last one, and why appending at last + 1 keeps get correct.",
           "hint": "Cover the one number per key the decision uses, and what the sorted list still guarantees after the bump."
         },
         {
-          "stage": "deep_dive",
+          "stage": "tradeoffs",
           "question": "Which steps of set must happen atomically for part 4, and what goes wrong if the clock is read outside the lock?",
           "hint": "List the read-compare-append steps, then interleave two threads between them and see which timestamps they record."
         },

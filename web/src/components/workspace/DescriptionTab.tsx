@@ -127,7 +127,7 @@ export function DescriptionTab({
               }}
             >
               <div className="mono text-[11px] tracking-[0.12em] uppercase text-accent font-semibold">
-                {t('partHeading', { n: index + 1, total: problem.parts!.length })}
+                {t('partHeading', { n: index + 1, total: problem.parts?.length ?? 0 })}
               </div>
               <h2 className="text-base font-semibold">{part.title}</h2>
               <div className="space-y-1">{renderDescription(part.descriptionEn)}</div>

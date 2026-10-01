@@ -61,3 +61,12 @@ def test_unshown_test_entries_have_no_code():
                 assert "code" not in test
                 assert "failure_message" not in test
                 assert test["behavior"]
+
+
+def test_multi_part_tasks_export_parts_and_every_case_part():
+    problem = next(p for p in build_problem_catalog()["problems"] if p["id"] == "time_map")
+    assert [part["title"] for part in problem["parts"]] == [
+        "Basic store", "Injectable clock", "Strictly increasing timestamps", "Concurrent callers",
+    ]
+    assert all("part" in test for test in problem["tests"])
+    assert any(test.get("visibility") == "unshown" for test in problem["tests"])

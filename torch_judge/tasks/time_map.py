@@ -25,7 +25,7 @@ The requirement arrives in parts, the way an interviewer adds them. Each part ke
 
 **Background — context only. Everything above this line is the requirement.**
 
-**Why this shows up in interviews:** the first part is a warm-up (a sorted list per key plus binary search). The later parts test whether the design survives new requirements: a clock you can replace in tests, an invariant the store enforces itself, and concurrent callers.
+**Why this shows up in interviews:** the first part is a warm-up (a sorted list per key plus binary search). The later parts add one requirement at a time and test whether your design absorbs each one with a small change.
 
 **Where it is used:** config and feature-flag histories, metrics stores and MVCC databases all answer "value as of time t" with the same per-key sorted history.
 
@@ -39,7 +39,7 @@ Adapted from the time-based key-value store question in Schuture/OpenAI-Intervie
 - `get` returns the value recorded at the largest timestamp less than or equal to `timestamp`.
 - `get` returns `None` for a key that was never set, or when every recorded timestamp for the key is later than `timestamp`.
 - Keys are independent: a `set` on one key never changes what `get` returns for another.
-- For one key, `set` calls arrive with strictly increasing timestamps. Part 3 removes this assumption.
+- For one key, `set` calls arrive with strictly increasing timestamps.
 - `get` must take time logarithmic in the number of values recorded for that key.
 
 **Example:**
@@ -86,14 +86,12 @@ Adapted from the time-based key-value store question in Schuture/OpenAI-Intervie
 - Each `set` and `get` behaves as if it happened at a single instant. A call without `timestamp` reads the clock inside that instant.
 - For each key, the recorded timestamps stay strictly increasing, even when threads set the same key at the same time. No two `set` calls on one key return the same timestamp.
 - `get(key, ...)` returns `None` or a value that some `set` on that key stored. Never another key's value, and never a half-written entry.
-- No call raises because of another thread's call.
-
-A lock around each operation is enough. The interview asks you to compare one lock for the whole store with one lock per key.""",
+- No call raises because of another thread's call.""",
         },
     ],
     "hints": [
-        {"level": 1, "kind": "questions", "content": "What per-key structure lets you find the last timestamp at or before t without scanning? If timestamps arrive in order, where does each new one go? Where must clock.now() be read so that a later part can make it atomic? In part 3, which single number per key decides the recorded timestamp? In part 4, which steps of set must not interleave with another thread's set on the same key?"},
-        {"level": 2, "kind": "analysis", "content": "Keep two parallel lists per key, timestamps and values, and append to both. For get, bisect_right on the timestamps gives the insertion point; the answer sits one to the left, or there is none. Resolve a missing timestamp from the clock, and default the clock to an object whose now() returns time.time(). For part 3, compare the requested timestamp with timestamps[-1] and record at max(requested, last + 1) when the key exists. For part 4, hold one threading.Lock across the whole of set and get, including the clock read, so the read-compare-append sequence cannot interleave."},
+        {"level": 1, "kind": "questions", "content": "What per-key structure lets you find the last timestamp at or before t without scanning? If timestamps arrive in order, where does each new one go? Is there one code path every write goes through, so that a new requirement changes only that path?"},
+        {"level": 2, "kind": "analysis", "content": "Keep two parallel lists per key, timestamps and values, and append to both. For get, bisect_right on the timestamps gives the insertion point; the answer sits one to the left, or there is none. Route every write through a single block that settles the timestamp, records it and returns it, and every read through a single lookup: each later part then changes one place, not several."},
     ],
     "model_connections": [
         "Multi-version concurrency control keeps a sorted version list per row and reads the newest version at or before a snapshot timestamp, which is part 1 at database scale.",
@@ -250,7 +248,9 @@ assert tm.set("k", "b", 7.25) == 7.25
 assert tm.set("k", "c", 3) == 8.25
 assert tm.set("k", "d", 8.25) == 9.25
 assert tm.set("k", "e", 100) == 100
-assert [tm.get("k", t) for t in (1.5, 7.25, 8.25, 9.25, 100)] == ["a", "b", "c", "d", "e"]
+# Later by less than 1 is still later: record it as requested, not at last + 1.
+assert tm.set("k", "f", 100.5) == 100.5
+assert [tm.get("k", t) for t in (1.5, 7.25, 8.25, 9.25, 100, 100.5)] == ["a", "b", "c", "d", "e", "f"]
 """},
         {"name": "Part 3: nothing is overwritten", "part": 3, "visibility": "unshown", "behavior": "state.invariant",
          "failure_message": "A repeated or backward timestamp must append a new entry at last + 1, not replace an existing one.",
@@ -381,15 +381,19 @@ class TimeMap:
             return self._values[key][index - 1] if index else None
 ''',
     "interview_questions": interview(
+        # Concept and deep-dive questions are answered before coding, so they stay inside
+        # part 1; questions about later parts wait for the tradeoffs stage after coding.
         concept=[
             "What data structure do you keep per key, and why does it make get logarithmic?",
-            "Why inject a clock instead of calling time.time() inside set and get?",
+            "What should get return when the key exists but every recorded timestamp is later than the query?",
         ],
         deep_dive=[
-            "Walk through what set does when the requested timestamp is not larger than the key's last one, and why appending at last + 1 keeps get correct.",
-            "Which steps of set must happen atomically for part 4, and what goes wrong if the clock is read outside the lock?",
+            "Which binary-search variant finds the latest timestamp at or before t, and how does it treat an exact match?",
         ],
         tradeoffs=[
+            "Why inject a clock instead of calling time.time() inside set and get?",
+            "Walk through what set does when the requested timestamp is not larger than the key's last one, and why appending at last + 1 keeps get correct.",
+            "Which steps of set must happen atomically for part 4, and what goes wrong if the clock is read outside the lock?",
             "Compare one lock for the whole store with one lock per key: what does each cost, and when does the per-key version win?",
             "Would a read-write lock that lets concurrent gets run together help here? Why or why not?",
         ],

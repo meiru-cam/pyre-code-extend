@@ -238,6 +238,9 @@ def _validate_parts(task_id: str, parts: Any, tests: list[dict]) -> None:
             if not isinstance(part[key], str) or not part[key].strip():
                 raise TaskValidationError(task_id, f"parts[{i}].{key}", "required non-empty string")
         _reject_math_markup(task_id, f"parts[{i}].description_en", part["description_en"])
+    titles = [part["title"] for part in parts]
+    if len(set(titles)) != len(titles):
+        raise TaskValidationError(task_id, "parts", "part titles must be unique")
     numbers = [test.get("part") for test in tests]
     for i, number in enumerate(numbers):
         if not isinstance(number, int) or isinstance(number, bool) or not 1 <= number <= len(parts):

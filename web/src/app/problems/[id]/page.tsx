@@ -171,6 +171,8 @@ function WorkspacePageNew() {
   };
 
   const parts = problem ? partCount(problem) : 0;
+  // unlockedPart is what this browser has unlocked; shownPart also opens every part once the
+  // exercise is solved, e.g. on another device.
   const shownPart = parts && progress[id]?.status === 'solved' ? parts : unlockedPart;
 
   // Run and Submit grade every part. Unlock as far as the code passes, then show only the
@@ -338,7 +340,7 @@ function WorkspacePageNew() {
         }
         bottom={
           <div className="flex flex-col h-full">
-            <TestPanel tests={problem.tests} functionName={problem.functionName} />
+            <TestPanel tests={problem.tests} functionName={problem.functionName} unlockedPart={shownPart} />
             <ActionBar onSubmit={handleSubmit} onRun={handleRun} isSubmitting={isSubmitting} isRunning={isRunning} disabled={!interviewUnlocked} attemptCount={submissionHistory.length} />
           </div>
         }
