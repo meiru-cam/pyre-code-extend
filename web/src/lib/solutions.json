@@ -948,6 +948,15 @@
       }
     ]
   },
+  "monster_battle": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "ELEMENTS = (\"Ember\", \"Tide\", \"Bramble\", \"Spark\")\nBEATS = {\"Ember\": \"Bramble\", \"Bramble\": \"Tide\", \"Tide\": \"Spark\", \"Spark\": \"Ember\"}\n\n\nclass Monster:\n    def __init__(self, name, hp, attack, element=None):\n        if element is not None and element not in ELEMENTS:\n            raise ValueError(f\"unknown element: {element!r}\")\n        self.name, self.hp, self.attack, self.element = name, hp, attack, element\n\n    def is_alive(self):\n        return self.hp > 0\n\n    def multiplier(self, defender):\n        \"\"\"The multiplier against defender, or None when one of the two has no element.\"\"\"\n        if self.element is None or defender.element is None:\n            return None\n        if BEATS[self.element] == defender.element:\n            return 2\n        if BEATS[defender.element] == self.element:\n            return 0.5\n        return 1\n\n    def damage_to(self, defender):\n        return max(1, int(self.attack * (self.multiplier(defender) or 1)))\n\n\nclass Team:\n    def __init__(self, name, monsters):\n        self.name = name\n        self.monsters = [Monster(*spec) for spec in monsters]\n\n    def alive(self):\n        return [m for m in self.monsters if m.is_alive()]\n\n    def is_beaten(self):\n        return not self.alive()\n\n    def attacker_against(self, defender, smart):\n        alive = self.alive()\n        if not smart:\n            return alive[0]\n        return max(alive, key=lambda m: m.damage_to(defender))  # max keeps the first on a tie\n\n\ndef run_battle(team_a, team_b, smart=False):\n    attacking, defending = Team(*team_a), Team(*team_b)\n    log = [f\"Match start: {attacking.name} takes on {defending.name}\"]\n    while True:\n        defender = defending.alive()[0]\n        attacker = attacking.attacker_against(defender, smart)\n        damage = attacker.damage_to(defender)\n        defender.hp -= damage\n        multiplier = attacker.multiplier(defender)\n        label = \"\" if multiplier is None else f\" ({multiplier:g}x)\"\n        outcome = f\"{defender.name} has {defender.hp} HP left.\" if defender.is_alive() else f\"{defender.name} is defeated!\"\n        log.append(f\"{attacker.name} hits {defender.name} for {damage} damage{label}. {outcome}\")\n        if defending.is_beaten():\n            log.append(f\"Match over: {attacking.name} wins!\")\n            return log\n        attacking, defending = defending, attacking",
+        "role": "solution"
+      }
+    ]
+  },
   "mpnn_layer": {
     "cells": [
       {

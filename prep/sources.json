@@ -178,5 +178,13 @@
       "gpu_credits"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/monster-battle",
+    "exercises": [
+      "monster_battle"
+    ],
+    "round": "coding"
   }
 ]

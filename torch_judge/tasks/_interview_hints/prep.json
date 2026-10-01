@@ -88,5 +88,13 @@
     "How do you answer correctly when a call arrives after a query about a later time?": "Picture a subtract arriving after a query about a later time, and what that query would have needed to know.",
     "What does replaying every call per query cost, and how does a cursor over sorted calls avoid it?": "Count the work of one query if it starts from an empty ledger, then ask what state could carry over between queries made in time order.",
     "When does the incremental cursor have to be thrown away, and what does the rebuild cost?": "List what a cursor assumes about calls it has already passed, and what a call or query behind it breaks."
+  },
+  "monster_battle": {
+    "Which objects would you model, and which of them owns the HP that changes during the battle?": "List what each monster knows and what changes during a fight, and decide where each piece of state lives.",
+    "How do you make sure the battle stops on the attack that beats a team, and not one turn later?": "Trace the attack that brings the last defender to 0 HP, and check what your loop does right after it.",
+    "How do you keep the log format exact, and how would you test it?": "Write the expected log for a two-monster fight by hand first, then compare it with yours line by line.",
+    "How do you represent which element beats which so that adding a fifth element is a one-line change?": "Think about a mapping from each element to the one it beats, and how both directions of the rule can be read from it.",
+    "How do you add smart targeting without changing the output of battles that do not ask for it?": "Consider a default argument that keeps the old behaviour, and which single decision in the loop it should change.",
+    "Why does picking the attacker by maximum damage need an explicit rule for ties?": "Check what Python's max returns when several items share the largest key, and whether that matches the rule."
   }
 }
