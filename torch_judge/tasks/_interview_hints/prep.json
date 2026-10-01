@@ -24,5 +24,13 @@
     "How would you rank accounts by outgoing total, and what does sorting on every call cost compared with keeping a sorted structure?": "Compare how often totals change with how often the ranking is read, and the sort key that handles ties.",
     "Why hold money for a pending transfer instead of moving it at once, and what makes the available balance cheap to compute?": "Think about what the target may still do, and which transfers count against the source at a given time.",
     "What history must an account keep so get_balance can answer any past time, and how does a merge fit into it?": "Consider appending (timestamp, balance) on every change and searching it, then treat the merge credit as one more change."
+  },
+  "spreadsheet": {
+    "How do you validate a cell name and a formula so that exactly the stated shapes are accepted?": "Think about anchoring a pattern to the whole string, and what a term is before writing the operators between terms.",
+    "How does get evaluate a formula whose terms are themselves formula cells?": "Each cell term is another get, so consider recursion and what an unset cell contributes.",
+    "How does a recursive get notice a cycle, and why is a set of visited cells not enough on its own?": "Separate cells on the current path from cells already finished, and picture a diamond with no cycle.",
+    "Compare evaluating on get with recomputing on set: which reads and writes does each make cheap?": "Count the work per get and per set in each design for a long chain, then think about which one happens more often.",
+    "Why must set check for a cycle before changing any state, and how do you check it?": "Picture a rejected set that already rewired edges, then ask whether the new references can reach the cell being set.",
+    "In a diamond, how do you make sure the bottom cell is recomputed once, after both of its inputs?": "Consider collecting every affected cell first and evaluating them in dependency order."
   }
 }

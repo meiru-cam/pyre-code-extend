@@ -114,5 +114,13 @@
       "bank_system"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/spreadsheet-dependencies",
+    "exercises": [
+      "spreadsheet"
+    ],
+    "round": "coding"
   }
 ]
