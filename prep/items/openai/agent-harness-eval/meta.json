@@ -1,0 +1,25 @@
+{
+  "title": "Agent Harness and Evaluation Framework",
+  "summary": "The execution harness for a multi-step, tool-calling agent plus the offline evaluation framework built on it: tool-call isolation, timeouts and retries; trajectory recording, replay and sampling; and preventing evaluation-set leakage and overfitting while wiring regression tests into CI.",
+  "round": "system-design",
+  "kind": "System design",
+  "difficulty": null,
+  "frequency": "rare",
+  "format": null,
+  "topics": [
+    "agent",
+    "evaluation",
+    "tooling",
+    "observability"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/system-design/agent-harness-eval",
+  "rubric": [
+    "Requirements and scale",
+    "Data model and API",
+    "Architecture",
+    "Deep dives",
+    "Failure modes and recovery",
+    "Trade-offs and alternatives rejected"
+  ],
+  "exercises": []
+}

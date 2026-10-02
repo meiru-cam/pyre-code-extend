@@ -482,5 +482,105 @@
       "sharded_linear"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "system-design/agent-harness-eval"
+  },
+  {
+    "company": "openai",
+    "item": "system-design/ai-chatbot-frontend"
+  },
+  {
+    "company": "openai",
+    "item": "system-design/chess-platform"
+  },
+  {
+    "company": "openai",
+    "item": "system-design/cloud-ide"
+  },
+  {
+    "company": "openai",
+    "item": "system-design/crossword-solver"
+  },
+  {
+    "company": "openai",
+    "item": "system-design/device-fleet-monitoring"
+  },
+  {
+    "company": "openai",
+    "item": "system-design/google-calendar"
+  },
+  {
+    "company": "openai",
+    "item": "system-design/gpt3-playground"
+  },
+  {
+    "company": "openai",
+    "item": "system-design/image-dedup-sharing"
+  },
+  {
+    "company": "openai",
+    "item": "system-design/mining-novel-data"
+  },
+  {
+    "company": "openai",
+    "item": "system-design/multi-tenant-ci-cd"
+  },
+  {
+    "company": "openai",
+    "item": "system-design/nearby-poi"
+  },
+  {
+    "company": "openai",
+    "item": "system-design/payment-coffee-shop"
+  },
+  {
+    "company": "openai",
+    "item": "system-design/rag-search-ml-design"
+  },
+  {
+    "company": "openai",
+    "item": "system-design/realtime-ai-feature"
+  },
+  {
+    "company": "openai",
+    "item": "system-design/slack"
+  },
+  {
+    "company": "openai",
+    "item": "system-design/url-shortener"
+  },
+  {
+    "company": "openai",
+    "item": "system-design/video-generation-pipeline"
+  },
+  {
+    "company": "openai",
+    "item": "behavioral/engineering-management"
+  },
+  {
+    "company": "openai",
+    "item": "behavioral/recruiter-screen"
+  },
+  {
+    "company": "anthropic",
+    "item": "system-design/design-doc-review"
+  },
+  {
+    "company": "anthropic",
+    "item": "system-design/one-on-one-chat"
+  },
+  {
+    "company": "anthropic",
+    "item": "system-design/telemetry-data-infrastructure"
+  },
+  {
+    "company": "anthropic",
+    "item": "behavioral/hiring-manager"
+  },
+  {
+    "company": "anthropic",
+    "item": "behavioral/recruiter-screen"
   }
 ]

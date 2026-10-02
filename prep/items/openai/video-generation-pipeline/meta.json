@@ -1,0 +1,24 @@
+{
+  "title": "Video Generation Pipeline (Sora-style)",
+  "summary": "Run video-generation jobs on a scarce, fluctuating multi-provider GPU pool: leases with fencing tokens, a checkpoint interval from Young's approximation, retries and cancellation, preemption order and admission control.",
+  "round": "system-design",
+  "kind": "System design",
+  "difficulty": "Medium",
+  "frequency": "very-high",
+  "format": "60 min",
+  "topics": [
+    "gpu-scheduling",
+    "queueing",
+    "fault-tolerance"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/system-design/video-generation-pipeline",
+  "rubric": [
+    "Requirements and scale",
+    "Data model and API",
+    "Architecture",
+    "Deep dives",
+    "Failure modes and recovery",
+    "Trade-offs and alternatives rejected"
+  ],
+  "exercises": []
+}

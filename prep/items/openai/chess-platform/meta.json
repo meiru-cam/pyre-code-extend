@@ -1,0 +1,26 @@
+{
+  "title": "Online Chess Platform (Chess.com-style)",
+  "summary": "Real-time one-on-one chess: match players by rating, relay moves with low latency over WebSockets, and keep an authoritative server clock without writing to the database every second.",
+  "round": "system-design",
+  "kind": "System design",
+  "difficulty": null,
+  "frequency": "very-high",
+  "format": null,
+  "topics": [
+    "websocket",
+    "matchmaking",
+    "game-state",
+    "idempotency",
+    "consistent-hashing"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/system-design/chess-platform",
+  "rubric": [
+    "Requirements and scale",
+    "Data model and API",
+    "Architecture",
+    "Deep dives",
+    "Failure modes and recovery",
+    "Trade-offs and alternatives rejected"
+  ],
+  "exercises": []
+}

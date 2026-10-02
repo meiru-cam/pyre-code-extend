@@ -1,0 +1,25 @@
+{
+  "title": "Cloud IDE",
+  "summary": "A browser IDE in the style of Replit or Codespaces: per-user sandboxes, workspace lifecycle, file storage and streamed terminal output, with isolation and reconnects as the hard parts.",
+  "round": "system-design",
+  "kind": "System design",
+  "difficulty": "Hard",
+  "frequency": "medium",
+  "format": null,
+  "topics": [
+    "sandbox",
+    "vm-lifecycle",
+    "websocket",
+    "streaming"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/system-design/cloud-ide",
+  "rubric": [
+    "Requirements and scale",
+    "Data model and API",
+    "Architecture",
+    "Deep dives",
+    "Failure modes and recovery",
+    "Trade-offs and alternatives rejected"
+  ],
+  "exercises": []
+}

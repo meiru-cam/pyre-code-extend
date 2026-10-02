@@ -1,0 +1,27 @@
+{
+  "title": "Hiring Manager Round: Impact, Collaboration and Growth",
+  "summary": "A 45-to-55-minute conversation with the hiring manager about how you work: your most impactful project and your own role in it, how you prioritize and own outcomes when plans compete for the same time, cross-functional collaboration and disagreement, mentoring others and your own growth, and fit with the team, closing with the questions you put to the manager.",
+  "round": "behavioral",
+  "kind": "Behavioral",
+  "difficulty": null,
+  "frequency": "very-high",
+  "format": "55 min",
+  "topics": [
+    "impact",
+    "ownership",
+    "collaboration",
+    "cross-functional",
+    "mentorship",
+    "roadmap-influence"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/behavioral/hiring-manager",
+  "rubric": [
+    "Past impact",
+    "Prioritisation and ownership",
+    "Collaboration",
+    "Growth and mentorship",
+    "Team fit and working style",
+    "Your questions for the manager"
+  ],
+  "exercises": []
+}

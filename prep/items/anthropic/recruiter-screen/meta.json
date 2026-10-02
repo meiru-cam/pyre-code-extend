@@ -1,0 +1,24 @@
+{
+  "title": "Recruiter Screen: Motivation, Mission and Logistics",
+  "summary": "A 30-minute call with a recruiter, not an engineer, that opens on why you want to work at Anthropic and gives AI safety and Anthropic's mission a substantial share of the time at first-conversation depth, before covering your background and the logistics of the rest of the process: work authorization, timeline, compensation, and team fit.",
+  "round": "behavioral",
+  "kind": "Behavioral",
+  "difficulty": null,
+  "frequency": "very-high",
+  "format": "30 min",
+  "topics": [
+    "why-anthropic",
+    "ai-safety",
+    "mission",
+    "background",
+    "compensation"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/behavioral/recruiter-screen",
+  "rubric": [
+    "Motivation",
+    "Safety and mission",
+    "Background",
+    "Logistics"
+  ],
+  "exercises": []
+}

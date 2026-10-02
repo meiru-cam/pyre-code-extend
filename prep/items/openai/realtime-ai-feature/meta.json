@@ -1,0 +1,25 @@
+{
+  "title": "Streaming AI Product Feature",
+  "summary": "An AI rewrite feature in a collaborative editor that streams its output to many users: SSE and cancellation, cost-weighted admission with a bounded queue, prefix caching, incremental rendering with resume, monitoring, and 10x scale.",
+  "round": "system-design",
+  "kind": "System design",
+  "difficulty": null,
+  "frequency": "rare",
+  "format": null,
+  "topics": [
+    "streaming",
+    "api-design",
+    "rate-limiting",
+    "fullstack"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/system-design/realtime-ai-feature",
+  "rubric": [
+    "Requirements and scale",
+    "Data model and API",
+    "Architecture",
+    "Deep dives",
+    "Failure modes and recovery",
+    "Trade-offs and alternatives rejected"
+  ],
+  "exercises": []
+}

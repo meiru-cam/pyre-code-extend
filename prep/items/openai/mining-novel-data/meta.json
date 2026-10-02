@@ -1,0 +1,24 @@
+{
+  "title": "Novel-Data Mining from an Unlabeled Corpus",
+  "summary": "From 8 billion unlabeled web images, mine those novel relative to an existing training set and retrieve those containing 200 target objects: defining novelty, a retrieval cascade, precision and recall from samples, cost at this scale.",
+  "round": "system-design",
+  "kind": "ML system design",
+  "difficulty": null,
+  "frequency": "rare",
+  "format": null,
+  "topics": [
+    "ml-system-design",
+    "data-mining",
+    "retrieval"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/system-design/mining-novel-data",
+  "rubric": [
+    "Requirements and scale",
+    "Data and pipeline interfaces",
+    "Architecture",
+    "Deep dives",
+    "Failure modes and recovery",
+    "Trade-offs and alternatives rejected"
+  ],
+  "exercises": []
+}

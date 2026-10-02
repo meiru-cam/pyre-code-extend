@@ -1,0 +1,24 @@
+{
+  "title": "Image Sharing with Deduplication",
+  "summary": "Upload, view and delete images while storing identical bytes once under a content hash. The interesting parts are concurrent uploads, blob and metadata consistency, and safe deletion.",
+  "round": "system-design",
+  "kind": "System design",
+  "difficulty": "Medium",
+  "frequency": "low",
+  "format": null,
+  "topics": [
+    "storage",
+    "deduplication",
+    "consistency"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/system-design/image-dedup-sharing",
+  "rubric": [
+    "Requirements and scale",
+    "Data model and API",
+    "Architecture",
+    "Deep dives",
+    "Failure modes and recovery",
+    "Trade-offs and alternatives rejected"
+  ],
+  "exercises": []
+}

@@ -1,0 +1,26 @@
+{
+  "title": "Engineering Management Round",
+  "summary": "A broad management round: philosophy, one-on-ones, coding versus managing, hiring, growing junior engineers, handling low performance and reshaping teams, all with concrete examples.",
+  "round": "behavioral",
+  "kind": "Behavioral",
+  "difficulty": null,
+  "frequency": "rare",
+  "format": null,
+  "topics": [
+    "leadership",
+    "hiring",
+    "mentorship",
+    "performance-management",
+    "team-composition"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/behavioral/engineering-management",
+  "rubric": [
+    "Background and team growth",
+    "Management philosophy and day-to-day operations",
+    "Hiring",
+    "Mentorship and growth",
+    "Performance management",
+    "Team composition"
+  ],
+  "exercises": []
+}
