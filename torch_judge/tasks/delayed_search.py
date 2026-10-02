@@ -103,14 +103,14 @@ def run_games(fn, bounds, secrets):
 
 TESTS = [
     {"name": "Part 1: the worked example", "part": 1, "behavior": "contract.signature", "code": _JUDGES + r"""
-j = BatchJudge(12, 8, 1)
-assert [j.check(x) for x in (6, 10, 2, 8, 11)] == [None, -1, 1, -1, 0]
+j = BatchJudge(10, 3, 1)
+assert [j.check(x) for x in (5, 10, 3, 9)] == [None, 1, 1, 0]
 try:
-    j.check(3)
+    j.check(4)
     raise AssertionError("the judge should refuse a call once the secret is determined")
 except ValueError:
     pass
-run_one({fn}, 12, 8)
+run_one({fn}, 10, 3)
 j = BatchJudge(1, 1, 1)
 assert {fn}().find_secret(1, j.check) == 1 and j.calls == 0
 """},
@@ -130,9 +130,11 @@ for n in [2**20, 2**20 + 1, 10**6, 999_999_937, 10**9]:
         run_one({fn}, n, secret)
 """},
     {"name": "Part 2: the worked example", "part": 2, "behavior": "contract.signature", "code": _JUDGES + r"""
-j = BatchJudge(20, 14, 2)
-assert j.send([7, 14]) is None and j.send([20]) == [-1, 0]
-run_two({fn}, 20, 14)
+j = BatchJudge(26, 5, 2)
+assert j.send([9, 18]) is None and j.send([26]) == [1, 1]
+assert j.send([3, 6]) == [1] and j.send([25]) == [-1, 1]
+assert (j.known.lo, j.known.hi) == (4, 5)
+run_two({fn}, 26, 5)
 j = BatchJudge(1, 1, 2)
 assert {fn}().find_secret_batched(1, j.send) == 1 and j.calls == 0
 """},
@@ -152,10 +154,12 @@ for n in [3**12, 3**12 + 1, 10**6, 10**9]:
         run_two({fn}, n, secret)
 """},
     {"name": "Part 3: the worked example", "part": 3, "behavior": "contract.signature", "code": _JUDGES + r"""
-j = RoundJudge({"x": 6, "y": 30}, {"x": 2, "y": 30})
-assert j.check_round({"x": 3, "y": 15}) is None
-assert j.check_round({}) == {"x": 1, "y": -1}
-run_games({fn}, {"x": 6, "y": 30}, {"x": 2, "y": 30})
+games, secrets = {"a": 1, "b": 9, "c": 4}, {"a": 1, "b": 7, "c": 1}
+j = RoundJudge(games, secrets)
+assert j.check_round({"b": 5, "c": 2}) is None
+assert j.check_round({"b": 8}) == {"b": -1, "c": 1}
+assert (j.known["c"].lo, j.known["c"].hi) == (1, 1)
+run_games({fn}, games, secrets)
 run_games({fn}, {"z": 1}, {"z": 1})
 """},
     {"name": "Part 3: many games share the rounds", "part": 3, "visibility": "unshown", "behavior": "performance.complexity",
@@ -186,7 +190,7 @@ The requirement arrives in parts. Each part adds one method to the same `Delayed
 - A secret is an integer in `[1, n]`. A guess is compared with it: `-1` if the guess is smaller, `1` if it is larger, `0` if it is the secret.
 - Each call's answer is about the call before it. The first call answers `None`, and the answer for your newest guess arrives only with your next call.
 - Every guess lies in `[1, n]` and differs from every earlier guess for the same secret.
-- Once the answers seen so far leave one possible value, make no further call; with `n = 1` that means no call at all.
+- Stop calling as soon as only one value is possible; for `n = 1`, return `1` without calling.
 - The channel raises `ValueError` when a rule is broken. Methods return the secret, and a call budget is part of each part.
 
 ────────────────────────────────
@@ -197,7 +201,7 @@ The requirement arrives in parts. Each part adds one method to the same `Delayed
 
 **Where it is used:** pipelined requests over a slow link, where each reply arrives after the next request has gone out; batched hyperparameter and threshold searches that send several probes per round; and several searches sharing one queue of evaluation jobs.
 
-Adapted from the delayed-answer binary search question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, as methods of one class instead of three functions. Part 2 caps a call at two guesses, which the source only implies, and every call budget has one call to spare, as in the source's stated bounds.""",
+Adapted from the delayed-answer binary search question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, as methods of one class instead of three functions. Part 2 caps a call at two guesses, which the source only implies; Part 3 also forbids an empty round once every game is settled; every call budget has one call to spare, as in the source's stated bounds.""",
     "parts": [
         {
             "title": "One guess per call",
@@ -207,10 +211,10 @@ Adapted from the delayed-answer binary search question in Schuture/OpenAI-Interv
 - Use at most `2 * ceil(log2(n)) + 1` calls, for `n` up to `10**9`.
 - A call whose only purpose is to bring back the previous answer still needs a new, unused guess.
 
-**Example:** with `n = 12` and the secret `8`, the calls `check(6)`, `check(10)`, `check(2)`, `check(8)` and `check(11)` answer:
-- `None`, then `-1` for `6`, so the secret is in `7..12`
-- `1` for `10`, so it is in `7..9`; `-1` for `2`, which adds nothing
-- `0` for `8`: the secret is `8`, and one more call would raise `ValueError`""",
+**Example:** with `n = 10` and the secret `3`:
+- `check(5)` answers `None`, and `check(10)` answers `1` for `5`: the secret is in `1..4`
+- `check(3)` answers `1` for `10`, which adds nothing
+- `check(9)` answers `0` for `3`: the secret is `3`, so stop; another call would raise `ValueError`""",
         },
         {
             "title": "Two guesses per call",
@@ -219,9 +223,10 @@ Adapted from the delayed-answer binary search question in Schuture/OpenAI-Interv
 - `check_batch(xs)` sends a list of one or two guesses, all new. It returns `None` on the first call, then the list of answers for the previous call's guesses, in the same order.
 - Use at most `2 * ceil(log3(n)) + 1` calls, for `n` up to `10**9`.
 
-**Example:** with `n = 20` and the secret `14`:
-- `check_batch([7, 14])` answers `None`
-- `check_batch([20])` answers `[-1, 0]`: `7` is too small and `14` is the secret, so return `14` with no further call""",
+**Example:** with `n = 26` and the secret `5`:
+- `check_batch([9, 18])` answers `None`, and `check_batch([26])` answers `[1, 1]`: the secret is in `1..8`
+- `check_batch([3, 6])` answers `[1]`, for `26`
+- `check_batch([25])` answers `[-1, 1]`: the secret is in `4..5`, so the search goes on""",
         },
         {
             "title": "Many games, few rounds",
@@ -229,17 +234,18 @@ Adapted from the delayed-answer binary search question in Schuture/OpenAI-Interv
 
 - `bounds` maps each game id to that game's `n`. Every game has its own secret and its own set of used guesses.
 - `check_round(guesses)` sends a dict from some game ids to one guess each; an empty dict is allowed. It returns `None` on the first call, then a dict with an answer for each guess of the previous call, whatever the current call holds.
-- A game whose secret is determined must not be guessed again. Return a dict from every game id to its secret.
+- A game whose secret is determined must not be guessed again, and once every game is settled, make no further call. Return a dict from every game id to its secret.
 - Use at most `2 * ceil(log2(m)) + 1` calls in total, where `m` is the largest `n`, however many games there are.
 
-**Example:** with games `x` (`n = 6`, secret `2`) and `y` (`n = 30`, secret `30`):
-- `check_round({"x": 3, "y": 15})` answers `None`
-- `check_round({})` answers `{"x": 1, "y": -1}`: `x` is in `1..2` and `y` in `16..30`""",
+**Example:** with games `a` (`n = 1`), `b` (`n = 9`, secret `7`) and `c` (`n = 4`, secret `1`):
+- `a` is settled from the start, so it is never guessed
+- `check_round({"b": 5, "c": 2})` answers `None`
+- `check_round({"b": 8})` answers `{"b": -1, "c": 1}`: `b` is in `6..9`, and `c` is settled at `1`""",
         },
     ],
     "hints": [
         {"level": 1, "kind": "questions", "content": "When you choose a guess, which earlier guesses' answers do you already have? When there is nothing useful to ask, which values can a call send that break no rule?"},
-        {"level": 2, "kind": "analysis", "content": "Alternate two kinds of call. A real call sends the midpoint of [lo, hi]. The next call sends a spare value, ideally one already outside [lo, hi], and brings back the real call's answer, which halves the range. Narrow on every answer you get, spare ones included. Keep a set of used values and nudge the midpoint if it is taken. Stop as soon as lo == hi."},
+        {"level": 2, "kind": "analysis", "content": "Keep [lo, hi] and a set of used values. One option: let every second call carry the midpoint, and let the calls between carry any unused value, best one you already know the answer for, since its only job is to bring the midpoint's answer back. Narrow on every answer that arrives. If a midpoint is already used, take the nearest free value. Stop once lo == hi."},
     ],
     "model_connections": [
         "Pipelined decoding and serving loops issue the next request before the previous result returns, so control logic must decide on stale information.",

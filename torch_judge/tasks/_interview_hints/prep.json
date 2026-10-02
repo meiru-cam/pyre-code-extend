@@ -391,6 +391,6 @@
     "How can the unfair lock starve a mode, and why does joining only the last batch prevent it?": "Holders of mode A keep arriving before the last one leaves. When does a waiter for mode B get its turn, and what rule would stop new A calls?",
     "Why must a fair batch stay at the front until both its holders and its woken-but-not-yet-running members are gone?": "A batch reaches the front and its members are woken, but none has run yet. What breaks if you remove the batch as soon as its holder count is zero?",
     "When a timed-out batch leaves the queue, why merge its neighbours, and what would go wrong without it?": "Queue: A running, B (one waiter), A (waiting). B times out. Which A batch should the last waiter be in, and when may it hold?",
-    "How would you build a reader/writer lock from this, and what extra rule does the writer mode need?": "Readers share and writers need the lock alone. Which mode is which, and what limit does the writer's batch need?"
+    "How would you build a shared/exclusive lock on top of this, and what must change for the exclusive mode?": "Readers share and writers need the lock alone. Which mode is which, and what limit does the writer's batch need?"
   }
 }

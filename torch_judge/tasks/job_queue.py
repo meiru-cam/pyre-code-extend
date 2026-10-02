@@ -169,11 +169,13 @@ assert q.fail("j1", a[1]) is None
 assert q.reserve("w2")[0] == "j3"
 c = q.reserve("w2")
 assert c[0] == "j1" and c[1] != a[1]
-assert kind(lambda: q.complete("j1", a[1])) == "InvalidReservationError"
-assert q.complete("j1", c[1]) is None
+assert kind(lambda: q.complete("j1", b[1])) == "InvalidReservationError"
 assert kind(lambda: q.complete("j9", c[1])) == "UnknownTaskError"
 assert kind(lambda: q.submit("j2", "again")) == "ValueError"
-assert q.reserve("w3") is None
+assert q.complete("j2", b[1]) is None
+assert q.fail("j1", c[1]) is None
+assert kind(lambda: q.complete("j1", c[1])) == "InvalidReservationError"
+assert q.reserve("w3")[0] == "j1"
 """},
     {"name": "Part 1: tokens and states", "part": 1, "visibility": "unshown", "behavior": "protocol.validation",
      "failure_message": "Every reservation gets a token no other reservation shares; another task's token, an old token, a token after complete and any token for a ready or completed task raise InvalidReservationError; an unknown id raises UnknownTaskError first; payloads come back unchanged; ready tasks keep first-in, first-out order.",
@@ -193,7 +195,7 @@ assert outcome(lambda: q.complete("x", rx[1])) == ("raise", "InvalidReservationE
 assert outcome(lambda: q.fail("x", rx[1])) == ("raise", "InvalidReservationError")
 q.fail("y", ry[1])
 assert outcome(lambda: q.fail("y", ry[1])) == ("raise", "InvalidReservationError"), "y is ready again"
-assert outcome(lambda: q.fail("nope", ry[1])) == ("raise", "UnknownTaskError")
+assert outcome(lambda: q.fail("ghost", ry[1])) == ("raise", "UnknownTaskError")
 tokens = set()
 for i in range(50):
     q.submit(f"t{i}", i)
@@ -315,19 +317,25 @@ def kind(call):
         return type(e).__name__
     return None
 clock = Clock()
-q = {fn}(clock, 4, 2)
+q = {fn}(clock, 6, 3)
 q.submit("j1", "resize")
+q.submit("j2", "encode")
 a = q.reserve("w1")
 q.fail("j1", a[1])
+b = q.reserve("w1")
+assert b[0] == "j2"
+q.complete("j2", b[1])
+c = q.reserve("w1")
+q.fail("j1", c[1])
 assert q.dead_letters() == []
-q.reserve("w1")
-clock.advance(5)
-assert q.dead_letters() == ["j1"], "the expired lease used up the second attempt"
-assert q.reserve("w2") is None
+q.reserve("w2")
+clock.advance(7)
+assert q.dead_letters() == ["j1"], "the expired lease used up the third attempt"
+q.submit("j3", "upload")
 assert q.requeue_dead("j1") is None
+assert [q.reserve("w3")[0], q.reserve("w3")[0]] == ["j3", "j1"]
 assert kind(lambda: q.requeue_dead("j1")) == "ValueError"
-assert kind(lambda: q.requeue_dead("nope")) == "UnknownTaskError"
-assert q.reserve("w2")[0] == "j1" and q.dead_letters() == []
+assert kind(lambda: q.requeue_dead("j7")) == "UnknownTaskError"
 """},
     {"name": "Part 3: attempts, order of death and requeue", "part": 3, "visibility": "unshown", "behavior": "retry.backoff",
      "failure_message": "Attempts count reservations; a task dies when a failed or expired reservation brings its count to max_attempts; dead_letters lists tasks in the order they died and returns a new list; requeue_dead resets the count, puts the task at the back, and raises ValueError for a task that is not dead; a completed task never dies.",
@@ -388,7 +396,7 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Where it is used:** Amazon SQS visibility timeouts, Celery and RQ acknowledgements, Kubernetes job retries, and dead-letter queues in every message broker.
 
-Adapted from the fault-tolerant work queue question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, on one class with a new name. A reservation is a tuple instead of a named tuple, and the clock, lease and retry budget arrive as optional constructor arguments so that earlier parts keep working. The test clock is any object with `now()`.""",
+Adapted from the fault-tolerant work queue question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, on one class renamed from `WorkQueue` to `JobQueue`. A reservation is a tuple instead of a named tuple, the source's size limits are dropped, Part 2 adds a speed check with 30,000 open leases, and the clock, lease and retry budget arrive as optional constructor arguments so that earlier parts keep working. The test clock is any object with `now()`.""",
     "parts": [
         {
             "title": "Reserve, complete and fail",
@@ -400,8 +408,8 @@ Adapted from the fault-tolerant work queue question in Schuture/OpenAI-Interview
 
 **Example:** submit `j1`, `j2` and `j3`, then `a = reserve("w1")` and `b = reserve("w1")`, which give `j1` and `j2`:
 - `fail("j1", a[1])` sends `j1` behind `j3`, so the next two reserves give `j3`, then `j1` again as `c`, with a new token
-- `complete("j1", a[1])` raises `InvalidReservationError`: that reservation is over. `complete("j1", c[1])` works
-- `complete("j9", c[1])` raises `UnknownTaskError`, and `submit("j2", "again")` raises `ValueError`""",
+- `complete("j1", b[1])` raises `InvalidReservationError`: `b` is a token for `j2`. `complete("j9", c[1])` raises `UnknownTaskError`, and `submit("j2", "again")` raises `ValueError`
+- `complete("j2", b[1])` works; `fail("j1", c[1])` sends `j1` back once more, so `complete("j1", c[1])` now raises `InvalidReservationError`""",
         },
         {
             "title": "Leases on a clock",
@@ -409,7 +417,7 @@ Adapted from the fault-tolerant work queue question in Schuture/OpenAI-Interview
 
 - `clock.now()` returns the current integer time. Read it only when a method is called.
 - A reservation made at time `t` has the deadline `t + lease_duration`. It is still valid at the deadline and expires once `now()` is greater.
-- Every call, `submit` included, first takes back every expired reservation, as if `fail` had been called on it, in order of deadline and then task id. Only then does the call do its own work.
+- Every call, `submit` included, first takes back every expired reservation, as if `fail` had been called on it, in order of deadline and then ascending task id. Only then does the call do its own work.
 - A token whose reservation was taken back works no more than any other old token. 30,000 open leases must not slow other calls down.
 
 **Example:** with `lease_duration = 10`, submit `j1` and `a = reserve("w1")` at time `0`:
@@ -426,15 +434,16 @@ Adapted from the fault-tolerant work queue question in Schuture/OpenAI-Interview
 - `requeue_dead(task_id)` puts a dead task at the back of the ready tasks with its count back at `0`. It raises `UnknownTaskError` for an unknown id and `ValueError` for a task that is not dead.
 - Both new methods also start by taking back expired reservations.
 
-**Example:** with `lease_duration = 4` and `max_attempts = 2`, submit `j1` at time `0`:
-- reserve it and `fail` it: one attempt used, so it is ready again; reserve it again and let the lease run out
-- at time `5`, `dead_letters()` is `["j1"]`, and `reserve` returns `None`
-- `requeue_dead("j1")` works once; a second call raises `ValueError`, and `requeue_dead("nope")` raises `UnknownTaskError`""",
+**Example:** with `lease_duration = 6` and `max_attempts = 3`, submit `j1` and `j2` at time `0`:
+- reserve `j1` and fail it, reserve and complete `j2`, then reserve `j1` and fail it again
+- reserve `j1` a third time and let the lease run out: at time `7`, `dead_letters()` is `["j1"]`
+- submit `j3`, then `requeue_dead("j1")`: the next reserves give `j3`, then `j1`
+- `requeue_dead("j1")` now raises `ValueError`, since `j1` is reserved, and `requeue_dead("j7")` raises `UnknownTaskError`""",
         },
     ],
     "hints": [
         {"level": 1, "kind": "questions", "content": "A worker that failed a task still holds its old token. If the token were just the task id, how could complete tell that worker apart from the one holding the task now? Which structure gives you the longest-waiting ready task in O(1)?"},
-        {"level": 2, "kind": "analysis", "content": "Keep a dict from task id to a record with its state, payload and current token, and a deque of ready ids. reserve pops the left end, draws a token from a counter and stores it on the record. complete and fail look the id up (UnknownTaskError if missing), then require state == reserved and the same token (InvalidReservationError otherwise). fail appends the id to the deque."},
+        {"level": 2, "kind": "analysis", "content": "A counter that only goes up gives every reservation a token nobody else ever had. Store, per task id, whether it is ready, reserved or completed, plus the token of the reservation now in force. Ready ids wait in a deque: reserve takes from the left and fail appends on the right. Check the id first, then the state and token, and change nothing until both checks pass."},
     ],
     "model_connections": [
         "Distributed training and evaluation clusters hand shards to workers with leases, so a crashed worker's shard goes to someone else instead of being lost.",

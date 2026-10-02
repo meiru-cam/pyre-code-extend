@@ -192,8 +192,9 @@ The requirement arrives in parts. Each part keeps every earlier behavior and add
 
 **Rules for every part:**
 - `JumpGrid(board)` takes `N` rows of `M` integers, with `1 <= N, M <= 60` and every value between `-10**9` and `10**9`. Never change `board`.
-- A path starts at `(0, p)` and ends the first time it reaches row `N - 1`. With `N = 1` it is just the start cell.
-- From `(i, j)`, a step goes to `(i + 1, j - 1)`, `(i + 1, j)` or `(i + 1, j + 1)`, if that column exists. A jump goes to `(i + 2, j)`, if that row exists. At most `k` jumps are allowed in one path, with `0 <= k <= N`.
+- Every method must finish in a few seconds on a 60 by 60 board with `k = 60`.
+- A path begins at `(0, p)` and stops on reaching row `N - 1`, so a one-row board gives a path of one cell.
+- From `(i, j)`, a step goes to `(i + 1, j - 1)`, `(i + 1, j)` or `(i + 1, j + 1)`, if that column exists. A jump goes to `(i + 2, j)`, if that row exists. A path may use at most `k` jumps; `k >= 0`, and it may be larger than any path can use.
 - A path's score is the sum of the values of the cells it visits, start and end included.
 
 ────────────────────────────────
@@ -204,14 +205,13 @@ The requirement arrives in parts. Each part keeps every earlier behavior and add
 
 **Where it is used:** beam and lattice searches in decoding, sequence alignment with limited gaps, seam carving for image resizing, and any planner that must count or rank equally good plans.
 
-Adapted from the grid path question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, as methods of one class that holds the board. The size limit is 60 instead of 200, so a plain Python table is fast enough.""",
+Adapted from the grid path question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, as methods of one class that holds the board, with the special move renamed a jump and `K`, `X` and `Y` written `k`, `x` and `y`. The size limit is 60 instead of 200, so a plain Python table is fast enough, and the rule that `board` stays unchanged is new.""",
     "parts": [
         {
             "title": "Best score",
             "description_en": r"""**Signature:** `JumpGrid(board).max_score(p, k) -> int`
 
 - Return the largest score over all paths from `(0, p)` with at most `k` jumps. `0 <= p < M`.
-- A 60 by 60 board with `k = 60` must finish in a few seconds.
 
 **Example:** `board = [[-2, 4, 5], [-5, -5, -5], [-5, 4, 0], [-1, -4, 3]]` and `p = 1`:
 - `max_score(1, 1)` is `11`: the path jumps from `(0, 1)` over the row of `-5`s to `(2, 1)`, then steps to `(3, 2)`, for `4 + 4 + 3`
@@ -237,7 +237,7 @@ Adapted from the grid path question in Schuture/OpenAI-Interview-Notes (CC BY-NC
 **Signature:** `count_optimal_paths(p, k) -> int`
 
 - Return how many different paths reach the best score, modulo `10**9 + 7`. Two paths differ if their cell lists differ, so a jump over `(i + 1, j)` and the two steps through it are different paths.
-- A 60 by 60 board must finish in a few seconds, even when every path ties.
+- Every path may tie, and the count can be far larger than `10**9`.
 
 **Example:** `board = [[-3, -1], [0, -2], [-1, 4], [0, 0]]` and `p = 1`:
 - with `k = 2` the best score is `3`. The path either steps through `(1, 0)` or jumps to `(2, 1)`, then ends at `(3, 0)` or `(3, 1)`, so `count_optimal_paths(1, 2)` is `4`
@@ -249,7 +249,7 @@ Adapted from the grid path question in Schuture/OpenAI-Interview-Notes (CC BY-NC
 
 **Signature:** `max_score_with_bonuses(p, k, x, y) -> int`, with `0 <= x, y <= 10**9`
 
-- Write `v0, v1, ..., vL` for the values in the order the path visits them. A jump's two ends are neighbours in this list, like a step's.
+- Bonuses look at the cell values in visiting order, `v0` first and `vL` last. The two ends of a jump are consecutive in that order, the same as the two ends of a step.
 - Add `x` for every `t >= 1` with `v(t-1) == vt`, and `y` for every `t >= 2` with `v(t-2) < v(t-1) < vt`.
 - Return the largest score plus bonuses over all paths. The best path here may differ from Part 1's.
 

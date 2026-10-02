@@ -92,17 +92,16 @@ TESTS = [
     {"name": "Part 1: the worked example", "part": 1, "behavior": "scheduler.concurrency", "code": _RIG + r"""
 lock = {fn}()
 rig = Rig(lock)
-rig.arrive("a", "fit"); rig.expect({"a"})
-rig.arrive("b", "score"); rig.expect({"a"})
-assert lock.waiting_count() == 1
-rig.arrive("c", "fit"); rig.expect({"a", "c"})
-rig.release("a"); rig.expect({"c"})
-rig.release("c"); rig.expect({"b"})
-rig.arrive("d", "score"); rig.expect({"b", "d"})
+rig.arrive("a", "ingest"); rig.expect({"a"})
+rig.arrive("b", "query")
+rig.arrive("c", "query")
+assert lock.waiting_count() == 2
+rig.arrive("d", "ingest"); rig.expect({"a", "d"})
+rig.release("a"); rig.expect({"d"})
+raises("ModeMismatchError", lambda: lock.release("query"))
+rig.release("d"); rig.expect({"b", "c"})
 assert lock.waiting_count() == 0
-raises("ModeMismatchError", lambda: lock.release("fit"))
-rig.release("b"); rig.release("d")
-raises("ModeMismatchError", lambda: lock.release("score"))
+rig.release("b"); rig.release("c")
 """},
     {"name": "Part 1: waking, counting and bad releases", "part": 1, "visibility": "unshown", "behavior": "concurrency.thread_safety",
      "failure_message": "When the last holder releases, every waiter of one mode must be granted together; waiting_count counts blocked calls across modes; release on an idle lock or in a mode not held raises ModeMismatchError and changes nothing; the same mode stays open to newcomers while others wait.",
@@ -138,19 +137,17 @@ stress({fn}())
     {"name": "Part 2: the worked example", "part": 2, "behavior": "events.ordering", "code": _RIG + r"""
 lock = {fn}(fair=True)
 rig = Rig(lock)
-rig.arrive("a", "fit"); rig.expect({"a"})
-rig.arrive("b", "fit"); rig.expect({"a", "b"})
-rig.arrive("c", "score")
-rig.arrive("d", "fit")
-rig.arrive("e", "export")
-rig.arrive("f", "export")
-assert lock.waiting_count() == 4
-rig.release("a"); rig.expect({"b"})
-rig.release("b"); rig.expect({"c"})
-raises("ModeMismatchError", lambda: lock.release("fit"))
-rig.release("c"); rig.expect({"d"})
-rig.release("d"); rig.expect({"e", "f"})
-rig.release("e"); rig.release("f")
+rig.arrive("a", "query"); rig.expect({"a"})
+rig.arrive("b", "ingest")
+rig.arrive("c", "ingest")
+rig.arrive("d", "query")
+assert lock.waiting_count() == 3
+rig.release("a"); rig.expect({"b", "c"})
+rig.arrive("e", "ingest")
+raises("ModeMismatchError", lambda: lock.release("query"))
+rig.release("b"); rig.release("c"); rig.expect({"d"})
+rig.release("d"); rig.expect({"e"})
+rig.release("e")
 assert lock.waiting_count() == 0
 """},
     {"name": "Part 2: only the last batch can be joined", "part": 2, "visibility": "unshown", "behavior": "events.ordering",
@@ -160,16 +157,17 @@ lock = {fn}(fair=True)
 rig = Rig(lock)
 rig.arrive("a", "x")
 rig.arrive("b", "y")
-rig.arrive("c", "z")
-rig.arrive("d", "y")
-rig.release("a"); rig.expect({"b"})
+rig.arrive("c", "y")
+rig.arrive("d", "z")
 rig.arrive("e", "y")
-rig.expect({"b"})
+rig.release("a"); rig.expect({"b", "c"})
+rig.arrive("f", "y")
+rig.expect({"b", "c"})
 raises("ModeMismatchError", lambda: lock.release("z"))
-rig.release("b"); rig.expect({"c"})
-rig.release("c"); rig.expect({"d", "e"})
-rig.arrive("g", "y"); rig.expect({"d", "e", "g"})
-for name in "deg":
+rig.release("b"); rig.release("c"); rig.expect({"d"})
+rig.release("d"); rig.expect({"e", "f"})
+rig.arrive("g", "y"); rig.expect({"e", "f", "g"})
+for name in "efg":
     rig.release(name)
 raises("ModeMismatchError", lambda: lock.release("y"))
 rig.arrive("h", "x"); rig.expect({"h"})
@@ -191,14 +189,14 @@ stress({fn}(fair=True))
     {"name": "Part 3: the worked example", "part": 3, "behavior": "budget.enforcement", "code": _RIG + r"""
 lock = {fn}(fair=True)
 rig = Rig(lock)
-rig.arrive("a", "fit"); rig.expect({"a"})
-assert lock.acquire("score", timeout=0) is False
+rig.arrive("a", "query"); rig.expect({"a"})
+assert lock.acquire("ingest", timeout=0) is False
 assert lock.waiting_count() == 0
-assert lock.acquire("fit", timeout=0) is True
-lock.release("fit")
-rig.arrive("b", "score")
-rig.arrive("c", "fit")
-rig.arrive("d", "score", timeout=0.05)
+assert lock.acquire("query", timeout=0) is True
+lock.release("query")
+rig.arrive("b", "ingest")
+rig.arrive("c", "query")
+rig.arrive("d", "ingest", timeout=0.05)
 wait_until(lambda: rig.workers["d"]["result"] == [False], "d to give up")
 rig.release("a"); rig.expect({"b"})
 rig.release("b"); rig.expect({"c"})
@@ -264,9 +262,9 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Why this shows up in interviews:** it tests condition variables beyond the textbook mutex: rechecking after a wake-up, waking a whole group, and keeping counts consistent. Each later part adds one requirement: fairness, so one busy mode cannot starve the others, then timeouts that leave the queue as if the call never came.
 
-**Where it is used:** GPU pools that switch between training and inference jobs, reader/writer locks, which are the special case with two modes, and phase barriers in batch pipelines.
+**Where it is used:** search indexes that serve many queries or many ingest writers but never both at once, shared/exclusive table locks in databases, and phase barriers in batch pipelines.
 
-Adapted from the ModalLock question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, as one class renamed `ModeLock` instead of `ModalLock` and `FairModalLock`: fairness is the constructor flag `fair`. Part 3, timeouts, comes from the source's follow-ups, along with the rule that neighbouring batches merge when one between them empties.""",
+Adapted from the ModalLock question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, as one class renamed `ModeLock` instead of `ModalLock` and `FairModalLock`: fairness is the constructor flag `fair`. Part 3 extends one of the source's follow-ups, timeouts; `acquire` returning a bool, `timeout=0` and the merging of same-mode neighbours are new.""",
     "parts": [
         {
             "title": "Shared holds by mode",
@@ -276,10 +274,10 @@ Adapted from the ModalLock question in Schuture/OpenAI-Interview-Notes (CC BY-NC
 - When the last holder releases, the lock is idle, and the waiters of one mode are all granted together.
 
 **Example:** threads arrive one after another and each step finishes before the next:
-- `a` asks for `"fit"` and holds; `b` asks for `"score"` and blocks, so `waiting_count()` is `1`
-- `c` asks for `"fit"` and holds alongside `a`, though `b` is waiting
-- `a` releases and `c` still holds; `c` releases and `b` holds; `d` asks for `"score"` and holds alongside `b`
-- `release("fit")` raises `ModeMismatchError`, and so does `release("score")` once `b` and `d` have released""",
+- `a` holds `"ingest"`; `b` and `c` ask for `"query"` and block, so `waiting_count()` is `2`
+- `d` asks for `"ingest"` and holds next to `a`, though others are waiting
+- `a` releases; while `d` still holds, `release("query")` raises `ModeMismatchError`
+- `d` releases, and `b` and `c` hold together""",
         },
         {
             "title": "Fair order",
@@ -290,10 +288,10 @@ Adapted from the ModalLock question in Schuture/OpenAI-Interview-Notes (CC BY-NC
 - The front batch leaves once all its members have released, and the next batch is granted.
 - `release(mode)` raises `ModeMismatchError` unless the front batch has `mode` and someone in it still holds.
 
-**Example:** `a` and `b` ask for `"fit"` and hold; `c` asks for `"score"`; `d` for `"fit"`; `e` and `f` for `"export"`:
-- `d` waits: the last batch is `c`'s, so it cannot join `a` and `b`
-- releases then grant `{b}` after `a`, `{c}`, `{d}`, then `{e, f}` together
-- while `c` holds, `release("fit")` raises `ModeMismatchError`""",
+**Example:** `a` holds `"query"`; `b` asks for `"ingest"` and waits, and `c` asks for `"ingest"` and joins `b`'s batch:
+- `d` asks for `"query"` and waits: the last batch is `"ingest"`, so `d` cannot join `a`
+- `a` releases, so `b` and `c` hold together; `e` asks for `"ingest"` and queues behind `d`
+- while `b` and `c` hold, `release("query")` raises `ModeMismatchError`; the next grants are `{d}`, then `{e}`""",
         },
         {
             "title": "Giving up",
@@ -303,18 +301,18 @@ Adapted from the ModalLock question in Schuture/OpenAI-Interview-Notes (CC BY-NC
 - A call that gives up holds nothing and no longer counts as waiting.
 - In a fair lock, a batch that loses its last member to a timeout leaves the queue. If the batches on either side of it have the same mode, they become one batch, so waiters in the later one may hold at once.
 
-**Example:** with `fair=True`, `a` holds `"fit"`:
-- `acquire("score", timeout=0)` is `False`, and `acquire("fit", timeout=0)` is `True` since nobody waits
-- `b` asks for `"score"`, `c` for `"fit"`, and `d` for `"score"` with `timeout=0.05`; `d` returns `False`
+**Example:** with `fair=True`, `a` holds `"query"`:
+- `acquire("ingest", timeout=0)` is `False`, and `acquire("query", timeout=0)` is `True` since nobody waits
+- `b` asks for `"ingest"`, `c` for `"query"`, and `d` for `"ingest"` with `timeout=0.05`; `d` returns `False`
 - releases then grant `{b}` and `{c}`, as if `d` had never come""",
         },
     ],
     "hints": [
         {"level": 1, "kind": "questions", "content": "What does a blocked acquire need to see before it may hold the lock, and what must a waiter check again when it wakes, given that other threads may have run first? When the last holder releases, how many waiters should wake?"},
-        {"level": 2, "kind": "analysis", "content": "Guard three fields with one threading.Condition: the mode held (None when idle), the number of holders and the number of blocked calls. acquire counts itself as waiting, waits in a while loop until the mode is None or equal to its own, then sets the mode and adds a holder. release checks the mode and holder count before changing anything, and on the last release clears the mode and calls notify_all."},
+        {"level": 2, "kind": "analysis", "content": "Use one threading.Condition. In acquire, add yourself to a blocked counter, loop on wait() until nobody holds the lock or the holders use your mode, then leave the counter, store the mode and count one more holder. In release, refuse a mode nobody holds before touching anything; the last release clears the mode and wakes every waiter."},
     ],
     "model_connections": [
-        "A shared GPU pool switching between training and inference phases must hold one kind of job at a time while letting many of that kind run together.",
+        "An embedding index must pause lookups while ingest jobs rebuild it, yet many lookups, or many ingest shards, may run together.",
         "Serving systems batch requests of the same kind, such as one adapter or one model, and fairness decides how long other kinds wait.",
     ],
     "pro_con_analysis": {
@@ -443,7 +441,7 @@ class ModeLock:
             "How can the unfair lock starve a mode, and why does joining only the last batch prevent it?",
             "Why must a fair batch stay at the front until both its holders and its woken-but-not-yet-running members are gone?",
             "When a timed-out batch leaves the queue, why merge its neighbours, and what would go wrong without it?",
-            "How would you build a reader/writer lock from this, and what extra rule does the writer mode need?",
+            "How would you build a shared/exclusive lock on top of this, and what must change for the exclusive mode?",
         ],
     ),
 }
