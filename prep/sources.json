@@ -290,5 +290,13 @@
       "web_crawler"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/autograd-hillis-steele",
+    "exercises": [
+      "prefix_scan"
+    ],
+    "round": "coding"
   }
 ]

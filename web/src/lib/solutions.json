@@ -2049,6 +2049,15 @@
       }
     ]
   },
+  "prefix_scan": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "# Adapted from Schuture/OpenAI-Interview-Notes (code under the MIT License).\nimport torch\n\n\nclass PrefixScan:\n    def prefix_products(self, W):\n        out = [W[0]]\n        for i in range(1, W.shape[0]):\n            out.append(out[-1] @ W[i])  # new tensors only, so autograd keeps every input it saved\n        return torch.stack(out)\n\n    def backward(self, W, P, G):\n        dW = []\n        carry = torch.zeros_like(W[0])  # dL/dP[i]: from the loss and from P[i + 1] = P[i] @ W[i + 1]\n        for i in reversed(range(W.shape[0])):\n            carry = carry + G[i]\n            dW.append(carry if i == 0 else P[i - 1].transpose(-1, -2) @ carry)\n            carry = carry @ W[i].transpose(-1, -2)\n        return torch.stack(dW[::-1])\n\n    def _rounds(self, W):\n        \"\"\"Runs the scan; returns P and the input of every round, for the backward pass.\"\"\"\n        X, inputs, stride = W, [], 1\n        while stride < W.shape[0]:\n            inputs.append((stride, X))\n            # one batched product per round; lower indices stay on the left\n            X = torch.cat([X[:stride], X[:-stride] @ X[stride:]])\n            stride *= 2\n        return X, inputs\n\n    def scan_forward(self, W):\n        return self._rounds(W)[0]\n\n    def scan_backward(self, W, G):\n        H = G\n        for stride, X in reversed(self._rounds(W)[1]):\n            # Y[j] = X[j] for j < stride, else X[j - stride] @ X[j]; X[j] may be used in both roles\n            right = X[:-stride].transpose(-1, -2) @ H[stride:]  # X[j] as the right factor of Y[j]\n            left = H[stride:] @ X[stride:].transpose(-1, -2)    # X[j] as the left factor of Y[j + stride]\n            dX = torch.cat([H[:stride], right]) + torch.cat([left, torch.zeros_like(H[:stride])])\n            H = dX\n        return H",
+        "role": "solution"
+      }
+    ]
+  },
   "prefix_tuning": {
     "cells": [
       {

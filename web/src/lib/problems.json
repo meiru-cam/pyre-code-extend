@@ -23625,6 +23625,159 @@
           "hint": "Besides the fragment, which differences in a URL point to the same page, and what would a polite crawler limit per host?"
         }
       ]
+    },
+    {
+      "id": "prefix_scan",
+      "title": "Prefix Products and Parallel Scan",
+      "titleZh": "Prefix Products and Parallel Scan",
+      "difficulty": "Hard",
+      "functionName": "PrefixScan",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Build `PrefixScan`, which computes all prefix products of a stack of matrices in PyTorch, then their gradient by hand, then both with a parallel scan.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior, so one `PrefixScan` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- `W` is a float tensor of shape `(N, D, D)` with `N >= 1`, holding the matrices `W[0]` to `W[N - 1]`. `torch` is available.\n- The prefix products are `P[i] = W[0] @ W[1] @ ... @ W[i]`, multiplied left to right, so `P[0] = W[0]` and `P[i] = P[i - 1] @ W[i]`. `P` has the shape of `W`.\n- `G` has the shape of `W`: `G[i]` is the gradient of a scalar loss `L` with respect to `P[i]`.\n- Never change a tensor you are given.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** the forward loop is three lines; the work is knowing what autograd saves, deriving a backward pass by hand, and trading sequential steps for parallel work, and each later part adds one requirement.\n\n**Where it is used:** linear recurrences such as state-space models and linear attention are trained with parallel scans over an associative operator, which is this scan with matrices.\n\nAdapted from the autograd and Hillis-Steele scan question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, on one class. The source's in-place first attempt is folded into Part 1's requirement that autograd works.",
+      "descriptionZh": "Build `PrefixScan`, which computes all prefix products of a stack of matrices in PyTorch, then their gradient by hand, then both with a parallel scan.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior, so one `PrefixScan` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- `W` is a float tensor of shape `(N, D, D)` with `N >= 1`, holding the matrices `W[0]` to `W[N - 1]`. `torch` is available.\n- The prefix products are `P[i] = W[0] @ W[1] @ ... @ W[i]`, multiplied left to right, so `P[0] = W[0]` and `P[i] = P[i - 1] @ W[i]`. `P` has the shape of `W`.\n- `G` has the shape of `W`: `G[i]` is the gradient of a scalar loss `L` with respect to `P[i]`.\n- Never change a tensor you are given.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** the forward loop is three lines; the work is knowing what autograd saves, deriving a backward pass by hand, and trading sequential steps for parallel work, and each later part adds one requirement.\n\n**Where it is used:** linear recurrences such as state-space models and linear attention are trained with parallel scans over an associative operator, which is this scan with matrices.\n\nAdapted from the autograd and Hillis-Steele scan question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, on one class. The source's in-place first attempt is folded into Part 1's requirement that autograd works.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Part 1: the worked example",
+          "code": "\nimport contextlib, math\n\nclass Counter:\n    n = 0\n\n@contextlib.contextmanager\ndef counting():\n    names = [(torch, \"matmul\"), (torch, \"bmm\"), (torch, \"mm\"), (torch, \"einsum\"),\n             (torch.Tensor, \"__matmul__\"), (torch.Tensor, \"__rmatmul__\"), (torch.Tensor, \"matmul\"),\n             (torch.Tensor, \"bmm\"), (torch.Tensor, \"mm\")]\n    saved = [(obj, name, getattr(obj, name)) for obj, name in names]\n    Counter.n = 0\n    def wrap(f):\n        def g(*a, **k):\n            Counter.n += 1\n            return f(*a, **k)\n        return g\n    for obj, name, f in saved:\n        setattr(obj, name, wrap(f))\n    try:\n        yield Counter\n    finally:\n        for obj, name, f in saved:\n            setattr(obj, name, f)\n\n@contextlib.contextmanager\ndef no_autograd():\n    def boom(*a, **k):\n        raise AssertionError(\"compute this gradient by hand, without autograd\")\n    saved = (torch.autograd.grad, torch.Tensor.backward, torch.autograd.backward)\n    torch.autograd.grad, torch.Tensor.backward, torch.autograd.backward = boom, boom, boom\n    try:\n        yield\n    finally:\n        torch.autograd.grad, torch.Tensor.backward, torch.autograd.backward = saved\n\ndef loop_products(W):\n    out = [W[0]]\n    for i in range(1, W.shape[0]):\n        out.append(out[-1] @ W[i])\n    return torch.stack(out)\n\ndef true_grad(W, G):\n    W = W.detach().clone().requires_grad_(True)\n    (g,) = torch.autograd.grad((loop_products(W) * G).sum(), W)\n    return g\n\nEXAMPLE = torch.tensor([[[2.0, 0.0], [1.0, 1.0]], [[1.0, 3.0], [0.0, 1.0]], [[0.0, 1.0], [1.0, 0.0]]])\n\ns = {fn}()\nP = s.prefix_products(EXAMPLE)\nassert torch.equal(P[1], torch.tensor([[2.0, 6.0], [1.0, 4.0]])) and torch.equal(P[2], torch.tensor([[6.0, 2.0], [4.0, 1.0]]))\nW = EXAMPLE.clone().requires_grad_(True)\ns.prefix_products(W).sum().backward()\nassert torch.allclose(W.grad, true_grad(EXAMPLE, torch.ones(3, 2, 2)))\n",
+          "behavior": "gradient.flow",
+          "part": 1
+        },
+        {
+          "name": "Part 1: random stacks under autograd",
+          "visibility": "unshown",
+          "behavior": "gradient.flow",
+          "failureMessage": "For a random stack, the prefix products were wrong, the input changed, or backward() failed or gave the wrong gradient; do not write into a tensor autograd saved.",
+          "hiddenCode": "\nimport contextlib, math\n\nclass Counter:\n    n = 0\n\n@contextlib.contextmanager\ndef counting():\n    names = [(torch, \"matmul\"), (torch, \"bmm\"), (torch, \"mm\"), (torch, \"einsum\"),\n             (torch.Tensor, \"__matmul__\"), (torch.Tensor, \"__rmatmul__\"), (torch.Tensor, \"matmul\"),\n             (torch.Tensor, \"bmm\"), (torch.Tensor, \"mm\")]\n    saved = [(obj, name, getattr(obj, name)) for obj, name in names]\n    Counter.n = 0\n    def wrap(f):\n        def g(*a, **k):\n            Counter.n += 1\n            return f(*a, **k)\n        return g\n    for obj, name, f in saved:\n        setattr(obj, name, wrap(f))\n    try:\n        yield Counter\n    finally:\n        for obj, name, f in saved:\n            setattr(obj, name, f)\n\n@contextlib.contextmanager\ndef no_autograd():\n    def boom(*a, **k):\n        raise AssertionError(\"compute this gradient by hand, without autograd\")\n    saved = (torch.autograd.grad, torch.Tensor.backward, torch.autograd.backward)\n    torch.autograd.grad, torch.Tensor.backward, torch.autograd.backward = boom, boom, boom\n    try:\n        yield\n    finally:\n        torch.autograd.grad, torch.Tensor.backward, torch.autograd.backward = saved\n\ndef loop_products(W):\n    out = [W[0]]\n    for i in range(1, W.shape[0]):\n        out.append(out[-1] @ W[i])\n    return torch.stack(out)\n\ndef true_grad(W, G):\n    W = W.detach().clone().requires_grad_(True)\n    (g,) = torch.autograd.grad((loop_products(W) * G).sum(), W)\n    return g\n\nEXAMPLE = torch.tensor([[[2.0, 0.0], [1.0, 1.0]], [[1.0, 3.0], [0.0, 1.0]], [[0.0, 1.0], [1.0, 0.0]]])\n\ns = {fn}()\ntorch.manual_seed(0)\nfor N in (1, 2, 3, 6, 9):\n    for D in (1, 3):\n        W0 = torch.randn(N, D, D, dtype=torch.float64)\n        G = torch.randn(N, D, D, dtype=torch.float64)\n        W = W0.clone().requires_grad_(True)\n        P = s.prefix_products(W)\n        assert P.shape == W.shape and torch.allclose(P.detach(), loop_products(W0)), (N, D)\n        (P * G).sum().backward()\n        assert torch.allclose(W.grad, true_grad(W0, G)), (N, D)\n        assert torch.equal(W.detach(), W0), \"W was changed\"\n",
+          "part": 1
+        },
+        {
+          "name": "Part 2: the worked example",
+          "code": "\nimport contextlib, math\n\nclass Counter:\n    n = 0\n\n@contextlib.contextmanager\ndef counting():\n    names = [(torch, \"matmul\"), (torch, \"bmm\"), (torch, \"mm\"), (torch, \"einsum\"),\n             (torch.Tensor, \"__matmul__\"), (torch.Tensor, \"__rmatmul__\"), (torch.Tensor, \"matmul\"),\n             (torch.Tensor, \"bmm\"), (torch.Tensor, \"mm\")]\n    saved = [(obj, name, getattr(obj, name)) for obj, name in names]\n    Counter.n = 0\n    def wrap(f):\n        def g(*a, **k):\n            Counter.n += 1\n            return f(*a, **k)\n        return g\n    for obj, name, f in saved:\n        setattr(obj, name, wrap(f))\n    try:\n        yield Counter\n    finally:\n        for obj, name, f in saved:\n            setattr(obj, name, f)\n\n@contextlib.contextmanager\ndef no_autograd():\n    def boom(*a, **k):\n        raise AssertionError(\"compute this gradient by hand, without autograd\")\n    saved = (torch.autograd.grad, torch.Tensor.backward, torch.autograd.backward)\n    torch.autograd.grad, torch.Tensor.backward, torch.autograd.backward = boom, boom, boom\n    try:\n        yield\n    finally:\n        torch.autograd.grad, torch.Tensor.backward, torch.autograd.backward = saved\n\ndef loop_products(W):\n    out = [W[0]]\n    for i in range(1, W.shape[0]):\n        out.append(out[-1] @ W[i])\n    return torch.stack(out)\n\ndef true_grad(W, G):\n    W = W.detach().clone().requires_grad_(True)\n    (g,) = torch.autograd.grad((loop_products(W) * G).sum(), W)\n    return g\n\nEXAMPLE = torch.tensor([[[2.0, 0.0], [1.0, 1.0]], [[1.0, 3.0], [0.0, 1.0]], [[0.0, 1.0], [1.0, 0.0]]])\n\ns = {fn}()\nG = torch.ones(3, 2, 2)\nwith no_autograd():\n    dW = s.backward(EXAMPLE, loop_products(EXAMPLE), G)\nassert torch.allclose(dW[0], torch.tensor([[9.0, 3.0], [9.0, 3.0]])), dW[0]\nassert torch.allclose(dW, true_grad(EXAMPLE, G))\n",
+          "behavior": "gradient.flow",
+          "part": 2
+        },
+        {
+          "name": "Part 2: random gradients by hand",
+          "visibility": "unshown",
+          "behavior": "gradient.flow",
+          "failureMessage": "The hand-written gradient differed from autograd's, used autograd, changed an input, or used far more than O(N) matrix products.",
+          "hiddenCode": "\nimport contextlib, math\n\nclass Counter:\n    n = 0\n\n@contextlib.contextmanager\ndef counting():\n    names = [(torch, \"matmul\"), (torch, \"bmm\"), (torch, \"mm\"), (torch, \"einsum\"),\n             (torch.Tensor, \"__matmul__\"), (torch.Tensor, \"__rmatmul__\"), (torch.Tensor, \"matmul\"),\n             (torch.Tensor, \"bmm\"), (torch.Tensor, \"mm\")]\n    saved = [(obj, name, getattr(obj, name)) for obj, name in names]\n    Counter.n = 0\n    def wrap(f):\n        def g(*a, **k):\n            Counter.n += 1\n            return f(*a, **k)\n        return g\n    for obj, name, f in saved:\n        setattr(obj, name, wrap(f))\n    try:\n        yield Counter\n    finally:\n        for obj, name, f in saved:\n            setattr(obj, name, f)\n\n@contextlib.contextmanager\ndef no_autograd():\n    def boom(*a, **k):\n        raise AssertionError(\"compute this gradient by hand, without autograd\")\n    saved = (torch.autograd.grad, torch.Tensor.backward, torch.autograd.backward)\n    torch.autograd.grad, torch.Tensor.backward, torch.autograd.backward = boom, boom, boom\n    try:\n        yield\n    finally:\n        torch.autograd.grad, torch.Tensor.backward, torch.autograd.backward = saved\n\ndef loop_products(W):\n    out = [W[0]]\n    for i in range(1, W.shape[0]):\n        out.append(out[-1] @ W[i])\n    return torch.stack(out)\n\ndef true_grad(W, G):\n    W = W.detach().clone().requires_grad_(True)\n    (g,) = torch.autograd.grad((loop_products(W) * G).sum(), W)\n    return g\n\nEXAMPLE = torch.tensor([[[2.0, 0.0], [1.0, 1.0]], [[1.0, 3.0], [0.0, 1.0]], [[0.0, 1.0], [1.0, 0.0]]])\n\ns = {fn}()\ntorch.manual_seed(1)\nfor N in (1, 2, 4, 7, 12):\n    for D in (1, 2, 4):\n        W = torch.randn(N, D, D, dtype=torch.float64)\n        G = torch.randn(N, D, D, dtype=torch.float64)\n        P = loop_products(W)\n        copies = (W.clone(), P.clone(), G.clone())\n        with no_autograd():\n            dW = s.backward(W, P, G)\n        assert dW.shape == W.shape and torch.allclose(dW, true_grad(W, G)), (N, D)\n        assert all(torch.equal(a, b) for a, b in zip((W, P, G), copies)), \"an input was changed\"\nW = torch.randn(40, 3, 3, dtype=torch.float64) * 0.5\nwith no_autograd(), counting() as c:\n    s.backward(W, loop_products(W), torch.randn(40, 3, 3, dtype=torch.float64))\nassert c.n <= 4 * 40, f\"{c.n} matrix products for N = 40\"\n",
+          "part": 2
+        },
+        {
+          "name": "Part 3: the worked example",
+          "code": "\nimport contextlib, math\n\nclass Counter:\n    n = 0\n\n@contextlib.contextmanager\ndef counting():\n    names = [(torch, \"matmul\"), (torch, \"bmm\"), (torch, \"mm\"), (torch, \"einsum\"),\n             (torch.Tensor, \"__matmul__\"), (torch.Tensor, \"__rmatmul__\"), (torch.Tensor, \"matmul\"),\n             (torch.Tensor, \"bmm\"), (torch.Tensor, \"mm\")]\n    saved = [(obj, name, getattr(obj, name)) for obj, name in names]\n    Counter.n = 0\n    def wrap(f):\n        def g(*a, **k):\n            Counter.n += 1\n            return f(*a, **k)\n        return g\n    for obj, name, f in saved:\n        setattr(obj, name, wrap(f))\n    try:\n        yield Counter\n    finally:\n        for obj, name, f in saved:\n            setattr(obj, name, f)\n\n@contextlib.contextmanager\ndef no_autograd():\n    def boom(*a, **k):\n        raise AssertionError(\"compute this gradient by hand, without autograd\")\n    saved = (torch.autograd.grad, torch.Tensor.backward, torch.autograd.backward)\n    torch.autograd.grad, torch.Tensor.backward, torch.autograd.backward = boom, boom, boom\n    try:\n        yield\n    finally:\n        torch.autograd.grad, torch.Tensor.backward, torch.autograd.backward = saved\n\ndef loop_products(W):\n    out = [W[0]]\n    for i in range(1, W.shape[0]):\n        out.append(out[-1] @ W[i])\n    return torch.stack(out)\n\ndef true_grad(W, G):\n    W = W.detach().clone().requires_grad_(True)\n    (g,) = torch.autograd.grad((loop_products(W) * G).sum(), W)\n    return g\n\nEXAMPLE = torch.tensor([[[2.0, 0.0], [1.0, 1.0]], [[1.0, 3.0], [0.0, 1.0]], [[0.0, 1.0], [1.0, 0.0]]])\n\ns = {fn}()\nW = torch.cat([EXAMPLE, EXAMPLE[:1]])\nwith counting() as c:\n    P = s.scan_forward(W)\nassert torch.allclose(P, loop_products(W)) and c.n <= 2, c.n\n",
+          "behavior": "performance.complexity",
+          "part": 3
+        },
+        {
+          "name": "Part 3: logarithmic rounds",
+          "visibility": "unshown",
+          "behavior": "performance.complexity",
+          "failureMessage": "scan_forward gave different products from the loop (keep lower indices on the left), changed W, or made more than ceil(log2 N) matrix product calls.",
+          "hiddenCode": "\nimport contextlib, math\n\nclass Counter:\n    n = 0\n\n@contextlib.contextmanager\ndef counting():\n    names = [(torch, \"matmul\"), (torch, \"bmm\"), (torch, \"mm\"), (torch, \"einsum\"),\n             (torch.Tensor, \"__matmul__\"), (torch.Tensor, \"__rmatmul__\"), (torch.Tensor, \"matmul\"),\n             (torch.Tensor, \"bmm\"), (torch.Tensor, \"mm\")]\n    saved = [(obj, name, getattr(obj, name)) for obj, name in names]\n    Counter.n = 0\n    def wrap(f):\n        def g(*a, **k):\n            Counter.n += 1\n            return f(*a, **k)\n        return g\n    for obj, name, f in saved:\n        setattr(obj, name, wrap(f))\n    try:\n        yield Counter\n    finally:\n        for obj, name, f in saved:\n            setattr(obj, name, f)\n\n@contextlib.contextmanager\ndef no_autograd():\n    def boom(*a, **k):\n        raise AssertionError(\"compute this gradient by hand, without autograd\")\n    saved = (torch.autograd.grad, torch.Tensor.backward, torch.autograd.backward)\n    torch.autograd.grad, torch.Tensor.backward, torch.autograd.backward = boom, boom, boom\n    try:\n        yield\n    finally:\n        torch.autograd.grad, torch.Tensor.backward, torch.autograd.backward = saved\n\ndef loop_products(W):\n    out = [W[0]]\n    for i in range(1, W.shape[0]):\n        out.append(out[-1] @ W[i])\n    return torch.stack(out)\n\ndef true_grad(W, G):\n    W = W.detach().clone().requires_grad_(True)\n    (g,) = torch.autograd.grad((loop_products(W) * G).sum(), W)\n    return g\n\nEXAMPLE = torch.tensor([[[2.0, 0.0], [1.0, 1.0]], [[1.0, 3.0], [0.0, 1.0]], [[0.0, 1.0], [1.0, 0.0]]])\n\ns = {fn}()\ntorch.manual_seed(2)\nfor N in (1, 2, 3, 5, 8, 9, 16, 33):\n    W = torch.randn(N, 3, 3, dtype=torch.float64) * 0.7\n    copy = W.clone()\n    with counting() as c:\n        P = s.scan_forward(W)\n    assert torch.allclose(P, loop_products(W)), N\n    assert c.n <= math.ceil(math.log2(N)), f\"{c.n} product calls for N = {N}\"\n    assert torch.equal(W, copy), \"W was changed\"\n",
+          "part": 3
+        },
+        {
+          "name": "Part 4: the worked example",
+          "code": "\nimport contextlib, math\n\nclass Counter:\n    n = 0\n\n@contextlib.contextmanager\ndef counting():\n    names = [(torch, \"matmul\"), (torch, \"bmm\"), (torch, \"mm\"), (torch, \"einsum\"),\n             (torch.Tensor, \"__matmul__\"), (torch.Tensor, \"__rmatmul__\"), (torch.Tensor, \"matmul\"),\n             (torch.Tensor, \"bmm\"), (torch.Tensor, \"mm\")]\n    saved = [(obj, name, getattr(obj, name)) for obj, name in names]\n    Counter.n = 0\n    def wrap(f):\n        def g(*a, **k):\n            Counter.n += 1\n            return f(*a, **k)\n        return g\n    for obj, name, f in saved:\n        setattr(obj, name, wrap(f))\n    try:\n        yield Counter\n    finally:\n        for obj, name, f in saved:\n            setattr(obj, name, f)\n\n@contextlib.contextmanager\ndef no_autograd():\n    def boom(*a, **k):\n        raise AssertionError(\"compute this gradient by hand, without autograd\")\n    saved = (torch.autograd.grad, torch.Tensor.backward, torch.autograd.backward)\n    torch.autograd.grad, torch.Tensor.backward, torch.autograd.backward = boom, boom, boom\n    try:\n        yield\n    finally:\n        torch.autograd.grad, torch.Tensor.backward, torch.autograd.backward = saved\n\ndef loop_products(W):\n    out = [W[0]]\n    for i in range(1, W.shape[0]):\n        out.append(out[-1] @ W[i])\n    return torch.stack(out)\n\ndef true_grad(W, G):\n    W = W.detach().clone().requires_grad_(True)\n    (g,) = torch.autograd.grad((loop_products(W) * G).sum(), W)\n    return g\n\nEXAMPLE = torch.tensor([[[2.0, 0.0], [1.0, 1.0]], [[1.0, 3.0], [0.0, 1.0]], [[0.0, 1.0], [1.0, 0.0]]])\n\ns = {fn}()\nG = torch.ones(3, 2, 2)\nwith no_autograd():\n    dW = s.scan_backward(EXAMPLE, G)\nassert torch.allclose(dW, true_grad(EXAMPLE, G))\n",
+          "behavior": "gradient.flow",
+          "part": 4
+        },
+        {
+          "name": "Part 4: gradients through the scan",
+          "visibility": "unshown",
+          "behavior": "gradient.flow",
+          "failureMessage": "scan_backward differed from autograd's gradient, used autograd, changed an input, or made more than 3 * ceil(log2 N) matrix product calls.",
+          "hiddenCode": "\nimport contextlib, math\n\nclass Counter:\n    n = 0\n\n@contextlib.contextmanager\ndef counting():\n    names = [(torch, \"matmul\"), (torch, \"bmm\"), (torch, \"mm\"), (torch, \"einsum\"),\n             (torch.Tensor, \"__matmul__\"), (torch.Tensor, \"__rmatmul__\"), (torch.Tensor, \"matmul\"),\n             (torch.Tensor, \"bmm\"), (torch.Tensor, \"mm\")]\n    saved = [(obj, name, getattr(obj, name)) for obj, name in names]\n    Counter.n = 0\n    def wrap(f):\n        def g(*a, **k):\n            Counter.n += 1\n            return f(*a, **k)\n        return g\n    for obj, name, f in saved:\n        setattr(obj, name, wrap(f))\n    try:\n        yield Counter\n    finally:\n        for obj, name, f in saved:\n            setattr(obj, name, f)\n\n@contextlib.contextmanager\ndef no_autograd():\n    def boom(*a, **k):\n        raise AssertionError(\"compute this gradient by hand, without autograd\")\n    saved = (torch.autograd.grad, torch.Tensor.backward, torch.autograd.backward)\n    torch.autograd.grad, torch.Tensor.backward, torch.autograd.backward = boom, boom, boom\n    try:\n        yield\n    finally:\n        torch.autograd.grad, torch.Tensor.backward, torch.autograd.backward = saved\n\ndef loop_products(W):\n    out = [W[0]]\n    for i in range(1, W.shape[0]):\n        out.append(out[-1] @ W[i])\n    return torch.stack(out)\n\ndef true_grad(W, G):\n    W = W.detach().clone().requires_grad_(True)\n    (g,) = torch.autograd.grad((loop_products(W) * G).sum(), W)\n    return g\n\nEXAMPLE = torch.tensor([[[2.0, 0.0], [1.0, 1.0]], [[1.0, 3.0], [0.0, 1.0]], [[0.0, 1.0], [1.0, 0.0]]])\n\ns = {fn}()\ntorch.manual_seed(3)\nfor N in (1, 2, 3, 5, 8, 11, 16, 33):\n    for D in (1, 3):\n        W = torch.randn(N, D, D, dtype=torch.float64) * 0.7\n        G = torch.randn(N, D, D, dtype=torch.float64)\n        copies = (W.clone(), G.clone())\n        with no_autograd(), counting() as c:\n            dW = s.scan_backward(W, G)\n        assert torch.allclose(dW, true_grad(W, G)), (N, D)\n        assert c.n <= 3 * math.ceil(math.log2(N)), f\"{c.n} product calls for N = {N}\"\n        assert torch.equal(W, copies[0]) and torch.equal(G, copies[1]), \"an input was changed\"\n",
+          "part": 4
+        }
+      ],
+      "parts": [
+        {
+          "title": "A forward pass autograd can follow",
+          "descriptionEn": "**Signature:** `PrefixScan()`, `prefix_products(W) -> Tensor`\n\n- Return `P` as defined above.\n- When `W.requires_grad` is `True`, `prefix_products(W)` must work with autograd: `(prefix_products(W) * G).sum().backward()` runs and fills `W.grad` with the correct gradient.\n- Writing results into a preallocated tensor with `P[i] = ...` breaks this, because autograd saved `P[i - 1]` for the backward pass and the write changes it. Build new tensors instead.\n\n**Example**, `N = 3`, `D = 2`:\n- `W[0] = [[2, 0], [1, 1]]`, `W[1] = [[1, 3], [0, 1]]`, `W[2] = [[0, 1], [1, 0]]`\n- `P[1] = [[2, 6], [1, 4]]` and `P[2] = [[6, 2], [4, 1]]`"
+        },
+        {
+          "title": "The backward pass by hand",
+          "descriptionEn": "Keep Part 1 and compute the gradient yourself.\n\n**Signature:** `backward(W, P, G) -> Tensor`\n\n- `P` is the output of `prefix_products(W)`. Return `dW` with `dW[i]` the gradient of `L` with respect to `W[i]`.\n- Do not use autograd: no `backward()` and no `torch.autograd.grad`.\n- Use `O(N)` matrix products.\n\n**Example**, the matrices of Part 1 with every `G[i]` the all-ones matrix: `dW[0] = [[9, 3], [9, 3]]`, the same as `W.grad` after `P.sum().backward()`."
+        },
+        {
+          "title": "Hillis-Steele forward",
+          "descriptionEn": "Keep Parts 1–2 and compute `P` in a logarithmic number of rounds.\n\n**Signature:** `scan_forward(W) -> Tensor`\n\n- Return the same `P` as Part 1.\n- Start with `x = W`. Run rounds with stride `s = 1, 2, 4, …` while `s < N`. In a round, every `x[i]` with `i >= s` becomes `x[i - s] @ x[i]`, using the values from before the round; the others stay.\n- Each round is one batched matrix product. The whole call makes at most `ceil(log2(N))` calls to `@`, `torch.matmul`, `torch.bmm`, `torch.mm` or `torch.einsum`.\n\n**Example**, `N = 4`: after stride `1`, `x` is `W0`, `W0 W1`, `W1 W2`, `W2 W3`; after stride `2`, it is `P[0]` to `P[3]`, in two rounds."
+        },
+        {
+          "title": "Hillis-Steele backward",
+          "descriptionEn": "Keep Parts 1–3 and compute the gradient through the scan.\n\n**Signature:** `scan_backward(W, G) -> Tensor`\n\n- Return the same `dW` as Part 2, without autograd.\n- Undo the rounds from last to first. The whole call makes at most `3 * ceil(log2(N))` calls to the matrix product functions listed in Part 3.\n\n**Example:** for `N = 33` that is at most `18` products, where Part 2's loop needs about `64`."
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "For Y = A @ B, which inputs does autograd keep to compute the gradients later? If you then write into the tensor that held A, what does the backward pass find? How can you build P without writing into any existing tensor?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Keep a Python list: out = [W[0]]; for i in range(1, N): out.append(out[-1] @ W[i]). Each product makes a new tensor, so nothing autograd saved is overwritten. Return torch.stack(out), which is also differentiable."
+        }
+      ],
+      "modelConnections": [
+        "State-space models such as S4 and Mamba, and linear attention, train recurrences in parallel with associative scans.",
+        "Writing custom backward passes, as in torch.autograd.Function or fused kernels, needs exactly this kind of hand-derived gradient."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Building new tensors instead of writing in place keeps every value autograd saved intact.",
+          "The hand-written backward pass uses one carry and O(N) products, the same cost as the forward pass.",
+          "The scan needs only ceil(log2 N) dependent rounds, so a parallel device finishes long sequences faster."
+        ],
+        "cons": [
+          "The scan does O(N log N) products instead of O(N), so on one core it is slower.",
+          "Keeping each round's input for the backward pass costs log N copies of W.",
+          "Long products of matrices can overflow or vanish; real models keep them stable with structure or normalisation."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why does writing P[i] = P[i - 1] @ W[i] into a preallocated tensor break backward()?",
+          "hint": "To compute the gradient of Y = A @ B later, autograd needs A and B. If the memory that held A is overwritten after the product, what does autograd see when backward runs?"
+        },
+        {
+          "stage": "concept",
+          "question": "Which tensors does autograd save for a matrix product, and why those?",
+          "hint": "Write Y = A @ B entry by entry. Which inputs appear in dY/dA and in dY/dB, and so which ones must be kept?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What does the forward loop cost in products and in sequential steps for N matrices of size D?",
+          "hint": "Count the products in the forward loop and how many must wait for the one before. What does that make the cost and the number of sequential steps?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why is the gradient flowing into P[i] a sum of two terms, and what are they?",
+          "hint": "P[i] is used by the loss and also as the left factor of P[i + 1]. Add the two contributions; how does the second one depend on the gradient flowing into P[i + 1]?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why does the Hillis-Steele scan need associativity but not commutativity, and where does order matter?",
+          "hint": "Draw x after each round for N = 4. Which pairs are multiplied, and what goes wrong if you swap the two factors?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "When is the scan faster than the loop, given that it does more total work?",
+          "hint": "The scan does about N log N products and the loop N - 1. When does doing more total work still finish sooner?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How would you cut the scan's memory, for example by recomputing rounds or using a Blelloch scan?",
+          "hint": "Each round keeps its input for the backward pass. How could you avoid storing them all, and what would it cost in extra products?"
+        }
+      ]
     }
   ]
 }
