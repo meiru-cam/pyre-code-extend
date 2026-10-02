@@ -415,6 +415,15 @@
       }
     ]
   },
+  "boot_debugger": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "# Adapted from Schuture/Anthropic-Interview-Notes (code under the MIT License).\nimport re\nfrom collections import defaultdict\n\n_VALUE = re.compile(r\"[+-][0-9]+\")\n_SWAP = {\"skip\": \"goto\", \"goto\": \"skip\"}\n\n\nclass ProgramError(Exception):\n    \"\"\"pc left 0..n without landing exactly on n.\"\"\"\n\n\nclass ParseError(ValueError):\n    def __init__(self, line_number, message):\n        super().__init__(f\"line {line_number}: {message}\")\n        self.line_number = line_number  # 1-based, counting blank and comment lines\n\n\ndef _next(program, i):\n    op, value = program[i]\n    return i + value if op == \"goto\" else i + 1\n\n\nclass BootDebugger:\n    def run(self, program):\n        n, pc, acc, seen = len(program), 0, 0, set()\n        while True:\n            if pc == n:\n                return True, acc, None\n            if pc < 0 or pc > n:\n                raise ProgramError(f\"pc {pc} is outside 0..{n}\")\n            if pc in seen:\n                return False, acc, pc\n            seen.add(pc)\n            op, value = program[pc]\n            if op == \"add\":\n                acc += value\n            pc = _next(program, pc)\n\n    def find_fix(self, program):\n        n = len(program)\n        # Every line has one successor, so a line ends the run exactly when the end is reachable from it.\n        into = defaultdict(list)\n        for i in range(n):\n            j = _next(program, i)\n            if 0 <= j <= n:\n                into[j].append(i)\n        ends = {n}\n        stack = [n]\n        while stack:\n            for i in into[stack.pop()]:\n                if i not in ends:\n                    ends.add(i)\n                    stack.append(i)\n        # Walk the looping path; the first switch whose other successor reaches the end is the repair.\n        pc, seen = 0, set()\n        while pc not in seen and 0 <= pc < n:\n            seen.add(pc)\n            op, value = program[pc]\n            if op in _SWAP:\n                other = pc + 1 if op == \"goto\" else pc + value\n                if other in ends:\n                    fixed = list(program)\n                    fixed[pc] = (_SWAP[op], value)\n                    return pc, self.run(fixed)[1]\n            pc = _next(program, pc)\n        raise ValueError(\"no single switch repairs this program\")\n\n    def parse(self, text):\n        program = []\n        for number, line in enumerate(text.split(\"\\n\"), start=1):\n            tokens = line.split(\"#\", 1)[0].split()\n            if not tokens:\n                continue\n            if len(tokens) != 2 or tokens[0] not in (\"add\", \"skip\", \"goto\") or not _VALUE.fullmatch(tokens[1]):\n                raise ParseError(number, f\"expected '<add|skip|goto> <+n|-n>', got {line.strip()!r}\")\n            program.append((tokens[0], int(tokens[1])))\n        return program",
+        "role": "solution"
+      }
+    ]
+  },
   "causal_attention": {
     "cells": [
       {

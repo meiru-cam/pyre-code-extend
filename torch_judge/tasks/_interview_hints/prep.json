@@ -266,5 +266,14 @@
     "Why add new owner-aware methods instead of changing the signatures of add_recipe and delete_recipe?": "Changing add_recipe's signature in place breaks every caller that still uses the old form. What does adding a new method keep working?",
     "Why should rollback append a copy instead of truncating history back to the old version?": "Truncating history on rollback loses the versions after it. With an append, what can an auditor still see, and how would you undo the rollback?",
     "How would you store versions more cheaply than a full copy of each one?": "Most edits change one ingredient. Could a version store only the difference from the previous one, and what would reading an old version then cost?"
+  },
+  "boot_debugger": {
+    "Why is a set of visited lines enough to detect a loop here, and what makes the state just pc?": "acc never decides where pc goes next. If pc comes back to a line it already ran, what will every step after that look like?",
+    "Why must landing past the end be an error rather than another way to finish?": "A goto that lands at n + 3 leaves no next line, just like landing on n. Why should a caller be able to tell those two cases apart?",
+    "In what order do you check normal end, out of range and already visited, and what breaks if the order changes?": "Suppose you test \"already visited\" before \"pc == n\". Can n ever be in the visited set? Then can an out-of-range pc? Which order is safe?",
+    "Why is trying every switch and rerunning O(n^2), and how does reachability from the end make the repair O(n)?": "Each line has one successor. Walking backwards from n over those edges marks every line that ends the run. How does that answer each switch in O(1)?",
+    "Why can only lines on the looping path be the corrupted one?": "If a line is never reached by the looping run, does switching it change anything that run does?",
+    "How would you report every malformed line at once instead of stopping at the first?": "Collecting errors into a list instead of raising at once: what would the caller get back, and which line numbers would it need?",
+    "If several lines could be corrupted, how would the repair search change?": "With two corrupted lines, each pair of switches is a candidate. How many pairs are there, and can the reachability idea still prune them?"
   }
 }

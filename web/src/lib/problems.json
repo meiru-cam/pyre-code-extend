@@ -24601,6 +24601,157 @@
           "hint": "Most edits change one ingredient. Could a version store only the difference from the previous one, and what would reading an old version then cost?"
         }
       ]
+    },
+    {
+      "id": "boot_debugger",
+      "title": "Boot Program Debugger",
+      "titleZh": "Boot Program Debugger",
+      "difficulty": "Medium",
+      "functionName": "BootDebugger",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Build `BootDebugger`, which runs a tiny boot program, finds the one corrupted line that traps it in a loop, and reads programs from text.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior, so one `BootDebugger` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- A program is a list of `(op, value)` pairs, one per line, numbered from `0`. `op` is `\"add\"`, `\"skip\"` or `\"goto\"`, and `value` is an `int`.\n- Running starts with `pc = 0` and `acc = 0`, where `pc` is the line about to run:\n- `add v`: `acc += v`, then `pc += 1`\n- `skip v`: `pc += 1`; the value is ignored\n- `goto v`: `pc += v`; `v` may be negative or `0`\n- With `n` lines, the run ends normally when `pc` becomes exactly `n`. If `pc` becomes anything else outside `0..n`, the program is out of range.\n- If `pc` is about to run a line it already ran in this run, the program is in a loop.\n- Define `class ProgramError(Exception)` yourself. Tests recognise it by its class name.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** the simulation is short, so the interview is about the second step: the obvious repair tries every line and reruns the program, and the question is whether you see the linear version. Each later part adds one requirement.\n\n**Where it is used:** emulators and bytecode interpreters detect loops and bad jumps the same way, and control-flow graphs with one successor per node are how compilers and static analysers reason about reachability.\n\nAdapted from the boot loader loop question in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, on one class, with renamed operations. The linear repair is checked by speed on a large program.",
+      "descriptionZh": "Build `BootDebugger`, which runs a tiny boot program, finds the one corrupted line that traps it in a loop, and reads programs from text.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior, so one `BootDebugger` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- A program is a list of `(op, value)` pairs, one per line, numbered from `0`. `op` is `\"add\"`, `\"skip\"` or `\"goto\"`, and `value` is an `int`.\n- Running starts with `pc = 0` and `acc = 0`, where `pc` is the line about to run:\n- `add v`: `acc += v`, then `pc += 1`\n- `skip v`: `pc += 1`; the value is ignored\n- `goto v`: `pc += v`; `v` may be negative or `0`\n- With `n` lines, the run ends normally when `pc` becomes exactly `n`. If `pc` becomes anything else outside `0..n`, the program is out of range.\n- If `pc` is about to run a line it already ran in this run, the program is in a loop.\n- Define `class ProgramError(Exception)` yourself. Tests recognise it by its class name.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** the simulation is short, so the interview is about the second step: the obvious repair tries every line and reruns the program, and the question is whether you see the linear version. Each later part adds one requirement.\n\n**Where it is used:** emulators and bytecode interpreters detect loops and bad jumps the same way, and control-flow graphs with one successor per node are how compilers and static analysers reason about reachability.\n\nAdapted from the boot loader loop question in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, on one class, with renamed operations. The linear repair is checked by speed on a large program.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Part 1: the worked example",
+          "code": "\nprogram = [(\"add\", 3), (\"skip\", 4), (\"add\", 10), (\"goto\", 3), (\"add\", 50), (\"goto\", -3), (\"goto\", -4), (\"add\", 1), (\"skip\", -8)]\nassert {fn}().run(program) == (False, 13, 2)\n",
+          "behavior": "state.invariant",
+          "part": 1
+        },
+        {
+          "name": "Part 1: ends, bounds and self-loops",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "An empty program ends at once with acc 0; landing exactly on n ends normally; any other pc outside 0..n raises ProgramError; goto 0 is a loop on its own line; the loop's acc is the value before the repeat.",
+          "hiddenCode": "\nimport random, time\n\nclass Bad(Exception):\n    pass\n\ndef model_run(program):\n    n, pc, acc, seen = len(program), 0, 0, set()\n    while True:\n        if pc == n:\n            return True, acc, None\n        if pc < 0 or pc > n:\n            raise Bad()\n        if pc in seen:\n            return False, acc, pc\n        seen.add(pc)\n        op, v = program[pc]\n        acc += v if op == \"add\" else 0\n        pc += v if op == \"goto\" else 1\n\nSWAP = {\"skip\": \"goto\", \"goto\": \"skip\"}\n\ndef fixes(program):\n    out = []\n    for i, (op, v) in enumerate(program):\n        if op in SWAP:\n            p = list(program)\n            p[i] = (SWAP[op], v)\n            try:\n                done, acc, _ = model_run(p)\n            except Bad:\n                continue\n            if done:\n                out.append((i, acc))\n    return out\n\ndef random_program(rng, n):\n    prog = []\n    for i in range(n):\n        op = rng.choice([\"add\", \"skip\", \"goto\", \"goto\"])\n        v = rng.randint(-i, n - i) if op != \"add\" else rng.randint(-9, 9)\n        if op == \"skip\" and rng.random() < 0.5:\n            v = rng.randint(-20, 20)\n        prog.append((op, v))\n    return prog\n\ndef one_fix_programs(rng, count, lo, hi):\n    out = []\n    while len(out) < count:\n        prog = random_program(rng, rng.randint(lo, hi))\n        try:\n            looped = not model_run(prog)[0]\n        except Bad:\n            continue\n        found = fixes(prog) if looped else []\n        if len(found) == 1:\n            out.append((prog, found[0]))\n    return out\n\ndef raises(name, call):\n    try:\n        call()\n    except Exception as e:\n        assert type(e).__name__ == name, f\"expected {name}, got {type(e).__name__}: {e}\"\n        return e\n    raise AssertionError(f\"expected {name}, nothing was raised\")\n\nd = {fn}()\nassert d.run([]) == (True, 0, None)\nassert d.run([(\"add\", -4), (\"goto\", 1)]) == (True, -4, None)\nassert d.run([(\"add\", 2), (\"goto\", 0)]) == (False, 2, 1)\nassert d.run([(\"add\", 5), (\"add\", 1), (\"goto\", -2)]) == (False, 6, 0)\nraises(\"ProgramError\", lambda: d.run([(\"goto\", 2)]))\nraises(\"ProgramError\", lambda: d.run([(\"add\", 1), (\"goto\", -2)]))\nassert d.run([(\"skip\", -7), (\"skip\", 99)]) == (True, 0, None), \"skip ignores its value\"\n",
+          "part": 1
+        },
+        {
+          "name": "Part 1: random programs and a long one",
+          "visibility": "unshown",
+          "behavior": "performance.complexity",
+          "failureMessage": "On random programs the result or the ProgramError differed from a plain simulation, or a 100000-line program took more than about a second.",
+          "hiddenCode": "\nimport random, time\n\nclass Bad(Exception):\n    pass\n\ndef model_run(program):\n    n, pc, acc, seen = len(program), 0, 0, set()\n    while True:\n        if pc == n:\n            return True, acc, None\n        if pc < 0 or pc > n:\n            raise Bad()\n        if pc in seen:\n            return False, acc, pc\n        seen.add(pc)\n        op, v = program[pc]\n        acc += v if op == \"add\" else 0\n        pc += v if op == \"goto\" else 1\n\nSWAP = {\"skip\": \"goto\", \"goto\": \"skip\"}\n\ndef fixes(program):\n    out = []\n    for i, (op, v) in enumerate(program):\n        if op in SWAP:\n            p = list(program)\n            p[i] = (SWAP[op], v)\n            try:\n                done, acc, _ = model_run(p)\n            except Bad:\n                continue\n            if done:\n                out.append((i, acc))\n    return out\n\ndef random_program(rng, n):\n    prog = []\n    for i in range(n):\n        op = rng.choice([\"add\", \"skip\", \"goto\", \"goto\"])\n        v = rng.randint(-i, n - i) if op != \"add\" else rng.randint(-9, 9)\n        if op == \"skip\" and rng.random() < 0.5:\n            v = rng.randint(-20, 20)\n        prog.append((op, v))\n    return prog\n\ndef one_fix_programs(rng, count, lo, hi):\n    out = []\n    while len(out) < count:\n        prog = random_program(rng, rng.randint(lo, hi))\n        try:\n            looped = not model_run(prog)[0]\n        except Bad:\n            continue\n        found = fixes(prog) if looped else []\n        if len(found) == 1:\n            out.append((prog, found[0]))\n    return out\n\ndef raises(name, call):\n    try:\n        call()\n    except Exception as e:\n        assert type(e).__name__ == name, f\"expected {name}, got {type(e).__name__}: {e}\"\n        return e\n    raise AssertionError(f\"expected {name}, nothing was raised\")\n\nd = {fn}()\nrng = random.Random(3)\nfor trial in range(400):\n    prog = random_program(rng, rng.randint(1, 30))\n    try:\n        want = model_run(prog)\n    except Bad:\n        raises(\"ProgramError\", lambda: d.run(prog))\n        continue\n    assert d.run(prog) == want, (trial, prog)\nn = 100000\nprog = [(\"add\", 1)] * (n - 1) + [(\"goto\", -(n - 1))]\nstart = time.perf_counter()\nassert d.run(prog) == (False, n - 1, 0)\nassert time.perf_counter() - start < 2.0, \"run must be linear in the program length\"\n",
+          "part": 1
+        },
+        {
+          "name": "Part 2: the worked example",
+          "code": "\nprogram = [(\"add\", 3), (\"skip\", 4), (\"add\", 10), (\"goto\", 3), (\"add\", 50), (\"goto\", -3), (\"goto\", -4), (\"add\", 1), (\"skip\", -8)]\nassert {fn}().find_fix(program) == (6, 14)\n",
+          "behavior": "state.invariant",
+          "part": 2
+        },
+        {
+          "name": "Part 2: random corrupted programs",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "On a random program with exactly one repairing switch, the line or the final acc differed from trying every switch; a switch that sends pc out of range is never the repair.",
+          "hiddenCode": "\nimport random, time\n\nclass Bad(Exception):\n    pass\n\ndef model_run(program):\n    n, pc, acc, seen = len(program), 0, 0, set()\n    while True:\n        if pc == n:\n            return True, acc, None\n        if pc < 0 or pc > n:\n            raise Bad()\n        if pc in seen:\n            return False, acc, pc\n        seen.add(pc)\n        op, v = program[pc]\n        acc += v if op == \"add\" else 0\n        pc += v if op == \"goto\" else 1\n\nSWAP = {\"skip\": \"goto\", \"goto\": \"skip\"}\n\ndef fixes(program):\n    out = []\n    for i, (op, v) in enumerate(program):\n        if op in SWAP:\n            p = list(program)\n            p[i] = (SWAP[op], v)\n            try:\n                done, acc, _ = model_run(p)\n            except Bad:\n                continue\n            if done:\n                out.append((i, acc))\n    return out\n\ndef random_program(rng, n):\n    prog = []\n    for i in range(n):\n        op = rng.choice([\"add\", \"skip\", \"goto\", \"goto\"])\n        v = rng.randint(-i, n - i) if op != \"add\" else rng.randint(-9, 9)\n        if op == \"skip\" and rng.random() < 0.5:\n            v = rng.randint(-20, 20)\n        prog.append((op, v))\n    return prog\n\ndef one_fix_programs(rng, count, lo, hi):\n    out = []\n    while len(out) < count:\n        prog = random_program(rng, rng.randint(lo, hi))\n        try:\n            looped = not model_run(prog)[0]\n        except Bad:\n            continue\n        found = fixes(prog) if looped else []\n        if len(found) == 1:\n            out.append((prog, found[0]))\n    return out\n\ndef raises(name, call):\n    try:\n        call()\n    except Exception as e:\n        assert type(e).__name__ == name, f\"expected {name}, got {type(e).__name__}: {e}\"\n        return e\n    raise AssertionError(f\"expected {name}, nothing was raised\")\n\nd = {fn}()\nfor prog, want in one_fix_programs(random.Random(11), 300, 2, 25):\n    assert d.find_fix(prog) == want, (prog, want)\nassert d.find_fix([(\"skip\", 9), (\"add\", 1), (\"goto\", -2)]) == (2, 1), \"switching line 0 sends pc out of range\"\nassert d.find_fix([(\"add\", 4), (\"skip\", -1), (\"goto\", -2)]) == (2, 4)\n",
+          "part": 2
+        },
+        {
+          "name": "Part 2: linear time on a long program",
+          "visibility": "unshown",
+          "behavior": "performance.complexity",
+          "failureMessage": "find_fix took more than about a second on a 40000-line program whose repair is in the middle: rerunning the program for every candidate line is O(n^2).",
+          "hiddenCode": "\nimport random, time\n\nclass Bad(Exception):\n    pass\n\ndef model_run(program):\n    n, pc, acc, seen = len(program), 0, 0, set()\n    while True:\n        if pc == n:\n            return True, acc, None\n        if pc < 0 or pc > n:\n            raise Bad()\n        if pc in seen:\n            return False, acc, pc\n        seen.add(pc)\n        op, v = program[pc]\n        acc += v if op == \"add\" else 0\n        pc += v if op == \"goto\" else 1\n\nSWAP = {\"skip\": \"goto\", \"goto\": \"skip\"}\n\ndef fixes(program):\n    out = []\n    for i, (op, v) in enumerate(program):\n        if op in SWAP:\n            p = list(program)\n            p[i] = (SWAP[op], v)\n            try:\n                done, acc, _ = model_run(p)\n            except Bad:\n                continue\n            if done:\n                out.append((i, acc))\n    return out\n\ndef random_program(rng, n):\n    prog = []\n    for i in range(n):\n        op = rng.choice([\"add\", \"skip\", \"goto\", \"goto\"])\n        v = rng.randint(-i, n - i) if op != \"add\" else rng.randint(-9, 9)\n        if op == \"skip\" and rng.random() < 0.5:\n            v = rng.randint(-20, 20)\n        prog.append((op, v))\n    return prog\n\ndef one_fix_programs(rng, count, lo, hi):\n    out = []\n    while len(out) < count:\n        prog = random_program(rng, rng.randint(lo, hi))\n        try:\n            looped = not model_run(prog)[0]\n        except Bad:\n            continue\n        found = fixes(prog) if looped else []\n        if len(found) == 1:\n            out.append((prog, found[0]))\n    return out\n\ndef raises(name, call):\n    try:\n        call()\n    except Exception as e:\n        assert type(e).__name__ == name, f\"expected {name}, got {type(e).__name__}: {e}\"\n        return e\n    raise AssertionError(f\"expected {name}, nothing was raised\")\n\nd = {fn}()\nn = 40000\na = n // 2\nprog = [(\"skip\", 0)] * (n - 2) + [(\"goto\", -(n - 2)), (\"goto\", 0)]\nprog[a] = (\"skip\", n - a)\nprog[a - 1] = (\"add\", 7)\nstart = time.perf_counter()\nassert d.find_fix(prog) == (a, 7)\nassert time.perf_counter() - start < 2.0, \"find_fix must be linear, not one rerun per line\"\n",
+          "part": 2
+        },
+        {
+          "name": "Part 3: the worked example",
+          "code": "\nimport random, time\n\nclass Bad(Exception):\n    pass\n\ndef model_run(program):\n    n, pc, acc, seen = len(program), 0, 0, set()\n    while True:\n        if pc == n:\n            return True, acc, None\n        if pc < 0 or pc > n:\n            raise Bad()\n        if pc in seen:\n            return False, acc, pc\n        seen.add(pc)\n        op, v = program[pc]\n        acc += v if op == \"add\" else 0\n        pc += v if op == \"goto\" else 1\n\nSWAP = {\"skip\": \"goto\", \"goto\": \"skip\"}\n\ndef fixes(program):\n    out = []\n    for i, (op, v) in enumerate(program):\n        if op in SWAP:\n            p = list(program)\n            p[i] = (SWAP[op], v)\n            try:\n                done, acc, _ = model_run(p)\n            except Bad:\n                continue\n            if done:\n                out.append((i, acc))\n    return out\n\ndef random_program(rng, n):\n    prog = []\n    for i in range(n):\n        op = rng.choice([\"add\", \"skip\", \"goto\", \"goto\"])\n        v = rng.randint(-i, n - i) if op != \"add\" else rng.randint(-9, 9)\n        if op == \"skip\" and rng.random() < 0.5:\n            v = rng.randint(-20, 20)\n        prog.append((op, v))\n    return prog\n\ndef one_fix_programs(rng, count, lo, hi):\n    out = []\n    while len(out) < count:\n        prog = random_program(rng, rng.randint(lo, hi))\n        try:\n            looped = not model_run(prog)[0]\n        except Bad:\n            continue\n        found = fixes(prog) if looped else []\n        if len(found) == 1:\n            out.append((prog, found[0]))\n    return out\n\ndef raises(name, call):\n    try:\n        call()\n    except Exception as e:\n        assert type(e).__name__ == name, f\"expected {name}, got {type(e).__name__}: {e}\"\n        return e\n    raise AssertionError(f\"expected {name}, nothing was raised\")\n\ntext = \"# warm start\\nadd +3\\n\\nskip +4   # value unused\\ngoto +2\\nadd +100  # never runs\\nadd -1\"\nd = {fn}()\nprogram = d.parse(text)\nassert program == [(\"add\", 3), (\"skip\", 4), (\"goto\", 2), (\"add\", 100), (\"add\", -1)]\nassert d.run(program) == (True, 2, None)\nfor bad in [\"add 5\", \"jump +1\", \"goto +1 +1\", \"skip\"]:\n    e = raises(\"ParseError\", lambda: d.parse(\"add +1\\n\" + bad))\n    assert e.line_number == 2, (bad, e.line_number)\n",
+          "behavior": "protocol.validation",
+          "part": 3
+        },
+        {
+          "name": "Part 3: strict tokens and line numbers",
+          "visibility": "unshown",
+          "behavior": "protocol.validation",
+          "failureMessage": "A value needs exactly one sign and only ASCII digits; ParseError subclasses ValueError and carries the 1-based line number counting blank and comment lines; whitespace-only and comment-only lines add nothing; text after # is ignored.",
+          "hiddenCode": "\nimport random, time\n\nclass Bad(Exception):\n    pass\n\ndef model_run(program):\n    n, pc, acc, seen = len(program), 0, 0, set()\n    while True:\n        if pc == n:\n            return True, acc, None\n        if pc < 0 or pc > n:\n            raise Bad()\n        if pc in seen:\n            return False, acc, pc\n        seen.add(pc)\n        op, v = program[pc]\n        acc += v if op == \"add\" else 0\n        pc += v if op == \"goto\" else 1\n\nSWAP = {\"skip\": \"goto\", \"goto\": \"skip\"}\n\ndef fixes(program):\n    out = []\n    for i, (op, v) in enumerate(program):\n        if op in SWAP:\n            p = list(program)\n            p[i] = (SWAP[op], v)\n            try:\n                done, acc, _ = model_run(p)\n            except Bad:\n                continue\n            if done:\n                out.append((i, acc))\n    return out\n\ndef random_program(rng, n):\n    prog = []\n    for i in range(n):\n        op = rng.choice([\"add\", \"skip\", \"goto\", \"goto\"])\n        v = rng.randint(-i, n - i) if op != \"add\" else rng.randint(-9, 9)\n        if op == \"skip\" and rng.random() < 0.5:\n            v = rng.randint(-20, 20)\n        prog.append((op, v))\n    return prog\n\ndef one_fix_programs(rng, count, lo, hi):\n    out = []\n    while len(out) < count:\n        prog = random_program(rng, rng.randint(lo, hi))\n        try:\n            looped = not model_run(prog)[0]\n        except Bad:\n            continue\n        found = fixes(prog) if looped else []\n        if len(found) == 1:\n            out.append((prog, found[0]))\n    return out\n\ndef raises(name, call):\n    try:\n        call()\n    except Exception as e:\n        assert type(e).__name__ == name, f\"expected {name}, got {type(e).__name__}: {e}\"\n        return e\n    raise AssertionError(f\"expected {name}, nothing was raised\")\n\nd = {fn}()\nassert d.parse(\"\") == [] and d.parse(\"\\n  \\n# only\\n\\t#x\\n\") == []\nassert d.parse(\"  goto   -0\\t\\nskip +0#c\\nadd +007 # x # y\\r\\n\") == [(\"goto\", 0), (\"skip\", 0), (\"add\", 7)]\nfor bad in [\"add +5.0\", \"add ++5\", \"add + 5\", \"add +\", \"add -x\", \"ADD +1\", \"add +٣\", \"add +5 # ok\\nadd 5\", \"+5 add\"]:\n    text = \"# header\\n\\nadd +1\\n\" + bad\n    e = raises(\"ParseError\", lambda: d.parse(text))\n    assert isinstance(e, ValueError), \"ParseError must subclass ValueError\"\n    want = 4 + bad.count(\"\\n\")\n    assert e.line_number == want, (bad, e.line_number, want)\n",
+          "part": 3
+        }
+      ],
+      "parts": [
+        {
+          "title": "Run and detect the loop",
+          "descriptionEn": "**Signature:** `BootDebugger().run(program) -> tuple[bool, int, int | None]`\n\n- On a normal end, return `(True, acc, None)`.\n- On a loop, return `(False, acc, line)`: `line` is the line about to run a second time, and `acc` is its value before that line runs again.\n- If a step sends `pc` out of range, raise `ProgramError`.\n- Run in `O(n)` time: a program of `100000` lines must finish well under a second.\n\n**Example:**\n- lines `0` to `8`: `add +3`, `skip +4`, `add +10`, `goto +3`, `add +50`, `goto -3`, `goto -4`, `add +1`, `skip -8`\n- the run visits lines `0`, `1`, `2`, `3`, `6`, and line `6` jumps back to line `2`\n- the result is `(False, 13, 2)`"
+        },
+        {
+          "title": "Find the corrupted line",
+          "descriptionEn": "Keep Part 1 and add a repair.\n\n**Signature:** `find_fix(program) -> tuple[int, int]`\n\n- Exactly one line was corrupted: a `goto` became a `skip`, or a `skip` became a `goto`, with its value unchanged. `add` lines are never corrupted.\n- So `run` loops on the given program, and switching exactly one line between `skip` and `goto` makes it end normally. No other single switch does.\n- Return `(line, acc)`: that line, and `acc` at the normal end of the repaired program.\n- Run in `O(n)` time. Trying every line and rerunning the program costs `O(n²)`, which is too slow for the tests: a program of `40000` lines must finish in about a second.\n\n**Example**, the program from Part 1:\n- switching line `6` to `skip -4` gives the path `0`, `1`, `2`, `3`, `6`, `7`, `8`, then `pc = 9`, the end\n- the result is `(6, 14)`: `3 + 10 + 1`"
+        },
+        {
+          "title": "Parse the program text",
+          "descriptionEn": "Keep Parts 1–2 and read programs from text.\n\n**Signature:** `parse(text) -> list[tuple[str, int]]`\n\n- Each line of `text` holds at most one instruction. Everything from a `#` to the end of its line is a comment.\n- A line that is empty or only whitespace after removing the comment adds nothing.\n- Every other line must split on whitespace into exactly two tokens: an op from the rules, then a sign `+` or `-` followed by one or more digits `0` to `9`. `+0` and `-0` are both zero; `5`, `+5.0`, `++5` and `+ 5` are not valid.\n- Return the instructions in order, numbered from `0` no matter how many lines were skipped.\n- Define `class ParseError(ValueError)` with an attribute `line_number`. On a malformed line, raise it with the 1-based number of that line in `text`, counting blank and comment lines.\n\n**Example:** the text below parses to `[(\"add\", 3), (\"skip\", 4), (\"goto\", 2), (\"add\", 100), (\"add\", -1)]`, and `run` on it gives `(True, 2, None)`:\n- line 1: `# warm start`\n- line 2: `add +3`\n- line 3: blank\n- line 4: `skip +4   # value unused`\n- line 5: `goto +2`\n- line 6: `add +100  # never runs`\n- line 7: `add -1`\n\n`\"add 5\"` on line 2 of a text raises `ParseError` with `line_number == 2`, and so do `\"jump +1\"`, `\"goto +1 +1\"` and `\"skip\"`."
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "What is the only thing that distinguishes a loop from progress, given that acc never changes control flow? What should you check first when pc changes: the end, out of range, or already visited, and does the order matter?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Keep a set of visited lines. In a while loop: if pc == n return (True, acc, None); if pc < 0 or pc > n raise ProgramError; if pc in seen return (False, acc, pc); add pc, then apply the op. Every line runs at most once, so it is O(n)."
+        }
+      ],
+      "modelConnections": [
+        "Agent loops detect repeated states the same way: a set of seen states stops a tool-calling loop that has started cycling.",
+        "Graph compilers such as XLA and TorchInductor reason about reachability on control-flow graphs, the structure used by the linear repair."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "A visited set detects a loop on the first repeat, in O(n) time and memory.",
+          "Reverse reachability from the end finds the repair in O(n) instead of rerunning the program for every line.",
+          "Strict parsing with line numbers turns a bad program into a precise error."
+        ],
+        "cons": [
+          "The visited set costs O(n) memory; tortoise-and-hare would use O(1) but needs more steps.",
+          "The linear repair relies on there being exactly one corrupted line.",
+          "A hand-written parser must be kept in sync with every new op or syntax."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why is a set of visited lines enough to detect a loop here, and what makes the state just pc?",
+          "hint": "acc never decides where pc goes next. If pc comes back to a line it already ran, what will every step after that look like?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why must landing past the end be an error rather than another way to finish?",
+          "hint": "A goto that lands at n + 3 leaves no next line, just like landing on n. Why should a caller be able to tell those two cases apart?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "In what order do you check normal end, out of range and already visited, and what breaks if the order changes?",
+          "hint": "Suppose you test \"already visited\" before \"pc == n\". Can n ever be in the visited set? Then can an out-of-range pc? Which order is safe?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why is trying every switch and rerunning O(n^2), and how does reachability from the end make the repair O(n)?",
+          "hint": "Each line has one successor. Walking backwards from n over those edges marks every line that ends the run. How does that answer each switch in O(1)?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why can only lines on the looping path be the corrupted one?",
+          "hint": "If a line is never reached by the looping run, does switching it change anything that run does?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How would you report every malformed line at once instead of stopping at the first?",
+          "hint": "Collecting errors into a list instead of raising at once: what would the caller get back, and which line numbers would it need?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "If several lines could be corrupted, how would the repair search change?",
+          "hint": "With two corrupted lines, each pair of switches is a candidate. How many pairs are there, and can the reachability idea still prune them?"
+        }
+      ]
     }
   ]
 }

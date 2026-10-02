@@ -338,5 +338,13 @@
       "recipe_book"
     ],
     "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/bootloader-loop-fix",
+    "exercises": [
+      "boot_debugger"
+    ],
+    "round": "coding"
   }
 ]
