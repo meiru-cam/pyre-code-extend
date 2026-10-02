@@ -418,5 +418,13 @@
       "change_directory"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/fault-tolerant-work-queue",
+    "exercises": [
+      "job_queue"
+    ],
+    "round": "coding"
   }
 ]

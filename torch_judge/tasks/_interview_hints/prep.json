@@ -356,5 +356,14 @@
     "Why must a link be expanded as soon as its component is added, before a later `..` can remove it?": "With x linking to /p/q, compare cancelling \"x/..\" as text with first following x and then going up. Which directory does each give?",
     "Why cap the number of expansions instead of failing the first time a link repeats?": "A link to \".\" can appear many times in one path without looping. What would a 'seen this link before' rule do with it?",
     "Why must `cd` be built into the shell instead of being a separate program, and what does the shell do when it runs it?": "If cd were a separate program, it would change its own working directory. Whose directory does the shell keep afterwards? Which variables would it update afterwards?"
+  },
+  "job_queue": {
+    "Why does each reservation need its own token instead of identifying it by task id and worker id?": "A worker fails a task, and the task is reserved again by someone else. The first worker now calls complete. What must the queue compare to refuse it?",
+    "Why must complete and fail reject a token for a task that is ready or already completed?": "List the states a task can be in. For each state, should complete or fail with some token succeed? What about an id never seen?",
+    "Which data structures make submit, reserve, complete and fail all O(1), and why must a failed task go to the back?": "Which structure pops the oldest ready id in O(1)? Which lookup tells you a task's state and current token in O(1)?",
+    "Why reclaim expired leases at the start of every call instead of with a background thread, and what does that cost?": "A background thread would reclaim leases on its own clock. What does reclaiming at the start of each call give you in tests, and what happens on an idle queue?",
+    "How do you keep reclaiming cheap with many open leases when completed reservations stay in the heap?": "Completed reservations leave entries in a heap of deadlines. How can you tell a stale entry from a live lease when you pop it?",
+    "Should max_attempts count reservations or retries after the first, and why does that choice matter to users?": "If max_attempts is 1, how many reservations does a task get? Does the first try count as a retry?",
+    "What would you change to run this queue across several processes or machines?": "Two processes share the queue. What must happen atomically when one reserves a task, and where would the tokens and deadlines live?"
   }
 }
