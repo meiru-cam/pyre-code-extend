@@ -1,0 +1,21 @@
+{
+  "title": "Prompting and Engineering with LLMs: Structured Output and Evaluation",
+  "summary": "Design a system prompt and a robust parser that turns a language model's reply into a validated support-ticket label, find four bugs in a given evaluation pipeline, then use error analysis and a paired comparison to decide whether a prompt change is a real improvement or noise.",
+  "round": "coding",
+  "kind": "Coding · prompting and evaluation",
+  "difficulty": "Medium",
+  "frequency": "low",
+  "format": "3 parts / 55 min",
+  "topics": [
+    "prompt-design",
+    "structured-output",
+    "parsing",
+    "evaluation",
+    "error-analysis"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/coding/prompting-with-llms",
+  "rubric": [],
+  "exercises": [
+    "ticket_triage"
+  ]
+}

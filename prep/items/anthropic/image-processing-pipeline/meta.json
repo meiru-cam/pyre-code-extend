@@ -1,0 +1,21 @@
+{
+  "title": "Image Processing Pipeline",
+  "summary": "Apply a JSON pipeline of Pillow transformations — grayscale, flip, scale, blur, rotate — to every image in a folder with exact rounding and resampling rules; then parallelise the batch across a process pool without re-decoding a source image once per pipeline; then reuse the leading steps two pipelines on the same image share, so each distinct prefix is computed exactly once.",
+  "round": "coding",
+  "kind": "Coding · concurrency, image processing",
+  "difficulty": "Medium",
+  "frequency": "very-high",
+  "format": "3 parts / 55 min",
+  "topics": [
+    "image-processing",
+    "pillow",
+    "multiprocessing",
+    "concurrency",
+    "caching"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/coding/image-processing-pipeline",
+  "rubric": [],
+  "exercises": [
+    "image_pipeline"
+  ]
+}

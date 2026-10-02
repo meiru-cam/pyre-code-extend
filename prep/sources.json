@@ -582,5 +582,37 @@
   {
     "company": "anthropic",
     "item": "behavioral/recruiter-screen"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/image-processing-pipeline",
+    "exercises": [
+      "image_pipeline"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/llm-agent-tool-loop",
+    "exercises": [
+      "tool_use_agent"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/prompting-with-llms",
+    "exercises": [
+      "ticket_triage"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/matmul-performance-modeling",
+    "exercises": [
+      "roofline_model"
+    ],
+    "round": "coding"
   }
 ]

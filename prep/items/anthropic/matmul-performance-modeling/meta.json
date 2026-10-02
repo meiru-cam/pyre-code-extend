@@ -1,0 +1,21 @@
+{
+  "title": "Performance Modelling: Matmuls, Roofline and Sharding",
+  "summary": "Estimate wall-clock time for bf16 matmuls of several shapes on one accelerator with a roofline model, extend it to a 72-layer stack of alternating matmuls and check whether it fits in one device's memory, compare pipeline and tensor parallelism across two devices on a single input, and build a cost model for sharding a feed-forward network by tensor or by token across p devices.",
+  "round": "coding",
+  "kind": "Estimation · roofline model, no code",
+  "difficulty": "Hard",
+  "frequency": "low",
+  "format": "4 parts / 60 min",
+  "topics": [
+    "roofline",
+    "arithmetic-intensity",
+    "gpu-performance",
+    "parallelism",
+    "ffn-sharding"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/coding/matmul-performance-modeling",
+  "rubric": [],
+  "exercises": [
+    "roofline_model"
+  ]
+}
