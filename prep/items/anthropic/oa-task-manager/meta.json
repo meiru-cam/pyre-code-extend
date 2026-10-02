@@ -1,0 +1,21 @@
+{
+  "title": "Online Assessment: Task Manager with Expiry and Snapshots",
+  "summary": "A four-level, gated online assessment: per-user task CRUD with a stated sort order, extended with a per-task TTL that expires tasks lazily, and finished with a time-travel query that reconstructs a user's task list exactly as it stood at any past moment.",
+  "round": "coding",
+  "kind": "Online assessment · 4 levels",
+  "difficulty": "Medium",
+  "frequency": "low",
+  "format": "4 levels / 90 min",
+  "topics": [
+    "oop-design",
+    "hash-table",
+    "ttl",
+    "time-travel",
+    "bisect"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/coding/oa-task-manager",
+  "rubric": [],
+  "exercises": [
+    "task_board"
+  ]
+}

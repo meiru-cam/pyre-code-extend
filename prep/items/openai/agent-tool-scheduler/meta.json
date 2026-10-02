@@ -1,0 +1,20 @@
+{
+  "title": "Scheduling Agent Tool Calls with Dependencies",
+  "summary": "Schedule every agent's dependent tool calls under a concurrency cap, escalating from one agent's own cap, to independent per-agent caps, to one cap shared by all agents, with a deterministic tie-break and an event-driven simulator instead of a per-tick scan.",
+  "round": "coding",
+  "kind": "Coding",
+  "difficulty": "Medium",
+  "frequency": "rare",
+  "format": "3 parts",
+  "topics": [
+    "scheduling",
+    "dag",
+    "simulation",
+    "concurrency"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/coding/agent-tool-scheduler",
+  "rubric": [],
+  "exercises": [
+    "tool_scheduler"
+  ]
+}

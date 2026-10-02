@@ -386,5 +386,37 @@
       "config_store"
     ],
     "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/oa-task-manager",
+    "exercises": [
+      "task_board"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/oa-worker-grant-management",
+    "exercises": [
+      "timesheet"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/agent-tool-scheduler",
+    "exercises": [
+      "tool_scheduler"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/cd-command",
+    "exercises": [
+      "change_directory"
+    ],
+    "round": "coding"
   }
 ]

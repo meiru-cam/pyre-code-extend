@@ -25661,6 +25661,712 @@
           "hint": "Two runs with the same config hash still differ. Which inputs live outside the config, such as code, data and libraries?"
         }
       ]
+    },
+    {
+      "id": "task_board",
+      "title": "Task Board with Time Travel",
+      "titleZh": "Task Board with Time Travel",
+      "difficulty": "Medium",
+      "functionName": "TaskBoard",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Build `TaskBoard`, which keeps each user's tasks with ids, edits and completion, then adds sorted lists, expiry, and lists as they were at an earlier time.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior, so one `TaskBoard` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- Each task stores its owner's user id, a title (titles may repeat), an integer priority (bigger means more urgent) and `created_at`, the time of its `add`.\n- Ids are `t` followed by a number that goes up by one with every `add`, whoever calls it: `t1`, `t2`, and so on. An id is never reused.\n- Methods return a task as the tuple `(task_id, title, priority, created_at)`.\n- Every method takes an integer timestamp first. Timestamps of `add`, `edit` and `finish` calls never go down, though neighbours may be equal.\n- A task is active from its `add` until it is finished. A task that is not active, belongs to another user, or does not exist gives the same failure value.\n- User ids are case-sensitive. A call that fails changes nothing. No method raises.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** it is a timed online assessment where each level builds on the class you already wrote. Each later part adds one requirement, and the last one punishes a design that only ever kept the current state.\n\n**Where it is used:** issue trackers and to-do services, job queues with deadlines, and audit views that show what a list looked like at a given moment.\n\nAdapted from the task manager online assessment in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, on one class renamed from `TaskManager` to `TaskBoard`, with shorter method names: `add_task` becomes `add`, `update_task` becomes `edit`, `complete_task` becomes `finish`, `get_task` becomes `get` and `get_task_list` becomes `list_tasks`. Tasks are tuples instead of a dataclass, and ids are `t1`, `t2`, and so on. Part 4 adds a speed check for past lists.",
+      "descriptionZh": "Build `TaskBoard`, which keeps each user's tasks with ids, edits and completion, then adds sorted lists, expiry, and lists as they were at an earlier time.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior, so one `TaskBoard` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- Each task stores its owner's user id, a title (titles may repeat), an integer priority (bigger means more urgent) and `created_at`, the time of its `add`.\n- Ids are `t` followed by a number that goes up by one with every `add`, whoever calls it: `t1`, `t2`, and so on. An id is never reused.\n- Methods return a task as the tuple `(task_id, title, priority, created_at)`.\n- Every method takes an integer timestamp first. Timestamps of `add`, `edit` and `finish` calls never go down, though neighbours may be equal.\n- A task is active from its `add` until it is finished. A task that is not active, belongs to another user, or does not exist gives the same failure value.\n- User ids are case-sensitive. A call that fails changes nothing. No method raises.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** it is a timed online assessment where each level builds on the class you already wrote. Each later part adds one requirement, and the last one punishes a design that only ever kept the current state.\n\n**Where it is used:** issue trackers and to-do services, job queues with deadlines, and audit views that show what a list looked like at a given moment.\n\nAdapted from the task manager online assessment in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, on one class renamed from `TaskManager` to `TaskBoard`, with shorter method names: `add_task` becomes `add`, `update_task` becomes `edit`, `complete_task` becomes `finish`, `get_task` becomes `get` and `get_task_list` becomes `list_tasks`. Tasks are tuples instead of a dataclass, and ids are `t1`, `t2`, and so on. Part 4 adds a speed check for past lists.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Part 1: the worked example",
+          "code": "\nb = {fn}()\nassert b.add(5, \"mia\", \"draft slides\", 2) == \"t1\"\nassert b.add(5, \"raj\", \"draft slides\", 4) == \"t2\"\nassert b.edit(6, \"mia\", \"t1\", \"final slides\", 6) is True\nassert b.get(6, \"mia\", \"t1\") == (\"t1\", \"final slides\", 6, 5)\nassert b.finish(7, \"raj\", \"t2\") is True and b.get(8, \"raj\", \"t2\") is None\nassert b.edit(8, \"raj\", \"t1\", \"x\", 1) is False and b.finish(8, \"raj\", \"t1\") is False\n",
+          "behavior": "state.invariant",
+          "part": 1
+        },
+        {
+          "name": "Part 1: owners, missing ids and failed calls",
+          "visibility": "unshown",
+          "behavior": "security.permission",
+          "failureMessage": "Ids come from one counter shared by every user; a task owned by someone else, a finished task and an unknown id all give None or False; a failed edit or finish changes nothing; an edit keeps created_at.",
+          "hiddenCode": "\nb = {fn}()\nids = [b.add(1, u, \"same\", 1) for u in [\"a\", \"b\", \"a\", \"c\"]]\nassert ids == [\"t1\", \"t2\", \"t3\", \"t4\"]\nassert b.edit(2, \"b\", \"t1\", \"stolen\", 9) is False and b.get(2, \"a\", \"t1\") == (\"t1\", \"same\", 1, 1)\nassert b.finish(2, \"a\", \"t9\") is False and b.get(2, \"a\", \"t9\") is None and b.edit(2, \"a\", \"t9\", \"x\", 1) is False\nassert b.edit(3, \"a\", \"t3\", \"same\", 1) is True, \"an edit to the same values still succeeds\"\nassert b.edit(4, \"a\", \"t3\", \"renamed\", 0) is True and b.get(4, \"a\", \"t3\") == (\"t3\", \"renamed\", 0, 1)\nassert b.finish(5, \"a\", \"t3\") is True and b.finish(5, \"a\", \"t3\") is False\nassert b.add(6, \"a\", \"next\", 2) == \"t5\", \"a finished task's id is never reused\"\nassert b.get(6, \"A\", \"t5\") is None, \"user ids are case-sensitive\"\n",
+          "part": 1
+        },
+        {
+          "name": "Part 1: random calls",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "On a random sequence of add, edit, finish and get, a return value differed from a model that replays every call.",
+          "hiddenCode": "\nimport random, time\n\nclass Model:\n    def __init__(self):\n        self.log = []  # (timestamp, op, args) for every state change, in call order\n        self.count = 0\n\n    def _state(self, at):\n        tasks = {}\n        for ts, op, args in self.log:\n            if ts > at:\n                break\n            if op == \"add\":\n                tid, user, title, priority, ttl, seq = args\n                tasks[tid] = {\"user\": user, \"title\": title, \"priority\": priority, \"created\": ts, \"ttl\": ttl, \"done\": False, \"seq\": seq}\n            elif op == \"edit\":\n                tid, title, priority = args\n                tasks[tid][\"title\"], tasks[tid][\"priority\"] = title, priority\n            else:\n                tasks[args[0]][\"done\"] = True\n        return {tid: t for tid, t in tasks.items()\n                if not t[\"done\"] and (t[\"ttl\"] is None or at < t[\"created\"] + t[\"ttl\"])}\n\n    def _live(self, at, user, tid):\n        t = self._state(at).get(tid)\n        return t if t is not None and t[\"user\"] == user else None\n\n    def add(self, ts, user, title, priority, ttl=None):\n        self.count += 1\n        tid = f\"t{self.count}\"\n        self.log.append((ts, \"add\", (tid, user, title, priority, ttl, self.count)))\n        return tid\n\n    def edit(self, ts, user, tid, title, priority):\n        if self._live(ts, user, tid) is None:\n            return False\n        self.log.append((ts, \"edit\", (tid, title, priority)))\n        return True\n\n    def finish(self, ts, user, tid):\n        if self._live(ts, user, tid) is None:\n            return False\n        self.log.append((ts, \"finish\", (tid,)))\n        return True\n\n    def get(self, ts, user, tid):\n        t = self._live(ts, user, tid)\n        return None if t is None else (tid, t[\"title\"], t[\"priority\"], t[\"created\"])\n\n    def list_tasks(self, at, user, min_priority=None):\n        rows = [(tid, t) for tid, t in self._state(at).items()\n                if t[\"user\"] == user and (min_priority is None or t[\"priority\"] >= min_priority)]\n        rows.sort(key=lambda r: (-r[1][\"priority\"], r[1][\"seq\"]))\n        return [(tid, t[\"title\"], t[\"priority\"], t[\"created\"]) for tid, t in rows]\n\nUSERS = [\"ana\", \"bo\", \"cy\"]\nTITLES = [\"sync\", \"Sync\", \"deploy\", \"notes\"]\n\ndef random_calls(rng, steps, part):\n    ts, calls, made = 0, [], 0\n    for _ in range(steps):\n        ts += rng.choice([0, 0, 1, 1, 2, 3])\n        user = rng.choice(USERS)\n        tid = f\"t{rng.randint(1, made + 1)}\"\n        kind = rng.random()\n        if kind < 0.3 or made == 0:\n            ttl = rng.choice([None, None, 1, 2, 4, 7]) if part >= 3 else None\n            args = (ts, user, rng.choice(TITLES), rng.randint(0, 4)) + ((ttl,) if ttl is not None else ())\n            calls.append((\"add\", args))\n            made += 1\n        elif kind < 0.5:\n            calls.append((\"edit\", (ts, user, tid, rng.choice(TITLES), rng.randint(0, 4))))\n        elif kind < 0.65:\n            calls.append((\"finish\", (ts, user, tid)))\n        elif kind < 0.8 or part == 1:\n            calls.append((\"get\", (ts, user, tid)))\n        else:\n            at = rng.randint(0, ts) if part >= 4 else ts\n            calls.append((\"list_tasks\", (at, user) + ((rng.randint(0, 4),) if rng.random() < 0.4 else ())))\n    return calls\n\ndef replay(board, calls, label):\n    model = Model()\n    for i, (name, args) in enumerate(calls):\n        want = getattr(model, name)(*args)\n        got = getattr(board, name)(*args)\n        assert got == want, (label, i, name, args, got, want)\n\nfor seed in range(150):\n    replay({fn}(), random_calls(random.Random(seed), 60, 1), seed)\n",
+          "part": 1
+        },
+        {
+          "name": "Part 2: the worked example",
+          "code": "\nb = {fn}()\nassert [b.add(1, \"raj\", \"logs\", 2), b.add(1, \"raj\", \"alerts\", 7), b.add(2, \"raj\", \"docs\", 2)] == [\"t1\", \"t2\", \"t3\"]\nassert b.finish(3, \"raj\", \"t2\") is True\nassert b.add(3, \"raj\", \"oncall\", 7) == \"t4\"\nassert b.list_tasks(3, \"raj\") == [(\"t4\", \"oncall\", 7, 3), (\"t1\", \"logs\", 2, 1), (\"t3\", \"docs\", 2, 2)]\nassert b.list_tasks(3, \"raj\", 3) == [(\"t4\", \"oncall\", 7, 3)]\nassert b.list_tasks(3, \"mia\") == []\n",
+          "behavior": "metrics.ties",
+          "part": 2
+        },
+        {
+          "name": "Part 2: ties, filters and fresh lists",
+          "visibility": "unshown",
+          "behavior": "metrics.ties",
+          "failureMessage": "Lists sort by priority, highest first, then by creation order (the id counter), never by title or timestamp; min_priority keeps priorities >= it, including negative ones; an edit moves a task but keeps its place among equals; each call returns a new list.",
+          "hiddenCode": "\nb = {fn}()\nb.add(4, \"u\", \"zeta\", 1)\nb.add(4, \"u\", \"alpha\", 1)\nb.add(4, \"u\", \"mid\", -3)\nassert [t[0] for t in b.list_tasks(4, \"u\")] == [\"t1\", \"t2\", \"t3\"]\nassert b.list_tasks(4, \"u\", -3) == b.list_tasks(4, \"u\") and b.list_tasks(4, \"u\", 2) == []\nassert [t[0] for t in b.list_tasks(4, \"u\", 0)] == [\"t1\", \"t2\"], \"0 is a real minimum, not 'no filter'\"\nb.edit(5, \"u\", \"t1\", \"zeta\", 0)\nb.edit(5, \"u\", \"t3\", \"mid\", 1)\nassert [t[0] for t in b.list_tasks(5, \"u\")] == [\"t2\", \"t3\", \"t1\"]\ngot = b.list_tasks(5, \"u\")\ngot.clear()\nassert len(b.list_tasks(5, \"u\")) == 3\n",
+          "part": 2
+        },
+        {
+          "name": "Part 2: random calls",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "On a random sequence that also lists tasks, a return value differed from a model that replays every call.",
+          "hiddenCode": "\nimport random, time\n\nclass Model:\n    def __init__(self):\n        self.log = []  # (timestamp, op, args) for every state change, in call order\n        self.count = 0\n\n    def _state(self, at):\n        tasks = {}\n        for ts, op, args in self.log:\n            if ts > at:\n                break\n            if op == \"add\":\n                tid, user, title, priority, ttl, seq = args\n                tasks[tid] = {\"user\": user, \"title\": title, \"priority\": priority, \"created\": ts, \"ttl\": ttl, \"done\": False, \"seq\": seq}\n            elif op == \"edit\":\n                tid, title, priority = args\n                tasks[tid][\"title\"], tasks[tid][\"priority\"] = title, priority\n            else:\n                tasks[args[0]][\"done\"] = True\n        return {tid: t for tid, t in tasks.items()\n                if not t[\"done\"] and (t[\"ttl\"] is None or at < t[\"created\"] + t[\"ttl\"])}\n\n    def _live(self, at, user, tid):\n        t = self._state(at).get(tid)\n        return t if t is not None and t[\"user\"] == user else None\n\n    def add(self, ts, user, title, priority, ttl=None):\n        self.count += 1\n        tid = f\"t{self.count}\"\n        self.log.append((ts, \"add\", (tid, user, title, priority, ttl, self.count)))\n        return tid\n\n    def edit(self, ts, user, tid, title, priority):\n        if self._live(ts, user, tid) is None:\n            return False\n        self.log.append((ts, \"edit\", (tid, title, priority)))\n        return True\n\n    def finish(self, ts, user, tid):\n        if self._live(ts, user, tid) is None:\n            return False\n        self.log.append((ts, \"finish\", (tid,)))\n        return True\n\n    def get(self, ts, user, tid):\n        t = self._live(ts, user, tid)\n        return None if t is None else (tid, t[\"title\"], t[\"priority\"], t[\"created\"])\n\n    def list_tasks(self, at, user, min_priority=None):\n        rows = [(tid, t) for tid, t in self._state(at).items()\n                if t[\"user\"] == user and (min_priority is None or t[\"priority\"] >= min_priority)]\n        rows.sort(key=lambda r: (-r[1][\"priority\"], r[1][\"seq\"]))\n        return [(tid, t[\"title\"], t[\"priority\"], t[\"created\"]) for tid, t in rows]\n\nUSERS = [\"ana\", \"bo\", \"cy\"]\nTITLES = [\"sync\", \"Sync\", \"deploy\", \"notes\"]\n\ndef random_calls(rng, steps, part):\n    ts, calls, made = 0, [], 0\n    for _ in range(steps):\n        ts += rng.choice([0, 0, 1, 1, 2, 3])\n        user = rng.choice(USERS)\n        tid = f\"t{rng.randint(1, made + 1)}\"\n        kind = rng.random()\n        if kind < 0.3 or made == 0:\n            ttl = rng.choice([None, None, 1, 2, 4, 7]) if part >= 3 else None\n            args = (ts, user, rng.choice(TITLES), rng.randint(0, 4)) + ((ttl,) if ttl is not None else ())\n            calls.append((\"add\", args))\n            made += 1\n        elif kind < 0.5:\n            calls.append((\"edit\", (ts, user, tid, rng.choice(TITLES), rng.randint(0, 4))))\n        elif kind < 0.65:\n            calls.append((\"finish\", (ts, user, tid)))\n        elif kind < 0.8 or part == 1:\n            calls.append((\"get\", (ts, user, tid)))\n        else:\n            at = rng.randint(0, ts) if part >= 4 else ts\n            calls.append((\"list_tasks\", (at, user) + ((rng.randint(0, 4),) if rng.random() < 0.4 else ())))\n    return calls\n\ndef replay(board, calls, label):\n    model = Model()\n    for i, (name, args) in enumerate(calls):\n        want = getattr(model, name)(*args)\n        got = getattr(board, name)(*args)\n        assert got == want, (label, i, name, args, got, want)\n\nfor seed in range(150):\n    replay({fn}(), random_calls(random.Random(100 + seed), 60, 2), seed)\n",
+          "part": 2
+        },
+        {
+          "name": "Part 3: the worked example",
+          "code": "\nb = {fn}()\nassert b.add(10, \"mia\", \"renew cert\", 3, ttl=4) == \"t1\"\nassert b.add(11, \"mia\", \"backup\", 1) == \"t2\"\nassert b.list_tasks(13, \"mia\") == [(\"t1\", \"renew cert\", 3, 10), (\"t2\", \"backup\", 1, 11)]\nassert b.edit(13, \"mia\", \"t1\", \"renew certs\", 5) is True\nassert b.list_tasks(14, \"mia\") == [(\"t2\", \"backup\", 1, 11)]\nassert b.finish(14, \"mia\", \"t1\") is False and b.get(14, \"mia\", \"t1\") is None\n",
+          "behavior": "state.invariant",
+          "part": 3
+        },
+        {
+          "name": "Part 3: expiry edges",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "A task with ttl is active while timestamp < created_at + ttl and inactive from that instant on, in get, list_tasks, edit and finish; edits never move the deadline; ttl=None never expires; ttl=1 lives for one time unit.",
+          "hiddenCode": "\nb = {fn}()\nb.add(0, \"u\", \"short\", 1, ttl=1)\nb.add(0, \"u\", \"long\", 1, 100)\nb.add(0, \"u\", \"none\", 1, None)\nassert [t[0] for t in b.list_tasks(0, \"u\")] == [\"t1\", \"t2\", \"t3\"]\nassert b.get(0, \"u\", \"t1\") == (\"t1\", \"short\", 1, 0)\nassert b.edit(1, \"u\", \"t1\", \"late\", 1) is False, \"t1 expired at 0 + 1\"\nassert b.edit(99, \"u\", \"t2\", \"x\", 2) is True and b.edit(99, \"u\", \"t2\", \"y\", 3) is True\nassert b.get(99, \"u\", \"t2\") == (\"t2\", \"y\", 3, 0)\nassert b.finish(100, \"u\", \"t2\") is False and b.list_tasks(100, \"u\") == [(\"t3\", \"none\", 1, 0)]\nassert b.get(10**9, \"u\", \"t3\") == (\"t3\", \"none\", 1, 0)\n",
+          "part": 3
+        },
+        {
+          "name": "Part 3: random calls",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "On a random sequence with ttls, a return value differed from a model that replays every call and checks expiry at the time asked.",
+          "hiddenCode": "\nimport random, time\n\nclass Model:\n    def __init__(self):\n        self.log = []  # (timestamp, op, args) for every state change, in call order\n        self.count = 0\n\n    def _state(self, at):\n        tasks = {}\n        for ts, op, args in self.log:\n            if ts > at:\n                break\n            if op == \"add\":\n                tid, user, title, priority, ttl, seq = args\n                tasks[tid] = {\"user\": user, \"title\": title, \"priority\": priority, \"created\": ts, \"ttl\": ttl, \"done\": False, \"seq\": seq}\n            elif op == \"edit\":\n                tid, title, priority = args\n                tasks[tid][\"title\"], tasks[tid][\"priority\"] = title, priority\n            else:\n                tasks[args[0]][\"done\"] = True\n        return {tid: t for tid, t in tasks.items()\n                if not t[\"done\"] and (t[\"ttl\"] is None or at < t[\"created\"] + t[\"ttl\"])}\n\n    def _live(self, at, user, tid):\n        t = self._state(at).get(tid)\n        return t if t is not None and t[\"user\"] == user else None\n\n    def add(self, ts, user, title, priority, ttl=None):\n        self.count += 1\n        tid = f\"t{self.count}\"\n        self.log.append((ts, \"add\", (tid, user, title, priority, ttl, self.count)))\n        return tid\n\n    def edit(self, ts, user, tid, title, priority):\n        if self._live(ts, user, tid) is None:\n            return False\n        self.log.append((ts, \"edit\", (tid, title, priority)))\n        return True\n\n    def finish(self, ts, user, tid):\n        if self._live(ts, user, tid) is None:\n            return False\n        self.log.append((ts, \"finish\", (tid,)))\n        return True\n\n    def get(self, ts, user, tid):\n        t = self._live(ts, user, tid)\n        return None if t is None else (tid, t[\"title\"], t[\"priority\"], t[\"created\"])\n\n    def list_tasks(self, at, user, min_priority=None):\n        rows = [(tid, t) for tid, t in self._state(at).items()\n                if t[\"user\"] == user and (min_priority is None or t[\"priority\"] >= min_priority)]\n        rows.sort(key=lambda r: (-r[1][\"priority\"], r[1][\"seq\"]))\n        return [(tid, t[\"title\"], t[\"priority\"], t[\"created\"]) for tid, t in rows]\n\nUSERS = [\"ana\", \"bo\", \"cy\"]\nTITLES = [\"sync\", \"Sync\", \"deploy\", \"notes\"]\n\ndef random_calls(rng, steps, part):\n    ts, calls, made = 0, [], 0\n    for _ in range(steps):\n        ts += rng.choice([0, 0, 1, 1, 2, 3])\n        user = rng.choice(USERS)\n        tid = f\"t{rng.randint(1, made + 1)}\"\n        kind = rng.random()\n        if kind < 0.3 or made == 0:\n            ttl = rng.choice([None, None, 1, 2, 4, 7]) if part >= 3 else None\n            args = (ts, user, rng.choice(TITLES), rng.randint(0, 4)) + ((ttl,) if ttl is not None else ())\n            calls.append((\"add\", args))\n            made += 1\n        elif kind < 0.5:\n            calls.append((\"edit\", (ts, user, tid, rng.choice(TITLES), rng.randint(0, 4))))\n        elif kind < 0.65:\n            calls.append((\"finish\", (ts, user, tid)))\n        elif kind < 0.8 or part == 1:\n            calls.append((\"get\", (ts, user, tid)))\n        else:\n            at = rng.randint(0, ts) if part >= 4 else ts\n            calls.append((\"list_tasks\", (at, user) + ((rng.randint(0, 4),) if rng.random() < 0.4 else ())))\n    return calls\n\ndef replay(board, calls, label):\n    model = Model()\n    for i, (name, args) in enumerate(calls):\n        want = getattr(model, name)(*args)\n        got = getattr(board, name)(*args)\n        assert got == want, (label, i, name, args, got, want)\n\nfor seed in range(150):\n    replay({fn}(), random_calls(random.Random(200 + seed), 70, 3), seed)\n",
+          "part": 3
+        },
+        {
+          "name": "Part 4: the worked example",
+          "code": "\nb = {fn}()\nassert b.add(2, \"raj\", \"warmup\", 5, ttl=6) == \"t1\"\nassert b.add(2, \"mia\", \"audit\", 1) == \"t2\"\nassert b.add(4, \"raj\", \"eval\", 3) == \"t3\"\nassert b.finish(6, \"raj\", \"t1\") is True\nassert b.edit(7, \"raj\", \"t3\", \"eval v2\", 9) is True\nassert b.list_tasks(1, \"raj\") == []\nassert b.list_tasks(5, \"raj\") == [(\"t1\", \"warmup\", 5, 2), (\"t3\", \"eval\", 3, 4)]\nassert b.list_tasks(6, \"raj\") == [(\"t3\", \"eval\", 3, 4)]\nassert b.list_tasks(7, \"raj\") == [(\"t3\", \"eval v2\", 9, 4)]\nassert b.list_tasks(7, \"mia\") == [(\"t2\", \"audit\", 1, 2)]\n",
+          "behavior": "checkpoint.recovery",
+          "part": 4
+        },
+        {
+          "name": "Part 4: same-time calls and early questions",
+          "visibility": "unshown",
+          "behavior": "events.ordering",
+          "failureMessage": "A past list must include every call with timestamp <= at_timestamp, including several edits at one timestamp, where the last one wins; a finish at t hides the task at t; before a user's first task the list is []; asking about the past changes nothing.",
+          "hiddenCode": "\nb = {fn}()\nb.add(2, \"u\", \"a\", 1)\nb.edit(2, \"u\", \"t1\", \"b\", 2)\nb.edit(2, \"u\", \"t1\", \"c\", 3)\nb.add(4, \"u\", \"d\", 3)\nb.edit(6, \"u\", \"t2\", \"e\", 5)\nb.finish(6, \"u\", \"t2\")\nassert b.list_tasks(1, \"u\") == [] and b.list_tasks(0, \"nobody\") == []\nassert b.list_tasks(2, \"u\") == [(\"t1\", \"c\", 3, 2)]\nassert b.list_tasks(5, \"u\", 3) == [(\"t1\", \"c\", 3, 2), (\"t2\", \"d\", 3, 4)]\nassert b.list_tasks(6, \"u\") == [(\"t1\", \"c\", 3, 2)]\nassert b.list_tasks(3, \"u\") == [(\"t1\", \"c\", 3, 2)]\nassert b.get(7, \"u\", \"t1\") == (\"t1\", \"c\", 3, 2) and b.add(7, \"u\", \"f\", 0) == \"t3\"\nassert b.list_tasks(7, \"u\") == [(\"t1\", \"c\", 3, 2), (\"t3\", \"f\", 0, 7)]\n",
+          "part": 4
+        },
+        {
+          "name": "Part 4: random past questions",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "On a random sequence that also lists tasks at past timestamps, a return value differed from replaying only the calls up to that timestamp.",
+          "hiddenCode": "\nimport random, time\n\nclass Model:\n    def __init__(self):\n        self.log = []  # (timestamp, op, args) for every state change, in call order\n        self.count = 0\n\n    def _state(self, at):\n        tasks = {}\n        for ts, op, args in self.log:\n            if ts > at:\n                break\n            if op == \"add\":\n                tid, user, title, priority, ttl, seq = args\n                tasks[tid] = {\"user\": user, \"title\": title, \"priority\": priority, \"created\": ts, \"ttl\": ttl, \"done\": False, \"seq\": seq}\n            elif op == \"edit\":\n                tid, title, priority = args\n                tasks[tid][\"title\"], tasks[tid][\"priority\"] = title, priority\n            else:\n                tasks[args[0]][\"done\"] = True\n        return {tid: t for tid, t in tasks.items()\n                if not t[\"done\"] and (t[\"ttl\"] is None or at < t[\"created\"] + t[\"ttl\"])}\n\n    def _live(self, at, user, tid):\n        t = self._state(at).get(tid)\n        return t if t is not None and t[\"user\"] == user else None\n\n    def add(self, ts, user, title, priority, ttl=None):\n        self.count += 1\n        tid = f\"t{self.count}\"\n        self.log.append((ts, \"add\", (tid, user, title, priority, ttl, self.count)))\n        return tid\n\n    def edit(self, ts, user, tid, title, priority):\n        if self._live(ts, user, tid) is None:\n            return False\n        self.log.append((ts, \"edit\", (tid, title, priority)))\n        return True\n\n    def finish(self, ts, user, tid):\n        if self._live(ts, user, tid) is None:\n            return False\n        self.log.append((ts, \"finish\", (tid,)))\n        return True\n\n    def get(self, ts, user, tid):\n        t = self._live(ts, user, tid)\n        return None if t is None else (tid, t[\"title\"], t[\"priority\"], t[\"created\"])\n\n    def list_tasks(self, at, user, min_priority=None):\n        rows = [(tid, t) for tid, t in self._state(at).items()\n                if t[\"user\"] == user and (min_priority is None or t[\"priority\"] >= min_priority)]\n        rows.sort(key=lambda r: (-r[1][\"priority\"], r[1][\"seq\"]))\n        return [(tid, t[\"title\"], t[\"priority\"], t[\"created\"]) for tid, t in rows]\n\nUSERS = [\"ana\", \"bo\", \"cy\"]\nTITLES = [\"sync\", \"Sync\", \"deploy\", \"notes\"]\n\ndef random_calls(rng, steps, part):\n    ts, calls, made = 0, [], 0\n    for _ in range(steps):\n        ts += rng.choice([0, 0, 1, 1, 2, 3])\n        user = rng.choice(USERS)\n        tid = f\"t{rng.randint(1, made + 1)}\"\n        kind = rng.random()\n        if kind < 0.3 or made == 0:\n            ttl = rng.choice([None, None, 1, 2, 4, 7]) if part >= 3 else None\n            args = (ts, user, rng.choice(TITLES), rng.randint(0, 4)) + ((ttl,) if ttl is not None else ())\n            calls.append((\"add\", args))\n            made += 1\n        elif kind < 0.5:\n            calls.append((\"edit\", (ts, user, tid, rng.choice(TITLES), rng.randint(0, 4))))\n        elif kind < 0.65:\n            calls.append((\"finish\", (ts, user, tid)))\n        elif kind < 0.8 or part == 1:\n            calls.append((\"get\", (ts, user, tid)))\n        else:\n            at = rng.randint(0, ts) if part >= 4 else ts\n            calls.append((\"list_tasks\", (at, user) + ((rng.randint(0, 4),) if rng.random() < 0.4 else ())))\n    return calls\n\ndef replay(board, calls, label):\n    model = Model()\n    for i, (name, args) in enumerate(calls):\n        want = getattr(model, name)(*args)\n        got = getattr(board, name)(*args)\n        assert got == want, (label, i, name, args, got, want)\n\nfor seed in range(150):\n    replay({fn}(), random_calls(random.Random(300 + seed), 70, 4), seed)\n",
+          "part": 4
+        },
+        {
+          "name": "Part 4: past questions on a long history",
+          "visibility": "unshown",
+          "behavior": "performance.complexity",
+          "failureMessage": "2,000 past lists over 50 tasks and 100,000 edits took too long: keep each task's versions in time order and binary-search them instead of replaying the history for each question.",
+          "hiddenCode": "\nimport random, time\nrng = random.Random(4)\nb = {fn}()\nfor i in range(50):\n    b.add(0, \"u\", f\"task{i}\", 0)\nfor ts in range(1, 100001):\n    b.edit(ts, \"u\", f\"t{rng.randint(1, 50)}\", \"v\", rng.randint(0, 9))\nstart = time.perf_counter()\nsizes = [len(b.list_tasks(rng.randint(0, 100000), \"u\", 5)) for _ in range(2000)]\nelapsed = time.perf_counter() - start\nassert len(b.list_tasks(0, \"u\")) == 50 and b.list_tasks(0, \"u\", 1) == []\nassert all(0 <= s <= 50 for s in sizes)\nassert elapsed < 2.0, f\"{elapsed:.2f}s for 2,000 past lists\"\n",
+          "part": 4
+        }
+      ],
+      "parts": [
+        {
+          "title": "Add, edit, finish and get",
+          "descriptionEn": "**Signatures:**\n- `TaskBoard().add(timestamp, user, title, priority) -> str` creates an active task owned by `user` and returns its id.\n- `edit(timestamp, user, task_id, title, priority) -> bool` replaces the title and priority and keeps `created_at`. It returns `False` if the task is not an active task of `user`.\n- `finish(timestamp, user, task_id) -> bool` makes the task inactive for good. It returns `False` if the task is not an active task of `user`.\n- `get(timestamp, user, task_id) -> tuple | None` returns the task if it is an active task of `user`, and `None` otherwise.\n\n**Example:**\n- `add(5, \"mia\", \"draft slides\", 2)` is `\"t1\"` and `add(5, \"raj\", \"draft slides\", 4)` is `\"t2\"`: same title, same timestamp, two tasks\n- `edit(6, \"mia\", \"t1\", \"final slides\", 6)` is `True`, and `get(6, \"mia\", \"t1\")` is `(\"t1\", \"final slides\", 6, 5)`\n- `finish(7, \"raj\", \"t2\")` is `True`; after it, `get(8, \"raj\", \"t2\")` is `None`\n- `edit(8, \"raj\", \"t1\", \"x\", 1)` and `finish(8, \"raj\", \"t1\")` are `False`: `t1` belongs to `mia`"
+        },
+        {
+          "title": "Sorted lists",
+          "descriptionEn": "Keep Part 1 and add a list.\n\n**Signature:** `list_tasks(at_timestamp, user, min_priority=None) -> list[tuple]`\n\n- Return `user`'s active tasks with `priority >= min_priority`, or all of them when `min_priority` is `None`.\n- Sort by priority, highest first, then by creation order: the earlier `add` call first, whatever the timestamps or titles.\n- In this part `at_timestamp` is always the largest timestamp passed to any call so far.\n- Each call returns a new list.\n\n**Example:** `add(1, \"raj\", \"logs\", 2)`, `add(1, \"raj\", \"alerts\", 7)`, `add(2, \"raj\", \"docs\", 2)`, then `finish(3, \"raj\", \"t2\")` and `add(3, \"raj\", \"oncall\", 7)`:\n- `list_tasks(3, \"raj\")` is `[(\"t4\", \"oncall\", 7, 3), (\"t1\", \"logs\", 2, 1), (\"t3\", \"docs\", 2, 2)]`\n- `list_tasks(3, \"raj\", 3)` is `[(\"t4\", \"oncall\", 7, 3)]`, and `list_tasks(3, \"mia\")` is `[]`"
+        },
+        {
+          "title": "Expiry",
+          "descriptionEn": "Keep Parts 1–2 and let tasks expire.\n\n**Signature:** `add(timestamp, user, title, priority, ttl=None) -> str`\n\n- With a positive integer `ttl`, the task counts as finished at `created_at + ttl`: from that timestamp on, `get`, `list_tasks`, `edit` and `finish` treat it as finished.\n- `ttl=None` never expires. `edit` never changes the deadline.\n- Expiry is checked when a method is called, against that call's timestamp; nothing removes tasks in the background.\n\n**Example:** `add(10, \"mia\", \"renew cert\", 3, ttl=4)` is `\"t1\"`, active while the timestamp is below `14`, and `add(11, \"mia\", \"backup\", 1)` is `\"t2\"`:\n- `list_tasks(13, \"mia\")` holds both, and `edit(13, \"mia\", \"t1\", \"renew certs\", 5)` is `True`, with the deadline still `14`\n- `list_tasks(14, \"mia\")` is `[(\"t2\", \"backup\", 1, 11)]`, and `finish(14, \"mia\", \"t1\")` is `False`"
+        },
+        {
+          "title": "Lists at past timestamps",
+          "descriptionEn": "Keep Parts 1–3. `list_tasks` may now ask about any timestamp, including one earlier than calls already made.\n\n- Answer as if the board had received only the calls with `timestamp <= at_timestamp`, then ask Part 3's `list_tasks` at that time. Every call at `at_timestamp` itself counts.\n- With no such calls for `user`, that is `[]`. Asking about the past changes nothing.\n- A history of 100,000 edits must still answer thousands of past lists in about a second.\n\n**Example:** `add(2, \"raj\", \"warmup\", 5, ttl=6)`, `add(2, \"mia\", \"audit\", 1)`, `add(4, \"raj\", \"eval\", 3)`, `finish(6, \"raj\", \"t1\")`, then `edit(7, \"raj\", \"t3\", \"eval v2\", 9)`:\n- `list_tasks(1, \"raj\")` is `[]`, and `list_tasks(5, \"raj\")` is `[(\"t1\", \"warmup\", 5, 2), (\"t3\", \"eval\", 3, 4)]`\n- `list_tasks(6, \"raj\")` is `[(\"t3\", \"eval\", 3, 4)]`: the finish at `6` counts\n- `list_tasks(7, \"raj\")` is `[(\"t3\", \"eval v2\", 9, 4)]`, while `list_tasks(7, \"mia\")` is `[(\"t2\", \"audit\", 1, 2)]`"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which single lookup does every method start with, and what three conditions decide whether a task counts as found? If the id counter lived per user, what would two users' first tasks be called?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Keep a dict from task id to a small record: owner, title, priority, created_at and an active flag, plus one counter for ids. Write one helper that returns the record only if it exists, belongs to the user and is active, and use it in get, edit and finish. Each call is then an O(1) dict lookup."
+        }
+      ],
+      "modelConnections": [
+        "Experiment and job trackers keep runs per user with priorities and deadlines, and their dashboards sort by priority and age.",
+        "Audit and evaluation tooling often asks what a queue or leaderboard looked like at a past moment, which needs versioned records rather than only the latest state."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "One helper for 'active task of this user' keeps get, edit and finish consistent.",
+          "Checking expiry at read time needs no background job and no clock of its own.",
+          "Per-task version lists answer a past list with one binary search per task."
+        ],
+        "cons": [
+          "Listing sorts the user's tasks on every call, O(k log k) for k tasks.",
+          "Version lists grow with every edit and are never trimmed.",
+          "A past list still touches every task the user ever had, even finished ones."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why does one id counter shared by every user keep ids unique when titles and users repeat?",
+          "hint": "Two users each add their first task. With a counter per user, what ids would they get, and which lookup would then need the user as well as the id?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why should get, edit and finish treat a finished task, another user's task and an unknown id the same way?",
+          "hint": "If get returned a different value for 'someone else's task' than for 'no such task', what could a caller learn about other users?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What must edit check before it writes anything, and how do you keep that check in one place?",
+          "hint": "List the three reasons edit can fail. If each method tests them on its own, what happens the day one method forgets one?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How would you keep list_tasks fast for a user with many tasks whose priorities change often?",
+          "hint": "Each list call sorts the user's tasks. How large can that get, and which structure would stay ordered while priorities change?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why check expiry when a method is called instead of deleting expired tasks in the background?",
+          "hint": "A task expires at created_at + ttl. If nothing deletes it, which comparison at call time gives the same answer a background job would?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How do you answer a list for a past timestamp without replaying every call since the start?",
+          "hint": "An edit at 5 and a question about 3. If every task keeps its versions with their times, which search finds the one in force at 3?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Compare a version list per task with a full snapshot after every call: what does each cost in memory and per question?",
+          "hint": "A snapshot after every call copies the whole board. How many copies is that after 20,000 edits, and what does a version list store instead?"
+        }
+      ]
+    },
+    {
+      "id": "timesheet",
+      "title": "Timesheet with Promotions and Double Pay",
+      "titleZh": "Timesheet with Promotions and Double Pay",
+      "difficulty": "Medium",
+      "functionName": "Timesheet",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Build `Timesheet`, which records when workers clock in and out, then ranks them by time worked, pays them with promotions, and doubles pay inside chosen periods.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior, so one `Timesheet` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- Worker ids are non-empty, case-sensitive strings, and nothing ever unregisters one.\n- `clock_in` and `clock_out` timestamps are non-negative integers that never go down from one call to the next, whichever worker the call is for.\n- Every interval is half-open: `[a, b)` holds `a` but not `b`. A session is `[clock_in time, clock_out time)`.\n- Rates are positive integers, and pay is length × rate.\n- A call that fails returns the failure value given for it and changes nothing. No method raises.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** it is a timed online assessment where each level reuses the session records of the last. Each later part adds one requirement, and the pay parts reward storing the rate on each session instead of reading the worker's current one.\n\n**Where it is used:** time tracking and payroll, contractor billing with rate changes, and surge or overtime pricing over time windows.\n\nAdapted from the worker management online assessment in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, on one class renamed from `Workforce` to `Timesheet`. `get_position` is added in Part 3 so that promotions can be checked, and a double-pay period with `end <= start` is ignored.",
+      "descriptionZh": "Build `Timesheet`, which records when workers clock in and out, then ranks them by time worked, pays them with promotions, and doubles pay inside chosen periods.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior, so one `Timesheet` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- Worker ids are non-empty, case-sensitive strings, and nothing ever unregisters one.\n- `clock_in` and `clock_out` timestamps are non-negative integers that never go down from one call to the next, whichever worker the call is for.\n- Every interval is half-open: `[a, b)` holds `a` but not `b`. A session is `[clock_in time, clock_out time)`.\n- Rates are positive integers, and pay is length × rate.\n- A call that fails returns the failure value given for it and changes nothing. No method raises.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** it is a timed online assessment where each level reuses the session records of the last. Each later part adds one requirement, and the pay parts reward storing the rate on each session instead of reading the worker's current one.\n\n**Where it is used:** time tracking and payroll, contractor billing with rate changes, and surge or overtime pricing over time windows.\n\nAdapted from the worker management online assessment in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, on one class renamed from `Workforce` to `Timesheet`. `get_position` is added in Part 3 so that promotions can be checked, and a double-pay period with `end <= start` is ignored.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Part 1: the worked example",
+          "code": "\nt = {fn}()\nassert t.clock_in(\"w-07\", 3) is False\nassert t.add_worker(\"w-07\", \"Annotator\", 12) is True\nassert t.clock_in(\"w-07\", 3) is True and t.clock_out(\"w-07\", 9) is True\nassert t.clock_out(\"w-07\", 9) is False\nassert t.clock_in(\"w-07\", 9) is True, \"a new session may start when the last one ended\"\nassert t.add_worker(\"w-07\", \"Lead\", 40) is False\n",
+          "behavior": "state.invariant",
+          "part": 1
+        },
+        {
+          "name": "Part 1: random calls",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "On a random sequence of add_worker, clock_in and clock_out, a return value differed from a model: a worker id is registered once, clock_in needs no open session, and clock_out needs one.",
+          "hiddenCode": "\nimport random\n\nclass Model:\n    def __init__(self):\n        self.w = {}\n        self.double = set()  # every double-pay tick\n\n    def add_worker(self, wid, position, rate):\n        if wid in self.w:\n            return False\n        self.w[wid] = {\"pos\": position, \"rate\": rate, \"next\": None, \"open\": None, \"done\": []}\n        return True\n\n    def clock_in(self, wid, ts):\n        w = self.w.get(wid)\n        if w is None or w[\"open\"] is not None:\n            return False\n        if w[\"next\"] is not None:\n            w[\"pos\"], w[\"rate\"] = w[\"next\"]\n            w[\"next\"] = None\n        w[\"open\"] = (ts, w[\"rate\"])\n        return True\n\n    def clock_out(self, wid, ts):\n        w = self.w.get(wid)\n        if w is None or w[\"open\"] is None:\n            return False\n        w[\"done\"].append((w[\"open\"][0], ts, w[\"open\"][1]))\n        w[\"open\"] = None\n        return True\n\n    def get_total_work_time(self, wid):\n        w = self.w.get(wid)\n        return None if w is None else sum(e - s for s, e, _ in w[\"done\"])\n\n    def top_k_workers(self, k):\n        return sorted(self.w, key=lambda wid: (-self.get_total_work_time(wid), wid))[:k]\n\n    def set_promotion(self, wid, position, rate):\n        if wid not in self.w:\n            return False\n        self.w[wid][\"next\"] = (position, rate)\n        return True\n\n    def get_position(self, wid):\n        w = self.w.get(wid)\n        return None if w is None else w[\"pos\"]\n\n    def calculate_pay(self, wid, start, end):\n        w = self.w.get(wid)\n        if w is None:\n            return None\n        sessions = list(w[\"done\"]) + ([(w[\"open\"][0], end, w[\"open\"][1])] if w[\"open\"] else [])\n        total = 0\n        for s, e, rate in sessions:\n            for t in range(max(s, start), min(e, end)):\n                total += rate * (2 if t in self.double else 1)\n        return total\n\n    def set_double_pay(self, start, end):\n        self.double.update(range(start, end))\n\nIDS = [\"kim\", \"ada\", \"lu\", \"Ada\"]\n\ndef random_calls(rng, steps, part):\n    ts, calls = 0, []\n    for _ in range(steps):\n        wid = rng.choice(IDS)\n        r = rng.random()\n        if r < 0.12:\n            calls.append((\"add_worker\", (wid, rng.choice([\"dev\", \"ops\"]), rng.randint(1, 9))))\n        elif r < 0.45:\n            ts += rng.choice([0, 0, 1, 2, 5])\n            calls.append((rng.choice([\"clock_in\", \"clock_out\"]), (wid, ts)))\n        elif part == 1:\n            calls.append((\"clock_in\", (wid, ts)))\n        elif r < 0.6:\n            calls.append((\"get_total_work_time\", (wid,)))\n        elif r < 0.7 or part == 2:\n            calls.append((\"top_k_workers\", (rng.randint(1, 5),)))\n        elif r < 0.78:\n            calls.append((\"set_promotion\", (wid, rng.choice([\"lead\", \"dev\"]), rng.randint(1, 9))))\n        elif r < 0.83:\n            calls.append((\"get_position\", (wid,)))\n        elif r < 0.92 or part == 3:\n            a = rng.randint(0, ts + 5)\n            calls.append((\"calculate_pay\", (wid, a, a + rng.randint(0, 30))))\n        else:\n            a = rng.randint(0, ts + 10)\n            calls.append((\"set_double_pay\", (a, a + rng.randint(0, 12))))\n    return calls\n\ndef replay(sheet, calls, label):\n    model = Model()\n    for i, (name, args) in enumerate(calls):\n        want = getattr(model, name)(*args)\n        got = getattr(sheet, name)(*args)\n        assert got == want, (label, i, name, args, got, want)\n\nfor seed in range(200):\n    replay({fn}(), random_calls(random.Random(seed), 50, 1), seed)\n",
+          "part": 1
+        },
+        {
+          "name": "Part 2: the worked example",
+          "code": "\nt = {fn}()\nfor wid in [\"kim\", \"ada\", \"lu\"]:\n    t.add_worker(wid, \"Labeler\", 10)\nt.clock_in(\"ada\", 0)\nt.clock_in(\"kim\", 5)\nt.clock_in(\"lu\", 10)\nt.clock_out(\"kim\", 20)\nt.clock_in(\"kim\", 25)\nt.clock_out(\"ada\", 30)\nt.clock_out(\"kim\", 40)\nassert t.get_total_work_time(\"kim\") == 30 and t.get_total_work_time(\"ada\") == 30\nassert t.get_total_work_time(\"lu\") == 0, \"an open session counts once it is closed\"\nassert t.top_k_workers(3) == [\"ada\", \"kim\", \"lu\"] and t.top_k_workers(1) == [\"ada\"]\nassert t.get_total_work_time(\"zed\") is None\n",
+          "behavior": "metrics.ties",
+          "part": 2
+        },
+        {
+          "name": "Part 2: ties, case and short lists",
+          "visibility": "unshown",
+          "behavior": "metrics.ties",
+          "failureMessage": "top_k_workers ranks by closed time, highest first, then by worker id in Python's string order (so 'B' comes before 'a'); it returns every worker when k is larger, and counts zero-length and open sessions as 0.",
+          "hiddenCode": "\nt = {fn}()\nfor wid in [\"a\", \"B\", \"c\"]:\n    t.add_worker(wid, \"x\", 1)\nassert t.top_k_workers(5) == [\"B\", \"a\", \"c\"]\nt.clock_in(\"c\", 4)\nt.clock_out(\"c\", 4)\nt.clock_in(\"a\", 4)\nassert t.top_k_workers(5) == [\"B\", \"a\", \"c\"] and t.get_total_work_time(\"c\") == 0\nt.clock_out(\"a\", 6)\nassert t.top_k_workers(1) == [\"a\"] and t.top_k_workers(2) == [\"a\", \"B\"]\n",
+          "part": 2
+        },
+        {
+          "name": "Part 2: random calls",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "On a random sequence that also asks for totals and the leaderboard, a return value differed from a model that adds up closed sessions.",
+          "hiddenCode": "\nimport random\n\nclass Model:\n    def __init__(self):\n        self.w = {}\n        self.double = set()  # every double-pay tick\n\n    def add_worker(self, wid, position, rate):\n        if wid in self.w:\n            return False\n        self.w[wid] = {\"pos\": position, \"rate\": rate, \"next\": None, \"open\": None, \"done\": []}\n        return True\n\n    def clock_in(self, wid, ts):\n        w = self.w.get(wid)\n        if w is None or w[\"open\"] is not None:\n            return False\n        if w[\"next\"] is not None:\n            w[\"pos\"], w[\"rate\"] = w[\"next\"]\n            w[\"next\"] = None\n        w[\"open\"] = (ts, w[\"rate\"])\n        return True\n\n    def clock_out(self, wid, ts):\n        w = self.w.get(wid)\n        if w is None or w[\"open\"] is None:\n            return False\n        w[\"done\"].append((w[\"open\"][0], ts, w[\"open\"][1]))\n        w[\"open\"] = None\n        return True\n\n    def get_total_work_time(self, wid):\n        w = self.w.get(wid)\n        return None if w is None else sum(e - s for s, e, _ in w[\"done\"])\n\n    def top_k_workers(self, k):\n        return sorted(self.w, key=lambda wid: (-self.get_total_work_time(wid), wid))[:k]\n\n    def set_promotion(self, wid, position, rate):\n        if wid not in self.w:\n            return False\n        self.w[wid][\"next\"] = (position, rate)\n        return True\n\n    def get_position(self, wid):\n        w = self.w.get(wid)\n        return None if w is None else w[\"pos\"]\n\n    def calculate_pay(self, wid, start, end):\n        w = self.w.get(wid)\n        if w is None:\n            return None\n        sessions = list(w[\"done\"]) + ([(w[\"open\"][0], end, w[\"open\"][1])] if w[\"open\"] else [])\n        total = 0\n        for s, e, rate in sessions:\n            for t in range(max(s, start), min(e, end)):\n                total += rate * (2 if t in self.double else 1)\n        return total\n\n    def set_double_pay(self, start, end):\n        self.double.update(range(start, end))\n\nIDS = [\"kim\", \"ada\", \"lu\", \"Ada\"]\n\ndef random_calls(rng, steps, part):\n    ts, calls = 0, []\n    for _ in range(steps):\n        wid = rng.choice(IDS)\n        r = rng.random()\n        if r < 0.12:\n            calls.append((\"add_worker\", (wid, rng.choice([\"dev\", \"ops\"]), rng.randint(1, 9))))\n        elif r < 0.45:\n            ts += rng.choice([0, 0, 1, 2, 5])\n            calls.append((rng.choice([\"clock_in\", \"clock_out\"]), (wid, ts)))\n        elif part == 1:\n            calls.append((\"clock_in\", (wid, ts)))\n        elif r < 0.6:\n            calls.append((\"get_total_work_time\", (wid,)))\n        elif r < 0.7 or part == 2:\n            calls.append((\"top_k_workers\", (rng.randint(1, 5),)))\n        elif r < 0.78:\n            calls.append((\"set_promotion\", (wid, rng.choice([\"lead\", \"dev\"]), rng.randint(1, 9))))\n        elif r < 0.83:\n            calls.append((\"get_position\", (wid,)))\n        elif r < 0.92 or part == 3:\n            a = rng.randint(0, ts + 5)\n            calls.append((\"calculate_pay\", (wid, a, a + rng.randint(0, 30))))\n        else:\n            a = rng.randint(0, ts + 10)\n            calls.append((\"set_double_pay\", (a, a + rng.randint(0, 12))))\n    return calls\n\ndef replay(sheet, calls, label):\n    model = Model()\n    for i, (name, args) in enumerate(calls):\n        want = getattr(model, name)(*args)\n        got = getattr(sheet, name)(*args)\n        assert got == want, (label, i, name, args, got, want)\n\nfor seed in range(200):\n    replay({fn}(), random_calls(random.Random(100 + seed), 60, 2), seed)\n",
+          "part": 2
+        },
+        {
+          "name": "Part 3: the worked example",
+          "code": "\nt = {fn}()\nt.add_worker(\"ada\", \"Labeler\", 10)\nt.clock_in(\"ada\", 0)\nassert t.set_promotion(\"ada\", \"Reviewer\", 15) is True\nassert t.set_promotion(\"ada\", \"Senior\", 25) is True\nt.clock_out(\"ada\", 20)\nassert t.get_position(\"ada\") == \"Labeler\"\nt.clock_in(\"ada\", 30)\nassert t.get_position(\"ada\") == \"Senior\"\nt.clock_out(\"ada\", 40)\nassert t.calculate_pay(\"ada\", 15, 35) == 5 * 10 + 5 * 25\nt.clock_in(\"ada\", 50)\nassert t.calculate_pay(\"ada\", 45, 60) == 10 * 25\nassert t.calculate_pay(\"ada\", 18, 18) == 0\n",
+          "behavior": "state.invariant",
+          "part": 3
+        },
+        {
+          "name": "Part 3: promotions and windows",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "A promotion replaces position and rate together at the next clock_in, never during an open session or for past ones, and a second one before then replaces the first; pay sums the overlap of each session with [start, end) at that session's own rate; an open session counts as running until end; an empty window pays 0.",
+          "hiddenCode": "\nt = {fn}()\nt.add_worker(\"u\", \"dev\", 3)\nt.set_promotion(\"u\", \"lead\", 7)\nt.clock_in(\"u\", 10)\nt.set_promotion(\"u\", \"dev\", 5)\nassert t.calculate_pay(\"u\", 0, 12) == 2 * 7, \"the first promotion applied at clock_in\"\nt.clock_out(\"u\", 14)\nt.clock_in(\"u\", 14)\nassert t.get_position(\"u\") == \"dev\"\nassert t.calculate_pay(\"u\", 12, 16) == 2 * 7 + 2 * 5\nassert t.calculate_pay(\"u\", 16, 16) == 0 and t.calculate_pay(\"u\", 0, 10) == 0\nassert t.calculate_pay(\"u\", 0, 10**6) == 4 * 7 + (10**6 - 14) * 5\nt.clock_out(\"u\", 20)\nassert t.calculate_pay(\"u\", 0, 10**6) == 4 * 7 + 6 * 5, \"a closed session stops at its clock_out\"\nassert t.get_position(\"nobody\") is None\n",
+          "part": 3
+        },
+        {
+          "name": "Part 3: random calls",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "On a random sequence with promotions and pay questions, a return value differed from a model that pays every time unit of every session at its rate.",
+          "hiddenCode": "\nimport random\n\nclass Model:\n    def __init__(self):\n        self.w = {}\n        self.double = set()  # every double-pay tick\n\n    def add_worker(self, wid, position, rate):\n        if wid in self.w:\n            return False\n        self.w[wid] = {\"pos\": position, \"rate\": rate, \"next\": None, \"open\": None, \"done\": []}\n        return True\n\n    def clock_in(self, wid, ts):\n        w = self.w.get(wid)\n        if w is None or w[\"open\"] is not None:\n            return False\n        if w[\"next\"] is not None:\n            w[\"pos\"], w[\"rate\"] = w[\"next\"]\n            w[\"next\"] = None\n        w[\"open\"] = (ts, w[\"rate\"])\n        return True\n\n    def clock_out(self, wid, ts):\n        w = self.w.get(wid)\n        if w is None or w[\"open\"] is None:\n            return False\n        w[\"done\"].append((w[\"open\"][0], ts, w[\"open\"][1]))\n        w[\"open\"] = None\n        return True\n\n    def get_total_work_time(self, wid):\n        w = self.w.get(wid)\n        return None if w is None else sum(e - s for s, e, _ in w[\"done\"])\n\n    def top_k_workers(self, k):\n        return sorted(self.w, key=lambda wid: (-self.get_total_work_time(wid), wid))[:k]\n\n    def set_promotion(self, wid, position, rate):\n        if wid not in self.w:\n            return False\n        self.w[wid][\"next\"] = (position, rate)\n        return True\n\n    def get_position(self, wid):\n        w = self.w.get(wid)\n        return None if w is None else w[\"pos\"]\n\n    def calculate_pay(self, wid, start, end):\n        w = self.w.get(wid)\n        if w is None:\n            return None\n        sessions = list(w[\"done\"]) + ([(w[\"open\"][0], end, w[\"open\"][1])] if w[\"open\"] else [])\n        total = 0\n        for s, e, rate in sessions:\n            for t in range(max(s, start), min(e, end)):\n                total += rate * (2 if t in self.double else 1)\n        return total\n\n    def set_double_pay(self, start, end):\n        self.double.update(range(start, end))\n\nIDS = [\"kim\", \"ada\", \"lu\", \"Ada\"]\n\ndef random_calls(rng, steps, part):\n    ts, calls = 0, []\n    for _ in range(steps):\n        wid = rng.choice(IDS)\n        r = rng.random()\n        if r < 0.12:\n            calls.append((\"add_worker\", (wid, rng.choice([\"dev\", \"ops\"]), rng.randint(1, 9))))\n        elif r < 0.45:\n            ts += rng.choice([0, 0, 1, 2, 5])\n            calls.append((rng.choice([\"clock_in\", \"clock_out\"]), (wid, ts)))\n        elif part == 1:\n            calls.append((\"clock_in\", (wid, ts)))\n        elif r < 0.6:\n            calls.append((\"get_total_work_time\", (wid,)))\n        elif r < 0.7 or part == 2:\n            calls.append((\"top_k_workers\", (rng.randint(1, 5),)))\n        elif r < 0.78:\n            calls.append((\"set_promotion\", (wid, rng.choice([\"lead\", \"dev\"]), rng.randint(1, 9))))\n        elif r < 0.83:\n            calls.append((\"get_position\", (wid,)))\n        elif r < 0.92 or part == 3:\n            a = rng.randint(0, ts + 5)\n            calls.append((\"calculate_pay\", (wid, a, a + rng.randint(0, 30))))\n        else:\n            a = rng.randint(0, ts + 10)\n            calls.append((\"set_double_pay\", (a, a + rng.randint(0, 12))))\n    return calls\n\ndef replay(sheet, calls, label):\n    model = Model()\n    for i, (name, args) in enumerate(calls):\n        want = getattr(model, name)(*args)\n        got = getattr(sheet, name)(*args)\n        assert got == want, (label, i, name, args, got, want)\n\nfor seed in range(200):\n    replay({fn}(), random_calls(random.Random(200 + seed), 70, 3), seed)\n",
+          "part": 3
+        },
+        {
+          "name": "Part 4: the worked example",
+          "code": "\nt = {fn}()\nt.add_worker(\"ada\", \"Labeler\", 10)\nt.clock_in(\"ada\", 0)\nt.clock_out(\"ada\", 30)\nassert t.set_double_pay(10, 20) is None\nt.set_double_pay(15, 25)\nt.set_double_pay(50, 50)\nassert t.calculate_pay(\"ada\", 0, 30) == 10 * 10 + 15 * 20 + 5 * 10\nassert t.calculate_pay(\"ada\", 12, 18) == 6 * 20\n",
+          "behavior": "state.invariant",
+          "part": 4
+        },
+        {
+          "name": "Part 4: periods for every worker and every time",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "A double-pay period covers [start, end) for every worker and for sessions before or after the call that set it; overlapping or touching periods double a time unit once, never more; empty periods change nothing.",
+          "hiddenCode": "\nt = {fn}()\nt.add_worker(\"a\", \"x\", 1)\nt.add_worker(\"b\", \"x\", 3)\nt.set_double_pay(5, 10)\nt.clock_in(\"a\", 0)\nt.clock_in(\"b\", 2)\nt.clock_out(\"a\", 20)\nt.set_double_pay(8, 12)\nt.set_double_pay(12, 14)\nt.set_double_pay(6, 9)\nt.set_double_pay(30, 20)\nassert t.calculate_pay(\"a\", 0, 20) == 20 + 9\nassert t.calculate_pay(\"b\", 0, 7) == 5 * 3 + 2 * 3, \"b's open session runs until the window's end\"\nassert t.calculate_pay(\"b\", 13, 15) == 2 * 3 + 3\n",
+          "part": 4
+        },
+        {
+          "name": "Part 4: random calls",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "On a random sequence with double-pay periods, a return value differed from a model that doubles each time unit covered by any period.",
+          "hiddenCode": "\nimport random\n\nclass Model:\n    def __init__(self):\n        self.w = {}\n        self.double = set()  # every double-pay tick\n\n    def add_worker(self, wid, position, rate):\n        if wid in self.w:\n            return False\n        self.w[wid] = {\"pos\": position, \"rate\": rate, \"next\": None, \"open\": None, \"done\": []}\n        return True\n\n    def clock_in(self, wid, ts):\n        w = self.w.get(wid)\n        if w is None or w[\"open\"] is not None:\n            return False\n        if w[\"next\"] is not None:\n            w[\"pos\"], w[\"rate\"] = w[\"next\"]\n            w[\"next\"] = None\n        w[\"open\"] = (ts, w[\"rate\"])\n        return True\n\n    def clock_out(self, wid, ts):\n        w = self.w.get(wid)\n        if w is None or w[\"open\"] is None:\n            return False\n        w[\"done\"].append((w[\"open\"][0], ts, w[\"open\"][1]))\n        w[\"open\"] = None\n        return True\n\n    def get_total_work_time(self, wid):\n        w = self.w.get(wid)\n        return None if w is None else sum(e - s for s, e, _ in w[\"done\"])\n\n    def top_k_workers(self, k):\n        return sorted(self.w, key=lambda wid: (-self.get_total_work_time(wid), wid))[:k]\n\n    def set_promotion(self, wid, position, rate):\n        if wid not in self.w:\n            return False\n        self.w[wid][\"next\"] = (position, rate)\n        return True\n\n    def get_position(self, wid):\n        w = self.w.get(wid)\n        return None if w is None else w[\"pos\"]\n\n    def calculate_pay(self, wid, start, end):\n        w = self.w.get(wid)\n        if w is None:\n            return None\n        sessions = list(w[\"done\"]) + ([(w[\"open\"][0], end, w[\"open\"][1])] if w[\"open\"] else [])\n        total = 0\n        for s, e, rate in sessions:\n            for t in range(max(s, start), min(e, end)):\n                total += rate * (2 if t in self.double else 1)\n        return total\n\n    def set_double_pay(self, start, end):\n        self.double.update(range(start, end))\n\nIDS = [\"kim\", \"ada\", \"lu\", \"Ada\"]\n\ndef random_calls(rng, steps, part):\n    ts, calls = 0, []\n    for _ in range(steps):\n        wid = rng.choice(IDS)\n        r = rng.random()\n        if r < 0.12:\n            calls.append((\"add_worker\", (wid, rng.choice([\"dev\", \"ops\"]), rng.randint(1, 9))))\n        elif r < 0.45:\n            ts += rng.choice([0, 0, 1, 2, 5])\n            calls.append((rng.choice([\"clock_in\", \"clock_out\"]), (wid, ts)))\n        elif part == 1:\n            calls.append((\"clock_in\", (wid, ts)))\n        elif r < 0.6:\n            calls.append((\"get_total_work_time\", (wid,)))\n        elif r < 0.7 or part == 2:\n            calls.append((\"top_k_workers\", (rng.randint(1, 5),)))\n        elif r < 0.78:\n            calls.append((\"set_promotion\", (wid, rng.choice([\"lead\", \"dev\"]), rng.randint(1, 9))))\n        elif r < 0.83:\n            calls.append((\"get_position\", (wid,)))\n        elif r < 0.92 or part == 3:\n            a = rng.randint(0, ts + 5)\n            calls.append((\"calculate_pay\", (wid, a, a + rng.randint(0, 30))))\n        else:\n            a = rng.randint(0, ts + 10)\n            calls.append((\"set_double_pay\", (a, a + rng.randint(0, 12))))\n    return calls\n\ndef replay(sheet, calls, label):\n    model = Model()\n    for i, (name, args) in enumerate(calls):\n        want = getattr(model, name)(*args)\n        got = getattr(sheet, name)(*args)\n        assert got == want, (label, i, name, args, got, want)\n\nfor seed in range(200):\n    replay({fn}(), random_calls(random.Random(300 + seed), 80, 4), seed)\n",
+          "part": 4
+        }
+      ],
+      "parts": [
+        {
+          "title": "Clocking in and out",
+          "descriptionEn": "**Signatures:**\n- `Timesheet().add_worker(worker_id, position, hourly_rate) -> bool` registers a worker. It returns `False` if the id is taken.\n- `clock_in(worker_id, timestamp) -> bool` opens a session. It returns `False` if the worker is not registered or already has an open session.\n- `clock_out(worker_id, timestamp) -> bool` closes the open session. It returns `False` if the worker is not registered or has no open session.\n\n**Example:**\n- `clock_in(\"w-07\", 3)` is `False` before `add_worker(\"w-07\", \"Annotator\", 12)`, which is `True`\n- now `clock_in(\"w-07\", 3)` and `clock_out(\"w-07\", 9)` are `True`, and a second `clock_out(\"w-07\", 9)` is `False`\n- `clock_in(\"w-07\", 9)` is `True`: a session may start when the last one ended\n- `add_worker(\"w-07\", \"Lead\", 40)` is `False`: the id is taken"
+        },
+        {
+          "title": "Totals and a leaderboard",
+          "descriptionEn": "Keep Part 1 and add two methods.\n\n**Signatures:**\n- `get_total_work_time(worker_id) -> int | None` is the summed length of the worker's closed sessions, or `None` if the worker is not registered. An open session adds nothing until it is closed.\n- `top_k_workers(k) -> list[str]` returns up to `k` worker ids, most time first, ties by worker id in Python's string order. `k` is positive; with fewer workers, return all of them.\n\n**Example:** `kim`, `ada` and `lu` are registered; `ada` works `[0, 30)`, `kim` works `[5, 20)` and `[25, 40)`, and `lu` clocks in at `10` and stays in:\n- `get_total_work_time(\"kim\")` is `30`, the same as `ada`, and `get_total_work_time(\"lu\")` is `0`\n- `top_k_workers(3)` is `[\"ada\", \"kim\", \"lu\"]`, and `top_k_workers(1)` is `[\"ada\"]`\n- `get_total_work_time(\"zed\")` is `None`"
+        },
+        {
+          "title": "Promotions and pay",
+          "descriptionEn": "Keep Parts 1–2 and add three methods.\n\n**Signatures:**\n- `set_promotion(worker_id, new_position, new_hourly_rate) -> bool` schedules a new position and rate together. They take effect at the worker's next `clock_in`, never for a session already open or closed. A second call before that replaces the first. It returns `False` if the worker is not registered.\n- `get_position(worker_id) -> str | None` is the current position, or `None` if the worker is not registered.\n- `calculate_pay(worker_id, start, end) -> int | None` sums, over each session, the length of its overlap with `[start, end)` times the rate in effect when that session began. An open session counts as running until `end`. It returns `None` if the worker is not registered. `0 <= start <= end`.\n\n**Example:** `add_worker(\"ada\", \"Labeler\", 10)` and `clock_in(\"ada\", 0)`; then `set_promotion(\"ada\", \"Reviewer\", 15)` and `set_promotion(\"ada\", \"Senior\", 25)`, and `clock_out(\"ada\", 20)`:\n- `get_position(\"ada\")` is still `\"Labeler\"`; after `clock_in(\"ada\", 30)` it is `\"Senior\"`, and the rate is `25`\n- after `clock_out(\"ada\", 40)`, `calculate_pay(\"ada\", 15, 35)` is `5 * 10 + 5 * 25 = 175`\n- after `clock_in(\"ada\", 50)`, `calculate_pay(\"ada\", 45, 60)` is `250`: the open session counts up to `60`\n- `calculate_pay(\"ada\", 18, 18)` is `0`: the window is empty"
+        },
+        {
+          "title": "Double-pay periods",
+          "descriptionEn": "Keep Parts 1–3 and add double pay.\n\n**Signature:** `set_double_pay(start, end) -> None`\n\n- In `calculate_pay`, time inside any double-pay period earns twice the session's rate. This holds for every worker, and for sessions before or after the call that set the period. `0 <= start`; a period with `end <= start` is ignored.\n- Periods never go away, and overlapping periods do not stack: a time is doubled at most once.\n\n**Example:** `ada` at rate `10` works `[0, 30)`; then `set_double_pay(10, 20)`, `set_double_pay(15, 25)` and `set_double_pay(50, 50)`:\n- the double-pay time is `[10, 25)`, so `calculate_pay(\"ada\", 0, 30)` is `10 * 10 + 15 * 20 + 5 * 10 = 450`\n- `calculate_pay(\"ada\", 12, 18)` is `6 * 20 = 120`"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "What does each worker need to remember between a clock_in and the matching clock_out? How does that one field let both methods decide in O(1) whether the call is allowed?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Keep a dict from worker id to a record with the position, the rate and the start of the open session, or None. add_worker fails if the id is in the dict. clock_in fails for an unknown id or a non-None start, and otherwise stores the timestamp. clock_out fails for an unknown id or a None start, and otherwise appends (start, timestamp) to the worker's sessions and clears the start."
+        }
+      ],
+      "modelConnections": [
+        "Compute billing for training and labeling jobs charges per GPU-hour at the rate when the job started, with surge windows priced differently.",
+        "Annotation vendors pay labelers by session time, with rate changes after a review and bonus periods for urgent batches."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Storing the rate on each session makes promotions never rewrite past pay.",
+          "Merging double-pay periods into a sorted union makes 'doubled once' automatic.",
+          "Every method is a dict lookup plus work on one worker's sessions."
+        ],
+        "cons": [
+          "top_k_workers sorts every worker on each call, O(n log n).",
+          "calculate_pay walks every session of the worker and every period, O(s * p) without binary search.",
+          "Sessions are never trimmed, so memory grows with every clock_out."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why should clock_in fail while a session is open instead of closing the old session first?",
+          "hint": "If clock_in silently closed an open session first, which timestamp would that session end at, and was the worker really there until then?"
+        },
+        {
+          "stage": "concept",
+          "question": "With half-open sessions, why can a worker clock out and clock in again at the same timestamp?",
+          "hint": "A session is [in, out). If one ends at 9 and the next starts at 9, is any instant counted twice?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What does each worker record need so that add_worker, clock_in and clock_out are all O(1)?",
+          "hint": "Between clock_in and clock_out, what is the one value a worker must remember? Where does it live so that both calls find it in O(1)?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How would you keep top_k_workers fast with many workers and frequent clock-outs?",
+          "hint": "Totals only change at clock_out. Which structure keeps workers ordered by total and lets one worker move when their total grows?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why store the rate on each session instead of reading the worker's rate when pay is asked for?",
+          "hint": "A promotion lands between two sessions. If pay reads the worker's current rate, what happens to the money for the earlier session?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why does an open session count as running until the end of the pay window, and what would go wrong otherwise?",
+          "hint": "A session still open has no end yet. Which end makes pay for [start, end) match what a later clock_out at or after end would give?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How do you make sure overlapping double-pay periods double a time only once, and how would you answer pay questions fast with many periods?",
+          "hint": "Two periods [10, 20) and [15, 25). If you add the overlap of each, how much of [15, 20) is paid extra, and what merged form avoids that?"
+        }
+      ]
+    },
+    {
+      "id": "tool_scheduler",
+      "title": "Agent Tool-Call Scheduler",
+      "titleZh": "Agent Tool-Call Scheduler",
+      "difficulty": "Hard",
+      "functionName": "ToolScheduler",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Build `ToolScheduler`, which plans when each agent's tool calls start, given their durations, their dependencies and a limited number of slots.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior and adds one method, so one `ToolScheduler` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- A call is a tuple `(tool_id, duration, deps)`. An agent's `tool_id`s are exactly `0` to `n - 1` in some order, `duration` is an integer from `1` to `10**9`, and `deps` names other calls of the same agent that must end before this one begins.\n- Time is an integer and starts at `0`. A call holds one slot from its start `s` until `s + duration`, and runs without interruption.\n- A call may start at time `t` only when each of its dependencies ended at `t` or earlier. At each `t`, first release every call that ends at `t`, then fill free slots.\n- A slot is never left free while a ready call that is allowed to start waits. When there are more ready calls than free slots, the smaller `(agent_id, tool_id)` starts first.\n- Each method returns `(starts, makespan)`. `starts` holds one `(start_time, agent_id, tool_id)` per call, sorted. `makespan` is the largest `start + duration`, or `0` with no calls.\n- If some call can never start because of a dependency cycle, raise `CycleError`, a class you define.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** it is list scheduling with dependencies, the core of every task runner. Each later part adds one requirement, and durations up to `10**9` rule out stepping through time one unit at a time.\n\n**Where it is used:** agent frameworks running tool calls in parallel, build systems such as Bazel and make `-j`, workflow engines such as Airflow, and GPU job queues with per-team limits.\n\nAdapted from the agent tool scheduler question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, on one class whose methods replace the three functions: `schedule_agent` becomes `run_one`, `schedule_agents_independently` becomes `run_each` and `schedule_agents_global` becomes `run_shared`. Calls are plain 3-tuples instead of the `ToolCall` named tuple, so `deps` is required in each, and the tests go up to 40,000 calls instead of 200,000. Part 4, a cap per agent under a shared cap, comes from the source's follow-ups and has its own speed check.",
+      "descriptionZh": "Build `ToolScheduler`, which plans when each agent's tool calls start, given their durations, their dependencies and a limited number of slots.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior and adds one method, so one `ToolScheduler` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- A call is a tuple `(tool_id, duration, deps)`. An agent's `tool_id`s are exactly `0` to `n - 1` in some order, `duration` is an integer from `1` to `10**9`, and `deps` names other calls of the same agent that must end before this one begins.\n- Time is an integer and starts at `0`. A call holds one slot from its start `s` until `s + duration`, and runs without interruption.\n- A call may start at time `t` only when each of its dependencies ended at `t` or earlier. At each `t`, first release every call that ends at `t`, then fill free slots.\n- A slot is never left free while a ready call that is allowed to start waits. When there are more ready calls than free slots, the smaller `(agent_id, tool_id)` starts first.\n- Each method returns `(starts, makespan)`. `starts` holds one `(start_time, agent_id, tool_id)` per call, sorted. `makespan` is the largest `start + duration`, or `0` with no calls.\n- If some call can never start because of a dependency cycle, raise `CycleError`, a class you define.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** it is list scheduling with dependencies, the core of every task runner. Each later part adds one requirement, and durations up to `10**9` rule out stepping through time one unit at a time.\n\n**Where it is used:** agent frameworks running tool calls in parallel, build systems such as Bazel and make `-j`, workflow engines such as Airflow, and GPU job queues with per-team limits.\n\nAdapted from the agent tool scheduler question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, on one class whose methods replace the three functions: `schedule_agent` becomes `run_one`, `schedule_agents_independently` becomes `run_each` and `schedule_agents_global` becomes `run_shared`. Calls are plain 3-tuples instead of the `ToolCall` named tuple, so `deps` is required in each, and the tests go up to 40,000 calls instead of 200,000. Part 4, a cap per agent under a shared cap, comes from the source's follow-ups and has its own speed check.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Part 1: the worked example",
+          "code": "\ns = {fn}()\ncalls = [(2, 3, [0]), (0, 4, []), (1, 1, []), (3, 2, [1])]\nassert s.run_one(calls, 2) == ([(0, 0, 0), (0, 0, 1), (1, 0, 3), (4, 0, 2)], 7)\nassert s.run_one([], 3) == ([], 0)\n",
+          "behavior": "contract.signature",
+          "part": 1
+        },
+        {
+          "name": "Part 1: instants, ties and cycles",
+          "visibility": "unshown",
+          "behavior": "events.ordering",
+          "failureMessage": "A dependency finishing at t unlocks its dependents at t; finishing calls free their slots before new calls start; ties go to the smaller tool_id whatever the list order; no slot stays free while a call is ready; any call that can never start raises CycleError.",
+          "hiddenCode": "\nimport random, time\n\ndef raises(kind, call):\n    try:\n        call()\n    except Exception as e:\n        assert type(e).__name__ == kind, f\"expected {kind}, got {type(e).__name__}: {e}\"\n        return e\n    raise AssertionError(f\"expected {kind}, nothing was raised\")\n\ndef brute(agents, capacity, caps=None):\n    flat = [(a, c) for a, calls in enumerate(agents) for c in calls]\n    done = set()\n    started = set()\n    finish_at = {}\n    running = {a: 0 for a in range(len(agents))}\n    starts, makespan, t = [], 0, 0\n    while len(started) < len(flat):\n        for key in [k for k, f in finish_at.items() if f == t]:\n            del finish_at[key]\n            done.add(key)\n            running[key[0]] -= 1\n        waiting = sorted((a, c[0]) for a, c in flat if (a, c[0]) not in started\n                         and all((a, d) in done for d in c[2]))\n        by_key = {(a, c[0]): c for a, c in flat}\n        for a, tool in waiting:\n            if len(finish_at) >= capacity:\n                break\n            if caps is not None and running[a] >= caps[a]:\n                continue\n            c = by_key[(a, tool)]\n            starts.append((t, a, tool))\n            started.add((a, tool))\n            finish_at[(a, tool)] = t + c[1]\n            running[a] += 1\n            makespan = max(makespan, t + c[1])\n        if len(started) == len(flat):\n            break\n        if not finish_at:\n            return \"CycleError\"\n        t += 1\n    return starts, makespan\n\ndef random_agents(rng, agents=4, calls=6, longest=4, cycle=0.0):\n    out = []\n    for _ in range(rng.randint(1, agents)):\n        n = rng.randint(0, calls)\n        made = []\n        for tool in range(n):\n            deps = rng.sample(range(tool), rng.randint(0, min(2, tool))) if tool else []\n            made.append((tool, rng.randint(1, longest), deps))\n        if n >= 2 and rng.random() < cycle:\n            a, b = rng.sample(range(n), 2)\n            made[min(a, b)] = (min(a, b), made[min(a, b)][1], made[min(a, b)][2] + [max(a, b)])\n        rng.shuffle(made)\n        out.append(made)\n    return out\n\ndef check(got, want, label):\n    if want == \"CycleError\":\n        raises(\"CycleError\", got)\n    else:\n        result = got()\n        assert result == want, (label, result, want)\n\ns = {fn}()\nassert s.run_one([(1, 5, [0]), (0, 5, [])], 1) == ([(0, 0, 0), (5, 0, 1)], 10)\nassert s.run_one([(0, 2, []), (1, 3, []), (2, 1, [])], 1) == ([(0, 0, 0), (2, 0, 1), (5, 0, 2)], 6)\nassert s.run_one([(3, 1, []), (2, 1, []), (1, 1, []), (0, 1, [])], 2) == ([(0, 0, 0), (0, 0, 1), (1, 0, 2), (1, 0, 3)], 2)\nassert s.run_one([(0, 1, []), (1, 1, [])], 10) == ([(0, 0, 0), (0, 0, 1)], 1)\nassert s.run_one([(0, 1, []), (1, 1, []), (2, 1, [1]), (3, 1, [1]), (4, 1, [])], 2) == ([(0, 0, 0), (0, 0, 1), (1, 0, 2), (1, 0, 3), (2, 0, 4)], 3)\nassert s.run_one([(0, 10**9, []), (1, 10**9, [0])], 1) == ([(0, 0, 0), (10**9, 0, 1)], 2 * 10**9)\nraises(\"CycleError\", lambda: s.run_one([(0, 1, [0])], 1))\nraises(\"CycleError\", lambda: s.run_one([(0, 1, []), (1, 1, [2]), (2, 1, [1])], 4))\nraises(\"CycleError\", lambda: s.run_one([(0, 1, []), (1, 1, [0, 3]), (2, 1, [1]), (3, 1, [2])], 1))\n",
+          "part": 1
+        },
+        {
+          "name": "Part 1: random calls",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "On random dependency lists, capacities and some cycles, the starts or makespan differed from stepping time one unit at a time and filling free slots in (agent_id, tool_id) order.",
+          "hiddenCode": "\nimport random, time\n\ndef raises(kind, call):\n    try:\n        call()\n    except Exception as e:\n        assert type(e).__name__ == kind, f\"expected {kind}, got {type(e).__name__}: {e}\"\n        return e\n    raise AssertionError(f\"expected {kind}, nothing was raised\")\n\ndef brute(agents, capacity, caps=None):\n    flat = [(a, c) for a, calls in enumerate(agents) for c in calls]\n    done = set()\n    started = set()\n    finish_at = {}\n    running = {a: 0 for a in range(len(agents))}\n    starts, makespan, t = [], 0, 0\n    while len(started) < len(flat):\n        for key in [k for k, f in finish_at.items() if f == t]:\n            del finish_at[key]\n            done.add(key)\n            running[key[0]] -= 1\n        waiting = sorted((a, c[0]) for a, c in flat if (a, c[0]) not in started\n                         and all((a, d) in done for d in c[2]))\n        by_key = {(a, c[0]): c for a, c in flat}\n        for a, tool in waiting:\n            if len(finish_at) >= capacity:\n                break\n            if caps is not None and running[a] >= caps[a]:\n                continue\n            c = by_key[(a, tool)]\n            starts.append((t, a, tool))\n            started.add((a, tool))\n            finish_at[(a, tool)] = t + c[1]\n            running[a] += 1\n            makespan = max(makespan, t + c[1])\n        if len(started) == len(flat):\n            break\n        if not finish_at:\n            return \"CycleError\"\n        t += 1\n    return starts, makespan\n\ndef random_agents(rng, agents=4, calls=6, longest=4, cycle=0.0):\n    out = []\n    for _ in range(rng.randint(1, agents)):\n        n = rng.randint(0, calls)\n        made = []\n        for tool in range(n):\n            deps = rng.sample(range(tool), rng.randint(0, min(2, tool))) if tool else []\n            made.append((tool, rng.randint(1, longest), deps))\n        if n >= 2 and rng.random() < cycle:\n            a, b = rng.sample(range(n), 2)\n            made[min(a, b)] = (min(a, b), made[min(a, b)][1], made[min(a, b)][2] + [max(a, b)])\n        rng.shuffle(made)\n        out.append(made)\n    return out\n\ndef check(got, want, label):\n    if want == \"CycleError\":\n        raises(\"CycleError\", got)\n    else:\n        result = got()\n        assert result == want, (label, result, want)\n\ns = {fn}()\nrng = random.Random(21)\nfor trial in range(300):\n    calls = random_agents(rng, agents=1, calls=8, cycle=0.15)[0]\n    capacity = rng.randint(1, 4)\n    check(lambda: s.run_one(calls, capacity), brute([calls], capacity), (trial, calls, capacity))\n",
+          "part": 1
+        },
+        {
+          "name": "Part 2: the worked example",
+          "code": "\ns = {fn}()\nagents = [[(0, 2, []), (1, 2, []), (2, 1, [0])], [(0, 3, [])], [(0, 1, []), (1, 1, [])]]\nassert s.run_each(agents, [2, 1, 1]) == ([(0, 0, 0), (0, 0, 1), (0, 1, 0), (0, 2, 0), (1, 2, 1), (2, 0, 2)], 3)\n",
+          "behavior": "contract.signature",
+          "part": 2
+        },
+        {
+          "name": "Part 2: random agents",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "Each agent must be scheduled alone under its own cap, the starts merged by (start_time, agent_id, tool_id), the makespan the largest over agents, and a cycle in any agent raises CycleError.",
+          "hiddenCode": "\nimport random, time\n\ndef raises(kind, call):\n    try:\n        call()\n    except Exception as e:\n        assert type(e).__name__ == kind, f\"expected {kind}, got {type(e).__name__}: {e}\"\n        return e\n    raise AssertionError(f\"expected {kind}, nothing was raised\")\n\ndef brute(agents, capacity, caps=None):\n    flat = [(a, c) for a, calls in enumerate(agents) for c in calls]\n    done = set()\n    started = set()\n    finish_at = {}\n    running = {a: 0 for a in range(len(agents))}\n    starts, makespan, t = [], 0, 0\n    while len(started) < len(flat):\n        for key in [k for k, f in finish_at.items() if f == t]:\n            del finish_at[key]\n            done.add(key)\n            running[key[0]] -= 1\n        waiting = sorted((a, c[0]) for a, c in flat if (a, c[0]) not in started\n                         and all((a, d) in done for d in c[2]))\n        by_key = {(a, c[0]): c for a, c in flat}\n        for a, tool in waiting:\n            if len(finish_at) >= capacity:\n                break\n            if caps is not None and running[a] >= caps[a]:\n                continue\n            c = by_key[(a, tool)]\n            starts.append((t, a, tool))\n            started.add((a, tool))\n            finish_at[(a, tool)] = t + c[1]\n            running[a] += 1\n            makespan = max(makespan, t + c[1])\n        if len(started) == len(flat):\n            break\n        if not finish_at:\n            return \"CycleError\"\n        t += 1\n    return starts, makespan\n\ndef random_agents(rng, agents=4, calls=6, longest=4, cycle=0.0):\n    out = []\n    for _ in range(rng.randint(1, agents)):\n        n = rng.randint(0, calls)\n        made = []\n        for tool in range(n):\n            deps = rng.sample(range(tool), rng.randint(0, min(2, tool))) if tool else []\n            made.append((tool, rng.randint(1, longest), deps))\n        if n >= 2 and rng.random() < cycle:\n            a, b = rng.sample(range(n), 2)\n            made[min(a, b)] = (min(a, b), made[min(a, b)][1], made[min(a, b)][2] + [max(a, b)])\n        rng.shuffle(made)\n        out.append(made)\n    return out\n\ndef check(got, want, label):\n    if want == \"CycleError\":\n        raises(\"CycleError\", got)\n    else:\n        result = got()\n        assert result == want, (label, result, want)\n\ns = {fn}()\nrng = random.Random(22)\nfor trial in range(300):\n    agents = random_agents(rng, cycle=0.05)\n    caps = [rng.randint(1, 3) for _ in agents]\n    want = [brute([calls], caps[a]) for a, calls in enumerate(agents)]\n    if \"CycleError\" in want:\n        raises(\"CycleError\", lambda: s.run_each(agents, caps))\n        continue\n    merged = sorted((t, a, tool) for a, (starts, _) in enumerate(want) for t, _, tool in starts)\n    assert s.run_each(agents, caps) == (merged, max([m for _, m in want], default=0)), (trial, agents, caps)\n",
+          "part": 2
+        },
+        {
+          "name": "Part 3: the worked example",
+          "code": "\ns = {fn}()\nagents = [[(0, 1, []), (1, 1, [0]), (2, 4, []), (3, 4, [])], [(0, 2, [])], [(0, 1, [])], [(0, 1, []), (1, 1, [0])]]\nassert s.run_shared(agents, 3) == ([(0, 0, 0), (0, 0, 2), (0, 0, 3), (1, 0, 1), (2, 1, 0), (4, 2, 0), (4, 3, 0), (5, 3, 1)], 6)\n",
+          "behavior": "contract.signature",
+          "part": 3
+        },
+        {
+          "name": "Part 3: random agents sharing slots",
+          "visibility": "unshown",
+          "behavior": "scheduler.concurrency",
+          "failureMessage": "With one cap shared by every agent, the starts or makespan differed from stepping time one unit at a time and giving each free slot to the ready call with the smallest (agent_id, tool_id).",
+          "hiddenCode": "\nimport random, time\n\ndef raises(kind, call):\n    try:\n        call()\n    except Exception as e:\n        assert type(e).__name__ == kind, f\"expected {kind}, got {type(e).__name__}: {e}\"\n        return e\n    raise AssertionError(f\"expected {kind}, nothing was raised\")\n\ndef brute(agents, capacity, caps=None):\n    flat = [(a, c) for a, calls in enumerate(agents) for c in calls]\n    done = set()\n    started = set()\n    finish_at = {}\n    running = {a: 0 for a in range(len(agents))}\n    starts, makespan, t = [], 0, 0\n    while len(started) < len(flat):\n        for key in [k for k, f in finish_at.items() if f == t]:\n            del finish_at[key]\n            done.add(key)\n            running[key[0]] -= 1\n        waiting = sorted((a, c[0]) for a, c in flat if (a, c[0]) not in started\n                         and all((a, d) in done for d in c[2]))\n        by_key = {(a, c[0]): c for a, c in flat}\n        for a, tool in waiting:\n            if len(finish_at) >= capacity:\n                break\n            if caps is not None and running[a] >= caps[a]:\n                continue\n            c = by_key[(a, tool)]\n            starts.append((t, a, tool))\n            started.add((a, tool))\n            finish_at[(a, tool)] = t + c[1]\n            running[a] += 1\n            makespan = max(makespan, t + c[1])\n        if len(started) == len(flat):\n            break\n        if not finish_at:\n            return \"CycleError\"\n        t += 1\n    return starts, makespan\n\ndef random_agents(rng, agents=4, calls=6, longest=4, cycle=0.0):\n    out = []\n    for _ in range(rng.randint(1, agents)):\n        n = rng.randint(0, calls)\n        made = []\n        for tool in range(n):\n            deps = rng.sample(range(tool), rng.randint(0, min(2, tool))) if tool else []\n            made.append((tool, rng.randint(1, longest), deps))\n        if n >= 2 and rng.random() < cycle:\n            a, b = rng.sample(range(n), 2)\n            made[min(a, b)] = (min(a, b), made[min(a, b)][1], made[min(a, b)][2] + [max(a, b)])\n        rng.shuffle(made)\n        out.append(made)\n    return out\n\ndef check(got, want, label):\n    if want == \"CycleError\":\n        raises(\"CycleError\", got)\n    else:\n        result = got()\n        assert result == want, (label, result, want)\n\ns = {fn}()\nrng = random.Random(23)\nfor trial in range(300):\n    agents = random_agents(rng, cycle=0.05)\n    capacity = rng.randint(1, 5)\n    check(lambda: s.run_shared(agents, capacity), brute(agents, capacity), (trial, agents, capacity))\n",
+          "part": 3
+        },
+        {
+          "name": "Part 3: many calls and long durations",
+          "visibility": "unshown",
+          "behavior": "performance.complexity",
+          "failureMessage": "About 40,000 calls with durations up to 10**9 took too long: jump to the next finish time instead of stepping time, and keep ready and running calls in heaps rather than rescanning lists.",
+          "hiddenCode": "\nimport random, time\nrng = random.Random(24)\nagents = []\nfor a in range(400):\n    calls = []\n    for tool in range(100):\n        deps = [tool - 1] if tool % 4 else []\n        calls.append((tool, rng.randint(1, 10**9), deps))\n    rng.shuffle(calls)\n    agents.append(calls)\ns = {fn}()\nstart = time.perf_counter()\nstarts, makespan = s.run_shared(agents, 64)\nelapsed = time.perf_counter() - start\nassert len(starts) == 40000 and len({(a, t) for _, a, t in starts}) == 40000\nassert starts == sorted(starts)\nassert elapsed < 6.0, f\"{elapsed:.2f}s for 40,000 calls\"\n",
+          "part": 3
+        },
+        {
+          "name": "Part 4: the worked example",
+          "code": "\ns = {fn}()\nagents = [[(0, 2, []), (1, 2, [])], [(0, 1, []), (1, 1, []), (2, 1, [])]]\nassert s.run_capped(agents, [1, 2], 2) == ([(0, 0, 0), (0, 1, 0), (1, 1, 1), (2, 0, 1), (2, 1, 2)], 4)\n",
+          "behavior": "contract.signature",
+          "part": 4
+        },
+        {
+          "name": "Part 4: random agents with both caps",
+          "visibility": "unshown",
+          "behavior": "budget.enforcement",
+          "failureMessage": "With a cap per agent and a shared cap, each free slot must go to the smallest (agent_id, tool_id) among ready calls whose agent is below its own cap; with very large caps on one side the result must match run_each or run_shared.",
+          "hiddenCode": "\nimport random, time\n\ndef raises(kind, call):\n    try:\n        call()\n    except Exception as e:\n        assert type(e).__name__ == kind, f\"expected {kind}, got {type(e).__name__}: {e}\"\n        return e\n    raise AssertionError(f\"expected {kind}, nothing was raised\")\n\ndef brute(agents, capacity, caps=None):\n    flat = [(a, c) for a, calls in enumerate(agents) for c in calls]\n    done = set()\n    started = set()\n    finish_at = {}\n    running = {a: 0 for a in range(len(agents))}\n    starts, makespan, t = [], 0, 0\n    while len(started) < len(flat):\n        for key in [k for k, f in finish_at.items() if f == t]:\n            del finish_at[key]\n            done.add(key)\n            running[key[0]] -= 1\n        waiting = sorted((a, c[0]) for a, c in flat if (a, c[0]) not in started\n                         and all((a, d) in done for d in c[2]))\n        by_key = {(a, c[0]): c for a, c in flat}\n        for a, tool in waiting:\n            if len(finish_at) >= capacity:\n                break\n            if caps is not None and running[a] >= caps[a]:\n                continue\n            c = by_key[(a, tool)]\n            starts.append((t, a, tool))\n            started.add((a, tool))\n            finish_at[(a, tool)] = t + c[1]\n            running[a] += 1\n            makespan = max(makespan, t + c[1])\n        if len(started) == len(flat):\n            break\n        if not finish_at:\n            return \"CycleError\"\n        t += 1\n    return starts, makespan\n\ndef random_agents(rng, agents=4, calls=6, longest=4, cycle=0.0):\n    out = []\n    for _ in range(rng.randint(1, agents)):\n        n = rng.randint(0, calls)\n        made = []\n        for tool in range(n):\n            deps = rng.sample(range(tool), rng.randint(0, min(2, tool))) if tool else []\n            made.append((tool, rng.randint(1, longest), deps))\n        if n >= 2 and rng.random() < cycle:\n            a, b = rng.sample(range(n), 2)\n            made[min(a, b)] = (min(a, b), made[min(a, b)][1], made[min(a, b)][2] + [max(a, b)])\n        rng.shuffle(made)\n        out.append(made)\n    return out\n\ndef check(got, want, label):\n    if want == \"CycleError\":\n        raises(\"CycleError\", got)\n    else:\n        result = got()\n        assert result == want, (label, result, want)\n\ns = {fn}()\nrng = random.Random(25)\nfor trial in range(300):\n    agents = random_agents(rng, cycle=0.05)\n    caps = [rng.randint(1, 3) for _ in agents]\n    capacity = rng.randint(1, 5)\n    check(lambda: s.run_capped(agents, caps, capacity), brute(agents, capacity, caps), (trial, agents, caps, capacity))\nfor trial in range(40):\n    agents = random_agents(rng)\n    caps = [rng.randint(1, 3) for _ in agents]\n    big = 10**6\n    assert s.run_capped(agents, caps, big) == s.run_each(agents, caps)\n    assert s.run_capped(agents, [big] * len(agents), 3) == s.run_shared(agents, 3)\n",
+          "part": 4
+        },
+        {
+          "name": "Part 4: many agents held at their cap",
+          "visibility": "unshown",
+          "behavior": "performance.complexity",
+          "failureMessage": "Many ready calls whose agents sit at their own cap took too long: skip a capped agent as a whole rather than setting aside and re-queuing its calls one by one.",
+          "hiddenCode": "\nimport random, time\nrng = random.Random(26)\nagents = [[(tool, rng.randint(1, 10**6), []) for tool in range(150)] for _ in range(250)]\ns = {fn}()\nstart = time.perf_counter()\nstarts, makespan = s.run_capped(agents, [1] * 250, 200)\nelapsed = time.perf_counter() - start\nassert len(starts) == 37500\nfirst = {a: t for t, a, tool in starts if tool == 0}\nassert all(first[a] == 0 for a in range(200)) and all(first[a] > 0 for a in range(200, 250))\nassert elapsed < 6.0, f\"{elapsed:.2f}s for 37,500 calls\"\n",
+          "part": 4
+        }
+      ],
+      "parts": [
+        {
+          "title": "One agent",
+          "descriptionEn": "**Signature:** `ToolScheduler().run_one(calls, capacity) -> (starts, makespan)`\n\n- `calls` belong to agent `0`, and `capacity` is a positive number of slots.\n- Durations reach `10**9`, so jump from one finish time to the next instead of stepping one unit at a time.\n\n**Example:** `calls = [(2, 3, [0]), (0, 4, []), (1, 1, []), (3, 2, [1])]` and `capacity = 2`:\n- at `0`, calls `0` and `1` start; call `1` finishes at `1`, which makes call `3` ready, so it starts at `1`\n- call `2` waits for call `0`, which finishes at `4`\n- the result is `([(0, 0, 0), (0, 0, 1), (1, 0, 3), (4, 0, 2)], 7)`, and `run_one([], 3)` is `([], 0)`"
+        },
+        {
+          "title": "Agents on their own caps",
+          "descriptionEn": "Keep Part 1 and add a method.\n\n**Signature:** `run_each(agents, capacities) -> (starts, makespan)`\n\n- `agents[a]` holds agent `a`'s calls, and `capacities[a]`, a positive integer, is its own number of slots. Ids are local to each agent.\n- Run each agent's list through the Part 1 rules with its own slot count, label its starts with its index, then merge everything into one sorted list; the makespan is the largest.\n\n**Example:** `agents = [[(0, 2, []), (1, 2, []), (2, 1, [0])], [(0, 3, [])], [(0, 1, []), (1, 1, [])]]` and `capacities = [2, 1, 1]`:\n- agent `0` starts two calls at `0` and its third at `2`; agent `1` starts at `0`; agent `2` has one slot, so its calls start at `0` and `1`\n- the result is `([(0, 0, 0), (0, 0, 1), (0, 1, 0), (0, 2, 0), (1, 2, 1), (2, 0, 2)], 3)`"
+        },
+        {
+          "title": "One shared cap",
+          "descriptionEn": "Keep Parts 1–2 and add a method.\n\n**Signature:** `run_shared(agents, capacity) -> (starts, makespan)`\n\n- Every agent's calls draw from the same `capacity` slots, so agents compete for each free slot under the tie rule.\n- Up to `40,000` calls with durations up to `10**9` must finish in a few seconds: aim for `O((N + E) log N)` for `N` calls and `E` dependencies.\n\n**Example:** `capacity = 3` and four agents: agent `0` has `(0, 1, [])`, `(1, 1, [0])`, `(2, 4, [])` and `(3, 4, [])`; agent `1` has `(0, 2, [])`; agent `2` has `(0, 1, [])`; agent `3` has `(0, 1, [])` and `(1, 1, [0])`:\n- at `0`, agent `0` takes all three slots\n- at `1`, `(0, 1)` has just become ready and still beats `(1, 0)`, which has waited since `0`; `(1, 0)` starts at `2`\n- the result is `([(0, 0, 0), (0, 0, 2), (0, 0, 3), (1, 0, 1), (2, 1, 0), (4, 2, 0), (4, 3, 0), (5, 3, 1)], 6)`"
+        },
+        {
+          "title": "Both caps at once",
+          "descriptionEn": "Keep Parts 1–3 and add a method.\n\n**Signature:** `run_capped(agents, capacities, capacity) -> (starts, makespan)`\n\n- Agent `a` may hold at most `capacities[a]` slots at once, a positive integer, and all agents together at most `capacity`.\n- A free slot goes to the smallest `(agent_id, tool_id)` among ready calls whose agent is below its own cap. A capped agent's ready calls wait without blocking other agents.\n- With every per-agent cap large, this is `run_shared`; with `capacity` large, it is `run_each`.\n- Many agents may sit at their cap with many ready calls: skip such an agent as a whole rather than one call at a time.\n\n**Example:** `agents = [[(0, 2, []), (1, 2, [])], [(0, 1, []), (1, 1, []), (2, 1, [])]]`, `capacities = [1, 2]`, `capacity = 2`:\n- at `0`, agent `0` takes one slot and `(1, 0)` the other, since `(0, 1)` is held by agent `0`'s cap\n- at `1`, `(1, 1)` starts; at `2`, `(0, 1)` and `(1, 2)` start\n- the result is `([(0, 0, 0), (0, 1, 0), (1, 1, 1), (2, 0, 1), (2, 1, 2)], 4)`"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Between two moments when a call finishes, can anything about the schedule change? Which ready call should get a slot when several want it, and which data structure hands you that call quickly? How can you tell that the calls left over can never start?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Count unfinished dependencies per call and keep a heap of ready calls keyed by (agent_id, tool_id) and a heap of running calls keyed by finish time. Loop: start ready calls while slots are free; then jump to the earliest finish time, release every call ending then, and push dependents whose count reaches 0. If nothing runs and calls remain, they wait on a cycle. Each call is pushed and popped once, so the run is O((N + E) log N)."
+        }
+      ],
+      "modelConnections": [
+        "Agent frameworks run independent tool calls in parallel and hold dependent ones until their inputs exist, under a limit on concurrent sandboxes.",
+        "Training and evaluation clusters schedule jobs with dependencies on a shared pool of GPUs with per-team quotas, the same two caps as Part 4."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Jumping between finish times makes the work depend on the number of calls, not on the durations.",
+          "Dependency counts give the ready set and the cycle check in one pass, as in Kahn's algorithm.",
+          "A fixed tie rule makes the schedule deterministic and easy to test."
+        ],
+        "cons": [
+          "The tie rule always favours small agent ids, so a high id can wait for a long time.",
+          "Greedy list scheduling is not optimal: starting a short call first can delay a long chain and lengthen the makespan.",
+          "Real tool calls do not have known durations, so a live executor can only react to completions, not plan ahead."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why can the scheduler jump from one finish time to the next instead of stepping through every time unit?",
+          "hint": "Durations go up to 10**9. Between two finish times, can a call become ready or a slot become free? What does that say about the instants worth visiting?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why must every call finishing at time t be released before any new call starts at t?",
+          "hint": "A call ends at 5 and its dependent is ready at 5. If you start new calls before releasing every call that ends at 5, which ready call might miss its slot?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do dependency counts find the ready calls and also detect a cycle, and what is the total cost?",
+          "hint": "Keep for each call how many dependencies are unfinished. When does a call become ready, and what is true if nothing runs but calls remain?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why is scheduling each agent alone and merging wrong once agents share one cap?",
+          "hint": "Two agents each scheduled alone may both start a call at 0. With one shared slot, who should get it, and can a merge afterwards fix that?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "With a shared cap, what does the fixed tie rule do to agents with large ids, and how would you make it fairer?",
+          "hint": "Agent 0 always wins ties. If it keeps adding calls, when does agent 9 run? What would you change to share slots more evenly?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "With both caps, why can one ready heap across all agents become slow, and what replaces it?",
+          "hint": "With per-agent caps, the smallest ready call may belong to a full agent. How many calls would you pop and push back each time if you used one heap?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Real tool calls have unknown durations. How would a live executor use the same dependency counts?",
+          "hint": "Without known durations you only learn that a call finished. Which part of this scheduler still works when you can only react to completions?"
+        }
+      ]
+    },
+    {
+      "id": "change_directory",
+      "title": "Resolve a cd Destination",
+      "titleZh": "Resolve a cd Destination",
+      "difficulty": "Medium",
+      "functionName": "change_directory",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Write `change_directory`, which returns the absolute path `pwd` would print after `cd destination`, first for relative destinations, then for absolute ones and `~`, then with symbolic links followed physically.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior, so one `change_directory` function passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- `cwd` and `home` are already in the form this function returns.\n- Split `destination` on `/` and handle the pieces left to right. An empty piece, from a repeated or trailing slash, and `.` change nothing. `..` drops the last component, and at `/` it stays at `/`. Any other piece is a name and is added; names are case-sensitive.\n- Return the result as `/` followed by the components joined with `/`, so the root is `\"/\"`.\n- Nothing is looked up on disk: unless Part 3 says a path is a link, it is a plain directory.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** it starts as a stack exercise that most candidates finish quickly. Each later part adds one requirement, and the link part tests whether `..` is applied to the real directory reached so far rather than to the text typed.\n\n**Where it is used:** shells (`cd -P`, `pwd -P`), `realpath`, path handling in build tools and container runtimes, and sandbox checks that must not be fooled by a link that leads outside.\n\nAdapted from the cd command question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, as one function, `change_directory`, in place of `cd_relative`, `cd_absolute` and `cd`; its `home` and `symlinks` arguments are optional and arrive in Parts 2 and 3. The expansion cap is 16 instead of 20, and `SymlinkLoopError` is renamed `LinkLoopError`. The source's last part, how a shell runs `cd`, has no code and becomes an interview question.",
+      "descriptionZh": "Write `change_directory`, which returns the absolute path `pwd` would print after `cd destination`, first for relative destinations, then for absolute ones and `~`, then with symbolic links followed physically.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior, so one `change_directory` function passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- `cwd` and `home` are already in the form this function returns.\n- Split `destination` on `/` and handle the pieces left to right. An empty piece, from a repeated or trailing slash, and `.` change nothing. `..` drops the last component, and at `/` it stays at `/`. Any other piece is a name and is added; names are case-sensitive.\n- Return the result as `/` followed by the components joined with `/`, so the root is `\"/\"`.\n- Nothing is looked up on disk: unless Part 3 says a path is a link, it is a plain directory.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** it starts as a stack exercise that most candidates finish quickly. Each later part adds one requirement, and the link part tests whether `..` is applied to the real directory reached so far rather than to the text typed.\n\n**Where it is used:** shells (`cd -P`, `pwd -P`), `realpath`, path handling in build tools and container runtimes, and sandbox checks that must not be fooled by a link that leads outside.\n\nAdapted from the cd command question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, as one function, `change_directory`, in place of `cd_relative`, `cd_absolute` and `cd`; its `home` and `symlinks` arguments are optional and arrive in Parts 2 and 3. The expansion cap is 16 instead of 20, and `SymlinkLoopError` is renamed `LinkLoopError`. The source's last part, how a shell runs `cd`, has no code and becomes an interview question.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Part 1: the worked example",
+          "code": "\nassert {fn}(\"/data/runs/exp3\", \"ckpt\") == \"/data/runs/exp3/ckpt\"\nassert {fn}(\"/data/runs/exp3\", \"..//exp4/./logs/\") == \"/data/runs/exp4/logs\"\nassert {fn}(\"/a\", \"../../b/../c\") == \"/c\"\n",
+          "behavior": "contract.signature",
+          "part": 1
+        },
+        {
+          "name": "Part 1: dots, slashes and the root",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "A '.' and an empty component change nothing, '..' drops the last component and stays at '/' when there is none, a trailing slash is ignored, and the result is '/' alone at the root, with no trailing slash elsewhere.",
+          "hiddenCode": "\nimport posixpath, random\n\ndef raises(kind, call):\n    try:\n        call()\n    except Exception as e:\n        assert type(e).__name__ == kind, f\"expected {kind}, got {type(e).__name__}: {e}\"\n        return e\n    raise AssertionError(f\"expected {kind}, nothing was raised\")\n\nWORDS = [\"etc\", \"opt\", \"var\", \"lib\"]\n\ndef random_dir(rng):\n    return \"/\" + \"/\".join(rng.choice(WORDS) for _ in range(rng.randint(0, 3)))\n\ndef random_tail(rng):\n    first = rng.choice(WORDS + [\".\", \"..\"])\n    rest = [rng.choice(WORDS + [\".\", \"..\", \"\"]) for _ in range(rng.randint(0, 6))]\n    return \"/\".join([first] + rest)\n\ndef spec(cwd, destination, home, links, cap=16):\n    # Follows the rules literally and recursively: (path, hops), or (None, hops) past the cap.\n    if destination == \"~\" or destination.startswith(\"~/\"):\n        start, rest = home, destination[2:]\n    elif destination.startswith(\"/\"):\n        start, rest = \"/\", destination\n    else:\n        start, rest = cwd, destination\n    hops = [0]\n    class Over(Exception):\n        pass\n    def follow(parts, path):\n        for piece in path.split(\"/\"):\n            if piece in (\"\", \".\"):\n                continue\n            if piece == \"..\":\n                parts = parts[:-1]\n                continue\n            here = \"/\" + \"/\".join(parts + [piece])\n            if here not in links:\n                parts = parts + [piece]\n                continue\n            hops[0] += 1\n            if hops[0] > cap:\n                raise Over()\n            target = links[here]\n            parts = follow([] if target.startswith(\"/\") else parts, target)\n        return parts\n    try:\n        return \"/\" + \"/\".join(follow([p for p in start.split(\"/\") if p], rest)), hops[0]\n    except Over:\n        return None, hops[0]\n\nassert {fn}(\"/\", \"a\") == \"/a\"\nassert {fn}(\"/\", \".\") == \"/\"\nassert {fn}(\"/\", \"./a/..//\") == \"/\"\nassert {fn}(\"/q\", \"..\") == \"/\"\nassert {fn}(\"/q/r\", \"./././\") == \"/q/r\"\nassert {fn}(\"/q/r\", \"s///t\") == \"/q/r/s/t\"\nassert {fn}(\"/q/r\", \"../../../../q2/../r2\") == \"/r2\"\nassert {fn}(\"/q/r\", \"...\") == \"/q/r/...\", \"three dots is an ordinary name\"\nassert {fn}(\"/q/r\", \".hidden/x.y\") == \"/q/r/.hidden/x.y\"\nassert {fn}(\"/Q\", \"q\") == \"/Q/q\", \"names are case-sensitive\"\n",
+          "part": 1
+        },
+        {
+          "name": "Part 1: random relative paths",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "On random relative destinations, the result differed from normalising cwd + '/' + destination with '..' stopping at '/'.",
+          "hiddenCode": "\nimport posixpath, random\n\ndef raises(kind, call):\n    try:\n        call()\n    except Exception as e:\n        assert type(e).__name__ == kind, f\"expected {kind}, got {type(e).__name__}: {e}\"\n        return e\n    raise AssertionError(f\"expected {kind}, nothing was raised\")\n\nWORDS = [\"etc\", \"opt\", \"var\", \"lib\"]\n\ndef random_dir(rng):\n    return \"/\" + \"/\".join(rng.choice(WORDS) for _ in range(rng.randint(0, 3)))\n\ndef random_tail(rng):\n    first = rng.choice(WORDS + [\".\", \"..\"])\n    rest = [rng.choice(WORDS + [\".\", \"..\", \"\"]) for _ in range(rng.randint(0, 6))]\n    return \"/\".join([first] + rest)\n\ndef spec(cwd, destination, home, links, cap=16):\n    # Follows the rules literally and recursively: (path, hops), or (None, hops) past the cap.\n    if destination == \"~\" or destination.startswith(\"~/\"):\n        start, rest = home, destination[2:]\n    elif destination.startswith(\"/\"):\n        start, rest = \"/\", destination\n    else:\n        start, rest = cwd, destination\n    hops = [0]\n    class Over(Exception):\n        pass\n    def follow(parts, path):\n        for piece in path.split(\"/\"):\n            if piece in (\"\", \".\"):\n                continue\n            if piece == \"..\":\n                parts = parts[:-1]\n                continue\n            here = \"/\" + \"/\".join(parts + [piece])\n            if here not in links:\n                parts = parts + [piece]\n                continue\n            hops[0] += 1\n            if hops[0] > cap:\n                raise Over()\n            target = links[here]\n            parts = follow([] if target.startswith(\"/\") else parts, target)\n        return parts\n    try:\n        return \"/\" + \"/\".join(follow([p for p in start.split(\"/\") if p], rest)), hops[0]\n    except Over:\n        return None, hops[0]\n\nrng = random.Random(11)\nfor _ in range(3000):\n    cwd, tail = random_dir(rng), random_tail(rng)\n    want = posixpath.normpath(cwd.rstrip(\"/\") + \"/\" + tail)\n    assert {fn}(cwd, tail) == want, (cwd, tail, want)\n",
+          "part": 1
+        },
+        {
+          "name": "Part 2: the worked example",
+          "code": "\ntry:\n    {fn}(\"/data/runs\", \"~kai\", \"/users/kai\")\nexcept ValueError:\n    pass\nelse:\n    raise AssertionError(\"~kai names another user's home and must raise ValueError\")\nassert {fn}(\"/data/runs\", \"notes/~old\", \"/users/kai\") == \"/data/runs/notes/~old\"\nassert {fn}(\"/srv\", \"~/../etc\", \"/\") == \"/etc\"\nassert {fn}(\"/data/runs\", \"/etc//ssl/\", \"/users/kai\") == \"/etc/ssl\"\n",
+          "behavior": "contract.signature",
+          "part": 2
+        },
+        {
+          "name": "Part 2: where ~ and / count",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "An absolute destination ignores cwd; '~' and '~/rest' start from home and only as the first character; '~name' raises ValueError; '/', '//x', '~/' and '~/..' all normalise like Part 1.",
+          "hiddenCode": "\nimport posixpath, random\n\ndef raises(kind, call):\n    try:\n        call()\n    except Exception as e:\n        assert type(e).__name__ == kind, f\"expected {kind}, got {type(e).__name__}: {e}\"\n        return e\n    raise AssertionError(f\"expected {kind}, nothing was raised\")\n\nWORDS = [\"etc\", \"opt\", \"var\", \"lib\"]\n\ndef random_dir(rng):\n    return \"/\" + \"/\".join(rng.choice(WORDS) for _ in range(rng.randint(0, 3)))\n\ndef random_tail(rng):\n    first = rng.choice(WORDS + [\".\", \"..\"])\n    rest = [rng.choice(WORDS + [\".\", \"..\", \"\"]) for _ in range(rng.randint(0, 6))]\n    return \"/\".join([first] + rest)\n\ndef spec(cwd, destination, home, links, cap=16):\n    # Follows the rules literally and recursively: (path, hops), or (None, hops) past the cap.\n    if destination == \"~\" or destination.startswith(\"~/\"):\n        start, rest = home, destination[2:]\n    elif destination.startswith(\"/\"):\n        start, rest = \"/\", destination\n    else:\n        start, rest = cwd, destination\n    hops = [0]\n    class Over(Exception):\n        pass\n    def follow(parts, path):\n        for piece in path.split(\"/\"):\n            if piece in (\"\", \".\"):\n                continue\n            if piece == \"..\":\n                parts = parts[:-1]\n                continue\n            here = \"/\" + \"/\".join(parts + [piece])\n            if here not in links:\n                parts = parts + [piece]\n                continue\n            hops[0] += 1\n            if hops[0] > cap:\n                raise Over()\n            target = links[here]\n            parts = follow([] if target.startswith(\"/\") else parts, target)\n        return parts\n    try:\n        return \"/\" + \"/\".join(follow([p for p in start.split(\"/\") if p], rest)), hops[0]\n    except Over:\n        return None, hops[0]\n\nhome = \"/h/me\"\nassert {fn}(\"/a/b\", \"/\", home) == \"/\"\nassert {fn}(\"/a/b\", \"//x//\", home) == \"/x\"\nassert {fn}(\"/a/b\", \"/../..\", home) == \"/\"\nassert {fn}(\"/a/b\", \"~/\", home) == \"/h/me\"\nassert {fn}(\"/a/b\", \"~/..\", home) == \"/h\"\nassert {fn}(\"/a/b\", \"~//./c/\", home) == \"/h/me/c\"\nassert {fn}(\"/a/b\", \"./~\", home) == \"/a/b/~\"\nassert {fn}(\"/a/b\", \"c/~/d\", home) == \"/a/b/c/~/d\"\nassert {fn}(\"/\", \"~\", \"/\") == \"/\"\nfor bad in [\"~x\", \"~x/y\", \"~.\", \"~~\"]:\n    raises(\"ValueError\", lambda: {fn}(\"/a/b\", bad, home))\nassert {fn}(\"/a/b\", \"c\", None) == \"/a/b/c\", \"home may be left out when the destination does not use it\"\n",
+          "part": 2
+        },
+        {
+          "name": "Part 2: random destinations",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "On random relative, absolute and ~/ destinations, the result differed from normalising the expanded path with '..' stopping at '/'.",
+          "hiddenCode": "\nimport posixpath, random\n\ndef raises(kind, call):\n    try:\n        call()\n    except Exception as e:\n        assert type(e).__name__ == kind, f\"expected {kind}, got {type(e).__name__}: {e}\"\n        return e\n    raise AssertionError(f\"expected {kind}, nothing was raised\")\n\nWORDS = [\"etc\", \"opt\", \"var\", \"lib\"]\n\ndef random_dir(rng):\n    return \"/\" + \"/\".join(rng.choice(WORDS) for _ in range(rng.randint(0, 3)))\n\ndef random_tail(rng):\n    first = rng.choice(WORDS + [\".\", \"..\"])\n    rest = [rng.choice(WORDS + [\".\", \"..\", \"\"]) for _ in range(rng.randint(0, 6))]\n    return \"/\".join([first] + rest)\n\ndef spec(cwd, destination, home, links, cap=16):\n    # Follows the rules literally and recursively: (path, hops), or (None, hops) past the cap.\n    if destination == \"~\" or destination.startswith(\"~/\"):\n        start, rest = home, destination[2:]\n    elif destination.startswith(\"/\"):\n        start, rest = \"/\", destination\n    else:\n        start, rest = cwd, destination\n    hops = [0]\n    class Over(Exception):\n        pass\n    def follow(parts, path):\n        for piece in path.split(\"/\"):\n            if piece in (\"\", \".\"):\n                continue\n            if piece == \"..\":\n                parts = parts[:-1]\n                continue\n            here = \"/\" + \"/\".join(parts + [piece])\n            if here not in links:\n                parts = parts + [piece]\n                continue\n            hops[0] += 1\n            if hops[0] > cap:\n                raise Over()\n            target = links[here]\n            parts = follow([] if target.startswith(\"/\") else parts, target)\n        return parts\n    try:\n        return \"/\" + \"/\".join(follow([p for p in start.split(\"/\") if p], rest)), hops[0]\n    except Over:\n        return None, hops[0]\n\nrng = random.Random(12)\nfor _ in range(3000):\n    cwd, home, tail = random_dir(rng), random_dir(rng), random_tail(rng)\n    kind = rng.choice([\"relative\", \"absolute\", \"home\"])\n    if kind == \"relative\":\n        destination, full = tail, cwd.rstrip(\"/\") + \"/\" + tail\n    elif kind == \"absolute\":\n        destination, full = \"/\" + tail, \"/\" + tail\n    else:\n        destination, full = \"~/\" + tail, home.rstrip(\"/\") + \"/\" + tail\n    want = posixpath.normpath(full)\n    assert {fn}(cwd, destination, home) == want, (cwd, destination, home, want)\n",
+          "part": 2
+        },
+        {
+          "name": "Part 3: the worked example",
+          "code": "\nlinks = {\"/data/latest\": \"runs/exp9\", \"/data/runs/exp9/out\": \"/scratch/out9\"}\nassert {fn}(\"/data\", \"latest/../exp2\", None, links) == \"/data/runs/exp2\"\nassert {fn}(\"/data\", \"latest/out/..\", None, links) == \"/scratch\"\nloop = {\"/l/a\": \"b\", \"/l/b\": \"a\"}\ntry:\n    {fn}(\"/l\", \"a\", None, loop)\nexcept Exception as e:\n    assert type(e).__name__ == \"LinkLoopError\", f\"expected LinkLoopError, got {type(e).__name__}\"\nelse:\n    raise AssertionError(\"a two-link loop must raise LinkLoopError\")\n",
+          "behavior": "contract.signature",
+          "part": 3
+        },
+        {
+          "name": "Part 3: link rules",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "A link is replaced by its target as soon as it is reached; a relative target starts from the link's own directory; '..' after a link leaves the target, not the link's directory; keys match whole components; targets may hold '.', '..' and other links; up to 16 expansions are fine and the 17th raises LinkLoopError.",
+          "hiddenCode": "\nimport posixpath, random\n\ndef raises(kind, call):\n    try:\n        call()\n    except Exception as e:\n        assert type(e).__name__ == kind, f\"expected {kind}, got {type(e).__name__}: {e}\"\n        return e\n    raise AssertionError(f\"expected {kind}, nothing was raised\")\n\nWORDS = [\"etc\", \"opt\", \"var\", \"lib\"]\n\ndef random_dir(rng):\n    return \"/\" + \"/\".join(rng.choice(WORDS) for _ in range(rng.randint(0, 3)))\n\ndef random_tail(rng):\n    first = rng.choice(WORDS + [\".\", \"..\"])\n    rest = [rng.choice(WORDS + [\".\", \"..\", \"\"]) for _ in range(rng.randint(0, 6))]\n    return \"/\".join([first] + rest)\n\ndef spec(cwd, destination, home, links, cap=16):\n    # Follows the rules literally and recursively: (path, hops), or (None, hops) past the cap.\n    if destination == \"~\" or destination.startswith(\"~/\"):\n        start, rest = home, destination[2:]\n    elif destination.startswith(\"/\"):\n        start, rest = \"/\", destination\n    else:\n        start, rest = cwd, destination\n    hops = [0]\n    class Over(Exception):\n        pass\n    def follow(parts, path):\n        for piece in path.split(\"/\"):\n            if piece in (\"\", \".\"):\n                continue\n            if piece == \"..\":\n                parts = parts[:-1]\n                continue\n            here = \"/\" + \"/\".join(parts + [piece])\n            if here not in links:\n                parts = parts + [piece]\n                continue\n            hops[0] += 1\n            if hops[0] > cap:\n                raise Over()\n            target = links[here]\n            parts = follow([] if target.startswith(\"/\") else parts, target)\n        return parts\n    try:\n        return \"/\" + \"/\".join(follow([p for p in start.split(\"/\") if p], rest)), hops[0]\n    except Over:\n        return None, hops[0]\n\nassert {fn}(\"/w\", \"ln/x\", None, {\"/w/ln\": \"../t/u\"}) == \"/t/u/x\", \"a relative target starts from /w\"\nassert {fn}(\"/w\", \"ln/..\", None, {\"/w/ln\": \"/p/q/r\"}) == \"/p/q\"\nassert {fn}(\"/w\", \"ln2/z\", None, {\"/w/ln\": \"/p\"}) == \"/w/ln2/z\", \"keys match whole components\"\nassert {fn}(\"/w\", \"a/b\", None, {\"/w/a\": \"/m/n/..\", \"/m/b\": \"/k\"}) == \"/k\", \"a target ending in .. then another link\"\nassert {fn}(\"/w\", \"a\", None, {\"/w/a\": \"b/./c\", \"/w/b\": \"/v\", \"/v/c\": \"../done\"}) == \"/done\"\nassert {fn}(\"/\", \"up/..\", None, {\"/up\": \"/\"}) == \"/\", \".. at the root after a link stays at /\"\nassert {fn}(\"/w\", \"ln/x\", \"/h\", {}) == \"/w/ln/x\"\nassert {fn}(\"/w\", \"~/s\", \"/h\", {\"/h/s\": \"/w\"}) == \"/w\"\nassert {fn}(\"/w\", \"/w/ln/x\", None, {\"/w/ln\": \"y\"}) == \"/w/y/x\"\nme = {\"/s/me\": \".\"}\nassert {fn}(\"/s\", \"/\".join([\"me\"] * 16) + \"/f\", None, me) == \"/s/f\", \"16 expansions are allowed\"\nraises(\"LinkLoopError\", lambda: {fn}(\"/s\", \"/\".join([\"me\"] * 17), None, me))\nchain = {f\"/c/l{k}\": f\"l{k + 1}\" for k in range(1, 16)}\nchain[\"/c/l16\"] = \"end\"\nassert {fn}(\"/c\", \"l1\", None, chain) == \"/c/end\"\nchain[\"/c/l16\"] = \"l17\"\nchain[\"/c/l17\"] = \"end\"\nraises(\"LinkLoopError\", lambda: {fn}(\"/c\", \"l1\", None, chain))\nraises(\"LinkLoopError\", lambda: {fn}(\"/z\", \"self\", None, {\"/z/self\": \"/z/self\"}))\nraises(\"LinkLoopError\", lambda: {fn}(\"/l\", \"a\", None, {\"/l/a\": \"b\", \"/l/b\": \"a\"}))\n",
+          "part": 3
+        },
+        {
+          "name": "Part 3: random links",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "On random link tables, including loops, targets that climb past '/', and links reached through other links, the result differed from following each component in order and expanding each link where it is reached.",
+          "hiddenCode": "\nimport posixpath, random\n\ndef raises(kind, call):\n    try:\n        call()\n    except Exception as e:\n        assert type(e).__name__ == kind, f\"expected {kind}, got {type(e).__name__}: {e}\"\n        return e\n    raise AssertionError(f\"expected {kind}, nothing was raised\")\n\nWORDS = [\"etc\", \"opt\", \"var\", \"lib\"]\n\ndef random_dir(rng):\n    return \"/\" + \"/\".join(rng.choice(WORDS) for _ in range(rng.randint(0, 3)))\n\ndef random_tail(rng):\n    first = rng.choice(WORDS + [\".\", \"..\"])\n    rest = [rng.choice(WORDS + [\".\", \"..\", \"\"]) for _ in range(rng.randint(0, 6))]\n    return \"/\".join([first] + rest)\n\ndef spec(cwd, destination, home, links, cap=16):\n    # Follows the rules literally and recursively: (path, hops), or (None, hops) past the cap.\n    if destination == \"~\" or destination.startswith(\"~/\"):\n        start, rest = home, destination[2:]\n    elif destination.startswith(\"/\"):\n        start, rest = \"/\", destination\n    else:\n        start, rest = cwd, destination\n    hops = [0]\n    class Over(Exception):\n        pass\n    def follow(parts, path):\n        for piece in path.split(\"/\"):\n            if piece in (\"\", \".\"):\n                continue\n            if piece == \"..\":\n                parts = parts[:-1]\n                continue\n            here = \"/\" + \"/\".join(parts + [piece])\n            if here not in links:\n                parts = parts + [piece]\n                continue\n            hops[0] += 1\n            if hops[0] > cap:\n                raise Over()\n            target = links[here]\n            parts = follow([] if target.startswith(\"/\") else parts, target)\n        return parts\n    try:\n        return \"/\" + \"/\".join(follow([p for p in start.split(\"/\") if p], rest)), hops[0]\n    except Over:\n        return None, hops[0]\n\nrng = random.Random(13)\ndirs = [\"/\"] + [\"/\" + a for a in \"pq\"] + [\"/\" + a + \"/\" + b for a in \"pq\" for b in \"pq\"]\ntargets = [\"/q/p\", \"/p/x\", \"..\", \"../..\", \"../../../p\", \".\", \"y\", \"../x/q\", \"x/..\", \"./y/p\", \"/\"]\nseen_links = seen_loops = 0\nfor trial in range(400):\n    links = {}\n    for d in dirs:\n        for name in (\"x\", \"y\"):\n            if rng.random() < 0.5:\n                links[d.rstrip(\"/\") + \"/\" + name] = rng.choice(targets)\n    for _ in range(20):\n        cwd, home = rng.choice(dirs), rng.choice(dirs)\n        tail = \"/\".join(rng.choice([\"p\", \"q\", \"x\", \"y\", \"x\", \".\", \"..\", \"\"]) for _ in range(rng.randint(1, 6)))\n        destination = rng.choice([tail, \"/\" + tail, \"~/\" + tail])\n        want, hops = spec(cwd, destination, home, links)\n        seen_links += hops > 0\n        if want is None:\n            seen_loops += 1\n            raises(\"LinkLoopError\", lambda: {fn}(cwd, destination, home, links))\n        else:\n            assert {fn}(cwd, destination, home, links) == want, (cwd, destination, home, links, want)\nassert seen_links > 2000 and seen_loops > 100, (seen_links, seen_loops)\n",
+          "part": 3
+        }
+      ],
+      "parts": [
+        {
+          "title": "Relative destinations",
+          "descriptionEn": "**Signature:** `change_directory(cwd, destination) -> str`\n\n- `destination` is relative: it never starts with `/` or `~`. Start at `cwd` and apply its pieces as the rules say.\n\n**Example:**\n- `change_directory(\"/data/runs/exp3\", \"ckpt\")` is `\"/data/runs/exp3/ckpt\"`\n- `change_directory(\"/data/runs/exp3\", \"..//exp4/./logs/\")` is `\"/data/runs/exp4/logs\"`\n- `change_directory(\"/a\", \"../../b/../c\")` is `\"/c\"`: the second `..` has nothing left to drop"
+        },
+        {
+          "title": "Absolute destinations and ~",
+          "descriptionEn": "Keep Part 1 and add a third argument.\n\n**Signature:** `change_directory(cwd, destination, home=None) -> str`\n\n- A `destination` starting with `/` is absolute: start at `/` instead of `cwd`.\n- `destination == \"~\"` is `home`, and `\"~/rest\"` starts at `home` and applies `rest` as in Part 1.\n- Any other `destination` starting with `~`, such as `\"~kai\"`, raises `ValueError`.\n- A `~` anywhere except at position 0 is an ordinary character.\n- `home` is always given when `destination` starts with `~`.\n\n**Example:**\n- `change_directory(\"/data/runs\", \"~kai\", \"/users/kai\")` raises `ValueError`\n- `change_directory(\"/data/runs\", \"notes/~old\", \"/users/kai\")` is `\"/data/runs/notes/~old\"`\n- `change_directory(\"/srv\", \"~/../etc\", \"/\")` is `\"/etc\"`: home is the root, so `..` stays there\n- `change_directory(\"/data/runs\", \"/etc//ssl/\", \"/users/kai\")` is `\"/etc/ssl\"`"
+        },
+        {
+          "title": "Symbolic links",
+          "descriptionEn": "Keep Parts 1–2 and add a fourth argument.\n\n**Signature:** `change_directory(cwd, destination, home=None, symlinks=None) -> str`, plus an exception class `LinkLoopError`\n\n- `symlinks` maps a link's full path, in the form this function returns, to its target; `None` means no links. Lookups compare whole paths, so `/a/bc` is not affected by a link at `/a/b`.\n- After each name is added, if the path so far is a key, replace that last component by the link's target: an absolute target starts again from `/`, and a relative target starts from the directory that holds the link. The target's pieces follow the same rules, including `.`, `..` and further links, and then the rest of `destination` continues from where they end.\n- `..` always removes the last component of the resolved path, so right after a link it climbs out of the link's target.\n- Count every replacement, whether or not the same link came up before. More than 16 in one call raises `LinkLoopError`.\n- Assume `cwd`, `home` and the keys pass through no link.\n\n**Example:** with `symlinks = {\"/data/latest\": \"runs/exp9\", \"/data/runs/exp9/out\": \"/scratch/out9\"}`:\n- `change_directory(\"/data\", \"latest/../exp2\", None, symlinks)` is `\"/data/runs/exp2\"`, not `\"/data/exp2\"`\n- `change_directory(\"/data\", \"latest/out/..\", None, symlinks)` is `\"/scratch\"`\n- `change_directory(\"/l\", \"a\", None, {\"/l/a\": \"b\", \"/l/b\": \"a\"})` raises `LinkLoopError`"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "If the current directory is a list of names, what does each kind of piece in the destination do to that list? What should happen when `..` meets an empty list, and how do you turn an empty list back into a path?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Split cwd on \"/\" and keep the non-empty pieces as a stack. For each piece of destination.split(\"/\"): skip \"\" and \".\", pop on \"..\" only if the stack is non-empty, otherwise push. Return \"/\" + \"/\".join(stack), which is \"/\" for an empty stack. Every step is O(1), so the whole call is linear in the input length."
+        }
+      ],
+      "modelConnections": [
+        "Sandboxes for code-running agents resolve every path physically before checking it is inside the workspace, since a link can point outside.",
+        "Dataset and checkpoint loaders follow links such as `latest` to a dated run directory, where `..` must mean the real parent."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "A stack of components handles `.`, `..`, repeated slashes and the root clamp in one linear pass.",
+          "Putting a link's target pieces in front of the remaining pieces reuses the same loop for chains of links.",
+          "Counting expansions bounds the work even when links form a loop."
+        ],
+        "cons": [
+          "A fixed expansion cap rejects very long but valid chains of links.",
+          "Building the path string for each link lookup costs time proportional to the depth, so deep paths with many links are quadratic.",
+          "Without a real file system the function cannot tell a missing directory from an existing one."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why does a stack of path components make `.` and `..` easy to handle?",
+          "hint": "Write cwd as a list of names. What does a name do to that list, and what does \"..\" do? Which end of the list do both touch?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why should `..` at the root stay at the root instead of raising an error?",
+          "hint": "\"cd ..\" at \"/\" in a real shell leaves you at \"/\". What should your list do when \"..\" meets an empty list?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Which inputs make splitting on `/` produce empty pieces, and why is skipping them correct in each case?",
+          "hint": "Split \"a//b/\" and \"/x\" on \"/\". Where do the empty strings come from in each, and does any of them name a directory?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why does `~` expand only at the start of the destination, and why reject `~name` here?",
+          "hint": "If \"~\" were expanded anywhere, what would \"notes/~draft\" become? Why is \"~kai\" a different request from \"~/kai\"?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why must a link be expanded as soon as its component is added, before a later `..` can remove it?",
+          "hint": "With x linking to /p/q, compare cancelling \"x/..\" as text with first following x and then going up. Which directory does each give?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why cap the number of expansions instead of failing the first time a link repeats?",
+          "hint": "A link to \".\" can appear many times in one path without looping. What would a 'seen this link before' rule do with it?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why must `cd` be built into the shell instead of being a separate program, and what does the shell do when it runs it?",
+          "hint": "If cd were a separate program, it would change its own working directory. Whose directory does the shell keep afterwards? Which variables would it update afterwards?"
+        }
+      ]
     }
   ]
 }

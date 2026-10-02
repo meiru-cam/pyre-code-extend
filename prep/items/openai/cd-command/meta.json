@@ -1,0 +1,19 @@
+{
+  "title": "cd Command / Path Resolution",
+  "summary": "Work out where `cd` lands you: normalise relative paths, add absolute paths and `~`, resolve symbolic links with cycle detection, and discuss why `cd` has to be a shell built-in.",
+  "round": "coding",
+  "kind": "Coding",
+  "difficulty": "Medium",
+  "frequency": "rare",
+  "format": "4 parts",
+  "topics": [
+    "string-processing",
+    "stack",
+    "symlinks"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/coding/cd-command",
+  "rubric": [],
+  "exercises": [
+    "change_directory"
+  ]
+}

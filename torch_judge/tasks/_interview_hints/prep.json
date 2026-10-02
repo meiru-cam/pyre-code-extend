@@ -320,5 +320,41 @@
     "Why can a whole-string reference keep the referenced type while an embedded one cannot?": "Replacing the whole string can hand back any object. Splicing into a longer string needs text: what text would a list or None become?",
     "Why is a bool rejected for an int field, given that bool subclasses int in Python?": "isinstance(True, int) is True. If a schema asks for a layer count and gets True, what would the run actually use?",
     "Besides the config and its hash, what must a run record to be reproducible weeks later on other hardware?": "Two runs with the same config hash still differ. Which inputs live outside the config, such as code, data and libraries?"
+  },
+  "task_board": {
+    "Why does one id counter shared by every user keep ids unique when titles and users repeat?": "Two users each add their first task. With a counter per user, what ids would they get, and which lookup would then need the user as well as the id?",
+    "Why should get, edit and finish treat a finished task, another user's task and an unknown id the same way?": "If get returned a different value for 'someone else's task' than for 'no such task', what could a caller learn about other users?",
+    "What must edit check before it writes anything, and how do you keep that check in one place?": "List the three reasons edit can fail. If each method tests them on its own, what happens the day one method forgets one?",
+    "How would you keep list_tasks fast for a user with many tasks whose priorities change often?": "Each list call sorts the user's tasks. How large can that get, and which structure would stay ordered while priorities change?",
+    "Why check expiry when a method is called instead of deleting expired tasks in the background?": "A task expires at created_at + ttl. If nothing deletes it, which comparison at call time gives the same answer a background job would?",
+    "How do you answer a list for a past timestamp without replaying every call since the start?": "An edit at 5 and a question about 3. If every task keeps its versions with their times, which search finds the one in force at 3?",
+    "Compare a version list per task with a full snapshot after every call: what does each cost in memory and per question?": "A snapshot after every call copies the whole board. How many copies is that after 20,000 edits, and what does a version list store instead?"
+  },
+  "timesheet": {
+    "Why should clock_in fail while a session is open instead of closing the old session first?": "If clock_in silently closed an open session first, which timestamp would that session end at, and was the worker really there until then?",
+    "With half-open sessions, why can a worker clock out and clock in again at the same timestamp?": "A session is [in, out). If one ends at 9 and the next starts at 9, is any instant counted twice?",
+    "What does each worker record need so that add_worker, clock_in and clock_out are all O(1)?": "Between clock_in and clock_out, what is the one value a worker must remember? Where does it live so that both calls find it in O(1)?",
+    "How would you keep top_k_workers fast with many workers and frequent clock-outs?": "Totals only change at clock_out. Which structure keeps workers ordered by total and lets one worker move when their total grows?",
+    "Why store the rate on each session instead of reading the worker's rate when pay is asked for?": "A promotion lands between two sessions. If pay reads the worker's current rate, what happens to the money for the earlier session?",
+    "Why does an open session count as running until the end of the pay window, and what would go wrong otherwise?": "A session still open has no end yet. Which end makes pay for [start, end) match what a later clock_out at or after end would give?",
+    "How do you make sure overlapping double-pay periods double a time only once, and how would you answer pay questions fast with many periods?": "Two periods [10, 20) and [15, 25). If you add the overlap of each, how much of [15, 20) is paid extra, and what merged form avoids that?"
+  },
+  "tool_scheduler": {
+    "Why can the scheduler jump from one finish time to the next instead of stepping through every time unit?": "Durations go up to 10**9. Between two finish times, can a call become ready or a slot become free? What does that say about the instants worth visiting?",
+    "Why must every call finishing at time t be released before any new call starts at t?": "A call ends at 5 and its dependent is ready at 5. If you start new calls before releasing every call that ends at 5, which ready call might miss its slot?",
+    "How do dependency counts find the ready calls and also detect a cycle, and what is the total cost?": "Keep for each call how many dependencies are unfinished. When does a call become ready, and what is true if nothing runs but calls remain?",
+    "Why is scheduling each agent alone and merging wrong once agents share one cap?": "Two agents each scheduled alone may both start a call at 0. With one shared slot, who should get it, and can a merge afterwards fix that?",
+    "With a shared cap, what does the fixed tie rule do to agents with large ids, and how would you make it fairer?": "Agent 0 always wins ties. If it keeps adding calls, when does agent 9 run? What would you change to share slots more evenly?",
+    "With both caps, why can one ready heap across all agents become slow, and what replaces it?": "With per-agent caps, the smallest ready call may belong to a full agent. How many calls would you pop and push back each time if you used one heap?",
+    "Real tool calls have unknown durations. How would a live executor use the same dependency counts?": "Without known durations you only learn that a call finished. Which part of this scheduler still works when you can only react to completions?"
+  },
+  "change_directory": {
+    "Why does a stack of path components make `.` and `..` easy to handle?": "Write cwd as a list of names. What does a name do to that list, and what does \"..\" do? Which end of the list do both touch?",
+    "Why should `..` at the root stay at the root instead of raising an error?": "\"cd ..\" at \"/\" in a real shell leaves you at \"/\". What should your list do when \"..\" meets an empty list?",
+    "Which inputs make splitting on `/` produce empty pieces, and why is skipping them correct in each case?": "Split \"a//b/\" and \"/x\" on \"/\". Where do the empty strings come from in each, and does any of them name a directory?",
+    "Why does `~` expand only at the start of the destination, and why reject `~name` here?": "If \"~\" were expanded anywhere, what would \"notes/~draft\" become? Why is \"~kai\" a different request from \"~/kai\"?",
+    "Why must a link be expanded as soon as its component is added, before a later `..` can remove it?": "With x linking to /p/q, compare cancelling \"x/..\" as text with first following x and then going up. Which directory does each give?",
+    "Why cap the number of expansions instead of failing the first time a link repeats?": "A link to \".\" can appear many times in one path without looping. What would a 'seen this link before' rule do with it?",
+    "Why must `cd` be built into the shell instead of being a separate program, and what does the shell do when it runs it?": "If cd were a separate program, it would change its own working directory. Whose directory does the shell keep afterwards? Which variables would it update afterwards?"
   }
 }
