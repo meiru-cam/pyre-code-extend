@@ -9,6 +9,7 @@ import { Footer } from '@/components/layout/Footer';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { useLocale } from '@/context/LocaleContext';
+import { saveLastPath } from '@/lib/pathGroups';
 import { cn } from '@/lib/utils';
 import type { LearningPath } from '@/lib/types';
 
@@ -34,7 +35,10 @@ export default function PathDetailPage() {
   useEffect(() => {
     fetch(`/api/paths/${id}`)
       .then((r) => r.json())
-      .then((d) => setPath(d));
+      .then((d) => {
+        setPath(d);
+        if (d.id) saveLastPath(d.id);
+      });
   }, [id]);
 
   if (!path) {

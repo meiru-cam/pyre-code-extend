@@ -23,6 +23,9 @@ def test_agent_runtime_path_is_separate_and_progressive():
         "context_compaction",
         "tool_call_dag",
         "tool_call_stream_parser",
+        "policy_engine",
+        "approval_gate",
+        "guarded_runtime",
     ]
     assert path["prerequisites"] == []
     assert "system" in path["titleEn"].lower()

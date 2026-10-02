@@ -1,4 +1,4 @@
-"""Integration contract for the separate executable guardrails path."""
+"""Integration contract for the guardrail exercises, merged into the Agent Runtime path."""
 
 import json
 from pathlib import Path
@@ -13,11 +13,11 @@ def _json(path):
     return json.loads((ROOT / path).read_text(encoding="utf-8"))
 
 
-def test_guardrail_path_is_separate_and_progressive():
+def test_guardrails_close_the_agent_runtime_path():
     paths = {item["id"]: item for item in _json("web/src/lib/paths.json")["paths"]}
-    path = paths["agent-guardrails-security"]
-    assert path["problems"] == ["policy_engine", "approval_gate", "guarded_runtime"]
-    assert path["prerequisites"] == ["agent-runtime-system-design"]
+    assert "agent-guardrails-security" not in paths
+    path = paths["agent-runtime-system-design"]
+    assert path["problems"][-3:] == ["policy_engine", "approval_gate", "guarded_runtime"]
     assert "guardrail" in path["titleEn"].lower()
 
 
@@ -38,9 +38,8 @@ def test_guardrail_tasks_export_with_starters_hints_and_security_metadata():
 
 
 def test_agent_runtime_path_remains_unchanged():
-    # The guardrails slice must not disturb the runtime path it sits beside. Later
-    # exercises may be appended, so this pins the original prefix rather than the
-    # whole list; the exact contents are asserted in test_agent_runtime_path.py.
+    # The guardrails slice is appended, so the runtime exercises keep their original
+    # prefix; the exact contents are asserted in test_agent_runtime_path.py.
     paths = {item["id"]: item for item in _json("web/src/lib/paths.json")["paths"]}
     problems = paths["agent-runtime-system-design"]["problems"]
     assert problems[:3] == [

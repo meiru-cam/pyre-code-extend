@@ -1,4 +1,4 @@
-"""Integration contract for the separate Advanced Attention path."""
+"""Integration contract for the advanced attention exercises, merged into the Attention path."""
 
 from __future__ import annotations
 
@@ -13,19 +13,14 @@ def _json(relative_path: str):
     return json.loads((ROOT / relative_path).read_text(encoding="utf-8"))
 
 
-def test_advanced_attention_is_separate_and_progressive():
+def test_advanced_attention_follows_the_basics_in_one_path():
     paths = {path["id"]: path for path in _json("web/src/lib/paths.json")["paths"]}
-    path = paths["advanced-attention"]
-    assert path["problems"] == [
-        "gqa",
-        "sliding_window",
-        "qk_norm",
-        "hybrid_attention_schedule",
-        "mla",
-        "frontier_attention_block",
-    ]
-    assert path["prerequisites"] == ["attention-position"]
-    assert path["titleEn"] == "Advanced Attention in Frontier Models"
+    assert "advanced-attention" not in paths
+    problems = paths["attention-position"]["problems"]
+    assert problems[-4:] == ["qk_norm", "hybrid_attention_schedule", "mla", "frontier_attention_block"]
+    # GQA and sliding windows, which the frontier block builds on, come earlier in the same path.
+    assert problems.index("gqa") < problems.index("qk_norm")
+    assert problems.index("sliding_window") < problems.index("qk_norm")
 
 
 def test_existing_frontier_overview_is_unchanged():

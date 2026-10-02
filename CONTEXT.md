@@ -12,12 +12,16 @@ _Avoid_: Personal study plan, lesson archive
 An ordered sequence of exercises that develops one coherent implementation capability from prerequisites through a capstone.
 _Avoid_: Category, tag, problem list
 
+**Path group**:
+A heading on the paths page that collects related learning paths (foundations, architectures, training, systems, agents). It orders the list only; it is not a path and has no exercises or prerequisites of its own.
+_Avoid_: Track, category
+
 **Part**:
 One stage of a multi-part exercise, revealed only after every evaluator case of the earlier parts passes, the way an interviewer adds a requirement. Parts are cumulative: a correct solution to part k passes parts 1..k, so Run grades them together. Solved still means every case of every part passes.
 _Avoid_: Level, step, sub-exercise
 
 **Prep item**:
-One real company interview question, filed under a company and a round, adapted with attribution from an outside notes repository. It points at exercises (ML coding) or carries a visible rubric and a learner answer (system design, behavioral). The site never grades the answer; the learner may copy it out for outside feedback. It is never part of a learning path. Items live in `prep/items/`.
+One real company interview question, filed under a company and a round, adapted with attribution from an outside notes repository. It points at exercises (ML coding) or carries a visible rubric and a learner answer (system design, behavioral). The site never grades the answer; the learner gets feedback outside it, for example from a browser assistant that reads the page. It is never part of a learning path. Items live in `prep/items/`.
 _Avoid_: Exercise, company path
 
 **Round**:
