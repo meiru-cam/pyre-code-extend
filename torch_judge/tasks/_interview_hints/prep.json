@@ -329,5 +329,14 @@
     "Why check expiry when a method is called instead of deleting expired tasks in the background?": "A task expires at created_at + ttl. If nothing deletes it, which comparison at call time gives the same answer a background job would?",
     "How do you answer a list for a past timestamp without replaying every call since the start?": "An edit at 5 and a question about 3. If every task keeps its versions with their times, which search finds the one in force at 3?",
     "Compare a version list per task with a full snapshot after every call: what does each cost in memory and per question?": "A snapshot after every call copies the whole board. How many copies is that after 20,000 edits, and what does a version list store instead?"
+  },
+  "timesheet": {
+    "Why should clock_in fail while a session is open instead of closing the old session first?": "If clock_in silently closed an open session first, which timestamp would that session end at, and was the worker really there until then?",
+    "With half-open sessions, why can a worker clock out and clock in again at the same timestamp?": "A session is [in, out). If one ends at 9 and the next starts at 9, is any instant counted twice?",
+    "What does each worker record need so that add_worker, clock_in and clock_out are all O(1)?": "Between clock_in and clock_out, what is the one value a worker must remember? Where does it live so that both calls find it in O(1)?",
+    "How would you keep top_k_workers fast with many workers and frequent clock-outs?": "Totals only change at clock_out. Which structure keeps workers ordered by total and lets one worker move when their total grows?",
+    "Why store the rate on each session instead of reading the worker's rate when pay is asked for?": "A promotion lands between two sessions. If pay reads the worker's current rate, what happens to the money for the earlier session?",
+    "Why does an open session count as running until the end of the pay window, and what would go wrong otherwise?": "A session still open has no end yet. Which end makes pay for [start, end) match what a later clock_out at or after end would give?",
+    "How do you make sure overlapping double-pay periods double a time only once, and how would you answer pay questions fast with many periods?": "Two periods [10, 20) and [15, 25). If you add the overlap of each, how much of [15, 20) is paid extra, and what merged form avoids that?"
   }
 }

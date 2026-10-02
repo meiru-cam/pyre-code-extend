@@ -1,0 +1,21 @@
+{
+  "title": "Online Assessment: Office Access, Promotions and Pay",
+  "summary": "Build a workforce-tracking class across four gated levels: office sessions from clock-in/clock-out events, a total-time leaderboard, promotions that take effect only at a worker's next entry, and pay calculated over sessions that may straddle a double-pay period, with overlapping bonus windows merged before the multiplier is applied.",
+  "round": "coding",
+  "kind": "Online assessment · 4 levels",
+  "difficulty": "Medium",
+  "frequency": "low",
+  "format": "4 levels / 90 min",
+  "topics": [
+    "oop-design",
+    "interval-merge",
+    "timestamps",
+    "payroll",
+    "ranking"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/coding/oa-worker-grant-management",
+  "rubric": [],
+  "exercises": [
+    "timesheet"
+  ]
+}

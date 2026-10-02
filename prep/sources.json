@@ -394,5 +394,13 @@
       "task_board"
     ],
     "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/oa-worker-grant-management",
+    "exercises": [
+      "timesheet"
+    ],
+    "round": "coding"
   }
 ]

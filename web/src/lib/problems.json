@@ -25854,6 +25854,183 @@
           "hint": "A snapshot after every call copies the whole board. How many copies is that after 20,000 edits, and what does a version list store instead?"
         }
       ]
+    },
+    {
+      "id": "timesheet",
+      "title": "Timesheet with Promotions and Double Pay",
+      "titleZh": "Timesheet with Promotions and Double Pay",
+      "difficulty": "Medium",
+      "functionName": "Timesheet",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Build `Timesheet`, which records when workers clock in and out, then ranks them by time worked, pays them with promotions, and doubles pay inside chosen periods.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior, so one `Timesheet` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- A worker id is a non-empty, case-sensitive string. Once registered, it stays registered.\n- Timestamps are non-negative integers. Across all `clock_in` and `clock_out` calls, for every worker together, they never decrease.\n- Every interval is half-open: `[a, b)` holds `a` but not `b`. A session is `[clock_in time, clock_out time)`.\n- A rate is a positive integer. Time `d` at rate `r` earns `d * r`.\n- A call that fails returns the failure value given for it and changes nothing. No method raises.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** it is a timed online assessment where each level reuses the session records of the last. Each later part adds one requirement, and the pay parts reward storing the rate on each session instead of reading the worker's current one.\n\n**Where it is used:** time tracking and payroll, contractor billing with rate changes, and surge or overtime pricing over time windows.\n\nAdapted from the worker management online assessment in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, on one class with a new name. `get_position` is added in Part 3 so that promotions can be checked, and `set_double_pay` returns `None`.",
+      "descriptionZh": "Build `Timesheet`, which records when workers clock in and out, then ranks them by time worked, pays them with promotions, and doubles pay inside chosen periods.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior, so one `Timesheet` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- A worker id is a non-empty, case-sensitive string. Once registered, it stays registered.\n- Timestamps are non-negative integers. Across all `clock_in` and `clock_out` calls, for every worker together, they never decrease.\n- Every interval is half-open: `[a, b)` holds `a` but not `b`. A session is `[clock_in time, clock_out time)`.\n- A rate is a positive integer. Time `d` at rate `r` earns `d * r`.\n- A call that fails returns the failure value given for it and changes nothing. No method raises.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** it is a timed online assessment where each level reuses the session records of the last. Each later part adds one requirement, and the pay parts reward storing the rate on each session instead of reading the worker's current one.\n\n**Where it is used:** time tracking and payroll, contractor billing with rate changes, and surge or overtime pricing over time windows.\n\nAdapted from the worker management online assessment in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, on one class with a new name. `get_position` is added in Part 3 so that promotions can be checked, and `set_double_pay` returns `None`.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Part 1: the worked example",
+          "code": "\nt = {fn}()\nassert t.add_worker(\"w-07\", \"Annotator\", 12) is True\nassert t.add_worker(\"w-07\", \"Lead\", 40) is False\nassert t.clock_out(\"w-07\", 3) is False\nassert t.clock_in(\"w-07\", 3) is True and t.clock_in(\"w-07\", 4) is False\nassert t.clock_out(\"w-07\", 9) is True\nassert t.clock_in(\"w-99\", 9) is False\nassert t.clock_in(\"w-07\", 9) is True, \"a new session may start when the last one ended\"\n",
+          "behavior": "state.invariant",
+          "part": 1
+        },
+        {
+          "name": "Part 1: random calls",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "On a random sequence of add_worker, clock_in and clock_out, a return value differed from a model: a worker id is registered once, clock_in needs no open session, and clock_out needs one.",
+          "hiddenCode": "\nimport random\n\nclass Model:\n    def __init__(self):\n        self.w = {}\n        self.double = set()  # every double-pay tick\n\n    def add_worker(self, wid, position, rate):\n        if wid in self.w:\n            return False\n        self.w[wid] = {\"pos\": position, \"rate\": rate, \"next\": None, \"open\": None, \"done\": []}\n        return True\n\n    def clock_in(self, wid, ts):\n        w = self.w.get(wid)\n        if w is None or w[\"open\"] is not None:\n            return False\n        if w[\"next\"] is not None:\n            w[\"pos\"], w[\"rate\"] = w[\"next\"]\n            w[\"next\"] = None\n        w[\"open\"] = (ts, w[\"rate\"])\n        return True\n\n    def clock_out(self, wid, ts):\n        w = self.w.get(wid)\n        if w is None or w[\"open\"] is None:\n            return False\n        w[\"done\"].append((w[\"open\"][0], ts, w[\"open\"][1]))\n        w[\"open\"] = None\n        return True\n\n    def get_total_work_time(self, wid):\n        w = self.w.get(wid)\n        return None if w is None else sum(e - s for s, e, _ in w[\"done\"])\n\n    def top_k_workers(self, k):\n        return sorted(self.w, key=lambda wid: (-self.get_total_work_time(wid), wid))[:k]\n\n    def set_promotion(self, wid, position, rate):\n        if wid not in self.w:\n            return False\n        self.w[wid][\"next\"] = (position, rate)\n        return True\n\n    def get_position(self, wid):\n        w = self.w.get(wid)\n        return None if w is None else w[\"pos\"]\n\n    def calculate_pay(self, wid, start, end):\n        w = self.w.get(wid)\n        if w is None:\n            return None\n        sessions = list(w[\"done\"]) + ([(w[\"open\"][0], end, w[\"open\"][1])] if w[\"open\"] else [])\n        total = 0\n        for s, e, rate in sessions:\n            for t in range(max(s, start), min(e, end)):\n                total += rate * (2 if t in self.double else 1)\n        return total\n\n    def set_double_pay(self, start, end):\n        self.double.update(range(start, end))\n\nIDS = [\"kim\", \"ada\", \"lu\", \"Ada\"]\n\ndef random_calls(rng, steps, part):\n    ts, calls = 0, []\n    for _ in range(steps):\n        wid = rng.choice(IDS)\n        r = rng.random()\n        if r < 0.12:\n            calls.append((\"add_worker\", (wid, rng.choice([\"dev\", \"ops\"]), rng.randint(1, 9))))\n        elif r < 0.45:\n            ts += rng.choice([0, 0, 1, 2, 5])\n            calls.append((rng.choice([\"clock_in\", \"clock_out\"]), (wid, ts)))\n        elif part == 1:\n            calls.append((\"clock_in\", (wid, ts)))\n        elif r < 0.6:\n            calls.append((\"get_total_work_time\", (wid,)))\n        elif r < 0.7 or part == 2:\n            calls.append((\"top_k_workers\", (rng.randint(1, 5),)))\n        elif r < 0.78:\n            calls.append((\"set_promotion\", (wid, rng.choice([\"lead\", \"dev\"]), rng.randint(1, 9))))\n        elif r < 0.83:\n            calls.append((\"get_position\", (wid,)))\n        elif r < 0.92 or part == 3:\n            a = rng.randint(0, ts + 5)\n            calls.append((\"calculate_pay\", (wid, a, a + rng.randint(0, 30))))\n        else:\n            a = rng.randint(0, ts + 10)\n            calls.append((\"set_double_pay\", (a, a + rng.randint(0, 12))))\n    return calls\n\ndef replay(sheet, calls, label):\n    model = Model()\n    for i, (name, args) in enumerate(calls):\n        want = getattr(model, name)(*args)\n        got = getattr(sheet, name)(*args)\n        assert got == want, (label, i, name, args, got, want)\n\nfor seed in range(200):\n    replay({fn}(), random_calls(random.Random(seed), 50, 1), seed)\n",
+          "part": 1
+        },
+        {
+          "name": "Part 2: the worked example",
+          "code": "\nt = {fn}()\nfor wid in [\"kim\", \"ada\", \"lu\"]:\n    t.add_worker(wid, \"Labeler\", 10)\nt.clock_in(\"ada\", 0)\nt.clock_in(\"kim\", 5)\nt.clock_in(\"lu\", 10)\nt.clock_out(\"kim\", 20)\nt.clock_in(\"kim\", 25)\nt.clock_out(\"ada\", 30)\nt.clock_out(\"kim\", 40)\nassert t.get_total_work_time(\"kim\") == 30 and t.get_total_work_time(\"ada\") == 30\nassert t.get_total_work_time(\"lu\") == 0, \"an open session counts once it is closed\"\nassert t.top_k_workers(3) == [\"ada\", \"kim\", \"lu\"] and t.top_k_workers(1) == [\"ada\"]\nassert t.get_total_work_time(\"zed\") is None\n",
+          "behavior": "metrics.ties",
+          "part": 2
+        },
+        {
+          "name": "Part 2: ties, case and short lists",
+          "visibility": "unshown",
+          "behavior": "metrics.ties",
+          "failureMessage": "top_k_workers ranks by closed time, highest first, then by worker id in Python's string order (so 'B' comes before 'a'); it returns every worker when k is larger, and counts zero-length and open sessions as 0.",
+          "hiddenCode": "\nt = {fn}()\nfor wid in [\"a\", \"B\", \"c\"]:\n    t.add_worker(wid, \"x\", 1)\nassert t.top_k_workers(5) == [\"B\", \"a\", \"c\"]\nt.clock_in(\"c\", 4)\nt.clock_out(\"c\", 4)\nt.clock_in(\"a\", 4)\nassert t.top_k_workers(5) == [\"B\", \"a\", \"c\"] and t.get_total_work_time(\"c\") == 0\nt.clock_out(\"a\", 6)\nassert t.top_k_workers(1) == [\"a\"] and t.top_k_workers(2) == [\"a\", \"B\"]\n",
+          "part": 2
+        },
+        {
+          "name": "Part 2: random calls",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "On a random sequence that also asks for totals and the leaderboard, a return value differed from a model that adds up closed sessions.",
+          "hiddenCode": "\nimport random\n\nclass Model:\n    def __init__(self):\n        self.w = {}\n        self.double = set()  # every double-pay tick\n\n    def add_worker(self, wid, position, rate):\n        if wid in self.w:\n            return False\n        self.w[wid] = {\"pos\": position, \"rate\": rate, \"next\": None, \"open\": None, \"done\": []}\n        return True\n\n    def clock_in(self, wid, ts):\n        w = self.w.get(wid)\n        if w is None or w[\"open\"] is not None:\n            return False\n        if w[\"next\"] is not None:\n            w[\"pos\"], w[\"rate\"] = w[\"next\"]\n            w[\"next\"] = None\n        w[\"open\"] = (ts, w[\"rate\"])\n        return True\n\n    def clock_out(self, wid, ts):\n        w = self.w.get(wid)\n        if w is None or w[\"open\"] is None:\n            return False\n        w[\"done\"].append((w[\"open\"][0], ts, w[\"open\"][1]))\n        w[\"open\"] = None\n        return True\n\n    def get_total_work_time(self, wid):\n        w = self.w.get(wid)\n        return None if w is None else sum(e - s for s, e, _ in w[\"done\"])\n\n    def top_k_workers(self, k):\n        return sorted(self.w, key=lambda wid: (-self.get_total_work_time(wid), wid))[:k]\n\n    def set_promotion(self, wid, position, rate):\n        if wid not in self.w:\n            return False\n        self.w[wid][\"next\"] = (position, rate)\n        return True\n\n    def get_position(self, wid):\n        w = self.w.get(wid)\n        return None if w is None else w[\"pos\"]\n\n    def calculate_pay(self, wid, start, end):\n        w = self.w.get(wid)\n        if w is None:\n            return None\n        sessions = list(w[\"done\"]) + ([(w[\"open\"][0], end, w[\"open\"][1])] if w[\"open\"] else [])\n        total = 0\n        for s, e, rate in sessions:\n            for t in range(max(s, start), min(e, end)):\n                total += rate * (2 if t in self.double else 1)\n        return total\n\n    def set_double_pay(self, start, end):\n        self.double.update(range(start, end))\n\nIDS = [\"kim\", \"ada\", \"lu\", \"Ada\"]\n\ndef random_calls(rng, steps, part):\n    ts, calls = 0, []\n    for _ in range(steps):\n        wid = rng.choice(IDS)\n        r = rng.random()\n        if r < 0.12:\n            calls.append((\"add_worker\", (wid, rng.choice([\"dev\", \"ops\"]), rng.randint(1, 9))))\n        elif r < 0.45:\n            ts += rng.choice([0, 0, 1, 2, 5])\n            calls.append((rng.choice([\"clock_in\", \"clock_out\"]), (wid, ts)))\n        elif part == 1:\n            calls.append((\"clock_in\", (wid, ts)))\n        elif r < 0.6:\n            calls.append((\"get_total_work_time\", (wid,)))\n        elif r < 0.7 or part == 2:\n            calls.append((\"top_k_workers\", (rng.randint(1, 5),)))\n        elif r < 0.78:\n            calls.append((\"set_promotion\", (wid, rng.choice([\"lead\", \"dev\"]), rng.randint(1, 9))))\n        elif r < 0.83:\n            calls.append((\"get_position\", (wid,)))\n        elif r < 0.92 or part == 3:\n            a = rng.randint(0, ts + 5)\n            calls.append((\"calculate_pay\", (wid, a, a + rng.randint(0, 30))))\n        else:\n            a = rng.randint(0, ts + 10)\n            calls.append((\"set_double_pay\", (a, a + rng.randint(0, 12))))\n    return calls\n\ndef replay(sheet, calls, label):\n    model = Model()\n    for i, (name, args) in enumerate(calls):\n        want = getattr(model, name)(*args)\n        got = getattr(sheet, name)(*args)\n        assert got == want, (label, i, name, args, got, want)\n\nfor seed in range(200):\n    replay({fn}(), random_calls(random.Random(100 + seed), 60, 2), seed)\n",
+          "part": 2
+        },
+        {
+          "name": "Part 3: the worked example",
+          "code": "\nt = {fn}()\nt.add_worker(\"ada\", \"Labeler\", 10)\nt.clock_in(\"ada\", 0)\nassert t.set_promotion(\"ada\", \"Reviewer\", 15) is True\nassert t.set_promotion(\"ada\", \"Senior\", 25) is True\nt.clock_out(\"ada\", 20)\nassert t.get_position(\"ada\") == \"Labeler\"\nt.clock_in(\"ada\", 30)\nassert t.get_position(\"ada\") == \"Senior\"\nt.clock_out(\"ada\", 40)\nassert t.calculate_pay(\"ada\", 15, 35) == 5 * 10 + 5 * 25\nt.clock_in(\"ada\", 50)\nassert t.calculate_pay(\"ada\", 45, 60) == 10 * 25\nassert t.calculate_pay(\"ada\", 0, 50) == 20 * 10 + 10 * 25\nassert t.calculate_pay(\"bo\", 0, 50) is None and t.set_promotion(\"bo\", \"x\", 1) is False\n",
+          "behavior": "state.invariant",
+          "part": 3
+        },
+        {
+          "name": "Part 3: promotions and windows",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "A promotion replaces position and rate together at the next clock_in, never during an open session or for past ones, and a second one before then replaces the first; pay sums the overlap of each session with [start, end) at that session's own rate; an open session counts as running until end; an empty window pays 0.",
+          "hiddenCode": "\nt = {fn}()\nt.add_worker(\"u\", \"dev\", 3)\nt.set_promotion(\"u\", \"lead\", 7)\nt.clock_in(\"u\", 10)\nt.set_promotion(\"u\", \"dev\", 5)\nassert t.calculate_pay(\"u\", 0, 12) == 2 * 7, \"the first promotion applied at clock_in\"\nt.clock_out(\"u\", 14)\nt.clock_in(\"u\", 14)\nassert t.get_position(\"u\") == \"dev\"\nassert t.calculate_pay(\"u\", 12, 16) == 2 * 7 + 2 * 5\nassert t.calculate_pay(\"u\", 16, 16) == 0 and t.calculate_pay(\"u\", 0, 10) == 0\nassert t.calculate_pay(\"u\", 0, 10**6) == 4 * 7 + (10**6 - 14) * 5\nt.clock_out(\"u\", 20)\nassert t.calculate_pay(\"u\", 0, 10**6) == 4 * 7 + 6 * 5, \"a closed session stops at its clock_out\"\nassert t.get_position(\"nobody\") is None\n",
+          "part": 3
+        },
+        {
+          "name": "Part 3: random calls",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "On a random sequence with promotions and pay questions, a return value differed from a model that pays every time unit of every session at its rate.",
+          "hiddenCode": "\nimport random\n\nclass Model:\n    def __init__(self):\n        self.w = {}\n        self.double = set()  # every double-pay tick\n\n    def add_worker(self, wid, position, rate):\n        if wid in self.w:\n            return False\n        self.w[wid] = {\"pos\": position, \"rate\": rate, \"next\": None, \"open\": None, \"done\": []}\n        return True\n\n    def clock_in(self, wid, ts):\n        w = self.w.get(wid)\n        if w is None or w[\"open\"] is not None:\n            return False\n        if w[\"next\"] is not None:\n            w[\"pos\"], w[\"rate\"] = w[\"next\"]\n            w[\"next\"] = None\n        w[\"open\"] = (ts, w[\"rate\"])\n        return True\n\n    def clock_out(self, wid, ts):\n        w = self.w.get(wid)\n        if w is None or w[\"open\"] is None:\n            return False\n        w[\"done\"].append((w[\"open\"][0], ts, w[\"open\"][1]))\n        w[\"open\"] = None\n        return True\n\n    def get_total_work_time(self, wid):\n        w = self.w.get(wid)\n        return None if w is None else sum(e - s for s, e, _ in w[\"done\"])\n\n    def top_k_workers(self, k):\n        return sorted(self.w, key=lambda wid: (-self.get_total_work_time(wid), wid))[:k]\n\n    def set_promotion(self, wid, position, rate):\n        if wid not in self.w:\n            return False\n        self.w[wid][\"next\"] = (position, rate)\n        return True\n\n    def get_position(self, wid):\n        w = self.w.get(wid)\n        return None if w is None else w[\"pos\"]\n\n    def calculate_pay(self, wid, start, end):\n        w = self.w.get(wid)\n        if w is None:\n            return None\n        sessions = list(w[\"done\"]) + ([(w[\"open\"][0], end, w[\"open\"][1])] if w[\"open\"] else [])\n        total = 0\n        for s, e, rate in sessions:\n            for t in range(max(s, start), min(e, end)):\n                total += rate * (2 if t in self.double else 1)\n        return total\n\n    def set_double_pay(self, start, end):\n        self.double.update(range(start, end))\n\nIDS = [\"kim\", \"ada\", \"lu\", \"Ada\"]\n\ndef random_calls(rng, steps, part):\n    ts, calls = 0, []\n    for _ in range(steps):\n        wid = rng.choice(IDS)\n        r = rng.random()\n        if r < 0.12:\n            calls.append((\"add_worker\", (wid, rng.choice([\"dev\", \"ops\"]), rng.randint(1, 9))))\n        elif r < 0.45:\n            ts += rng.choice([0, 0, 1, 2, 5])\n            calls.append((rng.choice([\"clock_in\", \"clock_out\"]), (wid, ts)))\n        elif part == 1:\n            calls.append((\"clock_in\", (wid, ts)))\n        elif r < 0.6:\n            calls.append((\"get_total_work_time\", (wid,)))\n        elif r < 0.7 or part == 2:\n            calls.append((\"top_k_workers\", (rng.randint(1, 5),)))\n        elif r < 0.78:\n            calls.append((\"set_promotion\", (wid, rng.choice([\"lead\", \"dev\"]), rng.randint(1, 9))))\n        elif r < 0.83:\n            calls.append((\"get_position\", (wid,)))\n        elif r < 0.92 or part == 3:\n            a = rng.randint(0, ts + 5)\n            calls.append((\"calculate_pay\", (wid, a, a + rng.randint(0, 30))))\n        else:\n            a = rng.randint(0, ts + 10)\n            calls.append((\"set_double_pay\", (a, a + rng.randint(0, 12))))\n    return calls\n\ndef replay(sheet, calls, label):\n    model = Model()\n    for i, (name, args) in enumerate(calls):\n        want = getattr(model, name)(*args)\n        got = getattr(sheet, name)(*args)\n        assert got == want, (label, i, name, args, got, want)\n\nfor seed in range(200):\n    replay({fn}(), random_calls(random.Random(200 + seed), 70, 3), seed)\n",
+          "part": 3
+        },
+        {
+          "name": "Part 4: the worked example",
+          "code": "\nt = {fn}()\nt.add_worker(\"ada\", \"Labeler\", 10)\nt.clock_in(\"ada\", 0)\nt.clock_out(\"ada\", 30)\nassert t.set_double_pay(10, 20) is None\nt.set_double_pay(15, 25)\nt.set_double_pay(50, 50)\nassert t.calculate_pay(\"ada\", 0, 30) == 10 * 10 + 15 * 20 + 5 * 10\nassert t.calculate_pay(\"ada\", 12, 18) == 6 * 20\n",
+          "behavior": "state.invariant",
+          "part": 4
+        },
+        {
+          "name": "Part 4: periods for every worker and every time",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "A double-pay period covers [start, end) for every worker and for sessions before or after the call that set it; overlapping or touching periods double a time unit once, never more; empty periods change nothing.",
+          "hiddenCode": "\nt = {fn}()\nt.add_worker(\"a\", \"x\", 1)\nt.add_worker(\"b\", \"x\", 3)\nt.set_double_pay(5, 10)\nt.clock_in(\"a\", 0)\nt.clock_in(\"b\", 2)\nt.clock_out(\"a\", 20)\nt.set_double_pay(8, 12)\nt.set_double_pay(12, 14)\nt.set_double_pay(6, 9)\nt.set_double_pay(30, 20)\nassert t.calculate_pay(\"a\", 0, 20) == 20 + 9\nassert t.calculate_pay(\"b\", 0, 7) == 5 * 3 + 2 * 3, \"b's open session runs until the window's end\"\nassert t.calculate_pay(\"b\", 13, 15) == 2 * 3 + 3\n",
+          "part": 4
+        },
+        {
+          "name": "Part 4: random calls",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "On a random sequence with double-pay periods, a return value differed from a model that doubles each time unit covered by any period.",
+          "hiddenCode": "\nimport random\n\nclass Model:\n    def __init__(self):\n        self.w = {}\n        self.double = set()  # every double-pay tick\n\n    def add_worker(self, wid, position, rate):\n        if wid in self.w:\n            return False\n        self.w[wid] = {\"pos\": position, \"rate\": rate, \"next\": None, \"open\": None, \"done\": []}\n        return True\n\n    def clock_in(self, wid, ts):\n        w = self.w.get(wid)\n        if w is None or w[\"open\"] is not None:\n            return False\n        if w[\"next\"] is not None:\n            w[\"pos\"], w[\"rate\"] = w[\"next\"]\n            w[\"next\"] = None\n        w[\"open\"] = (ts, w[\"rate\"])\n        return True\n\n    def clock_out(self, wid, ts):\n        w = self.w.get(wid)\n        if w is None or w[\"open\"] is None:\n            return False\n        w[\"done\"].append((w[\"open\"][0], ts, w[\"open\"][1]))\n        w[\"open\"] = None\n        return True\n\n    def get_total_work_time(self, wid):\n        w = self.w.get(wid)\n        return None if w is None else sum(e - s for s, e, _ in w[\"done\"])\n\n    def top_k_workers(self, k):\n        return sorted(self.w, key=lambda wid: (-self.get_total_work_time(wid), wid))[:k]\n\n    def set_promotion(self, wid, position, rate):\n        if wid not in self.w:\n            return False\n        self.w[wid][\"next\"] = (position, rate)\n        return True\n\n    def get_position(self, wid):\n        w = self.w.get(wid)\n        return None if w is None else w[\"pos\"]\n\n    def calculate_pay(self, wid, start, end):\n        w = self.w.get(wid)\n        if w is None:\n            return None\n        sessions = list(w[\"done\"]) + ([(w[\"open\"][0], end, w[\"open\"][1])] if w[\"open\"] else [])\n        total = 0\n        for s, e, rate in sessions:\n            for t in range(max(s, start), min(e, end)):\n                total += rate * (2 if t in self.double else 1)\n        return total\n\n    def set_double_pay(self, start, end):\n        self.double.update(range(start, end))\n\nIDS = [\"kim\", \"ada\", \"lu\", \"Ada\"]\n\ndef random_calls(rng, steps, part):\n    ts, calls = 0, []\n    for _ in range(steps):\n        wid = rng.choice(IDS)\n        r = rng.random()\n        if r < 0.12:\n            calls.append((\"add_worker\", (wid, rng.choice([\"dev\", \"ops\"]), rng.randint(1, 9))))\n        elif r < 0.45:\n            ts += rng.choice([0, 0, 1, 2, 5])\n            calls.append((rng.choice([\"clock_in\", \"clock_out\"]), (wid, ts)))\n        elif part == 1:\n            calls.append((\"clock_in\", (wid, ts)))\n        elif r < 0.6:\n            calls.append((\"get_total_work_time\", (wid,)))\n        elif r < 0.7 or part == 2:\n            calls.append((\"top_k_workers\", (rng.randint(1, 5),)))\n        elif r < 0.78:\n            calls.append((\"set_promotion\", (wid, rng.choice([\"lead\", \"dev\"]), rng.randint(1, 9))))\n        elif r < 0.83:\n            calls.append((\"get_position\", (wid,)))\n        elif r < 0.92 or part == 3:\n            a = rng.randint(0, ts + 5)\n            calls.append((\"calculate_pay\", (wid, a, a + rng.randint(0, 30))))\n        else:\n            a = rng.randint(0, ts + 10)\n            calls.append((\"set_double_pay\", (a, a + rng.randint(0, 12))))\n    return calls\n\ndef replay(sheet, calls, label):\n    model = Model()\n    for i, (name, args) in enumerate(calls):\n        want = getattr(model, name)(*args)\n        got = getattr(sheet, name)(*args)\n        assert got == want, (label, i, name, args, got, want)\n\nfor seed in range(200):\n    replay({fn}(), random_calls(random.Random(300 + seed), 80, 4), seed)\n",
+          "part": 4
+        }
+      ],
+      "parts": [
+        {
+          "title": "Clocking in and out",
+          "descriptionEn": "**Signatures:**\n- `Timesheet().add_worker(worker_id, position, hourly_rate) -> bool` registers a worker. It returns `False` if the id is taken.\n- `clock_in(worker_id, timestamp) -> bool` opens a session. It returns `False` if the worker is not registered or already has an open session.\n- `clock_out(worker_id, timestamp) -> bool` closes the open session. It returns `False` if the worker is not registered or has no open session.\n\n**Example:**\n- `add_worker(\"w-07\", \"Annotator\", 12)` is `True`, and `add_worker(\"w-07\", \"Lead\", 40)` is `False`\n- `clock_out(\"w-07\", 3)` is `False`: nothing is open yet\n- `clock_in(\"w-07\", 3)` is `True`, then `clock_in(\"w-07\", 4)` is `False`, and `clock_out(\"w-07\", 9)` is `True`\n- `clock_in(\"w-99\", 9)` is `False`, but `clock_in(\"w-07\", 9)` is `True`: a session may start when the last one ended"
+        },
+        {
+          "title": "Totals and a leaderboard",
+          "descriptionEn": "Keep Part 1 and add two methods.\n\n**Signatures:**\n- `get_total_work_time(worker_id) -> int | None` is the summed length of the worker's closed sessions, or `None` if the worker is not registered. An open session adds nothing until it is closed.\n- `top_k_workers(k) -> list[str]` returns up to `k` worker ids, most time first, ties by worker id in Python's string order. `k` is positive; with fewer workers, return all of them.\n\n**Example:** `kim`, `ada` and `lu` are registered; `ada` works `[0, 30)`, `kim` works `[5, 20)` and `[25, 40)`, and `lu` clocks in at `10` and stays in:\n- `get_total_work_time(\"kim\")` is `30`, the same as `ada`, and `get_total_work_time(\"lu\")` is `0`\n- `top_k_workers(3)` is `[\"ada\", \"kim\", \"lu\"]`, and `top_k_workers(1)` is `[\"ada\"]`\n- `get_total_work_time(\"zed\")` is `None`"
+        },
+        {
+          "title": "Promotions and pay",
+          "descriptionEn": "Keep Parts 1–2 and add three methods.\n\n**Signatures:**\n- `set_promotion(worker_id, new_position, new_hourly_rate) -> bool` schedules a new position and rate together. They take effect at the worker's next `clock_in`, never for a session already open or closed. A second call before that replaces the first. It returns `False` if the worker is not registered.\n- `get_position(worker_id) -> str | None` is the current position, or `None` if the worker is not registered.\n- `calculate_pay(worker_id, start, end) -> int | None` sums, over each session, the length of its overlap with `[start, end)` times the rate in effect when that session began. An open session counts as running until `end`. It returns `None` if the worker is not registered. `0 <= start <= end`.\n\n**Example:** `add_worker(\"ada\", \"Labeler\", 10)` and `clock_in(\"ada\", 0)`; then `set_promotion(\"ada\", \"Reviewer\", 15)` and `set_promotion(\"ada\", \"Senior\", 25)`, and `clock_out(\"ada\", 20)`:\n- `get_position(\"ada\")` is still `\"Labeler\"`; after `clock_in(\"ada\", 30)` it is `\"Senior\"`, and the rate is `25`\n- after `clock_out(\"ada\", 40)`, `calculate_pay(\"ada\", 15, 35)` is `5 * 10 + 5 * 25 = 175`\n- after `clock_in(\"ada\", 50)`, `calculate_pay(\"ada\", 45, 60)` is `250`, and `calculate_pay(\"ada\", 0, 50)` is `450`: the open session starts at `50`, outside `[0, 50)`"
+        },
+        {
+          "title": "Double-pay periods",
+          "descriptionEn": "Keep Parts 1–3 and add double pay.\n\n**Signature:** `set_double_pay(start, end) -> None`\n\n- Every time in `[start, end)` becomes double pay, for every worker, for sessions before or after this call. `0 <= start`; if `end <= start` nothing changes.\n- Periods only add up; none is ever removed. A time covered by several periods is still paid twice its rate, not more.\n- `calculate_pay` pays the part of each overlap that lies inside any period at twice the session's rate, and the rest at its rate.\n\n**Example:** `ada` at rate `10` works `[0, 30)`; then `set_double_pay(10, 20)`, `set_double_pay(15, 25)` and `set_double_pay(50, 50)`:\n- the double-pay time is `[10, 25)`, so `calculate_pay(\"ada\", 0, 30)` is `10 * 10 + 15 * 20 + 5 * 10 = 450`\n- `calculate_pay(\"ada\", 12, 18)` is `6 * 20 = 120`"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "What does each worker need to remember between a clock_in and the matching clock_out? How does that one field let both methods decide in O(1) whether the call is allowed?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Keep a dict from worker id to a record with the position, the rate and the start of the open session, or None. add_worker fails if the id is in the dict. clock_in fails for an unknown id or a non-None start, and otherwise stores the timestamp. clock_out fails for an unknown id or a None start, and otherwise appends (start, timestamp) to the worker's sessions and clears the start."
+        }
+      ],
+      "modelConnections": [
+        "Compute billing for training and labeling jobs charges per GPU-hour at the rate when the job started, with surge windows priced differently.",
+        "Annotation vendors pay labelers by session time, with rate changes after a review and bonus periods for urgent batches."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Storing the rate on each session makes promotions never rewrite past pay.",
+          "Merging double-pay periods into a sorted union makes 'doubled once' automatic.",
+          "Every method is a dict lookup plus work on one worker's sessions."
+        ],
+        "cons": [
+          "top_k_workers sorts every worker on each call, O(n log n).",
+          "calculate_pay walks every session of the worker and every period, O(s * p) without binary search.",
+          "Sessions are never trimmed, so memory grows with every clock_out."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why should clock_in fail while a session is open instead of closing the old session first?",
+          "hint": "If clock_in silently closed an open session first, which timestamp would that session end at, and was the worker really there until then?"
+        },
+        {
+          "stage": "concept",
+          "question": "With half-open sessions, why can a worker clock out and clock in again at the same timestamp?",
+          "hint": "A session is [in, out). If one ends at 9 and the next starts at 9, is any instant counted twice?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What does each worker record need so that add_worker, clock_in and clock_out are all O(1)?",
+          "hint": "Between clock_in and clock_out, what is the one value a worker must remember? Where does it live so that both calls find it in O(1)?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How would you keep top_k_workers fast with many workers and frequent clock-outs?",
+          "hint": "Totals only change at clock_out. Which structure keeps workers ordered by total and lets one worker move when their total grows?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why store the rate on each session instead of reading the worker's rate when pay is asked for?",
+          "hint": "A promotion lands between two sessions. If pay reads the worker's current rate, what happens to the money for the earlier session?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why does an open session count as running until the end of the pay window, and what would go wrong otherwise?",
+          "hint": "A session still open has no end yet. Which end makes pay for [start, end) match what a later clock_out at or after end would give?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How do you make sure overlapping double-pay periods double a time only once, and how would you answer pay questions fast with many periods?",
+          "hint": "Two periods [10, 20) and [15, 25). If you add the overlap of each, how much of [15, 20) is paid extra, and what merged form avoids that?"
+        }
+      ]
     }
   ]
 }
