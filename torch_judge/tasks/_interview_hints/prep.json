@@ -230,5 +230,14 @@
     "Why must the softmax subtract each row's maximum before exponentiating?": "Try np.exp(1000.0). What changes if you subtract each row's largest logit first, and why does the softmax stay the same?",
     "How would you serve nearest-neighbour search over millions of points?": "Comparing a query with every stored point costs O(n d). What do approximate indexes give up to answer faster?",
     "What does softmax over negative distances say about confidence, and how would a temperature change it?": "Logits here are negative squared distances, often far apart. What does that do to the softmax, and what would dividing by a temperature change?"
+  },
+  "softmax_entropy": {
+    "Why is the entropy of a softmax never negative, and what values does it take for one logit and for N equal logits?": "Each p_i is in (0, 1], so what sign does p_i log p_i have? Try one logit, then N equal logits, before writing any code.",
+    "Which intermediate arrays does the direct formula create, and in what order?": "List the arrays the formula needs: exponentials, their sum, probabilities, logs. Which depend on the sum, and so must wait for it?",
+    "What does the direct computation cost in time and memory for N logits?": "Count how many length-N arrays exist at once in your version. What does that cost in memory for a 100k-token vocabulary?",
+    "Why does subtracting the maximum logit leave the softmax unchanged, and what does it fix?": "Multiply the top and bottom of the softmax by exp(-m). What happens to p, and what is the largest exponent left?",
+    "Why compute log p in the centred form instead of taking the log of the probability?": "If exp(x_i - m) underflows to 0, what is log(p_i) when computed from p_i, and what is it in the centred form?",
+    "Which running scalars give the entropy in one pass, and how do you update them when the maximum grows?": "Keep m, S = sum exp(x - m) and V = sum exp(x - m)(x - m). When m grows by d, how do S and V change, and what is H from them?",
+    "How would you compute per-row entropies for a batch of sequences over a 100k-token vocabulary on a GPU?": "On a GPU, how would you reduce each row of a (batch, vocab) array to its entropy without a second full-size array?"
   }
 }

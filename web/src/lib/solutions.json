@@ -1339,6 +1339,15 @@
       }
     ]
   },
+  "softmax_entropy": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "# Adapted from Schuture/OpenAI-Interview-Notes (code under the MIT License).\nimport math\n\nimport numpy as np\n\n\nclass EntropyMeter:\n    def entropy(self, logits):\n        x = np.asarray(logits, dtype=float)\n        shifted = x - x.max()  # the largest term becomes exp(0) = 1, so nothing overflows\n        log_z = math.log(np.exp(shifted).sum())\n        log_p = shifted - log_z  # log p_i without ever dividing tiny numbers\n        return float(max(0.0, -(np.exp(log_p) * log_p).sum()))\n\n    def _update(self, state, block):\n        \"\"\"Folds one block into (m, s, v): s = sum exp(x - m), v = sum exp(x - m) * (x - m).\"\"\"\n        block = np.asarray(block, dtype=float)\n        if block.size == 0:\n            return state\n        m, s, v = state\n        new_m = max(m, float(block.max()))\n        if s:  # rescale the old sums to the new maximum\n            scale, delta = math.exp(m - new_m), m - new_m\n            s, v = s * scale, (v + delta * s) * scale\n        shifted = block - new_m\n        e = np.exp(shifted)\n        return new_m, s + float(e.sum()), v + float((e * shifted).sum())\n\n    @staticmethod\n    def _finish(state):\n        _, s, v = state\n        return max(0.0, math.log(s) - v / s)  # H = log Z - E[x - m]\n\n    def entropy_blockwise(self, logits, block_size=2):\n        x = np.asarray(logits, dtype=float)\n        state = (-math.inf, 0.0, 0.0)\n        for start in range(0, len(x), block_size):\n            state = self._update(state, x[start:start + block_size])  # a view, not a copy\n        return self._finish(state)\n\n    def entropy_online(self, blocks):\n        state = (-math.inf, 0.0, 0.0)\n        for block in blocks:\n            state = self._update(state, block)\n        return self._finish(state)",
+        "role": "solution"
+      }
+    ]
+  },
   "spreadsheet": {
     "cells": [
       {

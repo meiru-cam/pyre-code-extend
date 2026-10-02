@@ -306,5 +306,13 @@
       "nearest_neighbor"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/streaming-entropy",
+    "exercises": [
+      "softmax_entropy"
+    ],
+    "round": "coding"
   }
 ]
