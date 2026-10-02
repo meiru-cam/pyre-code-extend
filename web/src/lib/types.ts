@@ -131,6 +131,8 @@ export interface CustomTest {
   code: string;
 }
 
+export type PathGroup = 'foundations' | 'architectures' | 'training' | 'systems' | 'agents';
+
 export interface LearningPath {
   id: string;
   titleEn: string;
@@ -139,6 +141,7 @@ export interface LearningPath {
   descriptionZh: string;
   icon: string;
   problems: string[];
+  group: PathGroup;
   prerequisites: string[];
 }
 
