@@ -140,5 +140,14 @@
     "How does a trie answer a prefix query, and when would you keep it updated on each edit instead of rebuilding it?": "Walk a trie down the letters of the prefix, then think about what is below that node. What changes in the trie when one word is deleted from the text?",
     "Why does sending an index such as insert at 5 not work between replicas, and what do you send instead?": "Two replicas both send insert at 0 at the same moment. Apply each pair in both orders and compare. What could a character carry so its place does not depend on what arrived first?",
     "How can a delete arrive before the insert of its character, and how should a replica handle it?": "Follow three replicas where B deletes a character it received from A, and C hears from B before it hears from A. What should C remember when the delete names a character it has never seen?"
+  },
+  "chat_activity": {
+    "Why does the window follow the largest timestamp seen rather than the caller's chat or the wall clock?": "Suppose a quiet chat asks for its count long after everyone else has moved on. Whose timestamps decide what \"recent\" means, and what would go wrong if each chat used its own latest event?",
+    "When can a chat's entry be deleted, and what happens to memory if it never is?": "Run a stream where every event belongs to a new chat and count the entries your tracker holds after a million events. Which line would have to remove an entry, and when is it safe to run?",
+    "Why does each event cost amortized O(1) to evict when events arrive in timestamp order?": "Follow one event from the moment it is recorded until it leaves. How many times is it touched in total, and what does that say about the average cost per call?",
+    "Why does arrival order stop mattering once you keep each chat's highest ping and close timestamps?": "A ping at 10 and a close at 12 arrive in either order. What do you store per chat so that both orders end in the same state?",
+    "Why can an event older than the clock minus the window be dropped without changing any later answer?": "Once the clock has reached C, which timestamps can every future event still carry? Compare an event below C - window with what the chat already holds.",
+    "How would you partition millions of events per second across machines, and what about one very busy user?": "List what a single machine needs to answer active_sessions for one user. Which key keeps all of that on one machine, and what happens when one key gets most of the traffic?",
+    "After a crash, how much history must a machine replay to rebuild its state?": "Which events can still affect any answer after a restart? Relate that to how much state the tracker is allowed to keep."
   }
 }

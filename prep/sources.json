@@ -226,5 +226,13 @@
       "text_editor"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/event-window-aggregation",
+    "exercises": [
+      "chat_activity"
+    ],
+    "round": "coding"
   }
 ]
