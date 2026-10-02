@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowRight, Check, Copy, ExternalLink } from 'lucide-react';
+import { ArrowRight, Check, ExternalLink } from 'lucide-react';
 import 'katex/dist/katex.min.css';
 import { TopNav } from '@/components/layout/TopNav';
 import { Footer } from '@/components/layout/Footer';
@@ -14,7 +14,6 @@ import { useLocale } from '@/context/LocaleContext';
 import { PREP_ROUND_LABEL, companyName, difficultyVariant } from '@/lib/prep';
 import {
   EMPTY_PREP_DRAFT,
-  formatPrepForFeedback,
   loadPrepDraft,
   savePrepDraft,
   type PrepDraft,
@@ -39,7 +38,6 @@ export default function PrepItemPage() {
   const [notFound, setNotFound] = useState(false);
   const [draft, setDraft] = useState<PrepDraft>(EMPTY_PREP_DRAFT);
   const [showReference, setShowReference] = useState(false);
-  const [copied, setCopied] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout>>();
   const pendingSave = useRef<(() => void) | null>(null);
 
@@ -74,17 +72,6 @@ export default function PrepItemPage() {
       ? draft.covered.filter((p) => p !== point)
       : [...draft.covered, point];
     updateDraft({ ...draft, covered });
-  };
-
-  const copyForFeedback = async () => {
-    if (!item) return;
-    try {
-      await navigator.clipboard.writeText(formatPrepForFeedback(item, draft.answer));
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // Clipboard access can be denied; the answer is still on the page to copy by hand.
-    }
   };
 
   if (!item) {
@@ -186,12 +173,6 @@ export default function PrepItemPage() {
               className="w-full rounded-[10px] p-4 text-sm leading-relaxed text-text resize-y focus:outline-none"
               style={{ background: 'var(--bg-sunken)', border: '1px solid var(--line)' }}
             />
-            <div className="flex justify-end mt-3">
-              <Button variant="secondary" onClick={copyForFeedback} disabled={!draft.answer.trim()}>
-                {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                {copied ? t('prepCopied') : t('prepCopyForFeedback')}
-              </Button>
-            </div>
           </Section>
         )}
 
