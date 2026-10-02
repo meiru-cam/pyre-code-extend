@@ -1,0 +1,24 @@
+{
+  "title": "Restart Strategies under a Known Mean (Las Vegas)",
+  "summary": "Only the mean latency of a request is known. Bound the tail, work out what restarts guarantee inside a time budget, find the best number of equal attempts, show when restarting cannot help, and beat equal timeouts with unequal ones.",
+  "round": "coding",
+  "kind": "Spoken maths · probability, no code",
+  "difficulty": "Hard",
+  "frequency": "medium",
+  "format": "6 oral parts",
+  "topics": [
+    "probability",
+    "inequalities",
+    "algorithm-design"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/coding/restart-strategy-math",
+  "rubric": [
+    "Part 1: the tightest bound on P(T > 5) that the mean alone gives, and a distribution that reaches it",
+    "Part 2: the guarantee of two 5-minute attempts against one 10-minute attempt",
+    "Part 3: the guarantee of N + 1 equal attempts for every N, with the distribution that makes it tight",
+    "Part 4: the number of equal attempts with the largest guarantee, and that guarantee",
+    "Part 5: a known distribution under which every schedule succeeds equally often, and why",
+    "Part 6: unequal timeouts: the best two-attempt schedule, what m attempts can reach, and how a known distribution changes the choice"
+  ],
+  "exercises": []
+}

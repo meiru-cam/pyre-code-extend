@@ -1,0 +1,23 @@
+{
+  "title": "Lighthouse Beams and Heavy Tails",
+  "summary": "A lighthouse sweeps a beam at a uniformly random angle. Derive the law of the point it lands on, show its mean does not exist and that averaging flashes changes nothing, find estimators of the lighthouse position that do converge and how fast, and say what a simulation would have to measure.",
+  "round": "coding",
+  "kind": "Spoken maths · probability",
+  "difficulty": "Hard",
+  "frequency": "rare",
+  "format": "4 parts",
+  "topics": [
+    "probability",
+    "heavy-tails",
+    "simulation",
+    "estimation"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/coding/cauchy-lighthouse",
+  "rubric": [
+    "Part 1: F and f for the landing point, the standardized variable and its family, the median, quartiles and tail decay",
+    "Part 2: whether E[X] exists, the exact law of the sample mean for every n, and the step of the square-root-of-n argument that fails",
+    "Part 3: two consistent estimators with proofs, the Fisher information, each asymptotic variance, and which one is efficient",
+    "Part 4: the quantity a simulation should measure for each conclusion, the predicted value, and an error measure that behaves when the mean squared error does not"
+  ],
+  "exercises": []
+}
