@@ -428,5 +428,14 @@
     "In row-parallel forward, why must partial outputs be summed, and why does the backward pass need no communication?": "Each device's X_k @ W_k is a partial Y. Why must they be summed? In the backward pass, what does device k need to get dX_k?",
     "Why put the column-parallel layer before tanh and the row-parallel layer after it, and what would the opposite order cost?": "tanh is elementwise. After a column split, does any device need another device's hidden columns to apply it?",
     "How would you check sharded gradients against an unsharded reference, and which tolerances would you use?": "Compare with an unsharded reference built from the same weights. Which dtype, and which tolerances, catch a missing factor but not rounding?"
+  },
+  "image_pipeline": {
+    "Why must apply_step return a new array instead of changing its input, and what goes wrong when two pipelines start from the same loaded image?": "Two pipelines start from the same loaded image. If the first flips it in place, what does the second one see? What does a numpy slice like a[:, ::-1] share with a?",
+    "Why does grayscale or blur need a wider integer type before casting back to uint8?": "What is 255 * 299 in uint8 arithmetic? Which dtype should the weighted sum and the blur window total use before the cast back?",
+    "How does the scale index formula pick the source pixel whose centre is nearest, and what happens when the factor rounds a dimension down to zero?": "For output row i, the formula maps the centre of that row back to the source. Try height 3 scaled by 2: which source rows do output rows 0 to 5 copy? And what does max(1, ...) protect when the factor is 0.1?",
+    "When do threads speed up this work, and when would you need processes instead? What then crosses the process boundary?": "Threads overlap waiting and numpy work that releases the GIL. If a step were pure Python, what would limit the speed-up, and what would processes have to send each other?",
+    "How do you make sure each image is loaded once while several pipelines and workers use it?": "Where does the load call sit relative to the pipeline loop, and which unit of work does each worker receive: an image, or an image-pipeline pair?",
+    "How do you find the prefixes that pipelines share, and why does the key order inside a step not matter?": "Build a tree per image: each node is one step, children are the next steps. How do you turn a step dict into a key so {'radius': 1, 'type': 'blur'} and {'type': 'blur', 'radius': 1} match?",
+    "Why does a depth-first walk of the prefix tree keep fewer results alive than computing it level by level?": "Level by level, every node on a level holds its result until the next level is done. Depth first, which results are alive at once? Compare that with the longest pipeline's length."
   }
 }

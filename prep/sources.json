@@ -582,5 +582,13 @@
   {
     "company": "anthropic",
     "item": "behavioral/recruiter-screen"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/image-processing-pipeline",
+    "exercises": [
+      "image_pipeline"
+    ],
+    "round": "coding"
   }
 ]
