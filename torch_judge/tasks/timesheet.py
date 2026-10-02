@@ -107,13 +107,12 @@ def replay(sheet, calls, label):
 TESTS = [
     {"name": "Part 1: the worked example", "part": 1, "behavior": "state.invariant", "code": r"""
 t = {fn}()
+assert t.clock_in("w-07", 3) is False
 assert t.add_worker("w-07", "Annotator", 12) is True
-assert t.add_worker("w-07", "Lead", 40) is False
-assert t.clock_out("w-07", 3) is False
-assert t.clock_in("w-07", 3) is True and t.clock_in("w-07", 4) is False
-assert t.clock_out("w-07", 9) is True
-assert t.clock_in("w-99", 9) is False
+assert t.clock_in("w-07", 3) is True and t.clock_out("w-07", 9) is True
+assert t.clock_out("w-07", 9) is False
 assert t.clock_in("w-07", 9) is True, "a new session may start when the last one ended"
+assert t.add_worker("w-07", "Lead", 40) is False
 """},
     {"name": "Part 1: random calls", "part": 1, "visibility": "unshown", "behavior": "state.invariant",
      "failure_message": "On a random sequence of add_worker, clock_in and clock_out, a return value differed from a model: a worker id is registered once, clock_in needs no open session, and clock_out needs one.",
@@ -171,8 +170,7 @@ t.clock_out("ada", 40)
 assert t.calculate_pay("ada", 15, 35) == 5 * 10 + 5 * 25
 t.clock_in("ada", 50)
 assert t.calculate_pay("ada", 45, 60) == 10 * 25
-assert t.calculate_pay("ada", 0, 50) == 20 * 10 + 10 * 25
-assert t.calculate_pay("bo", 0, 50) is None and t.set_promotion("bo", "x", 1) is False
+assert t.calculate_pay("ada", 18, 18) == 0
 """},
     {"name": "Part 3: promotions and windows", "part": 3, "visibility": "unshown", "behavior": "state.invariant",
      "failure_message": "A promotion replaces position and rate together at the next clock_in, never during an open session or for past ones, and a second one before then replaces the first; pay sums the overlap of each session with [start, end) at that session's own rate; an open session counts as running until end; an empty window pays 0.",
@@ -246,10 +244,10 @@ TASK = {
 The requirement arrives in parts. Each part keeps every earlier behavior, so one `Timesheet` class passes all parts at the end. Pass every test of the current part to reveal the next one.
 
 **Rules for every part:**
-- A worker id is a non-empty, case-sensitive string. Once registered, it stays registered.
-- Timestamps are non-negative integers. Across all `clock_in` and `clock_out` calls, for every worker together, they never decrease.
+- Worker ids are non-empty, case-sensitive strings, and nothing ever unregisters one.
+- `clock_in` and `clock_out` timestamps are non-negative integers that never go down from one call to the next, whichever worker the call is for.
 - Every interval is half-open: `[a, b)` holds `a` but not `b`. A session is `[clock_in time, clock_out time)`.
-- A rate is a positive integer. Time `d` at rate `r` earns `d * r`.
+- Rates are positive integers, and pay is length × rate.
 - A call that fails returns the failure value given for it and changes nothing. No method raises.
 
 ────────────────────────────────
@@ -260,7 +258,7 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Where it is used:** time tracking and payroll, contractor billing with rate changes, and surge or overtime pricing over time windows.
 
-Adapted from the worker management online assessment in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, on one class with a new name. `get_position` is added in Part 3 so that promotions can be checked, and `set_double_pay` returns `None`.""",
+Adapted from the worker management online assessment in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, on one class renamed from `Workforce` to `Timesheet`. `get_position` is added in Part 3 so that promotions can be checked, and a double-pay period with `end <= start` is ignored.""",
     "parts": [
         {
             "title": "Clocking in and out",
@@ -270,10 +268,10 @@ Adapted from the worker management online assessment in Schuture/Anthropic-Inter
 - `clock_out(worker_id, timestamp) -> bool` closes the open session. It returns `False` if the worker is not registered or has no open session.
 
 **Example:**
-- `add_worker("w-07", "Annotator", 12)` is `True`, and `add_worker("w-07", "Lead", 40)` is `False`
-- `clock_out("w-07", 3)` is `False`: nothing is open yet
-- `clock_in("w-07", 3)` is `True`, then `clock_in("w-07", 4)` is `False`, and `clock_out("w-07", 9)` is `True`
-- `clock_in("w-99", 9)` is `False`, but `clock_in("w-07", 9)` is `True`: a session may start when the last one ended""",
+- `clock_in("w-07", 3)` is `False` before `add_worker("w-07", "Annotator", 12)`, which is `True`
+- now `clock_in("w-07", 3)` and `clock_out("w-07", 9)` are `True`, and a second `clock_out("w-07", 9)` is `False`
+- `clock_in("w-07", 9)` is `True`: a session may start when the last one ended
+- `add_worker("w-07", "Lead", 40)` is `False`: the id is taken""",
         },
         {
             "title": "Totals and a leaderboard",
@@ -300,7 +298,8 @@ Adapted from the worker management online assessment in Schuture/Anthropic-Inter
 **Example:** `add_worker("ada", "Labeler", 10)` and `clock_in("ada", 0)`; then `set_promotion("ada", "Reviewer", 15)` and `set_promotion("ada", "Senior", 25)`, and `clock_out("ada", 20)`:
 - `get_position("ada")` is still `"Labeler"`; after `clock_in("ada", 30)` it is `"Senior"`, and the rate is `25`
 - after `clock_out("ada", 40)`, `calculate_pay("ada", 15, 35)` is `5 * 10 + 5 * 25 = 175`
-- after `clock_in("ada", 50)`, `calculate_pay("ada", 45, 60)` is `250`, and `calculate_pay("ada", 0, 50)` is `450`: the open session starts at `50`, outside `[0, 50)`""",
+- after `clock_in("ada", 50)`, `calculate_pay("ada", 45, 60)` is `250`: the open session counts up to `60`
+- `calculate_pay("ada", 18, 18)` is `0`: the window is empty""",
         },
         {
             "title": "Double-pay periods",
@@ -308,9 +307,8 @@ Adapted from the worker management online assessment in Schuture/Anthropic-Inter
 
 **Signature:** `set_double_pay(start, end) -> None`
 
-- Every time in `[start, end)` becomes double pay, for every worker, for sessions before or after this call. `0 <= start`; if `end <= start` nothing changes.
-- Periods only add up; none is ever removed. A time covered by several periods is still paid twice its rate, not more.
-- `calculate_pay` pays the part of each overlap that lies inside any period at twice the session's rate, and the rest at its rate.
+- In `calculate_pay`, time inside any double-pay period earns twice the session's rate. This holds for every worker, and for sessions before or after the call that set the period. `0 <= start`; a period with `end <= start` is ignored.
+- Periods never go away, and overlapping periods do not stack: a time is doubled at most once.
 
 **Example:** `ada` at rate `10` works `[0, 30)`; then `set_double_pay(10, 20)`, `set_double_pay(15, 25)` and `set_double_pay(50, 50)`:
 - the double-pay time is `[10, 25)`, so `calculate_pay("ada", 0, 30)` is `10 * 10 + 15 * 20 + 5 * 10 = 450`
@@ -422,7 +420,7 @@ class Timesheet:
 
     def set_double_pay(self, start, end):
         if end <= start:
-            return None
+            return
         self._periods.append((start, end))
         merged = []
         for p, q in sorted(self._periods):
@@ -431,7 +429,6 @@ class Timesheet:
             else:
                 merged.append([p, q])
         self._union = [tuple(m) for m in merged]
-        return None
 ''',
     "interview_questions": interview(
         concept=[

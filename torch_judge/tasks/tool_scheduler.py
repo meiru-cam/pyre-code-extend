@@ -85,6 +85,7 @@ assert s.run_one([(1, 5, [0]), (0, 5, [])], 1) == ([(0, 0, 0), (5, 0, 1)], 10)
 assert s.run_one([(0, 2, []), (1, 3, []), (2, 1, [])], 1) == ([(0, 0, 0), (2, 0, 1), (5, 0, 2)], 6)
 assert s.run_one([(3, 1, []), (2, 1, []), (1, 1, []), (0, 1, [])], 2) == ([(0, 0, 0), (0, 0, 1), (1, 0, 2), (1, 0, 3)], 2)
 assert s.run_one([(0, 1, []), (1, 1, [])], 10) == ([(0, 0, 0), (0, 0, 1)], 1)
+assert s.run_one([(0, 1, []), (1, 1, []), (2, 1, [1]), (3, 1, [1]), (4, 1, [])], 2) == ([(0, 0, 0), (0, 0, 1), (1, 0, 2), (1, 0, 3), (2, 0, 4)], 3)
 assert s.run_one([(0, 10**9, []), (1, 10**9, [0])], 1) == ([(0, 0, 0), (10**9, 0, 1)], 2 * 10**9)
 raises("CycleError", lambda: s.run_one([(0, 1, [0])], 1))
 raises("CycleError", lambda: s.run_one([(0, 1, []), (1, 1, [2]), (2, 1, [1])], 4))
@@ -102,9 +103,8 @@ for trial in range(300):
 """},
     {"name": "Part 2: the worked example", "part": 2, "behavior": "contract.signature", "code": r"""
 s = {fn}()
-agents = [[(0, 3, []), (1, 2, [])], [(0, 1, []), (1, 1, [0])]]
-assert s.run_each(agents, [1, 1]) == ([(0, 0, 0), (0, 1, 0), (1, 1, 1), (3, 0, 1)], 5)
-assert s.run_each([], []) == ([], 0) and s.run_each([[], []], [1, 1]) == ([], 0)
+agents = [[(0, 2, []), (1, 2, []), (2, 1, [0])], [(0, 3, [])], [(0, 1, []), (1, 1, [])]]
+assert s.run_each(agents, [2, 1, 1]) == ([(0, 0, 0), (0, 0, 1), (0, 1, 0), (0, 2, 0), (1, 2, 1), (2, 0, 2)], 3)
 """},
     {"name": "Part 2: random agents", "part": 2, "visibility": "unshown", "behavior": "state.invariant",
      "failure_message": "Each agent must be scheduled alone under its own cap, the starts merged by (start_time, agent_id, tool_id), the makespan the largest over agents, and a cycle in any agent raises CycleError.",
@@ -123,8 +123,8 @@ for trial in range(300):
 """},
     {"name": "Part 3: the worked example", "part": 3, "behavior": "contract.signature", "code": r"""
 s = {fn}()
-agents = [[(0, 1, []), (1, 2, [0])], [(0, 3, [])], [(0, 2, []), (1, 1, [0])]]
-assert s.run_shared(agents, 2) == ([(0, 0, 0), (0, 1, 0), (1, 0, 1), (3, 2, 0), (5, 2, 1)], 6)
+agents = [[(0, 1, []), (1, 1, [0]), (2, 4, []), (3, 4, [])], [(0, 2, [])], [(0, 1, [])], [(0, 1, []), (1, 1, [0])]]
+assert s.run_shared(agents, 3) == ([(0, 0, 0), (0, 0, 2), (0, 0, 3), (1, 0, 1), (2, 1, 0), (4, 2, 0), (4, 3, 0), (5, 3, 1)], 6)
 """},
     {"name": "Part 3: random agents sharing slots", "part": 3, "visibility": "unshown", "behavior": "scheduler.concurrency",
      "failure_message": "With one cap shared by every agent, the starts or makespan differed from stepping time one unit at a time and giving each free slot to the ready call with the smallest (agent_id, tool_id).",
@@ -206,10 +206,10 @@ TASK = {
 The requirement arrives in parts. Each part keeps every earlier behavior and adds one method, so one `ToolScheduler` class passes all parts at the end. Pass every test of the current part to reveal the next one.
 
 **Rules for every part:**
-- A call is a tuple `(tool_id, duration, deps)`. An agent's `tool_id`s are exactly `0` to `n - 1` in some order, `duration` is an integer from `1` to `10**9`, and `deps` lists `tool_id`s of the same agent that must finish first.
+- A call is a tuple `(tool_id, duration, deps)`. An agent's `tool_id`s are exactly `0` to `n - 1` in some order, `duration` is an integer from `1` to `10**9`, and `deps` names other calls of the same agent that must end before this one begins.
 - Time is an integer and starts at `0`. A call holds one slot from its start `s` until `s + duration`, and runs without interruption.
-- A call is ready at time `t` once every dependency has `start + duration <= t`. At each `t`, first release every call that finishes at `t`, then fill free slots with ready calls.
-- A slot is never left free while a ready call waits. When there are more ready calls than free slots, the smaller `(agent_id, tool_id)` starts first.
+- A call may start at time `t` only when each of its dependencies ended at `t` or earlier. At each `t`, first release every call that ends at `t`, then fill free slots.
+- A slot is never left free while a ready call that is allowed to start waits. When there are more ready calls than free slots, the smaller `(agent_id, tool_id)` starts first.
 - Each method returns `(starts, makespan)`. `starts` holds one `(start_time, agent_id, tool_id)` per call, sorted. `makespan` is the largest `start + duration`, or `0` with no calls.
 - If some call can never start because of a dependency cycle, raise `CycleError`, a class you define.
 
@@ -221,13 +221,14 @@ The requirement arrives in parts. Each part keeps every earlier behavior and add
 
 **Where it is used:** agent frameworks running tool calls in parallel, build systems such as Bazel and make `-j`, workflow engines such as Airflow, and GPU job queues with per-team limits.
 
-Adapted from the agent tool scheduler question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, on one class whose methods replace the three functions. Calls are plain tuples. Part 4, a cap per agent under a shared cap, comes from the source's follow-ups.""",
+Adapted from the agent tool scheduler question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, on one class whose methods replace the three functions: `schedule_agent` becomes `run_one`, `schedule_agents_independently` becomes `run_each` and `schedule_agents_global` becomes `run_shared`. Calls are plain 3-tuples instead of the `ToolCall` named tuple, so `deps` is required in each, and the tests go up to 40,000 calls instead of 200,000. Part 4, a cap per agent under a shared cap, comes from the source's follow-ups and has its own speed check.""",
     "parts": [
         {
             "title": "One agent",
             "description_en": r"""**Signature:** `ToolScheduler().run_one(calls, capacity) -> (starts, makespan)`
 
 - `calls` belong to agent `0`, and `capacity` is a positive number of slots.
+- Durations reach `10**9`, so jump from one finish time to the next instead of stepping one unit at a time.
 
 **Example:** `calls = [(2, 3, [0]), (0, 4, []), (1, 1, []), (3, 2, [1])]` and `capacity = 2`:
 - at `0`, calls `0` and `1` start; call `1` finishes at `1`, which makes call `3` ready, so it starts at `1`
@@ -240,13 +241,12 @@ Adapted from the agent tool scheduler question in Schuture/OpenAI-Interview-Note
 
 **Signature:** `run_each(agents, capacities) -> (starts, makespan)`
 
-- `agents[a]` is the list of agent `a`'s calls. `tool_id`s are local, so the same id in two agents names two different calls.
-- Agent `a` has `capacities[a]` slots of its own and never competes with other agents. Each agent's starts are exactly what `run_one` would give it alone, with its own `agent_id`.
-- Return every start across agents, sorted, and the largest makespan.
+- `agents[a]` holds agent `a`'s calls, and `capacities[a]`, a positive integer, is its own number of slots. Ids are local to each agent.
+- Run each agent's list through the Part 1 rules with its own slot count, label its starts with its index, then merge everything into one sorted list; the makespan is the largest.
 
-**Example:** `agents = [[(0, 3, []), (1, 2, [])], [(0, 1, []), (1, 1, [0])]]` and `capacities = [1, 1]`:
-- agent `0` runs its calls at `0` and `3`; agent `1` at `0` and `1`
-- the result is `([(0, 0, 0), (0, 1, 0), (1, 1, 1), (3, 0, 1)], 5)`""",
+**Example:** `agents = [[(0, 2, []), (1, 2, []), (2, 1, [0])], [(0, 3, [])], [(0, 1, []), (1, 1, [])]]` and `capacities = [2, 1, 1]`:
+- agent `0` starts two calls at `0` and its third at `2`; agent `1` starts at `0`; agent `2` has one slot, so its calls start at `0` and `1`
+- the result is `([(0, 0, 0), (0, 0, 1), (0, 1, 0), (0, 2, 0), (1, 2, 1), (2, 0, 2)], 3)`""",
         },
         {
             "title": "One shared cap",
@@ -257,10 +257,10 @@ Adapted from the agent tool scheduler question in Schuture/OpenAI-Interview-Note
 - Every agent's calls draw from the same `capacity` slots, so agents compete for each free slot under the tie rule.
 - Up to `40,000` calls with durations up to `10**9` must finish in a few seconds: aim for `O((N + E) log N)` for `N` calls and `E` dependencies.
 
-**Example:** `agents = [[(0, 1, []), (1, 2, [0])], [(0, 3, [])], [(0, 2, []), (1, 1, [0])]]` and `capacity = 2`:
-- at `0`, three calls are ready and `(0, 0)` and `(1, 0)` win; at `1`, `(0, 1)` beats `(2, 0)` for the freed slot
-- at `3`, both running calls finish and `(2, 0)` starts; `(2, 1)` follows at `5`
-- the result is `([(0, 0, 0), (0, 1, 0), (1, 0, 1), (3, 2, 0), (5, 2, 1)], 6)`""",
+**Example:** `capacity = 3` and four agents: agent `0` has `(0, 1, [])`, `(1, 1, [0])`, `(2, 4, [])` and `(3, 4, [])`; agent `1` has `(0, 2, [])`; agent `2` has `(0, 1, [])`; agent `3` has `(0, 1, [])` and `(1, 1, [0])`:
+- at `0`, agent `0` takes all three slots
+- at `1`, `(0, 1)` has just become ready and still beats `(1, 0)`, which has waited since `0`; `(1, 0)` starts at `2`
+- the result is `([(0, 0, 0), (0, 0, 2), (0, 0, 3), (1, 0, 1), (2, 1, 0), (4, 2, 0), (4, 3, 0), (5, 3, 1)], 6)`""",
         },
         {
             "title": "Both caps at once",
@@ -268,7 +268,7 @@ Adapted from the agent tool scheduler question in Schuture/OpenAI-Interview-Note
 
 **Signature:** `run_capped(agents, capacities, capacity) -> (starts, makespan)`
 
-- Agent `a` may hold at most `capacities[a]` slots at once, and all agents together at most `capacity`.
+- Agent `a` may hold at most `capacities[a]` slots at once, a positive integer, and all agents together at most `capacity`.
 - A free slot goes to the smallest `(agent_id, tool_id)` among ready calls whose agent is below its own cap. A capped agent's ready calls wait without blocking other agents.
 - With every per-agent cap large, this is `run_shared`; with `capacity` large, it is `run_each`.
 - Many agents may sit at their cap with many ready calls: skip such an agent as a whole rather than one call at a time.
@@ -309,7 +309,7 @@ class CycleError(Exception):
 
 
 class ToolScheduler:
-    def _run(self, agents, caps, capacity):
+    def run_capped(self, agents, caps, capacity):
         """Event-driven list scheduling; caps[a] is agent a's own limit, capacity the shared one."""
         index = {}  # (agent_id, tool_id) -> (duration, dependents)
         waiting = {}  # (agent_id, tool_id) -> unfinished dependencies
@@ -375,9 +375,6 @@ class ToolScheduler:
 
     def run_shared(self, agents, capacity):
         return self.run_capped(agents, [capacity] * len(agents), capacity)
-
-    def run_capped(self, agents, capacities, capacity):
-        return self._run(agents, capacities, capacity)
 ''',
     "interview_questions": interview(
         concept=[

@@ -61,8 +61,7 @@ TESTS = [
     {"name": "Part 1: the worked example", "part": 1, "behavior": "contract.signature", "code": r"""
 assert {fn}("/data/runs/exp3", "ckpt") == "/data/runs/exp3/ckpt"
 assert {fn}("/data/runs/exp3", "..//exp4/./logs/") == "/data/runs/exp4/logs"
-assert {fn}("/data", "../../../tmp") == "/tmp"
-assert {fn}("/", "..") == "/"
+assert {fn}("/a", "../../b/../c") == "/c"
 """},
     {"name": "Part 1: dots, slashes and the root", "part": 1, "visibility": "unshown", "behavior": "edge.empty_or_boundary",
      "failure_message": "A '.' and an empty component change nothing, '..' drops the last component and stays at '/' when there is none, a trailing slash is ignored, and the result is '/' alone at the root, with no trailing slash elsewhere.",
@@ -88,17 +87,15 @@ for _ in range(3000):
     assert {fn}(cwd, tail) == want, (cwd, tail, want)
 """},
     {"name": "Part 2: the worked example", "part": 2, "behavior": "contract.signature", "code": r"""
-home = "/users/kai"
-assert {fn}("/data/runs", "/etc//ssl/", home) == "/etc/ssl"
-assert {fn}("/data/runs", "~", home) == "/users/kai"
-assert {fn}("/data/runs", "~/../shared", home) == "/users/shared"
-assert {fn}("/data/runs", "x/~y", home) == "/data/runs/x/~y"
 try:
-    {fn}("/data/runs", "~kai", home)
+    {fn}("/data/runs", "~kai", "/users/kai")
 except ValueError:
     pass
 else:
     raise AssertionError("~kai names another user's home and must raise ValueError")
+assert {fn}("/data/runs", "notes/~old", "/users/kai") == "/data/runs/notes/~old"
+assert {fn}("/srv", "~/../etc", "/") == "/etc"
+assert {fn}("/data/runs", "/etc//ssl/", "/users/kai") == "/etc/ssl"
 """},
     {"name": "Part 2: where ~ and / count", "part": 2, "visibility": "unshown", "behavior": "edge.empty_or_boundary",
      "failure_message": "An absolute destination ignores cwd; '~' and '~/rest' start from home and only as the first character; '~name' raises ValueError; '/', '//x', '~/' and '~/..' all normalise like Part 1.",
@@ -137,7 +134,6 @@ for _ in range(3000):
 links = {"/data/latest": "runs/exp9", "/data/runs/exp9/out": "/scratch/out9"}
 assert {fn}("/data", "latest/../exp2", None, links) == "/data/runs/exp2"
 assert {fn}("/data", "latest/out/..", None, links) == "/scratch"
-assert {fn}("/data", "latest/out", None, links) == "/scratch/out9"
 loop = {"/l/a": "b", "/l/b": "a"}
 try:
     {fn}("/l", "a", None, loop)
@@ -168,8 +164,7 @@ chain["/c/l16"] = "l17"
 chain["/c/l17"] = "end"
 raises("LinkLoopError", lambda: {fn}("/c", "l1", None, chain))
 raises("LinkLoopError", lambda: {fn}("/z", "self", None, {"/z/self": "/z/self"}))
-e = raises("LinkLoopError", lambda: {fn}("/l", "a", None, {"/l/a": "b", "/l/b": "a"}))
-assert isinstance(e, Exception)
+raises("LinkLoopError", lambda: {fn}("/l", "a", None, {"/l/a": "b", "/l/b": "a"}))
 """},
     {"name": "Part 3: random links", "part": 3, "visibility": "unshown", "behavior": "state.invariant",
      "failure_message": "On random link tables, including loops, targets that climb past '/', and links reached through other links, the result differed from following each component in order and expanding each link where it is reached.",
@@ -209,10 +204,10 @@ TASK = {
 The requirement arrives in parts. Each part keeps every earlier behavior, so one `change_directory` function passes all parts at the end. Pass every test of the current part to reveal the next one.
 
 **Rules for every part:**
-- `cwd` and `home` are already normalised absolute paths: they start with `/`, have no `.`, `..` or empty component, and no trailing slash unless the path is `"/"` itself.
+- `cwd` and `home` are already in the form this function returns.
 - Split `destination` on `/` and handle the pieces left to right. An empty piece, from a repeated or trailing slash, and `.` change nothing. `..` drops the last component, and at `/` it stays at `/`. Any other piece is a name and is added; names are case-sensitive.
 - Return the result as `/` followed by the components joined with `/`, so the root is `"/"`.
-- The function never touches a real file system. Every path that is not given as a link is treated as an ordinary directory.
+- Nothing is looked up on disk: unless Part 3 says a path is a link, it is a plain directory.
 
 ────────────────────────────────
 
@@ -222,7 +217,7 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Where it is used:** shells (`cd -P`, `pwd -P`), `realpath`, path handling in build tools and container runtimes, and sandbox checks that must not be fooled by a link that leads outside.
 
-Adapted from the cd command question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, as one function whose `home` and `symlinks` arguments arrive in Parts 2 and 3. The expansion cap is 16 and the error is `LinkLoopError`. The source's last part, how a shell runs `cd`, has no code and becomes an interview question.""",
+Adapted from the cd command question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, as one function, `change_directory`, in place of `cd_relative`, `cd_absolute` and `cd`; its `home` and `symlinks` arguments are optional and arrive in Parts 2 and 3. The expansion cap is 16 instead of 20, and `SymlinkLoopError` is renamed `LinkLoopError`. The source's last part, how a shell runs `cd`, has no code and becomes an interview question.""",
     "parts": [
         {
             "title": "Relative destinations",
@@ -233,8 +228,7 @@ Adapted from the cd command question in Schuture/OpenAI-Interview-Notes (CC BY-N
 **Example:**
 - `change_directory("/data/runs/exp3", "ckpt")` is `"/data/runs/exp3/ckpt"`
 - `change_directory("/data/runs/exp3", "..//exp4/./logs/")` is `"/data/runs/exp4/logs"`
-- `change_directory("/data", "../../../tmp")` is `"/tmp"`: the extra `..` stop at `/`
-- `change_directory("/", "..")` is `"/"`""",
+- `change_directory("/a", "../../b/../c")` is `"/c"`: the second `..` has nothing left to drop""",
         },
         {
             "title": "Absolute destinations and ~",
@@ -245,13 +239,14 @@ Adapted from the cd command question in Schuture/OpenAI-Interview-Notes (CC BY-N
 - A `destination` starting with `/` is absolute: start at `/` instead of `cwd`.
 - `destination == "~"` is `home`, and `"~/rest"` starts at `home` and applies `rest` as in Part 1.
 - Any other `destination` starting with `~`, such as `"~kai"`, raises `ValueError`.
-- `~` is special only as the first character: inside a path, such as `"x/~y"`, it is part of an ordinary name.
+- A `~` anywhere except at position 0 is an ordinary character.
+- `home` is always given when `destination` starts with `~`.
 
-**Example:** with `home = "/users/kai"`:
-- `change_directory("/data/runs", "/etc//ssl/", home)` is `"/etc/ssl"`
-- `change_directory("/data/runs", "~", home)` is `"/users/kai"`, and `"~/../shared"` gives `"/users/shared"`
-- `change_directory("/data/runs", "x/~y", home)` is `"/data/runs/x/~y"`
-- `change_directory("/data/runs", "~kai", home)` raises `ValueError`""",
+**Example:**
+- `change_directory("/data/runs", "~kai", "/users/kai")` raises `ValueError`
+- `change_directory("/data/runs", "notes/~old", "/users/kai")` is `"/data/runs/notes/~old"`
+- `change_directory("/srv", "~/../etc", "/")` is `"/etc"`: home is the root, so `..` stays there
+- `change_directory("/data/runs", "/etc//ssl/", "/users/kai")` is `"/etc/ssl"`""",
         },
         {
             "title": "Symbolic links",
@@ -259,11 +254,11 @@ Adapted from the cd command question in Schuture/OpenAI-Interview-Notes (CC BY-N
 
 **Signature:** `change_directory(cwd, destination, home=None, symlinks=None) -> str`, plus an exception class `LinkLoopError`
 
-- `symlinks` maps the normalised absolute path of a link to its target. `None` means no links. A key matches a whole path, never part of a component.
+- `symlinks` maps a link's full path, in the form this function returns, to its target; `None` means no links. Lookups compare whole paths, so `/a/bc` is not affected by a link at `/a/b`.
 - After each name is added, if the path so far is a key, replace that last component by the link's target: an absolute target starts again from `/`, and a relative target starts from the directory that holds the link. The target's pieces follow the same rules, including `.`, `..` and further links, and then the rest of `destination` continues from where they end.
-- So `..` right after a link leaves the directory the link leads to, not the directory that holds the link.
-- Every replacement counts as one expansion, even of a link already expanded in this call. More than 16 expansions in one call raises `LinkLoopError`.
-- `cwd`, `home` and every key are real directories: none of them lies inside a link.
+- `..` always removes the last component of the resolved path, so right after a link it climbs out of the link's target.
+- Count every replacement, whether or not the same link came up before. More than 16 in one call raises `LinkLoopError`.
+- Assume `cwd`, `home` and the keys pass through no link.
 
 **Example:** with `symlinks = {"/data/latest": "runs/exp9", "/data/runs/exp9/out": "/scratch/out9"}`:
 - `change_directory("/data", "latest/../exp2", None, symlinks)` is `"/data/runs/exp2"`, not `"/data/exp2"`
@@ -356,7 +351,7 @@ def change_directory(cwd, destination, home=None, symlinks=None):
             "Why does `~` expand only at the start of the destination, and why reject `~name` here?",
             "Why must a link be expanded as soon as its component is added, before a later `..` can remove it?",
             "Why cap the number of expansions instead of failing the first time a link repeats?",
-            "Why must `cd` be built into the shell instead of being a separate program the shell starts?",
+            "Why must `cd` be built into the shell instead of being a separate program, and what does the shell do when it runs it?",
         ],
     ),
 }

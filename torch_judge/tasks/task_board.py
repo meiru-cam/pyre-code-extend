@@ -98,12 +98,10 @@ TESTS = [
 b = {fn}()
 assert b.add(5, "mia", "draft slides", 2) == "t1"
 assert b.add(5, "raj", "draft slides", 4) == "t2"
-assert b.get(6, "raj", "t1") is None and b.finish(7, "raj", "t1") is False
-assert b.edit(8, "mia", "t1", "final slides", 6) is True
-assert b.get(8, "mia", "t1") == ("t1", "final slides", 6, 5)
-assert b.finish(9, "mia", "t1") is True
-assert b.edit(9, "mia", "t1", "again", 1) is False and b.get(9, "mia", "t1") is None
-assert b.get(9, "raj", "t2") == ("t2", "draft slides", 4, 5)
+assert b.edit(6, "mia", "t1", "final slides", 6) is True
+assert b.get(6, "mia", "t1") == ("t1", "final slides", 6, 5)
+assert b.finish(7, "raj", "t2") is True and b.get(8, "raj", "t2") is None
+assert b.edit(8, "raj", "t1", "x", 1) is False and b.finish(8, "raj", "t1") is False
 """},
     {"name": "Part 1: owners, missing ids and failed calls", "part": 1, "visibility": "unshown", "behavior": "security.permission",
      "failure_message": "Ids come from one counter shared by every user; a task owned by someone else, a finished task and an unknown id all give None or False; a failed edit or finish changes nothing; an edit keeps created_at.",
@@ -132,7 +130,6 @@ assert b.finish(3, "raj", "t2") is True
 assert b.add(3, "raj", "oncall", 7) == "t4"
 assert b.list_tasks(3, "raj") == [("t4", "oncall", 7, 3), ("t1", "logs", 2, 1), ("t3", "docs", 2, 2)]
 assert b.list_tasks(3, "raj", 3) == [("t4", "oncall", 7, 3)]
-assert b.list_tasks(3, "raj", min_priority=2) == b.list_tasks(3, "raj")
 assert b.list_tasks(3, "mia") == []
 """},
     {"name": "Part 2: ties, filters and fresh lists", "part": 2, "visibility": "unshown", "behavior": "metrics.ties",
@@ -190,15 +187,16 @@ for seed in range(150):
 """},
     {"name": "Part 4: the worked example", "part": 4, "behavior": "checkpoint.recovery", "code": r"""
 b = {fn}()
-b.add(0, "raj", "index", 1)
-b.add(3, "raj", "reindex", 4, ttl=5)
-b.edit(5, "raj", "t1", "index v2", 6)
-b.finish(9, "raj", "t1")
-assert b.list_tasks(4, "raj") == [("t2", "reindex", 4, 3), ("t1", "index", 1, 0)]
-assert b.list_tasks(5, "raj") == [("t1", "index v2", 6, 0), ("t2", "reindex", 4, 3)]
-assert b.list_tasks(8, "raj") == [("t1", "index v2", 6, 0)]
-assert b.list_tasks(9, "raj") == []
-assert b.list_tasks(2, "raj") == [("t1", "index", 1, 0)]
+assert b.add(2, "raj", "warmup", 5, ttl=6) == "t1"
+assert b.add(2, "mia", "audit", 1) == "t2"
+assert b.add(4, "raj", "eval", 3) == "t3"
+assert b.finish(6, "raj", "t1") is True
+assert b.edit(7, "raj", "t3", "eval v2", 9) is True
+assert b.list_tasks(1, "raj") == []
+assert b.list_tasks(5, "raj") == [("t1", "warmup", 5, 2), ("t3", "eval", 3, 4)]
+assert b.list_tasks(6, "raj") == [("t3", "eval", 3, 4)]
+assert b.list_tasks(7, "raj") == [("t3", "eval v2", 9, 4)]
+assert b.list_tasks(7, "mia") == [("t2", "audit", 1, 2)]
 """},
     {"name": "Part 4: same-time calls and early questions", "part": 4, "visibility": "unshown", "behavior": "events.ordering",
      "failure_message": "A past list must include every call with timestamp <= at_timestamp, including several edits at one timestamp, where the last one wins; a finish at t hides the task at t; before a user's first task the list is []; asking about the past changes nothing.",
@@ -225,21 +223,21 @@ for seed in range(150):
     replay({fn}(), random_calls(random.Random(300 + seed), 70, 4), seed)
 """},
     {"name": "Part 4: past questions on a long history", "part": 4, "visibility": "unshown", "behavior": "performance.complexity",
-     "failure_message": "2,000 past lists over 50 tasks and 20,000 edits took too long: keep each task's versions in time order and binary-search them instead of replaying the history for each question.",
+     "failure_message": "2,000 past lists over 50 tasks and 100,000 edits took too long: keep each task's versions in time order and binary-search them instead of replaying the history for each question.",
      "code": r"""
 import random, time
 rng = random.Random(4)
 b = {fn}()
 for i in range(50):
     b.add(0, "u", f"task{i}", 0)
-for ts in range(1, 20001):
+for ts in range(1, 100001):
     b.edit(ts, "u", f"t{rng.randint(1, 50)}", "v", rng.randint(0, 9))
 start = time.perf_counter()
-sizes = [len(b.list_tasks(rng.randint(0, 20000), "u", 5)) for _ in range(2000)]
+sizes = [len(b.list_tasks(rng.randint(0, 100000), "u", 5)) for _ in range(2000)]
 elapsed = time.perf_counter() - start
 assert len(b.list_tasks(0, "u")) == 50 and b.list_tasks(0, "u", 1) == []
 assert all(0 <= s <= 50 for s in sizes)
-assert elapsed < 4.0, f"{elapsed:.2f}s for 2,000 past lists"
+assert elapsed < 2.0, f"{elapsed:.2f}s for 2,000 past lists"
 """},
 ]
 
@@ -253,12 +251,12 @@ TASK = {
 The requirement arrives in parts. Each part keeps every earlier behavior, so one `TaskBoard` class passes all parts at the end. Pass every test of the current part to reveal the next one.
 
 **Rules for every part:**
-- A task has an owner (a user id string), a title, an integer priority, where larger is more urgent, and `created_at`, the timestamp of the `add` call. Titles may repeat.
-- Ids come from one counter shared by every user, in call order: the first `add` returns `"t1"`, the next `"t2"`, and so on. An id is never reused.
+- Each task stores its owner's user id, a title (titles may repeat), an integer priority (bigger means more urgent) and `created_at`, the time of its `add`.
+- Ids are `t` followed by a number that goes up by one with every `add`, whoever calls it: `t1`, `t2`, and so on. An id is never reused.
 - Methods return a task as the tuple `(task_id, title, priority, created_at)`.
-- Every method takes an integer timestamp first. Across the calls that change state (`add`, `edit`, `finish`), timestamps never decrease, and several calls may share one.
+- Every method takes an integer timestamp first. Timestamps of `add`, `edit` and `finish` calls never go down, though neighbours may be equal.
 - A task is active from its `add` until it is finished. A task that is not active, belongs to another user, or does not exist gives the same failure value.
-- A call that fails changes nothing. No method raises.
+- User ids are case-sensitive. A call that fails changes nothing. No method raises.
 
 ────────────────────────────────
 
@@ -268,7 +266,7 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Where it is used:** issue trackers and to-do services, job queues with deadlines, and audit views that show what a list looked like at a given moment.
 
-Adapted from the task manager online assessment in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, on one class with a new name and shorter method names (`add`, `edit`, `finish`, `get`, `list_tasks`). Tasks are tuples instead of a dataclass, and ids are `t1`, `t2`, and so on. Part 4 adds a speed check for past lists.""",
+Adapted from the task manager online assessment in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, on one class renamed from `TaskManager` to `TaskBoard`, with shorter method names: `add_task` becomes `add`, `update_task` becomes `edit`, `complete_task` becomes `finish`, `get_task` becomes `get` and `get_task_list` becomes `list_tasks`. Tasks are tuples instead of a dataclass, and ids are `t1`, `t2`, and so on. Part 4 adds a speed check for past lists.""",
     "parts": [
         {
             "title": "Add, edit, finish and get",
@@ -280,9 +278,9 @@ Adapted from the task manager online assessment in Schuture/Anthropic-Interview-
 
 **Example:**
 - `add(5, "mia", "draft slides", 2)` is `"t1"` and `add(5, "raj", "draft slides", 4)` is `"t2"`: same title, same timestamp, two tasks
-- `get(6, "raj", "t1")` is `None` and `finish(7, "raj", "t1")` is `False`: `t1` belongs to `mia`
-- `edit(8, "mia", "t1", "final slides", 6)` is `True`, and `get(8, "mia", "t1")` is `("t1", "final slides", 6, 5)`
-- `finish(9, "mia", "t1")` is `True`; after it, `edit(9, "mia", "t1", "again", 1)` is `False` and `get` is `None`""",
+- `edit(6, "mia", "t1", "final slides", 6)` is `True`, and `get(6, "mia", "t1")` is `("t1", "final slides", 6, 5)`
+- `finish(7, "raj", "t2")` is `True`; after it, `get(8, "raj", "t2")` is `None`
+- `edit(8, "raj", "t1", "x", 1)` and `finish(8, "raj", "t1")` are `False`: `t1` belongs to `mia`""",
         },
         {
             "title": "Sorted lists",
@@ -293,6 +291,7 @@ Adapted from the task manager online assessment in Schuture/Anthropic-Interview-
 - Return `user`'s active tasks with `priority >= min_priority`, or all of them when `min_priority` is `None`.
 - Sort by priority, highest first, then by creation order: the earlier `add` call first, whatever the timestamps or titles.
 - In this part `at_timestamp` is always the largest timestamp passed to any call so far.
+- Each call returns a new list.
 
 **Example:** `add(1, "raj", "logs", 2)`, `add(1, "raj", "alerts", 7)`, `add(2, "raj", "docs", 2)`, then `finish(3, "raj", "t2")` and `add(3, "raj", "oncall", 7)`:
 - `list_tasks(3, "raj")` is `[("t4", "oncall", 7, 3), ("t1", "logs", 2, 1), ("t3", "docs", 2, 2)]`
@@ -304,7 +303,7 @@ Adapted from the task manager online assessment in Schuture/Anthropic-Interview-
 
 **Signature:** `add(timestamp, user, title, priority, ttl=None) -> str`
 
-- With a positive integer `ttl`, the task is active only while the timestamp asked about is less than `created_at + ttl`. From that instant on it behaves exactly as if it had been finished then, in `get`, `list_tasks`, `edit` and `finish`.
+- With a positive integer `ttl`, the task counts as finished at `created_at + ttl`: from that timestamp on, `get`, `list_tasks`, `edit` and `finish` treat it as finished.
 - `ttl=None` never expires. `edit` never changes the deadline.
 - Expiry is checked when a method is called, against that call's timestamp; nothing removes tasks in the background.
 
@@ -316,14 +315,14 @@ Adapted from the task manager online assessment in Schuture/Anthropic-Interview-
             "title": "Lists at past timestamps",
             "description_en": r"""Keep Parts 1–3. `list_tasks` may now ask about any timestamp, including one earlier than calls already made.
 
-- Return the list that `list_tasks` would have returned at `at_timestamp`: count only the calls with `timestamp <= at_timestamp`, apply expiry at `at_timestamp`, and filter and sort as in Part 2. Calls that share a timestamp all count, in call order.
-- Before `user`'s first task, the result is `[]`. Asking about the past changes nothing.
-- A history of tens of thousands of edits must still answer thousands of past lists in a few seconds.
+- Answer as if the board had received only the calls with `timestamp <= at_timestamp`, then ask Part 3's `list_tasks` at that time. Every call at `at_timestamp` itself counts.
+- With no such calls for `user`, that is `[]`. Asking about the past changes nothing.
+- A history of 100,000 edits must still answer thousands of past lists in about a second.
 
-**Example:** `add(0, "raj", "index", 1)`, `add(3, "raj", "reindex", 4, ttl=5)`, `edit(5, "raj", "t1", "index v2", 6)`, `finish(9, "raj", "t1")`:
-- `list_tasks(4, "raj")` is `[("t2", "reindex", 4, 3), ("t1", "index", 1, 0)]`
-- `list_tasks(5, "raj")` is `[("t1", "index v2", 6, 0), ("t2", "reindex", 4, 3)]`: the edit at `5` counts
-- `list_tasks(8, "raj")` is `[("t1", "index v2", 6, 0)]`, since `t2` expired at `8`, and `list_tasks(9, "raj")` is `[]`""",
+**Example:** `add(2, "raj", "warmup", 5, ttl=6)`, `add(2, "mia", "audit", 1)`, `add(4, "raj", "eval", 3)`, `finish(6, "raj", "t1")`, then `edit(7, "raj", "t3", "eval v2", 9)`:
+- `list_tasks(1, "raj")` is `[]`, and `list_tasks(5, "raj")` is `[("t1", "warmup", 5, 2), ("t3", "eval", 3, 4)]`
+- `list_tasks(6, "raj")` is `[("t3", "eval", 3, 4)]`: the finish at `6` counts
+- `list_tasks(7, "raj")` is `[("t3", "eval v2", 9, 4)]`, while `list_tasks(7, "mia")` is `[("t2", "audit", 1, 2)]`""",
         },
     ],
     "hints": [
@@ -352,8 +351,7 @@ import bisect
 
 
 class _Task:
-    def __init__(self, seq, user, created, ttl, title, priority):
-        self.seq = seq
+    def __init__(self, user, created, ttl, title, priority):
         self.user = user
         self.created = created
         self.ttl = ttl
@@ -391,7 +389,7 @@ class TaskBoard:
     def add(self, timestamp, user, title, priority, ttl=None):
         self._count += 1
         task_id = f"t{self._count}"
-        self._tasks[task_id] = _Task(self._count, user, timestamp, ttl, title, priority)
+        self._tasks[task_id] = _Task(user, timestamp, ttl, title, priority)
         self._by_user.setdefault(user, []).append(task_id)
         return task_id
 

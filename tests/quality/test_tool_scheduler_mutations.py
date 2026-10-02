@@ -11,13 +11,13 @@ from tests.quality.parts_gate import assert_first_fails_in_part, assert_part_mut
 TASK_ID = "tool_scheduler"
 
 MUTATIONS = [
-    ("one release per step", 2, [("            while running and running[0][0] == now:", "            if running and running[0][0] == now:")]),
+    ("one release per step", 1, [("            while running and running[0][0] == now:", "            if running and running[0][0] == now:")]),
     ("ready order ignored", 1, [("                tool = heapq.heappop(ready[a])\n", "                tool = ready[a].pop()\n")]),
     ("cycle returns a partial plan", 1, [('                raise CycleError("some calls wait on a dependency cycle")\n', "                break\n")]),
     ("agents never rejoin", 1, [("            for a in touched:\n                if a not in queued", "            for a in ():\n                if a not in queued")]),
+    ("freed agents wait until idle", 1, [("if a not in queued and ready[a] and holding[a] < caps[a]:", "if a not in queued and ready[a] and holding[a] == 0:")]),
     ("agent caps ignored", 2, [("                if ready[a] and holding[a] < caps[a]:\n                    heapq.heappush(eligible, a)\n", "                if ready[a]:\n                    heapq.heappush(eligible, a)\n")]),
     ("each agent gets the largest cap", 2, [("return self.run_capped(agents, capacities, sum(capacities))", "return self.run_capped(agents, capacities, max(capacities, default=0))")]),
-    ("freed agents wait until idle", 1, [("if a not in queued and ready[a] and holding[a] < caps[a]:", "if a not in queued and ready[a] and holding[a] == 0:")]),
     ("shared cap per agent", 3, [("return self.run_capped(agents, [capacity] * len(agents), capacity)", "return self.run_capped(agents, [capacity] * len(agents), capacity * len(agents))")]),
 ]
 

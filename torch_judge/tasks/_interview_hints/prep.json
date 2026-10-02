@@ -355,6 +355,6 @@
     "Why does `~` expand only at the start of the destination, and why reject `~name` here?": "If \"~\" were expanded anywhere, what would \"notes/~draft\" become? Why is \"~kai\" a different request from \"~/kai\"?",
     "Why must a link be expanded as soon as its component is added, before a later `..` can remove it?": "With x linking to /p/q, compare cancelling \"x/..\" as text with first following x and then going up. Which directory does each give?",
     "Why cap the number of expansions instead of failing the first time a link repeats?": "A link to \".\" can appear many times in one path without looping. What would a 'seen this link before' rule do with it?",
-    "Why must `cd` be built into the shell instead of being a separate program the shell starts?": "If cd were a separate program, it would change its own working directory. Whose directory does the shell keep afterwards?"
+    "Why must `cd` be built into the shell instead of being a separate program, and what does the shell do when it runs it?": "If cd were a separate program, it would change its own working directory. Whose directory does the shell keep afterwards? Which variables would it update afterwards?"
   }
 }
