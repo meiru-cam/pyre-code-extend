@@ -194,5 +194,14 @@
     "Why keep matching and substitution as two passes instead of one?": "If substitution runs while bindings are still being filled in, what happens to a generic that is bound later in the parameter list?",
     "Why must the returned type share no list with the inputs?": "If the result contains the same list object as an argument, what happens to the argument when the caller appends to the result?",
     "What changes if arguments may contain generics too, and why is an occurs check needed?": "If both sides may contain generics, what goes wrong when you bind T1 to [T1,int], and what check stops it?"
+  },
+  "noisy_annotators": {
+    "Why must an annotator be compared with the other annotators' majority rather than one that includes their own vote?": "Take a sample with two voters. If one of them is part of the majority you compare it with, how often can it disagree, and what does that do to its score?",
+    "Why use the pool's mean and standard deviation for flagging instead of a fixed threshold?": "Would a cutoff of 0.5 mean the same with 2 classes as with 10? What do the mean and spread of the pool's own scores give you instead?",
+    "What does each method cost for n samples and A annotators, and where does the leave-one-out step add work?": "Count the work: aggregate touches each cell once. How many times does reliability call aggregate, and on how many columns each time?",
+    "What do you lose when you drop a flagged annotator's whole column?": "When you drop a column, look at the samples that only that annotator and one other labeled. What happens to their label and to how many samples you train on?",
+    "Where does the weight log(r (K - 1) / (1 - r)) come from, and why floor it at zero?": "Write the likelihood of a sample's votes for class c, assuming annotator j is right with probability r and otherwise picks one wrong class at random. Which term depends on c?",
+    "What goes wrong if most annotators share the same bias?": "If three of five annotators always say class 0, what is the consensus on a class-2 sample, and which annotators get flagged?",
+    "How would you iterate this into Dawid-Skene, and what would each step estimate?": "Alternate two steps: estimate each sample's class from weighted votes, then re-estimate each annotator's accuracy from those classes. What changes each round?"
   }
 }

@@ -1034,6 +1034,15 @@
       }
     ]
   },
+  "noisy_annotators": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "# Adapted from Schuture/OpenAI-Interview-Notes (code under the MIT License).\nimport numpy as np\n\n\nclass AnnotationCleaner:\n    def aggregate(self, annotations, n_classes, weights=None):\n        annotations = np.asarray(annotations)\n        n, a = annotations.shape\n        weights = np.ones(a) if weights is None else np.asarray(weights, dtype=float)\n        scores = np.zeros((n, n_classes))\n        for j in range(a):\n            voted = annotations[:, j] != -1\n            scores[voted, annotations[voted, j]] += weights[j]\n        return np.argmax(scores, axis=1), scores.sum(axis=1) > 0  # argmax keeps the first, smallest class\n\n    def reliability(self, annotations, n_classes):\n        annotations = np.asarray(annotations)\n        r = np.zeros(annotations.shape[1])\n        for j in range(annotations.shape[1]):\n            # compare with the other annotators only, so an annotator cannot agree with itself\n            others, has_others = self.aggregate(np.delete(annotations, j, axis=1), n_classes)\n            counted = (annotations[:, j] != -1) & has_others\n            if counted.any():\n                r[j] = np.mean(annotations[counted, j] == others[counted])\n        return r\n\n    def flag(self, r):\n        r = np.asarray(r, dtype=float)\n        return r < r.mean() - r.std()\n\n    def filtered_labels(self, annotations, n_classes):\n        annotations = np.asarray(annotations)\n        keep = ~self.flag(self.reliability(annotations, n_classes))\n        return self.aggregate(annotations[:, keep], n_classes)\n\n    def centroid_accuracy(self, X_train, labels, has_label, X_test, y_test, n_classes):\n        X_train, X_test = np.asarray(X_train, dtype=float), np.asarray(X_test, dtype=float)\n        labels, has_label = np.asarray(labels), np.asarray(has_label, dtype=bool)\n        dist = np.full((len(X_test), n_classes), np.inf)  # a class with no training point is never predicted\n        for c in range(n_classes):\n            members = X_train[has_label & (labels == c)]\n            if len(members):\n                dist[:, c] = ((X_test - members.mean(axis=0)) ** 2).sum(axis=1)\n        return float(np.mean(np.argmin(dist, axis=1) == np.asarray(y_test)))\n\n    def reliability_weights(self, r, n_classes):\n        r = np.clip(np.asarray(r, dtype=float), 0.01, 0.99)  # avoids log(0) at r == 0 or r == 1\n        return np.clip(np.log(r * (n_classes - 1) / (1 - r)), 0.0, None)  # worse than chance gets weight 0\n\n    def weighted_labels(self, annotations, n_classes):\n        w = self.reliability_weights(self.reliability(annotations, n_classes), n_classes)\n        return self.aggregate(annotations, n_classes, weights=w)",
+        "role": "solution"
+      }
+    ]
+  },
   "packed_sequence_mask": {
     "cells": [
       {

@@ -274,5 +274,13 @@
       "type_inference"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/noisy-annotators",
+    "exercises": [
+      "noisy_annotators"
+    ],
+    "round": "coding"
   }
 ]
