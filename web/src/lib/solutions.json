@@ -557,6 +557,15 @@
       }
     ]
   },
+  "crowd_code_reading": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "# Adapted from Schuture/OpenAI-Interview-Notes (code under the MIT License).\nimport torch\n\n\ndef op_counts(N, D, C, A, H, P):\n    \"\"\"Costs of one training step of the crowd-label classifier, read off the code.\"\"\"\n    return {\n        \"net_macs\": N * (D * H + H * C),  # two linear layers on N rows\n        \"net_outputs\": N * (H + C),  # forward outputs kept for backward\n        \"nll_macs\": P * C * C,  # one (C,) @ (C, C) product per observed pair\n        \"loop_iterations\": N * A,  # the double loop visits missing pairs too\n        \"dense_elements\": N * A * C,  # p[i] @ M[a] for every pair at once\n    }\n\n\ndef reliability(M):\n    \"\"\"(A, C, C) row-stochastic confusion matrices -> (A,) mean of each diagonal.\"\"\"\n    return M.diagonal(dim1=-2, dim2=-1).mean(dim=-1)\n\n\ndef least_reliable(r):\n    return int(torch.argmin(r))  # the first index on ties\n\n\ndef nll_vectorized(p, M, Y):\n    \"\"\"Same scalar as the double loop: -sum over observed (i, a) of log((p[i] @ M[a])[Y[i, a]] + 1e-8).\"\"\"\n    i, a = (Y >= 0).nonzero(as_tuple=True)  # observed pairs only: O(P * C) memory, not O(N * A * C)\n    lab = Y[i, a]\n    q = torch.einsum(\"pc,pc->p\", p[i], M[a, :, lab])\n    return -torch.log(q + 1e-8).sum()",
+        "role": "solution"
+      }
+    ]
+  },
   "dapo_dynamic_sampling": {
     "cells": [
       {

@@ -622,5 +622,13 @@
       "queue_pr_review"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/pytorch-code-reading",
+    "exercises": [
+      "crowd_code_reading"
+    ],
+    "round": "coding"
   }
 ]

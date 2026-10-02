@@ -28418,6 +28418,141 @@
           "hint": "For each pull request, is the problem in the idea or in the code? Which ones need a few lines changed, and which need the author to rethink the approach?"
         }
       ]
+    },
+    {
+      "id": "crowd_code_reading",
+      "title": "Crowd Labels Code Reading",
+      "titleZh": "Crowd Labels Code Reading",
+      "difficulty": "Medium",
+      "functionName": "op_counts",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "A training script learns a classifier from labels given by several annotators, with no true labels. Read what it does, then extend and speed it up. Each part asks for module-level functions.\n\nThe requirement arrives in parts. Each part keeps every earlier function, so one file passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- There are `N` samples with `D` features, `C` classes and `A` annotators. `Y` is an `(N, A)` integer tensor: `Y[i, a]` is the class annotator `a` gave sample `i`, or `-1` if `a` did not label `i`. `P` is the number of entries of `Y` that are not `-1`.\n- The classifier `net` is `Linear(D, H)`, ReLU, then `Linear(H, C)`. A softmax of its output gives `p`, an `(N, C)` tensor of class probabilities.\n- `M` is an `(A, C, C)` tensor of confusion matrices: `M[a, c, o]` is the chance that annotator `a` reports `o` when the true class is `c`, so every row sums to 1.\n- The script's loss loops over every `i`, then every `a`. It skips `Y[i, a] < 0`, and otherwise adds `-log((p[i] @ M[a])[Y[i, a]] + 1e-8)`. That loop is called the double loop below.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** code-reading rounds hand you an unfamiliar training script and ask where the time and memory go before you change anything. Each later part adds one requirement: a small extension on the learned parameters, then a refactor that must not change the numbers.\n\n**Where it is used:** labels from crowds or from several model graders disagree, and confusion-matrix layers learn how far to trust each source. Removing Python loops from a loss like this one is everyday work in training code.\n\nAdapted from the PyTorch code-reading question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded. The written answers about shapes and complexity become `op_counts`, and `reliability` takes the confusion matrices instead of being attached to the crowd layer. The script itself, its data generator and the bonus operator questions are left out; the vectorized loss is graded on random inputs and on speed.",
+      "descriptionZh": "A training script learns a classifier from labels given by several annotators, with no true labels. Read what it does, then extend and speed it up. Each part asks for module-level functions.\n\nThe requirement arrives in parts. Each part keeps every earlier function, so one file passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- There are `N` samples with `D` features, `C` classes and `A` annotators. `Y` is an `(N, A)` integer tensor: `Y[i, a]` is the class annotator `a` gave sample `i`, or `-1` if `a` did not label `i`. `P` is the number of entries of `Y` that are not `-1`.\n- The classifier `net` is `Linear(D, H)`, ReLU, then `Linear(H, C)`. A softmax of its output gives `p`, an `(N, C)` tensor of class probabilities.\n- `M` is an `(A, C, C)` tensor of confusion matrices: `M[a, c, o]` is the chance that annotator `a` reports `o` when the true class is `c`, so every row sums to 1.\n- The script's loss loops over every `i`, then every `a`. It skips `Y[i, a] < 0`, and otherwise adds `-log((p[i] @ M[a])[Y[i, a]] + 1e-8)`. That loop is called the double loop below.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** code-reading rounds hand you an unfamiliar training script and ask where the time and memory go before you change anything. Each later part adds one requirement: a small extension on the learned parameters, then a refactor that must not change the numbers.\n\n**Where it is used:** labels from crowds or from several model graders disagree, and confusion-matrix layers learn how far to trust each source. Removing Python loops from a loss like this one is everyday work in training code.\n\nAdapted from the PyTorch code-reading question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded. The written answers about shapes and complexity become `op_counts`, and `reliability` takes the confusion matrices instead of being attached to the crowd layer. The script itself, its data generator and the bonus operator questions are left out; the vectorized loss is graded on random inputs and on speed.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Part 1: the worked example",
+          "code": "\nimport math, random, time\nimport torch\n\ndef nll_loop(p, M, Y):\n    total = torch.zeros((), dtype=p.dtype)\n    for i in range(Y.shape[0]):\n        for a in range(Y.shape[1]):\n            lab = Y[i, a].item()\n            if lab < 0:\n                continue\n            q = p[i] @ M[a]\n            total = total + -torch.log(q[lab] + 1e-8)\n    return total\n\ndef rand_inputs(g, N, A, C, missing=0.4):\n    p = torch.softmax(torch.randn(N, C, generator=g, dtype=torch.float64), -1).requires_grad_()\n    M = torch.softmax(torch.randn(A, C, C, generator=g, dtype=torch.float64) * 2, -1).requires_grad_()\n    Y = torch.randint(0, C, (N, A), generator=g)\n    Y[torch.rand(N, A, generator=g) < missing] = -1\n    return p, M, Y\n\ndef learner(fn, name):\n    f = fn.__globals__.get(name)\n    assert callable(f), f\"define {name} at module level\"\n    return f\n\ngot = {fn}(600, 12, 3, 7, 32, 1500)\nwant = {\"net_macs\": 600 * (12 * 32 + 32 * 3), \"net_outputs\": 600 * 35, \"nll_macs\": 1500 * 9, \"loop_iterations\": 4200, \"dense_elements\": 12600}\nassert got == want, got\n",
+          "behavior": "performance.complexity",
+          "part": 1
+        },
+        {
+          "name": "Part 1: random sizes",
+          "visibility": "unshown",
+          "behavior": "performance.complexity",
+          "failureMessage": "op_counts disagreed with the counts read off the script for random N, D, C, A, H and P: forward multiply-adds of the two linear layers, their output elements, multiply-adds of the loss, inner-loop iterations, or elements of the all-pairs product.",
+          "hiddenCode": "\nimport math, random, time\nimport torch\n\ndef nll_loop(p, M, Y):\n    total = torch.zeros((), dtype=p.dtype)\n    for i in range(Y.shape[0]):\n        for a in range(Y.shape[1]):\n            lab = Y[i, a].item()\n            if lab < 0:\n                continue\n            q = p[i] @ M[a]\n            total = total + -torch.log(q[lab] + 1e-8)\n    return total\n\ndef rand_inputs(g, N, A, C, missing=0.4):\n    p = torch.softmax(torch.randn(N, C, generator=g, dtype=torch.float64), -1).requires_grad_()\n    M = torch.softmax(torch.randn(A, C, C, generator=g, dtype=torch.float64) * 2, -1).requires_grad_()\n    Y = torch.randint(0, C, (N, A), generator=g)\n    Y[torch.rand(N, A, generator=g) < missing] = -1\n    return p, M, Y\n\ndef learner(fn, name):\n    f = fn.__globals__.get(name)\n    assert callable(f), f\"define {name} at module level\"\n    return f\n\nfor seed in range(100):\n    rng = random.Random(seed)\n    N, D, C, A, H = (rng.randint(1, 5000) for _ in range(5))\n    P = rng.randint(0, N * A)\n    got = {fn}(N, D, C, A, H, P)\n    want = {\"net_macs\": N * (D * H + H * C), \"net_outputs\": N * (H + C), \"nll_macs\": P * C * C, \"loop_iterations\": N * A, \"dense_elements\": N * A * C}\n    assert got == want, (seed, got, want)\n",
+          "part": 1
+        },
+        {
+          "name": "Part 2: the worked example",
+          "code": "\nimport math, random, time\nimport torch\n\ndef nll_loop(p, M, Y):\n    total = torch.zeros((), dtype=p.dtype)\n    for i in range(Y.shape[0]):\n        for a in range(Y.shape[1]):\n            lab = Y[i, a].item()\n            if lab < 0:\n                continue\n            q = p[i] @ M[a]\n            total = total + -torch.log(q[lab] + 1e-8)\n    return total\n\ndef rand_inputs(g, N, A, C, missing=0.4):\n    p = torch.softmax(torch.randn(N, C, generator=g, dtype=torch.float64), -1).requires_grad_()\n    M = torch.softmax(torch.randn(A, C, C, generator=g, dtype=torch.float64) * 2, -1).requires_grad_()\n    Y = torch.randint(0, C, (N, A), generator=g)\n    Y[torch.rand(N, A, generator=g) < missing] = -1\n    return p, M, Y\n\ndef learner(fn, name):\n    f = fn.__globals__.get(name)\n    assert callable(f), f\"define {name} at module level\"\n    return f\n\nreliability, least_reliable = learner({fn}, \"reliability\"), learner({fn}, \"least_reliable\")\nM = torch.tensor([[[0.9, 0.1], [0.3, 0.7]], [[0.5, 0.5], [0.4, 0.6]], [[0.6, 0.4], [0.0, 1.0]]])\nr = reliability(M)\nassert r.shape == (3,) and torch.allclose(r, torch.tensor([0.8, 0.55, 0.8])), r\nassert least_reliable(r) == 1\n",
+          "behavior": "metrics.averaging",
+          "part": 2
+        },
+        {
+          "name": "Part 2: random confusion matrices",
+          "visibility": "unshown",
+          "behavior": "metrics.averaging",
+          "failureMessage": "reliability did not return the mean of each annotator's diagonal as an (A,) tensor for random A and C, or least_reliable did not return the first index of the minimum as a Python int.",
+          "hiddenCode": "\nimport math, random, time\nimport torch\n\ndef nll_loop(p, M, Y):\n    total = torch.zeros((), dtype=p.dtype)\n    for i in range(Y.shape[0]):\n        for a in range(Y.shape[1]):\n            lab = Y[i, a].item()\n            if lab < 0:\n                continue\n            q = p[i] @ M[a]\n            total = total + -torch.log(q[lab] + 1e-8)\n    return total\n\ndef rand_inputs(g, N, A, C, missing=0.4):\n    p = torch.softmax(torch.randn(N, C, generator=g, dtype=torch.float64), -1).requires_grad_()\n    M = torch.softmax(torch.randn(A, C, C, generator=g, dtype=torch.float64) * 2, -1).requires_grad_()\n    Y = torch.randint(0, C, (N, A), generator=g)\n    Y[torch.rand(N, A, generator=g) < missing] = -1\n    return p, M, Y\n\ndef learner(fn, name):\n    f = fn.__globals__.get(name)\n    assert callable(f), f\"define {name} at module level\"\n    return f\n\nreliability, least_reliable = learner({fn}, \"reliability\"), learner({fn}, \"least_reliable\")\ng = torch.Generator().manual_seed(0)\nfor trial in range(50):\n    A, C = int(torch.randint(1, 9, (1,), generator=g)), int(torch.randint(1, 7, (1,), generator=g))\n    M = torch.softmax(torch.randn(A, C, C, generator=g, dtype=torch.float64), -1)\n    want = torch.tensor([sum(M[a, c, c].item() for c in range(C)) / C for a in range(A)], dtype=torch.float64)\n    r = reliability(M)\n    assert r.shape == (A,) and torch.allclose(r.double(), want), (trial, r, want)\n    worst = min(range(A), key=lambda a: (want[a].item(), a))\n    got = least_reliable(want)\n    assert type(got) is int and got == worst, (trial, got, worst)\nassert least_reliable(torch.tensor([0.5, 0.2, 0.2])) == 1\n",
+          "part": 2
+        },
+        {
+          "name": "Part 3: the worked example",
+          "code": "\nimport math, random, time\nimport torch\n\ndef nll_loop(p, M, Y):\n    total = torch.zeros((), dtype=p.dtype)\n    for i in range(Y.shape[0]):\n        for a in range(Y.shape[1]):\n            lab = Y[i, a].item()\n            if lab < 0:\n                continue\n            q = p[i] @ M[a]\n            total = total + -torch.log(q[lab] + 1e-8)\n    return total\n\ndef rand_inputs(g, N, A, C, missing=0.4):\n    p = torch.softmax(torch.randn(N, C, generator=g, dtype=torch.float64), -1).requires_grad_()\n    M = torch.softmax(torch.randn(A, C, C, generator=g, dtype=torch.float64) * 2, -1).requires_grad_()\n    Y = torch.randint(0, C, (N, A), generator=g)\n    Y[torch.rand(N, A, generator=g) < missing] = -1\n    return p, M, Y\n\ndef learner(fn, name):\n    f = fn.__globals__.get(name)\n    assert callable(f), f\"define {name} at module level\"\n    return f\n\nnll_vectorized = learner({fn}, \"nll_vectorized\")\np = torch.tensor([[0.7, 0.3], [0.2, 0.8]], dtype=torch.float64)\nM = torch.tensor([[[0.9, 0.1], [0.2, 0.8]], [[0.6, 0.4], [0.5, 0.5]]], dtype=torch.float64)\nY = torch.tensor([[0, -1], [1, 1]])\ngot = nll_vectorized(p, M, Y)\nwant = -(math.log(0.69 + 1e-8) + math.log(0.66 + 1e-8) + math.log(0.48 + 1e-8))\nassert got.dim() == 0 and abs(got.item() - want) < 1e-9, (got, want)\n",
+          "behavior": "gradient.flow",
+          "part": 3
+        },
+        {
+          "name": "Part 3: values, gradients and speed",
+          "visibility": "unshown",
+          "behavior": "gradient.flow",
+          "failureMessage": "nll_vectorized differed from the double loop in value or in its gradients with respect to p and M, was not a 0-dim tensor (0 when nothing is observed), or took more than 2 seconds on 200000 samples and 10 annotators, which a Python loop over pairs cannot meet.",
+          "hiddenCode": "\nimport math, random, time\nimport torch\n\ndef nll_loop(p, M, Y):\n    total = torch.zeros((), dtype=p.dtype)\n    for i in range(Y.shape[0]):\n        for a in range(Y.shape[1]):\n            lab = Y[i, a].item()\n            if lab < 0:\n                continue\n            q = p[i] @ M[a]\n            total = total + -torch.log(q[lab] + 1e-8)\n    return total\n\ndef rand_inputs(g, N, A, C, missing=0.4):\n    p = torch.softmax(torch.randn(N, C, generator=g, dtype=torch.float64), -1).requires_grad_()\n    M = torch.softmax(torch.randn(A, C, C, generator=g, dtype=torch.float64) * 2, -1).requires_grad_()\n    Y = torch.randint(0, C, (N, A), generator=g)\n    Y[torch.rand(N, A, generator=g) < missing] = -1\n    return p, M, Y\n\ndef learner(fn, name):\n    f = fn.__globals__.get(name)\n    assert callable(f), f\"define {name} at module level\"\n    return f\n\nnll_vectorized = learner({fn}, \"nll_vectorized\")\ng = torch.Generator().manual_seed(1)\nfor trial in range(20):\n    N, A, C = int(torch.randint(1, 30, (1,), generator=g)), int(torch.randint(1, 6, (1,), generator=g)), int(torch.randint(2, 6, (1,), generator=g))\n    p, M, Y = rand_inputs(g, N, A, C)\n    want = nll_loop(p, M, Y)\n    got = nll_vectorized(p, M, Y)\n    assert got.dim() == 0 and torch.allclose(got.double(), want), (trial, got, want)\n    if Y.ge(0).any():\n        gw = torch.autograd.grad(want, (p, M))\n        gg = torch.autograd.grad(got, (p, M))\n        assert all(torch.allclose(x, y) for x, y in zip(gg, gw)), (trial, \"gradients differ\")\np, M, Y = rand_inputs(g, 3, 2, 3)\nY[:] = -1\nassert nll_vectorized(p, M, Y).item() == 0.0\np, M, Y = rand_inputs(g, 200000, 10, 4)\nstart = time.perf_counter()\nnll_vectorized(p.detach(), M.detach(), Y)\ntook = time.perf_counter() - start\nassert took < 2.0, f\"took {took:.2f}s\"\n",
+          "part": 3
+        }
+      ],
+      "parts": [
+        {
+          "title": "Reading the costs",
+          "descriptionEn": "**Signature:** `op_counts(N, D, C, A, H, P) -> dict`\n\nReturn exact counts for one training step, ignoring biases and the softmax:\n- `net_macs`: multiply-adds in the forward pass of `net` on all `N` samples.\n- `net_outputs`: elements in the outputs of the two linear layers, which backward keeps.\n- `nll_macs`: multiply-adds the double loop spends on `p[i] @ M[a]`, over the `P` observed pairs.\n- `loop_iterations`: times the inner loop body starts, missing labels included.\n- `dense_elements`: elements of `p[i] @ M[a]` computed for every `(i, a)` pair at once, before masking.\n\n**Example:** `op_counts(600, 12, 3, 7, 32, 1500)` returns:\n- `net_macs` `249600` and `net_outputs` `21000`\n- `nll_macs` `13500`, `loop_iterations` `4200` and `dense_elements` `12600`"
+        },
+        {
+          "title": "Annotator reliability",
+          "descriptionEn": "Keep Part 1. Add `reliability(M)` and `least_reliable(r)`.\n\n- `reliability(M)` returns an `(A,)` tensor: annotator `a`'s reliability is the mean over classes `c` of `M[a, c, c]`, the chance it reports the true class.\n- `least_reliable(r)` returns the index of the smallest entry as a Python `int`, the first such index on a tie.\n\n**Example:** with confusion matrices whose diagonals are `(0.9, 0.7)`, `(0.5, 0.6)` and `(0.6, 1.0)`:\n- `reliability` returns `[0.8, 0.55, 0.8]`\n- `least_reliable` returns `1`"
+        },
+        {
+          "title": "Vectorize the loss",
+          "descriptionEn": "Keep Parts 1–2. Add `nll_vectorized(p, M, Y)`.\n\n- Return the double loop's value as a 0-dim tensor, with the same gradients with respect to `p` and `M`, up to floating-point error. With no observed label it returns `0`.\n- Use no Python loop over samples or over observed pairs: on `200000` samples and `10` annotators it must finish within `2` seconds.\n\n**Example:** `p = [[0.7, 0.3], [0.2, 0.8]]`, `M[0] = [[0.9, 0.1], [0.2, 0.8]]`, `M[1] = [[0.6, 0.4], [0.5, 0.5]]` and `Y = [[0, -1], [1, 1]]`:\n- the observed pairs give probabilities `0.69`, `0.66` and `0.48`\n- the result is `-(log(0.69 + 1e-8) + log(0.66 + 1e-8) + log(0.48 + 1e-8))`"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "A Linear(D, H) applied to N rows: how many multiply-adds and how many output elements? For one observed pair, what are the shapes of p[i] and M[a], and how many multiply-adds does their product take? Does the inner loop body start for a missing label?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Each linear layer costs rows times inputs times outputs multiply-adds and leaves rows times outputs elements: N*D*H plus N*H*C, and N*H plus N*C. A (C,) by (C, C) product costs C*C, paid once per observed pair. The loops start N*A times, and the all-pairs product holds N*A*C numbers."
+        }
+      ],
+      "modelConnections": [
+        "Crowd-label and multi-grader setups learn a confusion matrix per source to weigh noisy labels, as in reward models trained on disagreeing raters.",
+        "Replacing per-element Python loops with gathers and einsum is the usual first speed-up when a loss is slow to train."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Counting multiply-adds and Python iterations separately explains why a tiny loss can dominate step time.",
+          "Gathering only the observed pairs keeps memory at P*C instead of N*A*C.",
+          "Reliability read off the diagonal needs no true labels."
+        ],
+        "cons": [
+          "Multiply-add counts ignore Python overhead and kernel launches, which dominate small loops.",
+          "Mean diagonal reliability hides annotators who are good on some classes and bad on others.",
+          "Vectorized code is harder to read than the loop it replaces, so a test against the loop must stay."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Trace the data from X to the optimizer step: where do Y and the true labels enter, if at all?",
+          "hint": "Follow one step: X goes through net, softmax gives p, the crowd layer gives M, and the loss mixes them with Y. Does the true class appear anywhere on that path, or only in logging?"
+        },
+        {
+          "stage": "concept",
+          "question": "What are the shapes of net(X), p and M, and of the two operands of p[i] @ M[a]?",
+          "hint": "net(X) has one row per sample and one column per class. What are p[i] and M[a] for one pair, and what shape is their product?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "The forward pass of net does far more multiply-adds than the loss loop, yet the loop takes longer. Why?",
+          "hint": "Count multiply-adds for net on N rows and for the loss over P pairs. Then count how many Python-level operations the loss runs. Which number decides the wall-clock time?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why is mean diagonal reliability a reasonable estimate without true labels, and when does it mislead?",
+          "hint": "An annotator that always reports the true class has an identity matrix; one that guesses has equal rows. Which entries of M separate the two, and what does averaging them hide?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Computing p @ M for every pair before masking needs N*A*C memory. How do you avoid it?",
+          "hint": "The all-pairs product holds N*A*C numbers, mostly for missing labels. How could you index only the observed (i, a) pairs and pick the one column each needs?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How do you prove the vectorized loss matches the loop, gradients included?",
+          "hint": "Run the loop and your version on the same small random inputs in float64. Which outputs and which gradients would you compare, and what about rows with no label at all?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What would you check before trusting a learned confusion matrix, given that p and M can trade off against each other?",
+          "hint": "If p is uniform and M absorbs all the signal, the loss can be equally low. What check on held-out data or on the diagonals would catch that?"
+        }
+      ]
     }
   ]
 }

@@ -1,0 +1,19 @@
+{
+  "title": "PyTorch Code Reading & Extension",
+  "summary": "A long, untidy PyTorch training script for a classifier with noisy annotators; answer time and memory questions about the existing code, extend it, then vectorise its slowest function.",
+  "round": "coding",
+  "kind": "Code reading · PyTorch",
+  "difficulty": null,
+  "frequency": "rare",
+  "format": "3 parts + bonus",
+  "topics": [
+    "code-reading",
+    "pytorch",
+    "complexity"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/coding/pytorch-code-reading",
+  "rubric": [],
+  "exercises": [
+    "crowd_code_reading"
+  ]
+}
