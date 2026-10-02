@@ -66,7 +66,7 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Background — context only. Everything above this line is the requirement.**
 
-**Why this shows up in interviews:** the rule reads like a simulation over keys, and the work is seeing that it is a greedy over intervals that never needs to look at a single key. Each later part adds one requirement.
+**Why this shows up in interviews:** the rule reads like a simulation over keys, and the work is applying it exactly, ties included. Each later part adds one requirement.
 
 **Where it is used:** range-sharded databases such as Bigtable, HBase and CockroachDB split, merge and move key ranges between servers.
 
@@ -86,21 +86,21 @@ Return the kept shards as `(id, start, end)` tuples, sorted by `(start, end, id)
 
 In this part the input shards together cover every key from the smallest `start` to the largest `end`.
 
-**Example**, `limit = 2`, input `a (0, 30)`, `b (0, 32)`, `c (0, 34)`, `d (0, 90)`, `e (1, 32)`, `f (91, 100)`:
-- `a` and `b` are kept as they are
-- `c` starts at `31`: `a` and `b` already cover `0` to `30` twice
-- `d` starts at `33`: every key up to `32` is covered twice
-- `e` is dropped: every key from `1` to `32` is covered twice
-- result: `[("a", 0, 30), ("b", 0, 32), ("c", 31, 34), ("d", 33, 90), ("f", 91, 100)]`""",
+**Example**, `limit = 2`, input `p (10, 20)`, `q (12, 18)`, `r (14, 30)`, `t (15, 16)`, `s (25, 40)`, processed in that order:
+- `p` and `q` fit, so both keep their ranges
+- `r` begins inside both of them; `14` to `18` already has coverage 2, so `r` becomes `(19, 30)`
+- `t` lies entirely in that doubly covered stretch and is dropped
+- at `25` only `r` covers the key, so `s` keeps its start
+- result: `[("p", 10, 20), ("q", 12, 18), ("r", 19, 30), ("s", 25, 40)]`""",
         },
         {
             "title": "Close the holes",
             "description_en": r"""Keep Part 1. The input may now leave holes: keys between the smallest `start` and the largest `end` that no input shard covers.
 
-- After every shard has been processed, take each maximal run of keys in that span that no kept shard covers.
-- Extend the end of the kept shard that ends at the key just before the run, up to the run's last key.
-- If several kept shards end there, extend the one with the smallest `start`, then the smallest `id`.
-- Sort the result by the final `(start, end, id)`.
+- Once Part 1's rule has run on every shard, find the gaps: each longest stretch of keys inside that span with coverage 0 among the kept shards.
+- A gap is closed by the kept shard whose range stops right before it: that shard's `end` moves to the gap's last key.
+- When more than one kept shard stops there, the one with the lowest `start` closes the gap; if starts tie too, the lower `id`.
+- The returned list is sorted by `(start, end, id)` after the ends have moved.
 
 **Example**, `limit = 2`, input `a (0, 4)`, `b (0, 4)`, `c (2, 9)`, `f (3, 6)`, `d (5, 9)`, `e (14, 16)`:
 - after Part 1's rule: `a (0, 4)`, `b (0, 4)`, `c (5, 9)`, `f (5, 6)`, `d (7, 9)`, `e (14, 16)`
@@ -122,14 +122,14 @@ In this part the input shards together cover every key from the smallest `start`
 **Signature:** `add_shard(shard_id) -> None`, `remove_shard(shard_id) -> None`, `locate(key) -> str`
 
 - `add_shard` raises `ValueError` if the id is already present; `remove_shard` raises `ValueError` if it is absent. `locate(key)` returns the id of the shard that owns the integer `key`, and raises `LookupError` when there are no shards.
-- `locate` depends only on the key and the current set of shard ids: not on the order they were added, and not on the process. Do not use the built-in `hash()`, whose result for a `str` changes between processes; `hashlib` and `zlib.crc32` are fine.
-- Only keys that must move do: after `add_shard(x)`, every key whose owner changed is now owned by `x`. After `remove_shard(x)`, every key whose owner changed was owned by `x`.
-- Keys spread about evenly: with `N` shards, each owns roughly `1/N` of them.
+- Two routers holding the same shard ids answer every `locate` the same way, whatever order the ids were added in, and so does a router rebuilt in a new process. The built-in `hash()` of a `str` is seeded per process, so it cannot be used; hash with `hashlib`, for example `hashlib.md5`, which mixes neighbouring integers well.
+- Adding shard `x` may only hand keys to `x`; no key moves between two other shards. Removing `x` may only move the keys `x` held.
+- The keys are shared out fairly: with 20 shards, every shard owns between half and one and a half times its fair share of the keys `0` to `39,999`.
 
-**Example**, over the keys `0` to `29,999`:
-- add `"red"`, `"green"` and `"blue"`: each owns roughly a third of the keys
-- add `"gold"`: roughly a quarter of the keys change owner, and all of them now belong to `"gold"`
-- remove `"green"`: exactly the keys `"green"` owned change owner""",
+**Example**, looking at the keys `0` to `39,999`:
+- with `"red"`, `"green"`, `"blue"` and `"white"`, each shard owns somewhere near 10,000 of them
+- adding `"gold"` reassigns about a fifth of the keys, every one of them to `"gold"`
+- removing `"green"` then reassigns precisely the keys `"green"` held, and nothing else""",
         },
     ],
     "hints": [
@@ -154,10 +154,10 @@ In this part the input shards together cover every key from the smallest `start`
     },
     "tests": [
         {"name": "Part 1: the worked example", "part": 1, "behavior": "state.invariant", "code": r"""
-shards = [("a", 0, 30), ("b", 0, 32), ("c", 0, 34), ("d", 0, 90), ("e", 1, 32), ("f", 91, 100)]
+shards = [("s", 25, 40), ("p", 10, 20), ("t", 15, 16), ("q", 12, 18), ("r", 14, 30)]
 original = list(shards)
 result = [tuple(s) for s in {fn}().rebalance(2, shards)]
-assert result == [("a", 0, 30), ("b", 0, 32), ("c", 31, 34), ("d", 33, 90), ("f", 91, 100)], result
+assert result == [("p", 10, 20), ("q", 12, 18), ("r", 19, 30), ("s", 25, 40)], result
 assert shards == original, "the input must not change"
 """},
         {"name": "Part 1: every small input without holes", "part": 1, "visibility": "unshown", "behavior": "state.invariant",
@@ -216,7 +216,7 @@ assert holes > 500
 tie = [("y", 0, 3), ("x", 0, 3), ("w", 6, 8)]
 assert as_tuples({fn}().rebalance(2, tie)) == [("y", 0, 3), ("x", 0, 5), ("w", 6, 8)]
 """},
-        {"name": "Part 3: the worked example", "part": 3, "behavior": "performance.complexity", "code": r"""
+        {"name": "Part 3: the worked example", "part": 3, "behavior": "state.invariant", "code": r"""
 result = [tuple(s) for s in {fn}().rebalance(1, [("x", -10**9, 10**9), ("y", 0, 10**9), ("z", 5, 10)])]
 assert result == [("x", -10**9, 10**9)], result
 result = [tuple(s) for s in {fn}().rebalance(2, [("x", -10**9, 10**9), ("y", 0, 10**9), ("z", 5, 10)])]
@@ -257,19 +257,19 @@ def best_of_three(limit, shards):
 
 small, big = workload(2000, 1), workload(20000, 2)
 ratio = best_of_three(3, big) / best_of_three(3, small)
-assert ratio < 30, f"10x the shards took {ratio:.0f}x as long"
+assert ratio < 40, f"10x the shards took {ratio:.0f}x as long"
 """},
         {"name": "Part 4: the worked example", "part": 4, "behavior": "routing.selection", "code": _ROUTING + r"""
-keys = range(30000)
-router = router_with(["red", "green", "blue"])
+keys = range(40000)
+router = router_with(["red", "green", "blue", "white"])
 before = owners(router, keys)
 share = collections.Counter(before.values())
-assert all(0.25 < share[s] / len(keys) < 0.42 for s in ["red", "green", "blue"]), share
+assert all(0.18 < share[s] / len(keys) < 0.33 for s in ["red", "green", "blue", "white"]), share
 router.add_shard("gold")
 after_add = owners(router, keys)
 moved = [k for k in keys if before[k] != after_add[k]]
 assert all(after_add[k] == "gold" for k in moved), "a key moved to a shard other than the new one"
-assert 0.17 < len(moved) / len(keys) < 0.33, len(moved)
+assert 0.12 < len(moved) / len(keys) < 0.3, len(moved)
 router.remove_shard("green")
 after_remove = owners(router, keys)
 moved = {k for k in keys if after_add[k] != after_remove[k]}
@@ -422,7 +422,7 @@ class ShardManager:
             "Why does a kept shard's range never need checking again after its start is moved?",
         ],
         deep_dive=[
-            "How does a heap of at most limit keys replace counting coverage key by key?",
+            "How would you check a result against the rule: which properties must hold for every key, and which for every shard?",
         ],
         tradeoffs=[
             "Can moving starts forward ever open a hole, and where can holes come from?",

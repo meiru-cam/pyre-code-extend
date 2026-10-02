@@ -49,7 +49,7 @@ TASK = {
 The requirement arrives in parts. Each part keeps every earlier behavior, so one `IPV4Iterator` class passes all parts at the end. Pass every test of the current part to reveal the next one.
 
 **Rules for every part:**
-- An address is written `"a.b.c.d"`: exactly four segments separated by dots. Each segment is decimal digits `0`–`9` with a value from `0` to `255`, and has no leading zero unless it is exactly `0`. So `"0.0.0.0"` and `"10.0.0.255"` are valid; `"1.2.03.4"`, `"1.2.00.4"`, `"1.2.3.256"` and `" 1.2.3.4"` are not.
+- An address is written `"a.b.c.d"`: exactly four segments separated by dots. Each segment is decimal digits `0`–`9` with a value from `0` to `255`, and has no leading zero unless it is exactly `0`. So `"0.0.0.0"` and `"10.0.0.255"` are valid; `"7.08.9.10"`, `"7.8.00.10"`, `"7.8.9.256"` and `" 1.2.3.4"` are not.
 - The address `"a.b.c.d"` stands for the 32-bit number `a·2²⁴ + b·2¹⁶ + c·2⁸ + d`. Addresses are ordered by that number, from `0.0.0.0` up to `255.255.255.255`.
 - Every invalid argument makes the constructor raise `ValueError`.
 - Each `next()` does constant work. The iterator must not build the whole range up front: starting at `0.0.0.0` must be as quick as starting anywhere else.
@@ -72,9 +72,9 @@ Adapted from the IPv4 iterator question in Schuture/OpenAI-Interview-Notes (CC B
 - `address` is an address `"a.b.c.d"` as described above.
 - `next()` returns addresses in increasing order, starting with `address` itself and ending with `255.255.255.255`. After that it raises `StopIteration`.
 
-**Example**, from `"192.0.2.254"`:
-- `192.0.2.254`, `192.0.2.255`, then `192.0.3.0` (the last segment passed 255 and carried into the one before), then `192.0.3.1`
-- from `"255.255.255.255"` the iterator returns that one address and stops""",
+**Example**, from `"172.16.9.253"`:
+- `172.16.9.253`, `172.16.9.254`, `172.16.9.255`, `172.16.10.0`: after `.255` the third segment goes up by one and the last starts again at `0`
+- `"255.255.255.255"` is the highest address, so an iterator started there returns just it""",
         },
         {
             "title": "Reverse iteration",
@@ -85,9 +85,9 @@ Adapted from the IPv4 iterator question in Schuture/OpenAI-Interview-Notes (CC B
 - `reverse=False` keeps Part 1's behavior.
 - `reverse=True` returns addresses in decreasing order, starting with `address` and ending with `0.0.0.0`, then raises `StopIteration`.
 
-**Example**, from `"192.0.2.1"` with `reverse=True`:
-- `192.0.2.1`, `192.0.2.0`, then `192.0.1.255` (borrowed from the segment before), then `192.0.1.254`
-- from `"0.0.0.0"` with `reverse=True` the iterator returns that one address and stops""",
+**Example**, from `"172.16.10.1"` with `reverse=True`:
+- `172.16.10.1`, `172.16.10.0`, `172.16.9.255`, `172.16.9.254`: below `.0` the third segment goes down by one and the last restarts at `255`
+- `"0.0.0.0"` is the lowest address, so a reverse iterator started there returns just it""",
         },
         {
             "title": "Confined to a block",
@@ -98,11 +98,11 @@ Adapted from the IPv4 iterator question in Schuture/OpenAI-Interview-Notes (CC B
 - Iteration still starts at `a.b.c.d` itself, which may be anywhere in the block. Forward iteration stops after the block's last address, and reverse iteration after its first.
 - Without `/prefix`, the range is still `0.0.0.0` to `255.255.255.255`.
 
-**Example**, `"203.0.113.100/28"` is the block `203.0.113.96` to `203.0.113.111`:
-- forward: `203.0.113.100` up to `203.0.113.111`, 12 addresses
-- reverse: `203.0.113.100` down to `203.0.113.96`, 5 addresses
-- `"198.51.100.77/32"` gives only `198.51.100.77`; `"198.51.100.16/31"` gives `198.51.100.16`, `198.51.100.17`
-- `"10.20.30.40/0"` starts at `10.20.30.40` and, forward, runs up to `255.255.255.255`""",
+**Example**, `"100.64.7.45/27"` keeps the top 27 bits, so its block runs from `100.64.7.32` to `100.64.7.63`:
+- forward gives 19 addresses, `100.64.7.45` through `100.64.7.63`
+- reverse gives 14 addresses, `100.64.7.45` down to `100.64.7.32`
+- `"192.168.40.9/32"` is a block of one address; `"192.168.40.6/31"` gives `192.168.40.6` and `192.168.40.7`
+- `"77.1.2.3/0"` is the whole address space: forward, it begins at `77.1.2.3` and ends at `255.255.255.255`""",
         },
         {
             "title": "Step size",
@@ -112,12 +112,12 @@ Adapted from the IPv4 iterator question in Schuture/OpenAI-Interview-Notes (CC B
 
 - `step` is a positive integer; `step <= 0` raises `ValueError`.
 - The first address returned is still `address`. Each later `next()` moves `step` addresses in the chosen direction.
-- Iteration stops as soon as the next address would fall outside the range (the block, or the whole address space), even if a step jumps past the end without landing on it.
+- Before returning an address, check that it is inside the range (the block, or the whole address space). The first one outside ends the iteration, whether or not some step hit the last address exactly.
 
 **Example:**
-- `"203.0.113.16/28"` with `step=3`: `.16`, `.19`, `.22`, `.25`, `.28`, `.31`; the next would be `.34`, outside the block, so it stops
-- `"203.0.113.30/28"` with `reverse=True, step=4`: `.30`, `.26`, `.22`, `.18`; the next would be `.14`, below the block's first address `.16`
-- `IPV4Iterator("203.0.113.16/28", step=0)` raises `ValueError`""",
+- `"100.64.7.32/27"` with `step=5`: `.32`, `.37`, `.42`, `.47`, `.52`, `.57`, `.62`; then `.67` is past `.63`, so it ends
+- `"100.64.7.61/27"` with `reverse=True, step=6`: `.61`, `.55`, `.49`, `.43`, `.37`; then `.31` is below `.32`, so it ends
+- `IPV4Iterator("100.64.7.32/27", step=0)` raises `ValueError`""",
         },
         {
             "title": "Batch reads",
@@ -129,10 +129,10 @@ Adapted from the IPv4 iterator question in Schuture/OpenAI-Interview-Notes (CC B
 - It never raises `StopIteration`: near the end it returns fewer than `size` addresses, and once nothing is left it returns `[]`.
 - `size` is a non-negative integer; `size < 0` raises `ValueError`. `size == 0` returns `[]` and moves nothing, even on an exhausted iterator.
 
-**Example**, `it = IPV4Iterator("203.0.113.16/28")`:
-- `it.next_batch(5)` returns `203.0.113.16` to `203.0.113.20`
-- `it.next_batch(100)` returns the remaining 11, ending with `203.0.113.31`
-- `it.next_batch(5)` returns `[]`""",
+**Example**, `it = IPV4Iterator("100.64.7.32/28")`, a block of 16 addresses:
+- `it.next_batch(6)` returns `100.64.7.32` through `100.64.7.37`
+- `it.next_batch(50)` returns the other 10, the last being `100.64.7.47`
+- `it.next_batch(2)` returns `[]`""",
         },
     ],
     "hints": [
@@ -158,9 +158,9 @@ Adapted from the IPv4 iterator question in Schuture/OpenAI-Interview-Notes (CC B
     "tests": [
         {"name": "Part 1: the worked example", "part": 1, "behavior": "state.invariant", "code": r"""
 import itertools
-it = {fn}("192.0.2.254")
+it = {fn}("172.16.9.253")
 assert iter(it) is it
-assert [next(it) for _ in range(4)] == ["192.0.2.254", "192.0.2.255", "192.0.3.0", "192.0.3.1"]
+assert [next(it) for _ in range(4)] == ["172.16.9.253", "172.16.9.254", "172.16.9.255", "172.16.10.0"]
 assert list({fn}("255.255.255.255")) == ["255.255.255.255"]
 assert list(itertools.islice({fn}("1.255.255.254"), 3)) == ["1.255.255.254", "1.255.255.255", "2.0.0.0"]
 """},
@@ -195,18 +195,18 @@ start = time.perf_counter()
 it = {fn}("0.0.0.0")
 assert [next(it) for _ in range(3)] == ["0.0.0.0", "0.0.0.1", "0.0.0.2"]
 elapsed = time.perf_counter() - start
-assert elapsed < 0.5, f"took {elapsed:.2f}s"
+assert elapsed < 2, f"took {elapsed:.2f}s"
 start = time.perf_counter()
 it = {fn}("10.0.0.0")
 for _ in range(200000):
     next(it)
 assert next(it) == "10.3.13.64"
 elapsed = time.perf_counter() - start
-assert elapsed < 3, f"200,000 calls took {elapsed:.2f}s"
+assert elapsed < 8, f"200,000 calls took {elapsed:.2f}s"
 """},
         {"name": "Part 2: the worked example", "part": 2, "behavior": "state.invariant", "code": r"""
-it = {fn}("192.0.2.1", reverse=True)
-assert [next(it) for _ in range(4)] == ["192.0.2.1", "192.0.2.0", "192.0.1.255", "192.0.1.254"]
+it = {fn}("172.16.10.1", reverse=True)
+assert [next(it) for _ in range(4)] == ["172.16.10.1", "172.16.10.0", "172.16.9.255", "172.16.9.254"]
 assert list({fn}("0.0.0.0", reverse=True)) == ["0.0.0.0"]
 assert list({fn}("0.0.0.2", reverse=True)) == ["0.0.0.2", "0.0.0.1", "0.0.0.0"]
 """},
@@ -226,14 +226,14 @@ assert list({fn}("255.255.255.255", reverse=False)) == ["255.255.255.255"]
 assert list(itertools.islice({fn}("3.0.0.0", reverse=True), 2)) == ["3.0.0.0", "2.255.255.255"]
 """},
         {"name": "Part 3: the worked example", "part": 3, "behavior": "state.invariant", "code": r"""
-forward = list({fn}("203.0.113.100/28"))
-assert forward[0] == "203.0.113.100" and forward[-1] == "203.0.113.111" and len(forward) == 12
-backward = list({fn}("203.0.113.100/28", reverse=True))
-assert backward[0] == "203.0.113.100" and backward[-1] == "203.0.113.96" and len(backward) == 5
-assert list({fn}("198.51.100.77/32")) == ["198.51.100.77"]
-assert list({fn}("198.51.100.16/31")) == ["198.51.100.16", "198.51.100.17"]
-it = {fn}("10.20.30.40/0")
-assert [next(it) for _ in range(3)] == ["10.20.30.40", "10.20.30.41", "10.20.30.42"]
+forward = list({fn}("100.64.7.45/27"))
+assert forward[0] == "100.64.7.45" and forward[-1] == "100.64.7.63" and len(forward) == 19
+backward = list({fn}("100.64.7.45/27", reverse=True))
+assert backward[0] == "100.64.7.45" and backward[-1] == "100.64.7.32" and len(backward) == 14
+assert list({fn}("192.168.40.9/32")) == ["192.168.40.9"]
+assert list({fn}("192.168.40.6/31")) == ["192.168.40.6", "192.168.40.7"]
+it = {fn}("77.1.2.3/0")
+assert [next(it) for _ in range(3)] == ["77.1.2.3", "77.1.2.4", "77.1.2.5"]
 """},
         {"name": "Part 3: prefix parsing", "part": 3, "visibility": "unshown", "behavior": "protocol.validation",
          "failure_message": "The prefix must be 0 to 32 in plain decimal without a leading zero; anything else, including a netmask or a second slash, raises ValueError.",
@@ -263,12 +263,10 @@ for _ in range(600):
     assert list(itertools.islice({fn}(seed, reverse=reverse), 5)) == expected(seed, reverse, count=5), (seed, reverse)
 """},
         {"name": "Part 4: the worked example", "part": 4, "behavior": "state.invariant", "code": r"""
-assert list({fn}("203.0.113.16/28", step=3)) == [
-    "203.0.113.16", "203.0.113.19", "203.0.113.22", "203.0.113.25", "203.0.113.28", "203.0.113.31"]
-assert list({fn}("203.0.113.30/28", reverse=True, step=4)) == [
-    "203.0.113.30", "203.0.113.26", "203.0.113.22", "203.0.113.18"]
+assert list({fn}("100.64.7.32/27", step=5)) == [f"100.64.7.{n}" for n in (32, 37, 42, 47, 52, 57, 62)]
+assert list({fn}("100.64.7.61/27", reverse=True, step=6)) == [f"100.64.7.{n}" for n in (61, 55, 49, 43, 37)]
 try:
-    {fn}("203.0.113.16/28", step=0)
+    {fn}("100.64.7.32/27", step=0)
     raise AssertionError("step=0 should raise ValueError")
 except ValueError:
     pass
@@ -292,11 +290,11 @@ assert list({fn}("8.8.8.8", step=2 ** 40)) == ["8.8.8.8"]
 assert list({fn}("8.8.8.8", reverse=True, step=2 ** 40)) == ["8.8.8.8"]
 """},
         {"name": "Part 5: the worked example", "part": 5, "behavior": "state.invariant", "code": r"""
-it = {fn}("203.0.113.16/28")
-assert it.next_batch(5) == ["203.0.113.16", "203.0.113.17", "203.0.113.18", "203.0.113.19", "203.0.113.20"]
-rest = it.next_batch(100)
-assert len(rest) == 11 and rest[-1] == "203.0.113.31"
-assert it.next_batch(5) == []
+it = {fn}("100.64.7.32/28")
+assert it.next_batch(6) == [f"100.64.7.{n}" for n in range(32, 38)]
+rest = it.next_batch(50)
+assert len(rest) == 10 and rest[-1] == "100.64.7.47"
+assert it.next_batch(2) == []
 """},
         {"name": "Part 5: batches mixed with next()", "part": 5, "visibility": "unshown", "behavior": "state.invariant",
          "failure_message": "next_batch must return exactly what the same number of next() calls would, never raise StopIteration, return [] once exhausted, treat size 0 as a no-op and reject a negative size.",

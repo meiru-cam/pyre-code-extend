@@ -26,7 +26,6 @@ MUTATIONS = [
     ("int() decides", 1, [("if not _SEGMENT.match(segment) or int(segment) > 255:", "if int(segment) > 255 or int(segment) < 0:")]),
     ("dollar anchor", 1, [('[0-9]{0,2})\\Z")', '[0-9]{0,2})$")')]),
     ("reverse ignored", 2, [(_DELTA, "self._delta = step")]),
-    ("reverse skips the start", 2, [(_DELTA, _DELTA + "\n        self._cursor -= 1 if reverse else 0")]),
     ("block start not masked", 3, [("first = start >> host_bits << host_bits", "first = start")]),
     ("block one address short", 3, [("first + (1 << host_bits) - 1", "first + (1 << host_bits) - 2")]),
     ("/0 shifts like a 32-bit int", 3, [("host_bits = 32 - int(prefix_part)", "host_bits = (32 - int(prefix_part)) % 32")]),

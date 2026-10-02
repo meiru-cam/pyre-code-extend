@@ -134,7 +134,7 @@ Adapted from the text editor question in Schuture/OpenAI-Interview-Notes (CC BY-
 - `buf.insert(4, " the")`; `buf.text()` is `"pull the request"`
 - `buf.read(0, 4)` is `"pull"` and `buf.read(4, 8)` is `" the"`
 - `buf.delete(4, 8)` returns `" the"`; `buf.text()` is `"pull request"` again
-- `buf.insert(100, "x")` and `buf.delete(3, 1)` raise `IndexError`""",
+- `buf.insert(13, "!")` (past the end) and `buf.delete(7, 2)` (start after end) raise `IndexError`""",
         },
         {
             "title": "Undo and redo",
@@ -147,11 +147,11 @@ Adapted from the text editor question in Schuture/OpenAI-Interview-Notes (CC BY-
 - `redo()` re-applies the most recently undone edit and returns `True`, or returns `False` if there is none.
 - A new recorded edit discards everything that could be redone. `undo` and `redo` themselves are never recorded as edits.
 
-**Example**, `buf = TextBuffer("dog")`:
-- `insert(3, "s")` gives `"dogs"`; `insert(0, "hot")` gives `"hotdogs"`
-- `undo()` gives `"dogs"`, `undo()` gives `"dog"`, `redo()` gives `"dogs"`; each returns `True`
-- `insert(4, "!")` gives `"dogs!"`; now `redo()` returns `False`: the new edit discarded the pending `"hot"`
-- `undo()` twice gives `"dog"`, and a third `undo()` returns `False`""",
+**Example**, `buf = TextBuffer("note")`:
+- `insert(4, "s")` makes `"notes"`, then `delete(0, 1)` makes `"otes"`
+- `undo()` restores `"notes"`; a second `undo()` restores `"note"`; `redo()` brings back `"notes"`. All three return `True`.
+- `insert(0, "my ")` makes `"my notes"`. The undone `delete` can no longer be redone: `redo()` returns `False`.
+- `undo()` makes `"notes"`, `undo()` makes `"note"`, and one more `undo()` returns `False`""",
         },
         {
             "title": "Autocomplete",
@@ -159,9 +159,9 @@ Adapted from the text editor question in Schuture/OpenAI-Interview-Notes (CC BY-
 
 **Signature:** `suggest(prefix, k) -> list[str]`
 
-- A word is a maximal run of the letters `A`–`Z` and `a`–`z`. Words are case-sensitive: `"The"` and `"the"` differ.
+- A word is a maximal run of the letters `A`–`Z` and `a`–`z`. Words are case-sensitive: `"Go"` and `"go"` are two words.
 - The vocabulary is the words in the buffer's current contents, and a word's frequency is how many times it occurs there now.
-- `suggest(prefix, k)` returns up to `k` words that start with `prefix`, most frequent first. Words with equal frequency come in string order, so uppercase comes before lowercase: `"Zoo"` before `"apple"`.
+- `suggest(prefix, k)` returns up to `k` words that start with `prefix`, most frequent first. Words with equal frequency come in string order, so every uppercase letter sorts before every lowercase one: `"Kiwi"` before `"banana"`.
 - `prefix = ""` matches every word. `k = 0` returns `[]`, and `k < 0` raises `ValueError`.
 
 **Example**, `buf = TextBuffer("to be or not to be")`:
@@ -175,7 +175,7 @@ Adapted from the text editor question in Schuture/OpenAI-Interview-Notes (CC BY-
 
 **Signature:** `TextBuffer(site_id=...)`, `local_insert(index, ch) -> op`, `local_delete(index) -> op`, `apply(op) -> None`
 
-- A replica is `TextBuffer(site_id=s)` with a unique string `s`. It starts empty, and `text()` returns its current document. Tests do not call `insert`, `delete`, `undo` or `redo` on a replica.
+- A replica is `TextBuffer(site_id=s)` with a unique string `s`. It starts empty, `text()` returns its current document, and `len(buf)` is the length of `text()`. Tests do not call `insert`, `delete`, `undo` or `redo` on a replica.
 - `local_insert(index, ch)` inserts one character at `index`, `0 <= index <= len(text())`, and returns an operation for the other replicas. Afterwards `text()[index] == ch`. A `ch` that is not exactly one character raises `ValueError`.
 - `local_delete(index)` deletes the character at `index`, `0 <= index < len(text())`, and returns an operation. Both raise `IndexError` for an index outside those bounds.
 - `apply(op)` applies an operation returned by any replica. Applying the same operation again changes nothing.
@@ -184,9 +184,9 @@ Adapted from the text editor question in Schuture/OpenAI-Interview-Notes (CC BY-
 - A character typed between two characters stays between them on every replica, as long as both are still there.
 
 **Example:**
-- `a, b = TextBuffer(site_id="A"), TextBuffer(site_id="B")`
-- `op1 = a.local_insert(0, "H")` and, at the same time, `op2 = b.local_insert(0, "i")`
-- after `b.apply(op1)` and `a.apply(op2)`, `a.text() == b.text()`""",
+- `north = TextBuffer(site_id="north")` and `south = TextBuffer(site_id="south")` both start empty
+- `north` types `"x"` at index 0 while `south`, not yet aware of it, types `"y"` at index 0
+- each replica then applies the other's operation; both now show the same two-character text, `"xy"` or `"yx"`""",
         },
     ],
     "hints": [
@@ -218,7 +218,7 @@ assert buf.text() == "pull the request"
 assert buf.read(0, 4) == "pull" and buf.read(4, 8) == " the"
 assert buf.delete(4, 8) == " the"
 assert buf.text() == "pull request"
-for bad in [lambda: buf.insert(100, "x"), lambda: buf.delete(3, 1)]:
+for bad in [lambda: buf.insert(13, "!"), lambda: buf.delete(7, 2)]:
     try:
         bad()
         raise AssertionError("expected IndexError")
@@ -251,17 +251,18 @@ assert buf.read(4, 4) == "" and buf.read(0, 4) == "abcd"
 assert buf.delete(0, 4) == "abcd" and buf.text() == "" and len(buf) == 0
 """},
         {"name": "Part 2: the worked example", "part": 2, "behavior": "state.invariant", "code": r"""
-buf = {fn}("dog")
-buf.insert(3, "s")
-buf.insert(0, "hot")
-assert buf.text() == "hotdogs"
-assert buf.undo() is True and buf.text() == "dogs"
-assert buf.undo() is True and buf.text() == "dog"
-assert buf.redo() is True and buf.text() == "dogs"
-buf.insert(4, "!")
-assert buf.redo() is False and buf.text() == "dogs!"
-assert buf.undo() and buf.undo() and buf.text() == "dog"
-assert buf.undo() is False and buf.text() == "dog"
+buf = {fn}("note")
+buf.insert(4, "s")
+assert buf.delete(0, 1) == "n" and buf.text() == "otes"
+assert buf.undo() is True and buf.text() == "notes"
+assert buf.undo() is True and buf.text() == "note"
+assert buf.redo() is True and buf.text() == "notes"
+buf.insert(0, "my ")
+assert buf.text() == "my notes"
+assert buf.redo() is False and buf.text() == "my notes"
+assert buf.undo() and buf.text() == "notes"
+assert buf.undo() and buf.text() == "note"
+assert buf.undo() is False and buf.text() == "note"
 """},
         {"name": "Part 2: random histories match snapshots", "part": 2, "visibility": "unshown", "behavior": "state.invariant",
          "failure_message": "After a random mix of edits, undos and redos, the buffer or a return value differed from keeping a snapshot of the whole text per recorded edit.",
@@ -308,9 +309,9 @@ for seed in range(300):
         {"name": "Part 3: what counts as a word", "part": 3, "visibility": "unshown", "behavior": "edge.empty_or_boundary",
          "failure_message": "Words are runs of A-Z and a-z only, case-sensitive; ties sort uppercase first; k = 0 gives [] and k < 0 raises ValueError.",
          "code": _NAIVE + r"""
-buf = {fn}("apple Zoo apple Zoo bee")
-assert buf.suggest("", 3) == ["Zoo", "apple", "bee"]
-assert buf.suggest("z", 5) == [] and buf.suggest("Z", 5) == ["Zoo"]
+buf = {fn}("pear Kiwi pear Kiwi fig")
+assert buf.suggest("", 3) == ["Kiwi", "pear", "fig"]
+assert buf.suggest("k", 5) == [] and buf.suggest("K", 5) == ["Kiwi"]
 assert buf.suggest("", 0) == []
 assert raises(ValueError, lambda: buf.suggest("", -1))
 buf = {fn}("abc1def snake_case café x-ray A\tb")
@@ -323,14 +324,14 @@ buf.undo()
 assert buf.suggest("G", 2) == ["Go"] and buf.suggest("", 1) == ["go"]
 """},
         {"name": "Part 4: the worked example", "part": 4, "behavior": "events.ordering", "code": r"""
-a, b = {fn}(site_id="A"), {fn}(site_id="B")
-assert a.text() == ""
-op1 = a.local_insert(0, "H")
-op2 = b.local_insert(0, "i")
-assert a.text() == "H" and b.text() == "i"
-b.apply(op1)
-a.apply(op2)
-assert a.text() == b.text() and sorted(a.text()) == ["H", "i"]
+north, south = {fn}(site_id="north"), {fn}(site_id="south")
+assert north.text() == "" and south.text() == ""
+from_north = north.local_insert(0, "x")
+from_south = south.local_insert(0, "y")
+assert north.text() == "x" and south.text() == "y"
+south.apply(from_north)
+north.apply(from_south)
+assert north.text() == south.text() and north.text() in ("xy", "yx")
 """},
         {"name": "Part 4: late deletes, repeats and neighbours", "part": 4, "visibility": "unshown", "behavior": "effects.idempotency",
          "failure_message": "A delete arriving before its insert, an operation applied twice, or an insert next to a concurrently deleted character left the replicas different or misplaced a character.",
@@ -421,6 +422,7 @@ for seed in range(150):
         for _, op in queue:
             deliver(reps[j], op)
     texts = [rep.text() for rep in reps]
+    assert all(len(rep) == len(text) for rep, text in zip(reps, texts)), "len() must count a replica's visible characters"
     assert texts[0] == texts[1] == texts[2], (seed, texts)
     where = {ch: n for n, ch in enumerate(texts[0])}
     for ch, left, right in placed:
@@ -461,7 +463,7 @@ class TextBuffer:
         self._deleted = set()   # (site, seq) deleted anywhere, possibly before their insert arrives
 
     def __len__(self):
-        return len(self._chars)
+        return len(self._live()) if self.site_id is not None else len(self._chars)
 
     def text(self):
         if self.site_id is not None:
@@ -556,7 +558,8 @@ class TextBuffer:
             raise IndexError(f"insert index {index} out of range for length {len(live)}")
         left = live[index - 1][0] if index > 0 else Fraction(0)
         right = live[index][0] if index < len(live) else Fraction(1)
-        # A random point, not the midpoint, so two replicas filling one gap rarely collide.
+        # A random point, not the midpoint, so two replicas filling one gap rarely collide; an
+        # exact collision (about 2**-32) still converges, since entries sort by (position, site, seq).
         position = left + (right - left) * Fraction(random.randint(1, 2 ** 32 - 1), 2 ** 32)
         self._counter += 1
         op = ("insert", position, self.site_id, self._counter, ch)

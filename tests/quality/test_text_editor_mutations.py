@@ -21,7 +21,7 @@ _REPLAY = '''        if (kind == "insert") == forward:
 '''
 
 MUTATIONS = [
-    ("insert at the end rejected", 1, [(_CHECK, "if not 0 <= start <= end < len(self._chars) and not (start == end == 0):")]),
+    ("insert at the end rejected", 1, [(_INSERT, _INSERT.replace("        self._check(pos, pos)\n", "        if not 0 <= pos < len(self._chars):\n            raise IndexError(pos)\n"))]),
     ("negative positions accepted", 1, [(_CHECK, "if not start <= end <= len(self._chars):")]),
     ("reversed range accepted", 1, [(_CHECK, "if not (0 <= start and end <= len(self._chars)):")]),
     ("delete returns a list", 1, [('        removed = "".join(self._chars[start:end])\n', "        removed = self._chars[start:end]\n")]),

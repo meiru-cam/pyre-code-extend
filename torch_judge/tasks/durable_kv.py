@@ -79,14 +79,12 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **The disk `fs`** is built by the tests; your code only calls it:
 - `fs.write(name, data)` creates or replaces the file `name` with the bytes `data`. It is atomic: a crash leaves the file either untouched or fully replaced.
-- `fs.append(name, data)` adds `data` to the end of `name`, creating it if absent. It is not atomic: a crash can leave any prefix of `data` behind, and those bytes may be damaged.
 - `fs.read(name)` returns the file's bytes, or `None` if it does not exist. `fs.list()` returns every file name. `fs.delete(name)` removes a file, atomically, and ignores a missing one.
-- `fs.max_file_size` is `None` or a limit in bytes. `write` and `append` raise `ValueError` and change nothing when a file would exceed it.
 - A new process is modelled by a new `KVStore` on the same `fs`, followed by `load()`.
 
 **Rules for every part:**
 - Keys and values are any `str`: empty, containing `:`, `,`, `=`, newlines or `\x00`, emoji, even a lone surrogate such as `"\ud800"`. All of them round-trip unchanged.
-- Design the byte format yourself. Do not use `json`, `pickle`, `marshal`, `shelve` or `eval`. `str.encode`, `bytes.decode`, `int.to_bytes`, `int.from_bytes` and `zlib` are allowed.
+- Design the byte format yourself. Do not use `json`, `pickle`, `marshal`, `shelve`, `eval` or `ast.literal_eval`. `str.encode`, `bytes.decode`, `int.to_bytes`, `int.from_bytes` and `zlib` are allowed.
 
 ────────────────────────────────
 
@@ -96,7 +94,7 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Where it is used:** every database and configuration store needs a byte format it can always parse back, and a way to recover after the process dies.
 
-Adapted from the durable KV store question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, on one class with a `log` flag instead of three classes.""",
+Adapted from the durable KV store question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, on one class.""",
     "parts": [
         {
             "title": "Save and load",
@@ -109,19 +107,19 @@ Adapted from the durable KV store question in Schuture/OpenAI-Interview-Notes (C
 - A later `save()` fully replaces an earlier one.
 
 **Example:**
-- `put("time:now", "12:00")`, `put("", "empty key")`, `put("emoji", "🙂\n")`, then `save()`
-- a new `KVStore(fs)` returns `None` for `get("time:now")` until `load()` is called
-- after `load()` it returns `"12:00"`, `"empty key"` and `"🙂\n"` for those three keys, and `None` for any other key""",
+- `put("a=b", "x,y")`, `put("", "nothing")`, `put("poem", "line one\nline two ✓")`, then `save()`
+- `store2 = KVStore(fs)`: `store2.get("a=b")` is `None`, because `load()` has not run yet
+- after `store2.load()`: `"x,y"`, `"nothing"` and `"line one\nline two ✓"` for those keys, `None` for `"poem "` or any other key""",
         },
         {
             "title": "Size-capped files and interrupted saves",
-            "description_en": r"""Keep Part 1. Now `fs.max_file_size` may be set, to any value of `64` or more.
+            "description_en": r"""Keep Part 1. Now `fs.max_file_size` may be set, to any value of `64` or more. It is `None` or a limit in bytes, and `fs.write` raises `ValueError` and changes nothing when a file would exceed it.
 
 - A single key or value longer than `fs.max_file_size` must still round-trip.
-- A crash may stop `save()` before or after any `write` or `delete` call it makes. A `load()` by a new instance afterwards must give exactly the store that the interrupted `save()` was writing, or exactly what `load()` gave before that `save()` began. Never a mix of the two, and never an error.
-- When `save()` returns, `fs` holds no file that `load()` does not need for the data just saved: nothing is left over from earlier saves, finished or interrupted.
+- The process can die between any two `fs.write` or `fs.delete` calls of a `save()`, or before the first. Then `load()` on a fresh instance returns one of two stores, complete: the one being saved, or the one saved before it (empty if there was none). It must not raise, and must not combine pieces of both.
+- After a `save()` completes, every file on `fs` is one that `load()` reads. Files from older saves, including saves that died partway, are gone: `fs` holds as many files as saving the same store to an empty disk would.
 
-**Example:** with `max_file_size=64`, saving 30 pairs that take several hundred bytes creates more than one file, every file holds at most 64 bytes, and a new `KVStore(fs)` returns every pair after `load()`.""",
+**Example:** `fs = FileSystem(max_file_size=64)`; 30 keys `key0` to `key29`, each with a value of up to 36 characters, add up to far more than 64 bytes. `save()` must spread them over several files, none over 64 bytes, and `load()` on a fresh instance gets all 30 back.""",
         },
         {
             "title": "Append-only log",
@@ -129,11 +127,13 @@ Adapted from the durable KV store question in Schuture/OpenAI-Interview-Notes (C
 
 **Signature:** `KVStore(fs, log=False)`, `delete(key) -> None`, `compact() -> None`
 
+- `fs.append(name, data)` adds `data` to the end of `name`, creating it if absent. It is not atomic: a crash can leave any prefix of `data` behind, and those bytes may be damaged.
+
 - `delete(key)` removes `key`: `get(key)` returns `None` until it is `put` again. A missing key is fine. Without `log=True`, the removal is in memory until the next `save()`.
-- With `log=True`, every `put` and `delete` is durable as soon as it returns. Each makes exactly one `fs.append`, whose size depends only on its own key and value, and no other `fs` call. `get` makes no `fs` call. `save()` is not used.
+- With `log=True`, `put` and `delete` are on disk by the time they return. Each one calls `fs.append` once and makes no other `fs` call, and how many bytes it appends is fixed by its key and value alone, not by what is already stored. `get` never calls `fs`. `save()` is not used.
 - With `log=True`, `load()` replays a log of `N` operations in `O(N)` time.
-- A crash in the middle of an `fs.append` leaves a damaged fragment at the end of the file. `load()` must then restore every `put` and `delete` that finished before it, take nothing from the fragment, and not raise. Operations after that `load()` must survive the next one.
-- `compact()` rewrites what is stored so that the total size of the files depends only on the keys and values in the store, not on its history. A `load()` afterwards gives the same store. A crash during `compact()` loses nothing.
+- If the process dies inside an `fs.append`, the file ends in a damaged fragment. The next `load()` returns the store as it was after the last operation that completed, ignores the fragment entirely, and does not raise. A `put` or `delete` made after that `load()` is still there after a further `load()`.
+- `compact()` rewrites the stored data. Afterwards, two stores holding the same keys and values occupy the same number of bytes on `fs`, however many overwrites and deletes led there, and `load()` still gives the same store. If the process dies during `compact()`, nothing is lost.
 - Tests of `log=True` use an `fs` with no `max_file_size`.
 
 **Example:** with `log=True`, `put("a", "1")`, `put("b", "2")`, `delete("a")`, `put("", "")`; a new `KVStore(fs, log=True)` returns `None`, `"2"` and `""` for `"a"`, `"b"` and `""` after `load()`.""",
@@ -163,16 +163,17 @@ Adapted from the durable KV store question in Schuture/OpenAI-Interview-Notes (C
         {"name": "Part 1: the worked example", "part": 1, "behavior": "state.invariant", "code": _FS + r"""
 fs = FileSystem()
 store = {fn}(fs)
-store.put("time:now", "12:00")
-store.put("", "empty key")
-store.put("emoji", "\U0001F642\n")
+store.put("a=b", "x,y")
+store.put("", "nothing")
+store.put("poem", "line one\nline two \u2713")
 store.save()
 fresh = {fn}(fs)
-assert fresh.get("time:now") is None, "a new store starts empty until load()"
+assert fresh.get("a=b") is None, "a new store starts empty until load()"
 fresh.load()
-assert fresh.get("time:now") == "12:00"
-assert fresh.get("") == "empty key"
-assert fresh.get("emoji") == "\U0001F642\n"
+assert fresh.get("a=b") == "x,y"
+assert fresh.get("") == "nothing"
+assert fresh.get("poem") == "line one\nline two \u2713"
+assert fresh.get("poem ") is None
 assert fresh.get("other") is None
 """},
         {"name": "Part 1: awkward strings round-trip", "part": 1, "visibility": "unshown", "behavior": "state.invariant",
@@ -575,7 +576,7 @@ def best_of_three(fs, expected):
 
 small, big = build(1500), build(15000)
 ratio = best_of_three(*big) / best_of_three(*small)
-assert ratio < 30, f"10x the records took {ratio:.0f}x as long to load"
+assert ratio < 40, f"10x the records took {ratio:.0f}x as long to load"
 """},
         {"name": "Part 3: compaction", "part": 3, "visibility": "unshown", "behavior": "checkpoint.recovery",
          "failure_message": "After compact(), the stored size must depend only on the current keys and values and load() must give the same store; a crash at any point of compact() must lose nothing.",

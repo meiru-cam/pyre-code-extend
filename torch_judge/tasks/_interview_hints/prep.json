@@ -126,11 +126,11 @@
   "shard_rebalance": {
     "Why is the first key where coverage drops below limit exactly where the earliest-free lane frees up?": "Draw the kept shards as bars on limit separate rows, never overlapping within a row. When the next shard arrives in start order, which row's last bar ends first, and where can the new bar begin?",
     "Why does a kept shard's range never need checking again after its start is moved?": "Take a kept shard whose start was moved. Can a shard processed later, which starts at or after it, push its coverage above limit inside that range? Consider which row the later shard goes on.",
-    "How does a heap of at most limit keys replace counting coverage key by key?": "Store one number per row: the first key at which it is free. Which of those numbers do you need for each new shard, and which structure hands you the smallest quickly?",
+    "How would you check a result against the rule: which properties must hold for every key, and which for every shard?": "Compare each output shard with its input: which of its ends may move, and in which direction? Then sort the output's starts and ends and sweep them to check coverage, without visiting every key.",
     "Can moving starts forward ever open a hole, and where can holes come from?": "Follow a key that a moved start skipped over, and the keys of a dropped shard. How many kept shards still cover them? Now compare with a key no input shard covers.",
     "With one hash point per shard, why are the shares uneven, and how do virtual nodes fix it?": "Hash 3 shards to one point each on a circle and look at the gaps between them. How large is the largest gap likely to be, and what happens to the gaps if each shard gets 100 points?",
     "Why must the hash not be Python's built-in hash() for strings?": "Run python -c \"print(hash('red'))\" twice in a terminal. What does that mean for a key's owner after the service restarts?",
-    "How does rendezvous hashing compare with a hash ring for locate cost and key movement?": "For each key, score every shard by hashing the pair (key, shard) and pick the highest. Count the hashes one locate costs, and work out which keys move when a shard leaves."
+    "How does rendezvous hashing compare with a hash ring for locate cost and key movement?": "What if each key ranked every shard on its own instead of using a ring? Count the hashes one locate would then cost, and work out which keys move when a shard leaves."
   },
   "text_editor": {
     "Why are the valid positions for insert different from the valid ranges for delete?": "In a buffer of length 3, list every pos where insert can put text, then every (start, end) a delete can take. Which value is allowed for one and not the other?",
