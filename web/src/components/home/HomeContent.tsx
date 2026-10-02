@@ -6,21 +6,11 @@ import { useRouter } from 'next/navigation';
 import { ArrowRight, Check, FlaskConical, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useLocale } from '@/context/LocaleContext';
-import type { LearningPath } from '@/lib/types';
+import { PathGroupCards, type PathsResponse } from '@/components/paths/PathGroupCards';
+import pathsData from '@/lib/paths.json';
 
 interface HomeContentProps {
   stats: { total: number; easy: number; medium: number; hard: number };
-}
-
-type PathWithProgress = LearningPath & { solved: number; total: number };
-
-interface CategoryInfo {
-  name: string;
-  description: string;
-  total: number;
-  easy: number;
-  medium: number;
-  hard: number;
 }
 
 function SectionHeader({
@@ -54,25 +44,6 @@ function SectionHeader({
   );
 }
 
-function DifficultyBars({ easy, medium, hard }: { easy: number; medium: number; hard: number }) {
-  const max = Math.max(easy, medium, hard, 1);
-  return (
-    <span className="inline-flex gap-[2px] items-end h-[10px]">
-      {[
-        { n: easy, color: 'var(--easy)' },
-        { n: medium, color: 'var(--medium)' },
-        { n: hard, color: 'var(--hard)' },
-      ].map((d, i) => (
-        <span
-          key={i}
-          className="w-[3px] rounded-[1px]"
-          style={{ height: `${Math.max(2, (d.n / max) * 10)}px`, background: d.color }}
-        />
-      ))}
-    </span>
-  );
-}
-
 const CODE_LINES = [
   { n: 1, code: '<span style="color:color-mix(in oklab,var(--accent) 80%,var(--text))"># Implement causal self-attention.</span>', style: 'italic' },
   { n: 2, code: '<span style="color:color-mix(in oklab,var(--accent) 80%,var(--text))">import</span> <span style="font-weight:500">torch</span>' },
@@ -97,8 +68,7 @@ const TESTS = [
 export function HomeContent({ stats }: HomeContentProps) {
   const { locale, t } = useLocale();
   const router = useRouter();
-  const [paths, setPaths] = useState<PathWithProgress[]>([]);
-  const [categories, setCategories] = useState<CategoryInfo[]>([]);
+  const [pathsResponse, setPathsResponse] = useState<PathsResponse | null>(null);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -122,21 +92,8 @@ export function HomeContent({ stats }: HomeContentProps) {
   useEffect(() => {
     fetch('/api/paths')
       .then((r) => r.json())
-      .then((d) => {
-        const pathsList = d.paths ?? [];
-        setPaths(pathsList);
-        // Derive categories from paths (each path = a category)
-        const cats: CategoryInfo[] = pathsList.map((p: PathWithProgress) => ({
-          name: locale === 'zh' ? p.titleZh : p.titleEn,
-          description: locale === 'zh' ? p.descriptionZh : p.descriptionEn,
-          total: p.total,
-          easy: Math.round(p.total * 0.25),
-          medium: Math.round(p.total * 0.45),
-          hard: p.total - Math.round(p.total * 0.25) - Math.round(p.total * 0.45),
-        }));
-        setCategories(cats);
-      });
-  }, [locale]);
+      .then((d) => setPathsResponse(d));
+  }, []);
 
   return (
     <main className="max-w-[1200px] mx-auto px-7">
@@ -185,7 +142,7 @@ export function HomeContent({ stats }: HomeContentProps) {
             <div className="flex gap-6 mt-8 pt-5" style={{ borderTop: '1px dashed var(--line)' }}>
               {[
                 { k: t('metaTotal'), v: t('metaTotalVal', { n: stats.total }) },
-                { k: t('metaCoverage'), v: t('metaCoverageVal', { n: 13 }) },
+                { k: t('metaCoverage'), v: t('metaCoverageVal', { n: pathsData.paths.length }) },
                 { k: t('metaRuntime'), v: t('metaRuntimeVal') },
                 { k: t('metaJudge'), v: 'torch_judge' },
               ].map((m) => (
@@ -333,102 +290,25 @@ export function HomeContent({ stats }: HomeContentProps) {
         </div>
       </div>
 
-      {/* Categories */}
-      {categories.length > 0 && (
-        <section className="py-20" style={{ borderTop: '1px solid var(--line)' }}>
-          <SectionHeader
-            eyebrow={locale === 'zh' ? '§ 01 — 题目集' : '§ 01 — Problem set'}
-            title={locale === 'zh' ? '九条路径覆盖全部核心领域。' : 'Nine paths. Every core domain covered.'}
-            linkText={locale === 'zh' ? `全部 ${stats.total} 题` : `All ${stats.total} problems`}
-            linkHref="/problems"
-          />
-          <div
-            className="grid grid-cols-4 max-[960px]:grid-cols-2 max-[560px]:grid-cols-1 rounded-[14px] overflow-hidden"
-            style={{ gap: '1px', background: 'var(--line)', border: '1px solid var(--line)' }}
-          >
-            {categories.slice(0, 8).map((cat, i) => (
-              <Link
-                key={cat.name}
-                href={paths[i] ? `/paths/${paths[i].id}` : '/problems'}
-                className="flex flex-col gap-2.5 p-[22px] min-h-[168px] relative transition-colors duration-[180ms] group"
-                style={{ background: 'var(--bg-elev)' }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = 'color-mix(in oklab, var(--accent) 3%, var(--bg-elev))')}
-                onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--bg-elev)')}
-              >
-                <span className="mono text-[11px] text-text-3 tracking-[0.12em]">
-                  {String(i + 1).padStart(2, '0')}
-                </span>
-                <h3 className="text-[17px] font-semibold tracking-[-0.012em]">{cat.name}</h3>
-                <div
-                  className="mt-auto flex items-center gap-2.5 pt-3"
-                  style={{ borderTop: '1px dashed var(--line)' }}
-                >
-                  <DifficultyBars easy={cat.easy} medium={cat.medium} hard={cat.hard} />
-                  <span className="mono text-xs text-text-2 tabular-nums">
-                    {cat.total} {locale === 'zh' ? '题' : 'problems'}
-                  </span>
-                  <span className="ml-auto text-text-3 transition-[color,transform] duration-[180ms] group-hover:text-accent group-hover:translate-x-[2px]">
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </span>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Learning Paths */}
-      {paths.length > 0 && (
-        <section className="py-20" style={{ borderTop: '1px solid var(--line)' }}>
-          <SectionHeader
-            eyebrow={locale === 'zh' ? '§ 02 — 学习路径' : '§ 02 — Learning paths'}
-            title={locale === 'zh' ? '选一个方向。' : 'Pick a destination.'}
-            linkText={locale === 'zh' ? `全部 ${paths.length} 条路径` : `All ${paths.length} paths`}
-            linkHref="/paths"
-          />
-          <div className="grid grid-cols-3 max-[900px]:grid-cols-2 max-[600px]:grid-cols-1 gap-3.5">
-            {paths.map((path, i) => {
-              const title = locale === 'zh' ? path.titleZh : path.titleEn;
-              const desc = locale === 'zh' ? path.descriptionZh : path.descriptionEn;
-              const pct = path.total > 0 ? Math.round((path.solved / path.total) * 100) : 0;
-              const tag = `PATH_${String(i + 1).padStart(2, '0')}`;
-              return (
-                <Link
-                  key={path.id}
-                  href={`/paths/${path.id}`}
-                  className="flex flex-col gap-3.5 p-5 min-h-[172px] rounded-xl relative transition-[border-color,background] duration-150 group"
-                  style={{ background: 'var(--bg-elev)', border: '1px solid var(--line)' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--accent-line)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--line)')}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="mono text-[10.5px] text-text-3 tracking-[0.12em]">{tag}</span>
-                  </div>
-                  <h3 className="text-[15.5px] font-semibold tracking-[-0.012em]">{title}</h3>
-                  <p className="text-[13px] text-text-2 leading-relaxed">{desc}</p>
-                  <div
-                    className="mt-auto flex items-center gap-2.5 mono text-[11.5px] text-text-2"
-                  >
-                    <span>{Math.round(pct / 100 * path.total)}/{path.total}</span>
-                    <div className="flex-1 h-[3px] rounded-pill relative" style={{ background: 'var(--line)' }}>
-                      <div
-                        className="absolute inset-0 rounded-pill"
-                        style={{ width: `${pct}%`, background: 'var(--accent)' }}
-                      />
-                    </div>
-                    <span className="tabular-nums">{pct}%</span>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        </section>
-      )}
+      {/* Learning paths, one card per group */}
+      <section className="py-20" style={{ borderTop: '1px solid var(--line)' }}>
+        <SectionHeader
+          eyebrow={locale === 'zh' ? '§ 01 — 学习路径' : '§ 01 — Learning paths'}
+          title={
+            locale === 'zh'
+              ? `五个方向，${pathsData.paths.length} 条路径。`
+              : `${pathsData.paths.length} paths in five areas.`
+          }
+          linkText={locale === 'zh' ? '全部路径' : 'All paths'}
+          linkHref="/paths"
+        />
+        <PathGroupCards data={pathsResponse} />
+      </section>
 
       {/* Features */}
       <section className="py-20" style={{ borderTop: '1px solid var(--line)' }}>
         <SectionHeader
-          eyebrow={locale === 'zh' ? '§ 03 — 工作方式' : '§ 03 — How it works'}
+          eyebrow={locale === 'zh' ? '§ 02 — 工作方式' : '§ 02 — How it works'}
           title={locale === 'zh' ? '读论文，然后写代码。' : 'Read the paper, then write the code.'}
         />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
