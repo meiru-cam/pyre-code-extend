@@ -26031,6 +26031,183 @@
           "hint": "Two periods [10, 20) and [15, 25). If you add the overlap of each, how much of [15, 20) is paid extra, and what merged form avoids that?"
         }
       ]
+    },
+    {
+      "id": "tool_scheduler",
+      "title": "Agent Tool-Call Scheduler",
+      "titleZh": "Agent Tool-Call Scheduler",
+      "difficulty": "Hard",
+      "functionName": "ToolScheduler",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Build `ToolScheduler`, which plans when each agent's tool calls start, given their durations, their dependencies and a limited number of slots.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior and adds one method, so one `ToolScheduler` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- A call is a tuple `(tool_id, duration, deps)`. An agent's `tool_id`s are exactly `0` to `n - 1` in some order, `duration` is an integer from `1` to `10**9`, and `deps` lists `tool_id`s of the same agent that must finish first.\n- Time is an integer and starts at `0`. A call holds one slot from its start `s` until `s + duration`, and runs without interruption.\n- A call is ready at time `t` once every dependency has `start + duration <= t`. At each `t`, first release every call that finishes at `t`, then fill free slots with ready calls.\n- A slot is never left free while a ready call waits. When there are more ready calls than free slots, the smaller `(agent_id, tool_id)` starts first.\n- Each method returns `(starts, makespan)`. `starts` holds one `(start_time, agent_id, tool_id)` per call, sorted. `makespan` is the largest `start + duration`, or `0` with no calls.\n- If some call can never start because of a dependency cycle, raise `CycleError`, a class you define.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** it is list scheduling with dependencies, the core of every task runner. Each later part adds one requirement, and durations up to `10**9` rule out stepping through time one unit at a time.\n\n**Where it is used:** agent frameworks running tool calls in parallel, build systems such as Bazel and make `-j`, workflow engines such as Airflow, and GPU job queues with per-team limits.\n\nAdapted from the agent tool scheduler question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, on one class whose methods replace the three functions. Calls are plain tuples. Part 4, a cap per agent under a shared cap, comes from the source's follow-ups.",
+      "descriptionZh": "Build `ToolScheduler`, which plans when each agent's tool calls start, given their durations, their dependencies and a limited number of slots.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior and adds one method, so one `ToolScheduler` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- A call is a tuple `(tool_id, duration, deps)`. An agent's `tool_id`s are exactly `0` to `n - 1` in some order, `duration` is an integer from `1` to `10**9`, and `deps` lists `tool_id`s of the same agent that must finish first.\n- Time is an integer and starts at `0`. A call holds one slot from its start `s` until `s + duration`, and runs without interruption.\n- A call is ready at time `t` once every dependency has `start + duration <= t`. At each `t`, first release every call that finishes at `t`, then fill free slots with ready calls.\n- A slot is never left free while a ready call waits. When there are more ready calls than free slots, the smaller `(agent_id, tool_id)` starts first.\n- Each method returns `(starts, makespan)`. `starts` holds one `(start_time, agent_id, tool_id)` per call, sorted. `makespan` is the largest `start + duration`, or `0` with no calls.\n- If some call can never start because of a dependency cycle, raise `CycleError`, a class you define.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** it is list scheduling with dependencies, the core of every task runner. Each later part adds one requirement, and durations up to `10**9` rule out stepping through time one unit at a time.\n\n**Where it is used:** agent frameworks running tool calls in parallel, build systems such as Bazel and make `-j`, workflow engines such as Airflow, and GPU job queues with per-team limits.\n\nAdapted from the agent tool scheduler question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, on one class whose methods replace the three functions. Calls are plain tuples. Part 4, a cap per agent under a shared cap, comes from the source's follow-ups.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Part 1: the worked example",
+          "code": "\ns = {fn}()\ncalls = [(2, 3, [0]), (0, 4, []), (1, 1, []), (3, 2, [1])]\nassert s.run_one(calls, 2) == ([(0, 0, 0), (0, 0, 1), (1, 0, 3), (4, 0, 2)], 7)\nassert s.run_one([], 3) == ([], 0)\n",
+          "behavior": "contract.signature",
+          "part": 1
+        },
+        {
+          "name": "Part 1: instants, ties and cycles",
+          "visibility": "unshown",
+          "behavior": "events.ordering",
+          "failureMessage": "A dependency finishing at t unlocks its dependents at t; finishing calls free their slots before new calls start; ties go to the smaller tool_id whatever the list order; no slot stays free while a call is ready; any call that can never start raises CycleError.",
+          "hiddenCode": "\nimport random, time\n\ndef raises(kind, call):\n    try:\n        call()\n    except Exception as e:\n        assert type(e).__name__ == kind, f\"expected {kind}, got {type(e).__name__}: {e}\"\n        return e\n    raise AssertionError(f\"expected {kind}, nothing was raised\")\n\ndef brute(agents, capacity, caps=None):\n    flat = [(a, c) for a, calls in enumerate(agents) for c in calls]\n    done = set()\n    started = set()\n    finish_at = {}\n    running = {a: 0 for a in range(len(agents))}\n    starts, makespan, t = [], 0, 0\n    while len(started) < len(flat):\n        for key in [k for k, f in finish_at.items() if f == t]:\n            del finish_at[key]\n            done.add(key)\n            running[key[0]] -= 1\n        waiting = sorted((a, c[0]) for a, c in flat if (a, c[0]) not in started\n                         and all((a, d) in done for d in c[2]))\n        by_key = {(a, c[0]): c for a, c in flat}\n        for a, tool in waiting:\n            if len(finish_at) >= capacity:\n                break\n            if caps is not None and running[a] >= caps[a]:\n                continue\n            c = by_key[(a, tool)]\n            starts.append((t, a, tool))\n            started.add((a, tool))\n            finish_at[(a, tool)] = t + c[1]\n            running[a] += 1\n            makespan = max(makespan, t + c[1])\n        if len(started) == len(flat):\n            break\n        if not finish_at:\n            return \"CycleError\"\n        t += 1\n    return starts, makespan\n\ndef random_agents(rng, agents=4, calls=6, longest=4, cycle=0.0):\n    out = []\n    for _ in range(rng.randint(1, agents)):\n        n = rng.randint(0, calls)\n        made = []\n        for tool in range(n):\n            deps = rng.sample(range(tool), rng.randint(0, min(2, tool))) if tool else []\n            made.append((tool, rng.randint(1, longest), deps))\n        if n >= 2 and rng.random() < cycle:\n            a, b = rng.sample(range(n), 2)\n            made[min(a, b)] = (min(a, b), made[min(a, b)][1], made[min(a, b)][2] + [max(a, b)])\n        rng.shuffle(made)\n        out.append(made)\n    return out\n\ndef check(got, want, label):\n    if want == \"CycleError\":\n        raises(\"CycleError\", got)\n    else:\n        result = got()\n        assert result == want, (label, result, want)\n\ns = {fn}()\nassert s.run_one([(1, 5, [0]), (0, 5, [])], 1) == ([(0, 0, 0), (5, 0, 1)], 10)\nassert s.run_one([(0, 2, []), (1, 3, []), (2, 1, [])], 1) == ([(0, 0, 0), (2, 0, 1), (5, 0, 2)], 6)\nassert s.run_one([(3, 1, []), (2, 1, []), (1, 1, []), (0, 1, [])], 2) == ([(0, 0, 0), (0, 0, 1), (1, 0, 2), (1, 0, 3)], 2)\nassert s.run_one([(0, 1, []), (1, 1, [])], 10) == ([(0, 0, 0), (0, 0, 1)], 1)\nassert s.run_one([(0, 10**9, []), (1, 10**9, [0])], 1) == ([(0, 0, 0), (10**9, 0, 1)], 2 * 10**9)\nraises(\"CycleError\", lambda: s.run_one([(0, 1, [0])], 1))\nraises(\"CycleError\", lambda: s.run_one([(0, 1, []), (1, 1, [2]), (2, 1, [1])], 4))\nraises(\"CycleError\", lambda: s.run_one([(0, 1, []), (1, 1, [0, 3]), (2, 1, [1]), (3, 1, [2])], 1))\n",
+          "part": 1
+        },
+        {
+          "name": "Part 1: random calls",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "On random dependency lists, capacities and some cycles, the starts or makespan differed from stepping time one unit at a time and filling free slots in (agent_id, tool_id) order.",
+          "hiddenCode": "\nimport random, time\n\ndef raises(kind, call):\n    try:\n        call()\n    except Exception as e:\n        assert type(e).__name__ == kind, f\"expected {kind}, got {type(e).__name__}: {e}\"\n        return e\n    raise AssertionError(f\"expected {kind}, nothing was raised\")\n\ndef brute(agents, capacity, caps=None):\n    flat = [(a, c) for a, calls in enumerate(agents) for c in calls]\n    done = set()\n    started = set()\n    finish_at = {}\n    running = {a: 0 for a in range(len(agents))}\n    starts, makespan, t = [], 0, 0\n    while len(started) < len(flat):\n        for key in [k for k, f in finish_at.items() if f == t]:\n            del finish_at[key]\n            done.add(key)\n            running[key[0]] -= 1\n        waiting = sorted((a, c[0]) for a, c in flat if (a, c[0]) not in started\n                         and all((a, d) in done for d in c[2]))\n        by_key = {(a, c[0]): c for a, c in flat}\n        for a, tool in waiting:\n            if len(finish_at) >= capacity:\n                break\n            if caps is not None and running[a] >= caps[a]:\n                continue\n            c = by_key[(a, tool)]\n            starts.append((t, a, tool))\n            started.add((a, tool))\n            finish_at[(a, tool)] = t + c[1]\n            running[a] += 1\n            makespan = max(makespan, t + c[1])\n        if len(started) == len(flat):\n            break\n        if not finish_at:\n            return \"CycleError\"\n        t += 1\n    return starts, makespan\n\ndef random_agents(rng, agents=4, calls=6, longest=4, cycle=0.0):\n    out = []\n    for _ in range(rng.randint(1, agents)):\n        n = rng.randint(0, calls)\n        made = []\n        for tool in range(n):\n            deps = rng.sample(range(tool), rng.randint(0, min(2, tool))) if tool else []\n            made.append((tool, rng.randint(1, longest), deps))\n        if n >= 2 and rng.random() < cycle:\n            a, b = rng.sample(range(n), 2)\n            made[min(a, b)] = (min(a, b), made[min(a, b)][1], made[min(a, b)][2] + [max(a, b)])\n        rng.shuffle(made)\n        out.append(made)\n    return out\n\ndef check(got, want, label):\n    if want == \"CycleError\":\n        raises(\"CycleError\", got)\n    else:\n        result = got()\n        assert result == want, (label, result, want)\n\ns = {fn}()\nrng = random.Random(21)\nfor trial in range(300):\n    calls = random_agents(rng, agents=1, calls=8, cycle=0.15)[0]\n    capacity = rng.randint(1, 4)\n    check(lambda: s.run_one(calls, capacity), brute([calls], capacity), (trial, calls, capacity))\n",
+          "part": 1
+        },
+        {
+          "name": "Part 2: the worked example",
+          "code": "\ns = {fn}()\nagents = [[(0, 3, []), (1, 2, [])], [(0, 1, []), (1, 1, [0])]]\nassert s.run_each(agents, [1, 1]) == ([(0, 0, 0), (0, 1, 0), (1, 1, 1), (3, 0, 1)], 5)\nassert s.run_each([], []) == ([], 0) and s.run_each([[], []], [1, 1]) == ([], 0)\n",
+          "behavior": "contract.signature",
+          "part": 2
+        },
+        {
+          "name": "Part 2: random agents",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "Each agent must be scheduled alone under its own cap, the starts merged by (start_time, agent_id, tool_id), the makespan the largest over agents, and a cycle in any agent raises CycleError.",
+          "hiddenCode": "\nimport random, time\n\ndef raises(kind, call):\n    try:\n        call()\n    except Exception as e:\n        assert type(e).__name__ == kind, f\"expected {kind}, got {type(e).__name__}: {e}\"\n        return e\n    raise AssertionError(f\"expected {kind}, nothing was raised\")\n\ndef brute(agents, capacity, caps=None):\n    flat = [(a, c) for a, calls in enumerate(agents) for c in calls]\n    done = set()\n    started = set()\n    finish_at = {}\n    running = {a: 0 for a in range(len(agents))}\n    starts, makespan, t = [], 0, 0\n    while len(started) < len(flat):\n        for key in [k for k, f in finish_at.items() if f == t]:\n            del finish_at[key]\n            done.add(key)\n            running[key[0]] -= 1\n        waiting = sorted((a, c[0]) for a, c in flat if (a, c[0]) not in started\n                         and all((a, d) in done for d in c[2]))\n        by_key = {(a, c[0]): c for a, c in flat}\n        for a, tool in waiting:\n            if len(finish_at) >= capacity:\n                break\n            if caps is not None and running[a] >= caps[a]:\n                continue\n            c = by_key[(a, tool)]\n            starts.append((t, a, tool))\n            started.add((a, tool))\n            finish_at[(a, tool)] = t + c[1]\n            running[a] += 1\n            makespan = max(makespan, t + c[1])\n        if len(started) == len(flat):\n            break\n        if not finish_at:\n            return \"CycleError\"\n        t += 1\n    return starts, makespan\n\ndef random_agents(rng, agents=4, calls=6, longest=4, cycle=0.0):\n    out = []\n    for _ in range(rng.randint(1, agents)):\n        n = rng.randint(0, calls)\n        made = []\n        for tool in range(n):\n            deps = rng.sample(range(tool), rng.randint(0, min(2, tool))) if tool else []\n            made.append((tool, rng.randint(1, longest), deps))\n        if n >= 2 and rng.random() < cycle:\n            a, b = rng.sample(range(n), 2)\n            made[min(a, b)] = (min(a, b), made[min(a, b)][1], made[min(a, b)][2] + [max(a, b)])\n        rng.shuffle(made)\n        out.append(made)\n    return out\n\ndef check(got, want, label):\n    if want == \"CycleError\":\n        raises(\"CycleError\", got)\n    else:\n        result = got()\n        assert result == want, (label, result, want)\n\ns = {fn}()\nrng = random.Random(22)\nfor trial in range(300):\n    agents = random_agents(rng, cycle=0.05)\n    caps = [rng.randint(1, 3) for _ in agents]\n    want = [brute([calls], caps[a]) for a, calls in enumerate(agents)]\n    if \"CycleError\" in want:\n        raises(\"CycleError\", lambda: s.run_each(agents, caps))\n        continue\n    merged = sorted((t, a, tool) for a, (starts, _) in enumerate(want) for t, _, tool in starts)\n    assert s.run_each(agents, caps) == (merged, max([m for _, m in want], default=0)), (trial, agents, caps)\n",
+          "part": 2
+        },
+        {
+          "name": "Part 3: the worked example",
+          "code": "\ns = {fn}()\nagents = [[(0, 1, []), (1, 2, [0])], [(0, 3, [])], [(0, 2, []), (1, 1, [0])]]\nassert s.run_shared(agents, 2) == ([(0, 0, 0), (0, 1, 0), (1, 0, 1), (3, 2, 0), (5, 2, 1)], 6)\n",
+          "behavior": "contract.signature",
+          "part": 3
+        },
+        {
+          "name": "Part 3: random agents sharing slots",
+          "visibility": "unshown",
+          "behavior": "scheduler.concurrency",
+          "failureMessage": "With one cap shared by every agent, the starts or makespan differed from stepping time one unit at a time and giving each free slot to the ready call with the smallest (agent_id, tool_id).",
+          "hiddenCode": "\nimport random, time\n\ndef raises(kind, call):\n    try:\n        call()\n    except Exception as e:\n        assert type(e).__name__ == kind, f\"expected {kind}, got {type(e).__name__}: {e}\"\n        return e\n    raise AssertionError(f\"expected {kind}, nothing was raised\")\n\ndef brute(agents, capacity, caps=None):\n    flat = [(a, c) for a, calls in enumerate(agents) for c in calls]\n    done = set()\n    started = set()\n    finish_at = {}\n    running = {a: 0 for a in range(len(agents))}\n    starts, makespan, t = [], 0, 0\n    while len(started) < len(flat):\n        for key in [k for k, f in finish_at.items() if f == t]:\n            del finish_at[key]\n            done.add(key)\n            running[key[0]] -= 1\n        waiting = sorted((a, c[0]) for a, c in flat if (a, c[0]) not in started\n                         and all((a, d) in done for d in c[2]))\n        by_key = {(a, c[0]): c for a, c in flat}\n        for a, tool in waiting:\n            if len(finish_at) >= capacity:\n                break\n            if caps is not None and running[a] >= caps[a]:\n                continue\n            c = by_key[(a, tool)]\n            starts.append((t, a, tool))\n            started.add((a, tool))\n            finish_at[(a, tool)] = t + c[1]\n            running[a] += 1\n            makespan = max(makespan, t + c[1])\n        if len(started) == len(flat):\n            break\n        if not finish_at:\n            return \"CycleError\"\n        t += 1\n    return starts, makespan\n\ndef random_agents(rng, agents=4, calls=6, longest=4, cycle=0.0):\n    out = []\n    for _ in range(rng.randint(1, agents)):\n        n = rng.randint(0, calls)\n        made = []\n        for tool in range(n):\n            deps = rng.sample(range(tool), rng.randint(0, min(2, tool))) if tool else []\n            made.append((tool, rng.randint(1, longest), deps))\n        if n >= 2 and rng.random() < cycle:\n            a, b = rng.sample(range(n), 2)\n            made[min(a, b)] = (min(a, b), made[min(a, b)][1], made[min(a, b)][2] + [max(a, b)])\n        rng.shuffle(made)\n        out.append(made)\n    return out\n\ndef check(got, want, label):\n    if want == \"CycleError\":\n        raises(\"CycleError\", got)\n    else:\n        result = got()\n        assert result == want, (label, result, want)\n\ns = {fn}()\nrng = random.Random(23)\nfor trial in range(300):\n    agents = random_agents(rng, cycle=0.05)\n    capacity = rng.randint(1, 5)\n    check(lambda: s.run_shared(agents, capacity), brute(agents, capacity), (trial, agents, capacity))\n",
+          "part": 3
+        },
+        {
+          "name": "Part 3: many calls and long durations",
+          "visibility": "unshown",
+          "behavior": "performance.complexity",
+          "failureMessage": "About 40,000 calls with durations up to 10**9 took too long: jump to the next finish time instead of stepping time, and keep ready and running calls in heaps rather than rescanning lists.",
+          "hiddenCode": "\nimport random, time\nrng = random.Random(24)\nagents = []\nfor a in range(400):\n    calls = []\n    for tool in range(100):\n        deps = [tool - 1] if tool % 4 else []\n        calls.append((tool, rng.randint(1, 10**9), deps))\n    rng.shuffle(calls)\n    agents.append(calls)\ns = {fn}()\nstart = time.perf_counter()\nstarts, makespan = s.run_shared(agents, 64)\nelapsed = time.perf_counter() - start\nassert len(starts) == 40000 and len({(a, t) for _, a, t in starts}) == 40000\nassert starts == sorted(starts)\nassert elapsed < 6.0, f\"{elapsed:.2f}s for 40,000 calls\"\n",
+          "part": 3
+        },
+        {
+          "name": "Part 4: the worked example",
+          "code": "\ns = {fn}()\nagents = [[(0, 2, []), (1, 2, [])], [(0, 1, []), (1, 1, []), (2, 1, [])]]\nassert s.run_capped(agents, [1, 2], 2) == ([(0, 0, 0), (0, 1, 0), (1, 1, 1), (2, 0, 1), (2, 1, 2)], 4)\n",
+          "behavior": "contract.signature",
+          "part": 4
+        },
+        {
+          "name": "Part 4: random agents with both caps",
+          "visibility": "unshown",
+          "behavior": "budget.enforcement",
+          "failureMessage": "With a cap per agent and a shared cap, each free slot must go to the smallest (agent_id, tool_id) among ready calls whose agent is below its own cap; with very large caps on one side the result must match run_each or run_shared.",
+          "hiddenCode": "\nimport random, time\n\ndef raises(kind, call):\n    try:\n        call()\n    except Exception as e:\n        assert type(e).__name__ == kind, f\"expected {kind}, got {type(e).__name__}: {e}\"\n        return e\n    raise AssertionError(f\"expected {kind}, nothing was raised\")\n\ndef brute(agents, capacity, caps=None):\n    flat = [(a, c) for a, calls in enumerate(agents) for c in calls]\n    done = set()\n    started = set()\n    finish_at = {}\n    running = {a: 0 for a in range(len(agents))}\n    starts, makespan, t = [], 0, 0\n    while len(started) < len(flat):\n        for key in [k for k, f in finish_at.items() if f == t]:\n            del finish_at[key]\n            done.add(key)\n            running[key[0]] -= 1\n        waiting = sorted((a, c[0]) for a, c in flat if (a, c[0]) not in started\n                         and all((a, d) in done for d in c[2]))\n        by_key = {(a, c[0]): c for a, c in flat}\n        for a, tool in waiting:\n            if len(finish_at) >= capacity:\n                break\n            if caps is not None and running[a] >= caps[a]:\n                continue\n            c = by_key[(a, tool)]\n            starts.append((t, a, tool))\n            started.add((a, tool))\n            finish_at[(a, tool)] = t + c[1]\n            running[a] += 1\n            makespan = max(makespan, t + c[1])\n        if len(started) == len(flat):\n            break\n        if not finish_at:\n            return \"CycleError\"\n        t += 1\n    return starts, makespan\n\ndef random_agents(rng, agents=4, calls=6, longest=4, cycle=0.0):\n    out = []\n    for _ in range(rng.randint(1, agents)):\n        n = rng.randint(0, calls)\n        made = []\n        for tool in range(n):\n            deps = rng.sample(range(tool), rng.randint(0, min(2, tool))) if tool else []\n            made.append((tool, rng.randint(1, longest), deps))\n        if n >= 2 and rng.random() < cycle:\n            a, b = rng.sample(range(n), 2)\n            made[min(a, b)] = (min(a, b), made[min(a, b)][1], made[min(a, b)][2] + [max(a, b)])\n        rng.shuffle(made)\n        out.append(made)\n    return out\n\ndef check(got, want, label):\n    if want == \"CycleError\":\n        raises(\"CycleError\", got)\n    else:\n        result = got()\n        assert result == want, (label, result, want)\n\ns = {fn}()\nrng = random.Random(25)\nfor trial in range(300):\n    agents = random_agents(rng, cycle=0.05)\n    caps = [rng.randint(1, 3) for _ in agents]\n    capacity = rng.randint(1, 5)\n    check(lambda: s.run_capped(agents, caps, capacity), brute(agents, capacity, caps), (trial, agents, caps, capacity))\nfor trial in range(40):\n    agents = random_agents(rng)\n    caps = [rng.randint(1, 3) for _ in agents]\n    big = 10**6\n    assert s.run_capped(agents, caps, big) == s.run_each(agents, caps)\n    assert s.run_capped(agents, [big] * len(agents), 3) == s.run_shared(agents, 3)\n",
+          "part": 4
+        },
+        {
+          "name": "Part 4: many agents held at their cap",
+          "visibility": "unshown",
+          "behavior": "performance.complexity",
+          "failureMessage": "Many ready calls whose agents sit at their own cap took too long: skip a capped agent as a whole rather than setting aside and re-queuing its calls one by one.",
+          "hiddenCode": "\nimport random, time\nrng = random.Random(26)\nagents = [[(tool, rng.randint(1, 10**6), []) for tool in range(150)] for _ in range(250)]\ns = {fn}()\nstart = time.perf_counter()\nstarts, makespan = s.run_capped(agents, [1] * 250, 200)\nelapsed = time.perf_counter() - start\nassert len(starts) == 37500\nfirst = {a: t for t, a, tool in starts if tool == 0}\nassert all(first[a] == 0 for a in range(200)) and all(first[a] > 0 for a in range(200, 250))\nassert elapsed < 6.0, f\"{elapsed:.2f}s for 37,500 calls\"\n",
+          "part": 4
+        }
+      ],
+      "parts": [
+        {
+          "title": "One agent",
+          "descriptionEn": "**Signature:** `ToolScheduler().run_one(calls, capacity) -> (starts, makespan)`\n\n- `calls` belong to agent `0`, and `capacity` is a positive number of slots.\n\n**Example:** `calls = [(2, 3, [0]), (0, 4, []), (1, 1, []), (3, 2, [1])]` and `capacity = 2`:\n- at `0`, calls `0` and `1` start; call `1` finishes at `1`, which makes call `3` ready, so it starts at `1`\n- call `2` waits for call `0`, which finishes at `4`\n- the result is `([(0, 0, 0), (0, 0, 1), (1, 0, 3), (4, 0, 2)], 7)`, and `run_one([], 3)` is `([], 0)`"
+        },
+        {
+          "title": "Agents on their own caps",
+          "descriptionEn": "Keep Part 1 and add a method.\n\n**Signature:** `run_each(agents, capacities) -> (starts, makespan)`\n\n- `agents[a]` is the list of agent `a`'s calls. `tool_id`s are local, so the same id in two agents names two different calls.\n- Agent `a` has `capacities[a]` slots of its own and never competes with other agents. Each agent's starts are exactly what `run_one` would give it alone, with its own `agent_id`.\n- Return every start across agents, sorted, and the largest makespan.\n\n**Example:** `agents = [[(0, 3, []), (1, 2, [])], [(0, 1, []), (1, 1, [0])]]` and `capacities = [1, 1]`:\n- agent `0` runs its calls at `0` and `3`; agent `1` at `0` and `1`\n- the result is `([(0, 0, 0), (0, 1, 0), (1, 1, 1), (3, 0, 1)], 5)`"
+        },
+        {
+          "title": "One shared cap",
+          "descriptionEn": "Keep Parts 1–2 and add a method.\n\n**Signature:** `run_shared(agents, capacity) -> (starts, makespan)`\n\n- Every agent's calls draw from the same `capacity` slots, so agents compete for each free slot under the tie rule.\n- Up to `40,000` calls with durations up to `10**9` must finish in a few seconds: aim for `O((N + E) log N)` for `N` calls and `E` dependencies.\n\n**Example:** `agents = [[(0, 1, []), (1, 2, [0])], [(0, 3, [])], [(0, 2, []), (1, 1, [0])]]` and `capacity = 2`:\n- at `0`, three calls are ready and `(0, 0)` and `(1, 0)` win; at `1`, `(0, 1)` beats `(2, 0)` for the freed slot\n- at `3`, both running calls finish and `(2, 0)` starts; `(2, 1)` follows at `5`\n- the result is `([(0, 0, 0), (0, 1, 0), (1, 0, 1), (3, 2, 0), (5, 2, 1)], 6)`"
+        },
+        {
+          "title": "Both caps at once",
+          "descriptionEn": "Keep Parts 1–3 and add a method.\n\n**Signature:** `run_capped(agents, capacities, capacity) -> (starts, makespan)`\n\n- Agent `a` may hold at most `capacities[a]` slots at once, and all agents together at most `capacity`.\n- A free slot goes to the smallest `(agent_id, tool_id)` among ready calls whose agent is below its own cap. A capped agent's ready calls wait without blocking other agents.\n- With every per-agent cap large, this is `run_shared`; with `capacity` large, it is `run_each`.\n- Many agents may sit at their cap with many ready calls: skip such an agent as a whole rather than one call at a time.\n\n**Example:** `agents = [[(0, 2, []), (1, 2, [])], [(0, 1, []), (1, 1, []), (2, 1, [])]]`, `capacities = [1, 2]`, `capacity = 2`:\n- at `0`, agent `0` takes one slot and `(1, 0)` the other, since `(0, 1)` is held by agent `0`'s cap\n- at `1`, `(1, 1)` starts; at `2`, `(0, 1)` and `(1, 2)` start\n- the result is `([(0, 0, 0), (0, 1, 0), (1, 1, 1), (2, 0, 1), (2, 1, 2)], 4)`"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Between two moments when a call finishes, can anything about the schedule change? Which ready call should get a slot when several want it, and which data structure hands you that call quickly? How can you tell that the calls left over can never start?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Count unfinished dependencies per call and keep a heap of ready calls keyed by (agent_id, tool_id) and a heap of running calls keyed by finish time. Loop: start ready calls while slots are free; then jump to the earliest finish time, release every call ending then, and push dependents whose count reaches 0. If nothing runs and calls remain, they wait on a cycle. Each call is pushed and popped once, so the run is O((N + E) log N)."
+        }
+      ],
+      "modelConnections": [
+        "Agent frameworks run independent tool calls in parallel and hold dependent ones until their inputs exist, under a limit on concurrent sandboxes.",
+        "Training and evaluation clusters schedule jobs with dependencies on a shared pool of GPUs with per-team quotas, the same two caps as Part 4."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Jumping between finish times makes the work depend on the number of calls, not on the durations.",
+          "Dependency counts give the ready set and the cycle check in one pass, as in Kahn's algorithm.",
+          "A fixed tie rule makes the schedule deterministic and easy to test."
+        ],
+        "cons": [
+          "The tie rule always favours small agent ids, so a high id can wait for a long time.",
+          "Greedy list scheduling is not optimal: starting a short call first can delay a long chain and lengthen the makespan.",
+          "Real tool calls do not have known durations, so a live executor can only react to completions, not plan ahead."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why can the scheduler jump from one finish time to the next instead of stepping through every time unit?",
+          "hint": "Durations go up to 10**9. Between two finish times, can a call become ready or a slot become free? What does that say about the instants worth visiting?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why must every call finishing at time t be released before any new call starts at t?",
+          "hint": "A call ends at 5 and its dependent is ready at 5. If you start new calls before releasing every call that ends at 5, which ready call might miss its slot?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do dependency counts find the ready calls and also detect a cycle, and what is the total cost?",
+          "hint": "Keep for each call how many dependencies are unfinished. When does a call become ready, and what is true if nothing runs but calls remain?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why is scheduling each agent alone and merging wrong once agents share one cap?",
+          "hint": "Two agents each scheduled alone may both start a call at 0. With one shared slot, who should get it, and can a merge afterwards fix that?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "With a shared cap, what does the fixed tie rule do to agents with large ids, and how would you make it fairer?",
+          "hint": "Agent 0 always wins ties. If it keeps adding calls, when does agent 9 run? What would you change to share slots more evenly?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "With both caps, why can one ready heap across all agents become slow, and what replaces it?",
+          "hint": "With per-agent caps, the smallest ready call may belong to a full agent. How many calls would you pop and push back each time if you used one heap?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Real tool calls have unknown durations. How would a live executor use the same dependency counts?",
+          "hint": "Without known durations you only learn that a call finished. Which part of this scheduler still works when you can only react to completions?"
+        }
+      ]
     }
   ]
 }

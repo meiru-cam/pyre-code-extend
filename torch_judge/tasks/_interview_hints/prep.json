@@ -338,5 +338,14 @@
     "Why store the rate on each session instead of reading the worker's rate when pay is asked for?": "A promotion lands between two sessions. If pay reads the worker's current rate, what happens to the money for the earlier session?",
     "Why does an open session count as running until the end of the pay window, and what would go wrong otherwise?": "A session still open has no end yet. Which end makes pay for [start, end) match what a later clock_out at or after end would give?",
     "How do you make sure overlapping double-pay periods double a time only once, and how would you answer pay questions fast with many periods?": "Two periods [10, 20) and [15, 25). If you add the overlap of each, how much of [15, 20) is paid extra, and what merged form avoids that?"
+  },
+  "tool_scheduler": {
+    "Why can the scheduler jump from one finish time to the next instead of stepping through every time unit?": "Durations go up to 10**9. Between two finish times, can a call become ready or a slot become free? What does that say about the instants worth visiting?",
+    "Why must every call finishing at time t be released before any new call starts at t?": "A call ends at 5 and its dependent is ready at 5. If you start new calls before releasing every call that ends at 5, which ready call might miss its slot?",
+    "How do dependency counts find the ready calls and also detect a cycle, and what is the total cost?": "Keep for each call how many dependencies are unfinished. When does a call become ready, and what is true if nothing runs but calls remain?",
+    "Why is scheduling each agent alone and merging wrong once agents share one cap?": "Two agents each scheduled alone may both start a call at 0. With one shared slot, who should get it, and can a merge afterwards fix that?",
+    "With a shared cap, what does the fixed tie rule do to agents with large ids, and how would you make it fairer?": "Agent 0 always wins ties. If it keeps adding calls, when does agent 9 run? What would you change to share slots more evenly?",
+    "With both caps, why can one ready heap across all agents become slow, and what replaces it?": "With per-agent caps, the smallest ready call may belong to a full agent. How many calls would you pop and push back each time if you used one heap?",
+    "Real tool calls have unknown durations. How would a live executor use the same dependency counts?": "Without known durations you only learn that a call finished. Which part of this scheduler still works when you can only react to completions?"
   }
 }

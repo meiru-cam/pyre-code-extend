@@ -402,5 +402,13 @@
       "timesheet"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/agent-tool-scheduler",
+    "exercises": [
+      "tool_scheduler"
+    ],
+    "round": "coding"
   }
 ]
