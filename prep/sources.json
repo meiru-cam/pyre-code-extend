@@ -314,5 +314,13 @@
       "softmax_entropy"
     ],
     "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/distributed-mode-median",
+    "exercises": [
+      "cluster_stats"
+    ],
+    "round": "coding"
   }
 ]

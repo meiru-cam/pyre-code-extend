@@ -239,5 +239,14 @@
     "Why compute log p in the centred form instead of taking the log of the probability?": "If exp(x_i - m) underflows to 0, what is log(p_i) when computed from p_i, and what is it in the centred form?",
     "Which running scalars give the entropy in one pass, and how do you update them when the maximum grows?": "Keep m, S = sum exp(x - m) and V = sum exp(x - m)(x - m). When m grows by d, how do S and V change, and what is H from them?",
     "How would you compute per-row entropies for a batch of sequences over a 100k-token vocabulary on a GPU?": "On a GPU, how would you reduce each row of a (batch, vocab) array to its entropy without a second full-size array?"
+  },
+  "cluster_stats": {
+    "Why does sending every count to rank 0 break the per-rank traffic bound?": "Suppose every rank sends its whole count table to rank 0. Add up what rank 0 receives when there are a million distinct values.",
+    "How does giving each value an owner rank keep the result correct and the traffic spread?": "If value v always goes to rank v % P, which rank sees every count of v? Can that rank then know v's total exactly?",
+    "How many messages and bytes does your mode protocol send in total, and how much does the busiest rank receive?": "Count messages: every rank sends one dict to every rank, then one candidate to rank 0. How many messages is that, and how many values does the busiest rank get?",
+    "How do you find the median by exchanging counts only, and how many rounds does it take?": "Rank 0 proposes a value; each rank replies how many of its elements are at most that value. How does the total tell you which half holds the median?",
+    "How do you choose splitters for a sample sort, and what happens when one value dominates?": "If every rank sends a few evenly spaced samples, what do the sorted samples say about where to cut? What happens if half the data is one value?",
+    "Where would barriers or a fixed message order matter to avoid deadlock?": "Two ranks each wait in recv for the other before sending. What happens, and what ordering of sends and receives avoids it?",
+    "How would these protocols change with collectives such as all-reduce and all-to-all, or with many more ranks?": "Which of these steps is an all-to-all, and which is a reduce? How does the message count grow with P?"
   }
 }
