@@ -258,5 +258,13 @@
       "weighted_batcher"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/labeling-task-scheduler",
+    "exercises": [
+      "label_scheduler"
+    ],
+    "round": "coding"
   }
 ]

@@ -1,0 +1,19 @@
+{
+  "title": "Data Labeling Task Scheduler",
+  "summary": "Emit a list of (task, model, human) assignments so that every labeller gets at least k tasks, nobody repeats a task, and model usage per task stays balanced at every prefix of the list.",
+  "round": "coding",
+  "kind": "Coding",
+  "difficulty": "Medium",
+  "frequency": "high",
+  "format": "3 parts",
+  "topics": [
+    "scheduling",
+    "greedy",
+    "fairness"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/coding/labeling-task-scheduler",
+  "rubric": [],
+  "exercises": [
+    "label_scheduler"
+  ]
+}

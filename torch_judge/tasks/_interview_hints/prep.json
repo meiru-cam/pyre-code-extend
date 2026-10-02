@@ -176,5 +176,14 @@
     "Why must a stochastic checkpoint carry the generator's current state rather than the seed?": "A generator built from the seed and one that has already drawn a thousand numbers give different next draws. Which of the two should a restored batcher match?",
     "With the smallest count-to-weight rule, how far can a dataset's count drift from its ideal share, and why?": "Each pick goes to the dataset with the smallest count / weight. Compare any two datasets: how far apart can their ratios get before the lower one is picked?",
     "How would you split the datasets across data-parallel ranks so no two ranks read the same example?": "If every rank opens every dataset at the same offsets, they read the same examples. How could each rank get its own disjoint slice of offsets?"
+  },
+  "label_scheduler": {
+    "Why can no schedule meet coverage when k is larger than t?": "Uniqueness lets one human rate each task at most once. Count the tasks one human can ever see, and compare that with k.",
+    "Why is h * k the fewest assignments any valid schedule can have?": "Each assignment serves exactly one human. If every human needs k, how many assignments must there be at the very least?",
+    "How does rotating each human's task by round guarantee no repeated (task, human) pair?": "Give human u the task (u + r) % t in round r. For a fixed u, which tasks appear as r runs over k values, and can two of them be equal when k <= t?",
+    "Why does giving a task's c-th occurrence model c % m keep that task balanced at every prefix?": "Write the c-th occurrence of a task as c = q * m + s. How many times has each model been used on that task at that moment?",
+    "Why does always picking a model with the smallest count keep the counts within 1 of each other?": "Suppose every counter is L or L + 1 and you add 1 to one with value L. What values can the counters have afterwards?",
+    "Can the greedy rule that balances tasks first also guarantee balance by human, and how would you find out?": "Run the greedy rule on tiny inputs and check every prefix with your checker. If a human's two picks are both forced, can any tie-break save it?",
+    "How would you schedule if raters arrive one at a time instead of in fixed rounds?": "If raters show up one by one, what running counts would you keep, and what would you pick for the next rater who arrives?"
   }
 }

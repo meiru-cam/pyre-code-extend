@@ -794,6 +794,15 @@
       }
     ]
   },
+  "label_scheduler": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "# Adapted from Schuture/OpenAI-Interview-Notes (code under the MIT License).\nclass LabelScheduler:\n    def _invalid(self, t, m, h, k):\n        if t <= 0 or m <= 0 or h <= 0:\n            return None\n        if k == 0:\n            return []\n        if k > t:  # a human can see each task once, so at most t assignments each\n            return None\n        return False\n\n    def basic_schedule(self, t, m, h, k):\n        early = self._invalid(t, m, h, k)\n        if early is not False:\n            return early\n        # round r gives human u task (u + r) % t; k <= t rounds never repeat a task for one human\n        return [((u + r) % t, 0, u) for r in range(k) for u in range(h)]\n\n    def balanced_schedule(self, t, m, h, k):\n        early = self._invalid(t, m, h, k)\n        if early is not False:\n            return early\n        seen = [0] * t  # occurrences of each task so far; its c-th occurrence uses model c % m\n        schedule = []\n        for task, _, u in self.basic_schedule(t, m, h, k):\n            schedule.append((task, seen[task] % m, u))\n            seen[task] += 1\n        return schedule\n\n    def greedy_schedule(self, t, m, h, k):\n        early = self._invalid(t, m, h, k)\n        if early is not False:\n            return early\n        task_count = [[0] * m for _ in range(t)]\n        human_count = [[0] * m for _ in range(h)]\n        schedule = []\n        for task, _, u in self.basic_schedule(t, m, h, k):\n            model = min(range(m), key=lambda i: (task_count[task][i], human_count[u][i], i))\n            task_count[task][model] += 1\n            human_count[u][model] += 1\n            schedule.append((task, model, u))\n        return schedule\n\n    def first_human_imbalance(self, schedule, m):\n        counts = {}\n        for p, (_, model, u) in enumerate(schedule, start=1):\n            row = counts.setdefault(u, [0] * m)\n            row[model] += 1\n            if max(row) - min(row) > 1:  # only human u changed, so only u can newly break balance\n                return p\n        return None",
+        "role": "solution"
+      }
+    ]
+  },
   "layernorm": {
     "cells": [
       {
