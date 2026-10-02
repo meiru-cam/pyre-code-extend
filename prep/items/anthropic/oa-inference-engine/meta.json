@@ -1,0 +1,21 @@
+{
+  "title": "Online Assessment: Completing a Small LLM Inference Engine",
+  "summary": "Complete a small vLLM-style LLM serving engine across five gated levels, working from given, sparsely commented toy-model, block-allocator, sequence and request-queue code: admission and prefill, a budget-constrained decode scheduler, stop conditions and block freeing, hash-keyed prefix caching with LRU eviction, and preemption once the block pool runs out.",
+  "round": "coding",
+  "kind": "Online assessment · 5 levels",
+  "difficulty": "Hard",
+  "frequency": "rare",
+  "format": "5 levels / 90 min",
+  "topics": [
+    "llm-serving",
+    "scheduling",
+    "kv-cache",
+    "prefix-caching",
+    "oop-design"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/coding/oa-inference-engine",
+  "rubric": [],
+  "exercises": [
+    "inference_engine"
+  ]
+}

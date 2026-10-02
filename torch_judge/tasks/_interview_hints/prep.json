@@ -410,5 +410,14 @@
     "What does a fixed calendar window save over a sliding one, and which bursts does it let through?": "Limit 2 per 100 seconds, requests at 90 and 99. Under calendar windows of 100 seconds, what happens at 101?",
     "Why does a lock around deciding and recording fix the race, and how would you avoid one lock for every user?": "Two threads both read 'one place left' before either records. What must happen between reading and recording so only one gets it?",
     "How would you enforce the same limits across several servers?": "Several servers share one user's limits. Where must the admitted times live, and what must be atomic there?"
+  },
+  "inference_engine": {
+    "Why must a sequence hold room for len(token_ids) + 1 tokens before next_token is called?": "next_token appends one token. If the blocks only fit the tokens you already have, where does the new one go?",
+    "How many blocks does a 7-token prompt need at prefill, and why reserve them in one allocate call?": "A 7-token prompt plus the token prefill generates is 8 tokens. How many 4-token blocks is that, and why not ask the allocator one block at a time?",
+    "Which state does the engine keep for itself, and which already lives in the provided Sequence and BlockAllocator?": "The Sequence already stores its tokens, status and block ids. What does the engine still need: which requests wait, and in what order?",
+    "Why does admission stop at the first request that does not fit instead of skipping to a shorter one?": "The first waiting request is too long for what is left of the budget, the second is short. What would admitting the second do to the first over many steps?",
+    "What goes wrong if a stopped sequence keeps its blocks until the end of the step?": "A sequence finishes but keeps its blocks until the end of the step. What can a later sequence in the same step not get?",
+    "Why chain block hashes from the start of the sequence, and why stop reusing at the first miss?": "Two prompts share their first block but differ in the second. Why must the hash of block 2 depend on block 1, and why stop at the first miss?",
+    "Why preempt the most recently admitted sequence, and when would swapping blocks out beat recomputing them?": "The newest sequence has the fewest tokens to recompute. When would copying its blocks to host memory beat recomputing them?"
   }
 }
