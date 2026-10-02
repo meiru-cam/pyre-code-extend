@@ -27172,6 +27172,159 @@
           "hint": "What could you store next to the indices so that set_state notices the state came from different data?"
         }
       ]
+    },
+    {
+      "id": "rate_limiter",
+      "title": "Rate Limiter Bug Hunt",
+      "titleZh": "Rate Limiter Bug Hunt",
+      "difficulty": "Medium",
+      "functionName": "RateLimiter",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Fix `RateLimiter`, which the starter code gives you with several bugs. It should admit a user's request only if the request fits under every rule, and it must stay correct when threads call it at once.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior, so one fixed `RateLimiter` passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- `RateLimiter(rules, clock=time.time, checkpoint=lambda: None)`: `rules` is a list of `(max_requests, period_seconds)` pairs, and `clock()` returns the current time in seconds. Time never goes backward.\n- `allow(user_id) -> bool` reads the clock once and returns `True` if the request is admitted. Users never affect each other.\n- A request admitted at time `t` counts against a rule while `now - t <= period` for that rule, and not after. A request fits under a rule when fewer than `max_requests` of the user's admitted requests count against it.\n- `allow` calls `checkpoint()` exactly once, after deciding and before recording anything.\n- Keep the constructor and `allow`; the rest of the class is yours to change.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** debugging rounds test reading code against a written contract and proving each bug with a test before fixing it. Each later part adds one requirement, and each one exposes another bug in the starter: a boundary, a partial update, a shortcut that changes the rule, and a race.\n\n**Where it is used:** API gateways and model-serving endpoints limit requests per key per minute, hour and day, and the same check-then-record pattern guards quotas, credits and inventory.\n\nAdapted from the rate limiter bug hunt in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded. The starter is new code with its own bugs, the limiter takes a list of rules instead of three named tiers, `should_allow_request` is renamed `allow`, and the decorator is left out.",
+      "descriptionZh": "Fix `RateLimiter`, which the starter code gives you with several bugs. It should admit a user's request only if the request fits under every rule, and it must stay correct when threads call it at once.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior, so one fixed `RateLimiter` passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- `RateLimiter(rules, clock=time.time, checkpoint=lambda: None)`: `rules` is a list of `(max_requests, period_seconds)` pairs, and `clock()` returns the current time in seconds. Time never goes backward.\n- `allow(user_id) -> bool` reads the clock once and returns `True` if the request is admitted. Users never affect each other.\n- A request admitted at time `t` counts against a rule while `now - t <= period` for that rule, and not after. A request fits under a rule when fewer than `max_requests` of the user's admitted requests count against it.\n- `allow` calls `checkpoint()` exactly once, after deciding and before recording anything.\n- Keep the constructor and `allow`; the rest of the class is yours to change.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** debugging rounds test reading code against a written contract and proving each bug with a test before fixing it. Each later part adds one requirement, and each one exposes another bug in the starter: a boundary, a partial update, a shortcut that changes the rule, and a race.\n\n**Where it is used:** API gateways and model-serving endpoints limit requests per key per minute, hour and day, and the same check-then-record pattern guards quotas, credits and inventory.\n\nAdapted from the rate limiter bug hunt in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded. The starter is new code with its own bugs, the limiter takes a list of rules instead of three named tiers, `should_allow_request` is renamed `allow`, and the decorator is left out.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Part 1: the worked example",
+          "code": "\nimport random, threading, time\n\nBIG = (10**9, 10**9)\n\nclass Clock:\n    def __init__(self, t=0.0):\n        self.t = t\n    def __call__(self):\n        return self.t\n\nclass Model:\n    def __init__(self, rules):\n        self.rules, self.times = rules, {}\n    def allow(self, user, now):\n        times = self.times.setdefault(user, [])\n        ok = all(sum(1 for t in times if now - t <= period) < limit for limit, period in self.rules)\n        if ok:\n            times.append(now)\n        return ok\n\ndef compare(fn, rules, rng, steps, label, users=(\"u\", \"v\")):\n    clock = Clock()\n    lim, m = fn(rules, clock), Model(rules)\n    for step in range(steps):\n        clock.t += rng.choice([0, 0, 1, 2, 5, 10, 0.5])\n        user = rng.choice(users)\n        got, want = lim.allow(user), m.allow(user, clock.t)\n        assert got == want, (label, step, rules, user, clock.t, got, want)\n\nclock = Clock()\nlim = {fn}([(2, 60), BIG], clock)\nassert [lim.allow(\"ana\") for _ in range(2)] == [True, True]\nclock.t = 59\nassert lim.allow(\"ana\") is False\nassert lim.allow(\"ben\") is True\nclock.t = 60\nassert lim.allow(\"ana\") is False, \"a request made at 0 still counts at exactly 60\"\nclock.t = 60.5\nassert lim.allow(\"ana\") is True\n",
+          "behavior": "budget.enforcement",
+          "part": 1
+        },
+        {
+          "name": "Part 1: random times on one rule",
+          "visibility": "unshown",
+          "behavior": "budget.enforcement",
+          "failureMessage": "With one rule that can reject, a result differed from a model where a request admitted at t counts while now - t <= period, for each user separately.",
+          "hiddenCode": "\nimport random, threading, time\n\nBIG = (10**9, 10**9)\n\nclass Clock:\n    def __init__(self, t=0.0):\n        self.t = t\n    def __call__(self):\n        return self.t\n\nclass Model:\n    def __init__(self, rules):\n        self.rules, self.times = rules, {}\n    def allow(self, user, now):\n        times = self.times.setdefault(user, [])\n        ok = all(sum(1 for t in times if now - t <= period) < limit for limit, period in self.rules)\n        if ok:\n            times.append(now)\n        return ok\n\ndef compare(fn, rules, rng, steps, label, users=(\"u\", \"v\")):\n    clock = Clock()\n    lim, m = fn(rules, clock), Model(rules)\n    for step in range(steps):\n        clock.t += rng.choice([0, 0, 1, 2, 5, 10, 0.5])\n        user = rng.choice(users)\n        got, want = lim.allow(user), m.allow(user, clock.t)\n        assert got == want, (label, step, rules, user, clock.t, got, want)\n\nfor seed in range(200):\n    rng = random.Random(seed)\n    rules = [(rng.randint(1, 4), rng.choice([1, 2, 5, 10])), BIG]\n    compare({fn}, rules, rng, 60, seed)\n",
+          "part": 1
+        },
+        {
+          "name": "Part 2: the worked example",
+          "code": "\nimport random, threading, time\n\nBIG = (10**9, 10**9)\n\nclass Clock:\n    def __init__(self, t=0.0):\n        self.t = t\n    def __call__(self):\n        return self.t\n\nclass Model:\n    def __init__(self, rules):\n        self.rules, self.times = rules, {}\n    def allow(self, user, now):\n        times = self.times.setdefault(user, [])\n        ok = all(sum(1 for t in times if now - t <= period) < limit for limit, period in self.rules)\n        if ok:\n            times.append(now)\n        return ok\n\ndef compare(fn, rules, rng, steps, label, users=(\"u\", \"v\")):\n    clock = Clock()\n    lim, m = fn(rules, clock), Model(rules)\n    for step in range(steps):\n        clock.t += rng.choice([0, 0, 1, 2, 5, 10, 0.5])\n        user = rng.choice(users)\n        got, want = lim.allow(user), m.allow(user, clock.t)\n        assert got == want, (label, step, rules, user, clock.t, got, want)\n\nclock = Clock()\nlim = {fn}([(2, 1000), (1, 10), BIG], clock)\nassert lim.allow(\"ana\") is True\nclock.t = 5\nassert lim.allow(\"ana\") is False, \"the second rule allows one request per 10 seconds\"\nclock.t = 20\nassert lim.allow(\"ana\") is True, \"the rejected request at 5 must not count under the first rule\"\nclock.t = 30\nassert lim.allow(\"ana\") is False, \"two admitted requests in 1000 seconds\"\n",
+          "behavior": "effects.idempotency",
+          "part": 2
+        },
+        {
+          "name": "Part 2: random times on several rules",
+          "visibility": "unshown",
+          "behavior": "effects.idempotency",
+          "failureMessage": "With two rules that can reject, a result differed from a model that admits a request only if it fits under every rule and then records it under every rule; a rejected request must count nowhere.",
+          "hiddenCode": "\nimport random, threading, time\n\nBIG = (10**9, 10**9)\n\nclass Clock:\n    def __init__(self, t=0.0):\n        self.t = t\n    def __call__(self):\n        return self.t\n\nclass Model:\n    def __init__(self, rules):\n        self.rules, self.times = rules, {}\n    def allow(self, user, now):\n        times = self.times.setdefault(user, [])\n        ok = all(sum(1 for t in times if now - t <= period) < limit for limit, period in self.rules)\n        if ok:\n            times.append(now)\n        return ok\n\ndef compare(fn, rules, rng, steps, label, users=(\"u\", \"v\")):\n    clock = Clock()\n    lim, m = fn(rules, clock), Model(rules)\n    for step in range(steps):\n        clock.t += rng.choice([0, 0, 1, 2, 5, 10, 0.5])\n        user = rng.choice(users)\n        got, want = lim.allow(user), m.allow(user, clock.t)\n        assert got == want, (label, step, rules, user, clock.t, got, want)\n\nfor seed in range(300):\n    rng = random.Random(500 + seed)\n    rules = [(rng.randint(1, 4), rng.choice([2, 5, 20, 50])) for _ in range(2)] + [BIG]\n    compare({fn}, rules, rng, 60, seed)\n",
+          "part": 2
+        },
+        {
+          "name": "Part 3: the worked example",
+          "code": "\nimport random, threading, time\n\nBIG = (10**9, 10**9)\n\nclass Clock:\n    def __init__(self, t=0.0):\n        self.t = t\n    def __call__(self):\n        return self.t\n\nclass Model:\n    def __init__(self, rules):\n        self.rules, self.times = rules, {}\n    def allow(self, user, now):\n        times = self.times.setdefault(user, [])\n        ok = all(sum(1 for t in times if now - t <= period) < limit for limit, period in self.rules)\n        if ok:\n            times.append(now)\n        return ok\n\ndef compare(fn, rules, rng, steps, label, users=(\"u\", \"v\")):\n    clock = Clock()\n    lim, m = fn(rules, clock), Model(rules)\n    for step in range(steps):\n        clock.t += rng.choice([0, 0, 1, 2, 5, 10, 0.5])\n        user = rng.choice(users)\n        got, want = lim.allow(user), m.allow(user, clock.t)\n        assert got == want, (label, step, rules, user, clock.t, got, want)\n\nclock = Clock(90)\nlim = {fn}([(5, 10), (2, 100)], clock)\nassert lim.allow(\"ana\") is True\nclock.t = 99\nassert lim.allow(\"ana\") is True\nclock.t = 101\nassert lim.allow(\"ana\") is False, \"the 100-second rule slides: 90 and 99 both still count\"\nclock.t = 190\nassert lim.allow(\"ana\") is False\nclock.t = 190.5\nassert lim.allow(\"ana\") is True\n",
+          "behavior": "budget.enforcement",
+          "part": 3
+        },
+        {
+          "name": "Part 3: random times on every rule",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "With 1 to 3 rules that can all reject, including the last one, a result differed from a model where every rule is a sliding window over admitted requests.",
+          "hiddenCode": "\nimport random, threading, time\n\nBIG = (10**9, 10**9)\n\nclass Clock:\n    def __init__(self, t=0.0):\n        self.t = t\n    def __call__(self):\n        return self.t\n\nclass Model:\n    def __init__(self, rules):\n        self.rules, self.times = rules, {}\n    def allow(self, user, now):\n        times = self.times.setdefault(user, [])\n        ok = all(sum(1 for t in times if now - t <= period) < limit for limit, period in self.rules)\n        if ok:\n            times.append(now)\n        return ok\n\ndef compare(fn, rules, rng, steps, label, users=(\"u\", \"v\")):\n    clock = Clock()\n    lim, m = fn(rules, clock), Model(rules)\n    for step in range(steps):\n        clock.t += rng.choice([0, 0, 1, 2, 5, 10, 0.5])\n        user = rng.choice(users)\n        got, want = lim.allow(user), m.allow(user, clock.t)\n        assert got == want, (label, step, rules, user, clock.t, got, want)\n\nfor seed in range(300):\n    rng = random.Random(900 + seed)\n    rules = [(rng.randint(1, 4), rng.choice([2, 5, 20, 50])) for _ in range(rng.randint(1, 3))]\n    compare({fn}, rules, rng, 60, seed)\n",
+          "part": 3
+        },
+        {
+          "name": "Part 4: the worked example",
+          "code": "\nimport random, threading, time\n\nBIG = (10**9, 10**9)\n\nclass Clock:\n    def __init__(self, t=0.0):\n        self.t = t\n    def __call__(self):\n        return self.t\n\nclass Model:\n    def __init__(self, rules):\n        self.rules, self.times = rules, {}\n    def allow(self, user, now):\n        times = self.times.setdefault(user, [])\n        ok = all(sum(1 for t in times if now - t <= period) < limit for limit, period in self.rules)\n        if ok:\n            times.append(now)\n        return ok\n\ndef compare(fn, rules, rng, steps, label, users=(\"u\", \"v\")):\n    clock = Clock()\n    lim, m = fn(rules, clock), Model(rules)\n    for step in range(steps):\n        clock.t += rng.choice([0, 0, 1, 2, 5, 10, 0.5])\n        user = rng.choice(users)\n        got, want = lim.allow(user), m.allow(user, clock.t)\n        assert got == want, (label, step, rules, user, clock.t, got, want)\n\nfor rules in ([(1, 60), BIG], [BIG, (1, 60)]):\n    gate = threading.Barrier(2, timeout=0.5)\n    def hold():\n        try:\n            gate.wait()\n        except threading.BrokenBarrierError:\n            pass\n    lim = {fn}(rules, Clock(), hold)\n    results = []\n    threads = [threading.Thread(target=lambda: results.append(lim.allow(\"ana\"))) for _ in range(2)]\n    for t in threads:\n        t.start()\n    for t in threads:\n        t.join(10)\n    assert sorted(results) == [False, True], (rules, results)\n",
+          "behavior": "concurrency.thread_safety",
+          "part": 4
+        },
+        {
+          "name": "Part 4: many threads",
+          "visibility": "unshown",
+          "behavior": "concurrency.thread_safety",
+          "failureMessage": "16 threads calling allow at the same instant, with a checkpoint that yields, admitted more requests than a rule allows: decide and record under one lock.",
+          "hiddenCode": "\nimport random, threading, time\n\nBIG = (10**9, 10**9)\n\nclass Clock:\n    def __init__(self, t=0.0):\n        self.t = t\n    def __call__(self):\n        return self.t\n\nclass Model:\n    def __init__(self, rules):\n        self.rules, self.times = rules, {}\n    def allow(self, user, now):\n        times = self.times.setdefault(user, [])\n        ok = all(sum(1 for t in times if now - t <= period) < limit for limit, period in self.rules)\n        if ok:\n            times.append(now)\n        return ok\n\ndef compare(fn, rules, rng, steps, label, users=(\"u\", \"v\")):\n    clock = Clock()\n    lim, m = fn(rules, clock), Model(rules)\n    for step in range(steps):\n        clock.t += rng.choice([0, 0, 1, 2, 5, 10, 0.5])\n        user = rng.choice(users)\n        got, want = lim.allow(user), m.allow(user, clock.t)\n        assert got == want, (label, step, rules, user, clock.t, got, want)\n\nfor rules in ([(5, 1000), BIG], [BIG, (5, 1000)], [(7, 1000), (5, 500)]):\n    lim = {fn}(rules, Clock(), lambda: time.sleep(0.001))\n    results = []\n    def worker():\n        for _ in range(3):\n            results.append(lim.allow(\"ana\"))\n    threads = [threading.Thread(target=worker) for _ in range(16)]\n    for t in threads:\n        t.start()\n    for t in threads:\n        t.join(20)\n    assert results.count(True) == 5, (rules, results.count(True))\n",
+          "part": 4
+        }
+      ],
+      "parts": [
+        {
+          "title": "The edge of the window",
+          "descriptionEn": "**Signature:** `RateLimiter(rules, clock, checkpoint).allow(user_id) -> bool`\n\n- Make one rule exact: a request admitted at `t` still counts at `now = t + period` and stops counting just after.\n- The tests here use one rule that can reject, followed by a rule too large to reject anything.\n\n**Example:** `rules = [(2, 60), (10**9, 10**9)]`, with the clock moved by hand:\n- at `0`, two calls for `\"ana\"` are admitted; at `59` a third is rejected, while `\"ben\"` is admitted\n- at `60`, `\"ana\"` is still rejected: both requests from `0` count until the end of second `60`\n- at `60.5`, `\"ana\"` is admitted"
+        },
+        {
+          "title": "Every rule decides before any records",
+          "descriptionEn": "Keep Part 1. Several rules can reject now.\n\n- A request is admitted only if it fits under every rule. An admitted request then counts under every rule.\n- A rejected request counts under no rule, even if some rules had room for it.\n\n**Example:** `rules = [(2, 1000), (1, 10), (10**9, 10**9)]`:\n- at `0`, `\"ana\"` is admitted; at `5` she is rejected by the second rule\n- at `20` she is admitted: the rejected request at `5` used none of the first rule's two places\n- at `30` she is rejected, with two admitted requests in the last `1000` seconds"
+        },
+        {
+          "title": "Every rule slides",
+          "descriptionEn": "Keep Parts 1–2. Every rule, the last one included, follows the same counting rule.\n\n- No rule may count by fixed calendar windows, and no rule may count rejected requests.\n\n**Example:** `rules = [(5, 10), (2, 100)]`:\n- `\"ana\"` is admitted at `90` and at `99`\n- at `101` she is rejected: both earlier requests are within `100` seconds, though a new hundred has begun\n- at `190` she is still rejected, and at `190.5` she is admitted, since only the request from `99` still counts"
+        },
+        {
+          "title": "Threads",
+          "descriptionEn": "Keep Parts 1–3. Calls may now run on many threads at once.\n\n- Concurrent calls must give results that some one-at-a-time order of the same calls would give. In particular, two calls must never both take a rule's last place.\n- `checkpoint` may block or sleep, as the tests use it to hold a thread between deciding and recording.\n\n**Example:** with `rules = [(1, 60), (10**9, 10**9)]`, two threads call `allow(\"ana\")` at the same instant while `checkpoint` waits for both threads to arrive, giving up after `0.5` seconds:\n- exactly one call returns `True`\n- the same holds with the two rules swapped"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which line decides that an old request no longer counts? Compare its condition with the rule: at exactly t + period, should the request at t still count? Write the test for that instant before you change anything."
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "The eviction loop drops entries while now - t >= period, so a request stops counting at exactly t + period, one instant early. The contract keeps it while now - t <= period, so the loop must drop an entry only when now - t > period. A test at 0, 0, then exactly 60 with a limit of 2 per 60 seconds shows it."
+        }
+      ],
+      "modelConnections": [
+        "Model-serving APIs cap requests and tokens per key over several windows, and an off-by-one at the window edge lets bursts through.",
+        "Quota checks for GPU hours or credits use the same decide-then-record step, which must be atomic under concurrent jobs."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "A log of admitted times per rule gives an exact sliding window.",
+          "Deciding under every rule before recording keeps rejected requests from using any quota.",
+          "One lock around decide and record makes concurrent calls behave like some serial order."
+        ],
+        "cons": [
+          "A log per rule costs memory proportional to the limit, which a fixed-window counter avoids at the price of bursts at window edges.",
+          "One lock for all users serialises unrelated users; a lock per user scales better.",
+          "Within one process only; across servers the log needs a shared store with atomic updates."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "At exactly t + period, should a request admitted at t still count, and which comparison in the eviction loop says so?",
+          "hint": "Limit 2 per 60 seconds, requests at 0 and 0. Is a third request at exactly 60 allowed by the contract? Which comparison in the eviction loop decides?"
+        },
+        {
+          "stage": "concept",
+          "question": "How do you write a test that fails on the off-by-one without depending on the wall clock?",
+          "hint": "The clock is an argument. How can a test place requests at 0, 59, 60 and 60.5 exactly, without sleeping?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why does a deque make eviction cheap, and what does eviction cost per call?",
+          "hint": "Old entries leave from the left as time moves on. Which structure removes from the left in O(1), and how often is each entry removed?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why must every rule decide before any rule records, and what does a rejected request cost otherwise?",
+          "hint": "Rule A has room, rule B rejects. If A recorded the request before B decided, what does that cost the user later?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What does a fixed calendar window save over a sliding one, and which bursts does it let through?",
+          "hint": "Limit 2 per 100 seconds, requests at 90 and 99. Under calendar windows of 100 seconds, what happens at 101?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why does a lock around deciding and recording fix the race, and how would you avoid one lock for every user?",
+          "hint": "Two threads both read 'one place left' before either records. What must happen between reading and recording so only one gets it?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How would you enforce the same limits across several servers?",
+          "hint": "Several servers share one user's limits. Where must the admitted times live, and what must be atomic there?"
+        }
+      ]
     }
   ]
 }

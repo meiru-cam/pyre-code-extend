@@ -458,5 +458,13 @@
       "resumable_iterator"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/rate-limiter-debug",
+    "exercises": [
+      "rate_limiter"
+    ],
+    "round": "coding"
   }
 ]

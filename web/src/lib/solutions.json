@@ -1238,6 +1238,15 @@
       }
     ]
   },
+  "rate_limiter": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "# Adapted from Schuture/OpenAI-Interview-Notes (code under the MIT License).\nimport threading\nimport time\nfrom collections import defaultdict, deque\n\n\nclass RateLimiter:\n    def __init__(self, rules, clock=time.time, checkpoint=lambda: None):\n        self.rules = list(rules)  # (max_requests, period_seconds) pairs\n        self.clock = clock\n        self.checkpoint = checkpoint\n        self.logs = defaultdict(lambda: [deque() for _ in self.rules])  # user_id -> admitted times, one log per rule\n        self.lock = threading.Lock()\n\n    def allow(self, user_id):\n        with self.lock:  # deciding and recording form one step, so two calls cannot both take the last slot\n            now = self.clock()\n            logs = self.logs[user_id]\n            fits = True\n            for (limit, period), log in zip(self.rules, logs):\n                while log and now - log[0] > period:  # a request still counts exactly period seconds later\n                    log.popleft()\n                fits = fits and len(log) < limit\n            self.checkpoint()\n            if fits:\n                for log in logs:  # recorded under every rule, or under none\n                    log.append(now)\n            return fits",
+        "role": "solution"
+      }
+    ]
+  },
   "recipe_book": {
     "cells": [
       {

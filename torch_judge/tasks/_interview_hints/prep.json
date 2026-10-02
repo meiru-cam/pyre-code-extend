@@ -401,5 +401,14 @@
     "Why does a state from other data of the same shape continue correctly, and what can go wrong on a different shape?": "A state saved on [[a, b], [c]] is given to [[x, y], [z]]. What does it point at there? What about [[x], [y, z]]?",
     "How do you make next fast after a long run of empty lists, and what do you keep between calls?": "After an item, where does the search for the next one start? What do you keep so the next call does not walk from the top?",
     "How would you detect that a saved state belongs to different data?": "What could you store next to the indices so that set_state notices the state came from different data?"
+  },
+  "rate_limiter": {
+    "At exactly t + period, should a request admitted at t still count, and which comparison in the eviction loop says so?": "Limit 2 per 60 seconds, requests at 0 and 0. Is a third request at exactly 60 allowed by the contract? Which comparison in the eviction loop decides?",
+    "How do you write a test that fails on the off-by-one without depending on the wall clock?": "The clock is an argument. How can a test place requests at 0, 59, 60 and 60.5 exactly, without sleeping?",
+    "Why does a deque make eviction cheap, and what does eviction cost per call?": "Old entries leave from the left as time moves on. Which structure removes from the left in O(1), and how often is each entry removed?",
+    "Why must every rule decide before any rule records, and what does a rejected request cost otherwise?": "Rule A has room, rule B rejects. If A recorded the request before B decided, what does that cost the user later?",
+    "What does a fixed calendar window save over a sliding one, and which bursts does it let through?": "Limit 2 per 100 seconds, requests at 90 and 99. Under calendar windows of 100 seconds, what happens at 101?",
+    "Why does a lock around deciding and recording fix the race, and how would you avoid one lock for every user?": "Two threads both read 'one place left' before either records. What must happen between reading and recording so only one gets it?",
+    "How would you enforce the same limits across several servers?": "Several servers share one user's limits. Where must the admitted times live, and what must be atomic there?"
   }
 }
