@@ -356,5 +356,41 @@
     "Why must a link be expanded as soon as its component is added, before a later `..` can remove it?": "With x linking to /p/q, compare cancelling \"x/..\" as text with first following x and then going up. Which directory does each give?",
     "Why cap the number of expansions instead of failing the first time a link repeats?": "A link to \".\" can appear many times in one path without looping. What would a 'seen this link before' rule do with it?",
     "Why must `cd` be built into the shell instead of being a separate program, and what does the shell do when it runs it?": "If cd were a separate program, it would change its own working directory. Whose directory does the shell keep afterwards? Which variables would it update afterwards?"
+  },
+  "job_queue": {
+    "Why does each reservation need its own token instead of identifying it by task id and worker id?": "A worker fails a task, and the task is reserved again by someone else. The first worker now calls complete. What must the queue compare to refuse it?",
+    "Why must complete and fail reject a token for a task that is ready or already completed?": "List the states a task can be in. For each state, should complete or fail with some token succeed? What about an id never seen?",
+    "Which data structures make submit, reserve, complete and fail all O(1), and why must a failed task go to the back?": "Which structure pops the oldest ready id in O(1)? Which lookup tells you a task's state and current token in O(1)?",
+    "Why reclaim expired leases at the start of every call instead of with a background thread, and what does that cost?": "A background thread would reclaim leases on its own clock. What does reclaiming at the start of each call give you in tests, and what happens on an idle queue?",
+    "How do you keep reclaiming cheap with many open leases when completed reservations stay in the heap?": "Completed reservations leave entries in a heap of deadlines. How can you tell a stale entry from a live lease when you pop it?",
+    "Should max_attempts count reservations or retries after the first, and why does that choice matter to users?": "If max_attempts is 1, how many reservations does a task get? Does the first try count as a retry?",
+    "What would you change to run this queue across several processes or machines?": "Two processes share the queue. What must happen atomically when one reserves a task, and where would the tokens and deadlines live?"
+  },
+  "jump_grid": {
+    "Why does the best way to finish from (i, j) depend only on i, j and the jumps left, and not on how the path got there?": "Two paths reach (i, j) with the same jumps left. Can the cells they visited before change what is best from here on?",
+    "Why must a jump be refused from the second-to-last row, and what would the path look like if it were allowed?": "From the second-to-last row, where would a jump land? What does the rule 'if that row exists' leave you with?",
+    "In what order must the table be filled so that every value it reads is already known, and what are the time and memory costs?": "best[i][j][b] reads rows i + 1 and i + 2. Which direction must i run so those are already filled? Count the cells times the jump budgets.",
+    "How do you rebuild the lexicographically smallest best path from the table without storing every path?": "Several moves from a cell can reach the best total. Which one keeps the list smallest, and in what order would you try them to find it first?",
+    "Why can counting best paths reuse the score table, and why must you only add counts from moves that reach the best score?": "A move that does not reach the best score can still have many paths behind it. Why must those be left out of the sum?",
+    "What extra state do the bonuses need, and how much larger does the table become?": "A rise bonus needs the value two cells back. What do you add to the state, and how many values can it take?",
+    "How would you cut memory if only the score were needed, and why does that no longer work for rebuilding the path?": "For the score alone, which rows of the table do you still need when filling row i? What does rebuilding the path need that you threw away?"
+  },
+  "delayed_search": {
+    "When you choose the next guess, which answers do you have, and how does that change plain binary search?": "When you choose your fifth guess, whose answers have come back? Which guess's answer is still on its way?",
+    "What can a spare call send so that it brings back the previous answer without breaking any rule?": "After a few answers you know the secret is in [lo, hi]. Which values outside that range can you send, and what does each tell you?",
+    "Why does alternating a midpoint probe with a spare call stay within 2 * ceil(log2(n)) + 1 calls?": "Pair each midpoint with one spare call that fetches its answer. How many pairs do you need to shrink n candidates to one?",
+    "Why do two guesses per call reach a third of the range, and what limits going to more guesses per call?": "Two guesses split [lo, hi] into three pieces. How many real rounds do you need for n, and how does that compare with halving?",
+    "When many games share one channel, why does the round count depend only on the largest game?": "Ten games each need 30 halvings. If they all guess in the same round, how many rounds does the slowest one cost?",
+    "Could some calls in the single-game case carry a new probe instead of a spare, and what would that gain?": "While one guess's answer is in flight, could your next call already carry a useful probe? What would it have to assume?",
+    "If calls could overlap in flight, how would the problem change?": "If several calls could be in flight at once, which part of the delay problem would remain?"
+  },
+  "mode_lock": {
+    "Why must a woken waiter check the mode again in a loop instead of assuming it may now hold?": "Three waiters wake after a release: two want mode A, one wants mode B. The first one in takes the lock. What must the others check before they continue?",
+    "Why does the last release call notify_all instead of notify?": "The last holder releases and four waiters of the next mode are blocked. With notify, how many of them wake, and who wakes the rest?",
+    "How do you keep waiting_count exact, including calls that are granted without ever blocking?": "A call can be granted at once without ever blocking. Where do you add to and subtract from the waiting count so nobody outside sees the change?",
+    "How can the unfair lock starve a mode, and why does joining only the last batch prevent it?": "Holders of mode A keep arriving before the last one leaves. When does a waiter for mode B get its turn, and what rule would stop new A calls?",
+    "Why must a fair batch stay at the front until both its holders and its woken-but-not-yet-running members are gone?": "A batch reaches the front and its members are woken, but none has run yet. What breaks if you remove the batch as soon as its holder count is zero?",
+    "When a timed-out batch leaves the queue, why merge its neighbours, and what would go wrong without it?": "Queue: A running, B (one waiter), A (waiting). B times out. Which A batch should the last waiter be in, and when may it hold?",
+    "How would you build a shared/exclusive lock on top of this, and what must change for the exclusive mode?": "Readers share and writers need the lock alone. Which mode is which, and what limit does the writer's batch need?"
   }
 }

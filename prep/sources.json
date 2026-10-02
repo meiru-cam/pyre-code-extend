@@ -418,5 +418,37 @@
       "change_directory"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/fault-tolerant-work-queue",
+    "exercises": [
+      "job_queue"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/grid-path-limited-jumps",
+    "exercises": [
+      "jump_grid"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/guess-number-delayed",
+    "exercises": [
+      "delayed_search"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/modal-lock",
+    "exercises": [
+      "mode_lock"
+    ],
+    "round": "coding"
   }
 ]

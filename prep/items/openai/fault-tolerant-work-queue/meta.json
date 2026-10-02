@@ -1,0 +1,19 @@
+{
+  "title": "Fault-Tolerant Work Queue",
+  "summary": "A work queue whose reserve, complete and fail are checked against per-reservation tokens, extended with lease timeouts on a manual clock, a retry cap and a dead-letter queue.",
+  "round": "coding",
+  "kind": "Coding",
+  "difficulty": "Medium",
+  "frequency": "rare",
+  "format": "3 parts",
+  "topics": [
+    "queue",
+    "state-machine",
+    "retry"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/coding/fault-tolerant-work-queue",
+  "rubric": [],
+  "exercises": [
+    "job_queue"
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "title": "ModalLock and FairModalLock",
+  "summary": "A lock that many threads may hold together as long as they ask for the same mode, then a fair version that serves waiting modes in arrival order so that none of them starves.",
+  "round": "coding",
+  "kind": "Coding · concurrency, Python",
+  "difficulty": "Hard",
+  "frequency": "rare",
+  "format": "2 parts",
+  "topics": [
+    "concurrency",
+    "threading",
+    "fairness"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/coding/modal-lock",
+  "rubric": [],
+  "exercises": [
+    "mode_lock"
+  ]
+}

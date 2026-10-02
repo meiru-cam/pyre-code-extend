@@ -1,0 +1,19 @@
+{
+  "title": "Best Grid Path with K Row Skips",
+  "summary": "Walk down a grid by stepping to one of the three adjacent cells in the next row or, at most K times, skipping a row by jumping straight down to the same column two rows below. Maximise the score, recover the lexicographically smallest best path, count all best paths, then add bonuses that depend on the last few cells.",
+  "round": "coding",
+  "kind": "Coding",
+  "difficulty": "Hard",
+  "frequency": "rare",
+  "format": "4 parts",
+  "topics": [
+    "dp",
+    "grid",
+    "counting"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/coding/grid-path-limited-jumps",
+  "rubric": [],
+  "exercises": [
+    "jump_grid"
+  ]
+}
