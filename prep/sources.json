@@ -442,5 +442,13 @@
       "delayed_search"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/modal-lock",
+    "exercises": [
+      "mode_lock"
+    ],
+    "round": "coding"
   }
 ]

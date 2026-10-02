@@ -383,5 +383,14 @@
     "When many games share one channel, why does the round count depend only on the largest game?": "Ten games each need 30 halvings. If they all guess in the same round, how many rounds does the slowest one cost?",
     "Could some calls in the single-game case carry a new probe instead of a spare, and what would that gain?": "While one guess's answer is in flight, could your next call already carry a useful probe? What would it have to assume?",
     "If calls could overlap in flight, how would the problem change?": "If several calls could be in flight at once, which part of the delay problem would remain?"
+  },
+  "mode_lock": {
+    "Why must a woken waiter check the mode again in a loop instead of assuming it may now hold?": "Three waiters wake after a release, one for each of two modes. The first one in takes the lock. What must the others check before they continue?",
+    "Why does the last release call notify_all instead of notify?": "The last holder releases and four waiters of the next mode are blocked. With notify, how many of them wake, and who wakes the rest?",
+    "How do you keep waiting_count exact, including calls that are granted without ever blocking?": "A call can be granted at once without ever blocking. Where do you add to and subtract from the waiting count so nobody outside sees the change?",
+    "How can the unfair lock starve a mode, and why does joining only the last batch prevent it?": "Holders of mode A keep arriving before the last one leaves. When does a waiter for mode B get its turn, and what rule would stop new A calls?",
+    "Why must a fair batch stay at the front until both its holders and its woken-but-not-yet-running members are gone?": "A batch reaches the front and its members are woken, but none has run yet. What breaks if you remove the batch as soon as its holder count is zero?",
+    "When a timed-out batch leaves the queue, why merge its neighbours, and what would go wrong without it?": "Queue: A running, B (one waiter), A (waiting). B times out. Which A batch should the last waiter be in, and when may it hold?",
+    "How would you build a reader/writer lock from this, and what extra rule does the writer mode need?": "Readers share and writers need the lock alone. Which mode is which, and what limit does the writer's batch need?"
   }
 }
