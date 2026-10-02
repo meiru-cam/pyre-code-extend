@@ -1,0 +1,20 @@
+{
+  "title": "Noisy Annotators",
+  "summary": "Training labels come from several annotators and some are unreliable. Identify them, drop or down-weight their labels, and check whether the classifier actually improves.",
+  "round": "coding",
+  "kind": "ML coding · Python",
+  "difficulty": "Medium",
+  "frequency": "high",
+  "format": "3 parts",
+  "topics": [
+    "data-cleaning",
+    "label-noise",
+    "evaluation",
+    "numpy"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/coding/noisy-annotators",
+  "rubric": [],
+  "exercises": [
+    "noisy_annotators"
+  ]
+}

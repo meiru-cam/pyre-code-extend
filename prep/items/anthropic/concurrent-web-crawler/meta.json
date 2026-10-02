@@ -1,0 +1,21 @@
+{
+  "title": "Concurrent Web Crawler",
+  "summary": "Crawl every page reachable from a start URL under its hostname, given a slow, thread-safe get_urls helper: a single-threaded BFS first, then a bounded thread pool whose result and per-page fetch count must match it exactly, then an asyncio version bounded by a concurrency limit.",
+  "round": "coding",
+  "kind": "Coding · concurrency, Python",
+  "difficulty": "Medium",
+  "frequency": "high",
+  "format": "3 parts / 55 min",
+  "topics": [
+    "bfs",
+    "threading",
+    "asyncio",
+    "url-normalization",
+    "thread-safety"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/coding/concurrent-web-crawler",
+  "rubric": [],
+  "exercises": [
+    "web_crawler"
+  ]
+}

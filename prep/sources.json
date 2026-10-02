@@ -258,5 +258,37 @@
       "weighted_batcher"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/labeling-task-scheduler",
+    "exercises": [
+      "label_scheduler"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/type-inference",
+    "exercises": [
+      "type_inference"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/noisy-annotators",
+    "exercises": [
+      "noisy_annotators"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/concurrent-web-crawler",
+    "exercises": [
+      "web_crawler"
+    ],
+    "round": "coding"
   }
 ]

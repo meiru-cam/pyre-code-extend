@@ -197,5 +197,9 @@
   "chat_activity": "class ActivityTracker:\n\n    def __init__(self, window):\n        pass\n\n    def record_event(self, user_id, chat_id, timestamp):\n        pass\n\n    def recent_count(self, user_id, chat_id):\n        pass",
   "version_search": "class PackageManager:\n\n    def earliest_supported(self, versions, is_supported):\n        pass",
   "poker_hands": "class PokerTable:\n\n    def hand_type(self, cards):\n        pass\n\n    def compare_hands(self, a, b):\n        pass\n\n    def rank_players(self, hands):\n        pass",
-  "weighted_batcher": "class DataBatcher:\n\n    def __init__(self, registry, weights, batch_size):\n        pass\n\n    def next_batch(self):\n        pass"
+  "weighted_batcher": "class DataBatcher:\n\n    def __init__(self, registry, weights, batch_size):\n        pass\n\n    def next_batch(self):\n        pass",
+  "label_scheduler": "class LabelScheduler:\n\n    def basic_schedule(self, t, m, h, k):\n        pass",
+  "type_inference": "class TypeChecker:\n\n    def format_type(self, t):\n        pass\n\n    def format_function(self, params, ret):\n        pass\n\n    def parse_type(self, text):\n        pass\n\n    def parse_function(self, text):\n        pass",
+  "noisy_annotators": "import numpy as np\n\n\nclass AnnotationCleaner:\n\n    def aggregate(self, annotations, n_classes, weights=None):\n        pass\n\n    def reliability(self, annotations, n_classes):\n        pass\n\n    def flag(self, r):\n        pass",
+  "web_crawler": "from urllib.parse import urlparse\n\n\nclass WebCrawler:\n\n    def crawl(self, start_url, html_parser):\n        pass"
 }

@@ -1,0 +1,19 @@
+{
+  "title": "Type Inference for a Toy Language",
+  "summary": "Types are primitives, generics and nested tuples. Print them, then infer a function's return type by unifying its generic parameters with concrete arguments and reporting conflicts.",
+  "round": "coding",
+  "kind": "Coding",
+  "difficulty": "Medium",
+  "frequency": "high",
+  "format": "2 parts",
+  "topics": [
+    "recursion",
+    "unification",
+    "tree"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/coding/type-inference",
+  "rubric": [],
+  "exercises": [
+    "type_inference"
+  ]
+}
