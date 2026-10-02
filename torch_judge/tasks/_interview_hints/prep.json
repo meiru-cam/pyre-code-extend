@@ -455,5 +455,14 @@
     "Why count a parse failure as wrong rather than leaving it out of accuracy?": "Ten tickets, two replies fail to parse, and the other eight are all right. Is accuracy 80% or 100%? Which number would hide a format regression?",
     "Why compare two prompts with a paired sign test on the tickets where they disagree instead of comparing their accuracies?": "Prompt B wins on 6 tickets, A on 1, and they agree on 93. Why do only the 7 disagreements carry evidence, and what would a coin flip produce on 7 tickets?",
     "With temperature above zero, how would you change the evaluation so one lucky run does not decide?": "At temperature 0.7 the same prompt can score differently on two runs. How many runs, or which paired design, would you use before calling a prompt better?"
+  },
+  "roofline_model": {
+    "What is arithmetic intensity, and why does a matmul with few rows end up memory bound?": "Bytes are about s times kn when m is small. Write intensity for m = 1, 16 and 4096 with k = n = 8192: how does it scale with m, and where does it cross the ridge?",
+    "Can growing m, k or n alone ever move a matmul from compute bound to memory bound? Argue for each of the three.": "Take intensity 2mkn / s(mk + kn + mn) and let one variable grow with the other two fixed. Toward what limit does it go, and can it ever fall?",
+    "Why is the predicted time the larger of compute time and memory time rather than their sum, and when is that wrong?": "Compute and memory traffic overlap inside one kernel. Which one finishes last, and when would the true time sit closer to their sum?",
+    "Which tensors must be resident to run a layer stack, and what can you drop to fit a model that does not?": "During layer i you need its weight, its input and its output. Which earlier activations can be freed, and which weights could be streamed in instead of kept?",
+    "For a single request on two devices, why does tensor parallel beat a pipeline, and why are pipelines used anyway?": "Pipeline: the second device idles until the first finishes. Tensor: both work on every layer but talk after each one. Which wins for one request, and what changes with many requests in flight?",
+    "As p grows, when does tensor sharding of a feed-forward block become communication bound, and how does a slower link change that?": "Tensor sharding divides compute by p but the all-reduce volume 2(p-1)/p Td s barely shrinks. At which p does communication pass compute on a fast link, and on a 25 GB/s one?",
+    "What would let the all-reduce overlap with compute in a real model, given that it cannot within one block?": "Within one block the all-reduce waits on the last matmul. What other independent work exists in a full model or a batch that could run while it is in flight?"
   }
 }

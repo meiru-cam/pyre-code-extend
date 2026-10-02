@@ -606,5 +606,13 @@
       "ticket_triage"
     ],
     "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/matmul-performance-modeling",
+    "exercises": [
+      "roofline_model"
+    ],
+    "round": "coding"
   }
 ]
