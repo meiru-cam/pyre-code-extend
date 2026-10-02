@@ -362,5 +362,13 @@
       "cloud_storage"
     ],
     "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/oa-dns-resolver",
+    "exercises": [
+      "dns_resolver"
+    ],
+    "round": "coding"
   }
 ]

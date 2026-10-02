@@ -293,5 +293,14 @@
     "How would you make find_files fast for millions of files with frequent prefix searches?": "Every match shares the prefix. Which structure lets you jump straight to the names that start with it instead of scanning all of them?",
     "Why does decompress_file compare the current size, not the doubled size, against the remaining capacity?": "The file grows from s to 2s. How many new bytes does that need, and is that the same number as the doubled size?",
     "What can go wrong when restore matches files by name only, and how would you avoid it?": "A file is compressed, then a new file with the old name appears. What would a name-only restore overwrite, and whose file is it?"
+  },
+  "dns_resolver": {
+    "Why normalise names before every lookup, and what goes wrong if only the query is normalised?": "Zone keys are already normalised. If a query arrives as \"Web.Lab.test\" with no dot, what does a raw lookup find, and where else do names come from later on?",
+    "Why should a missing name raise an error with the name attached instead of returning an empty list?": "An empty list could mean \"no addresses\" or \"no such name\". How would a caller tell them apart, and which name would it want to log?",
+    "How do you design the error classes so a caller can catch every resolution error at once and still tell them apart?": "If all three errors share one base class, what can an except clause catch? What does each subclass still let the caller do?",
+    "Why must a cycle be checked before the chain length, and what would the caller see otherwise?": "A two-name loop with a limit of 1: which check fires first if length goes first, and does that error describe what is really wrong?",
+    "Why fall back only on a missing name and not on a cycle or an overlong chain?": "A second zone can supply a missing name. Can it repair a loop or a chain that is too long in the primary zone?",
+    "Why use the smallest TTL on the chain for the cache entry, and why not cache errors?": "If one record on the chain changes after 30 seconds, how long may the cached answer live? What would caching a NameNotFoundError hide once the name is added?",
+    "How do you stop eight callers from resolving the same name at once without making different names wait for each other?": "Keep one record per name for the resolution in progress. Where does a second caller for that name wait, and what lock does a caller for another name touch?"
   }
 }
