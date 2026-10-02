@@ -216,5 +216,6 @@
   "config_store": "class ConfigError(Exception):\n    pass\n\n\nclass ConfigNotFoundError(ConfigError):\n    pass\n\n\nclass ConfigCycleError(ConfigError):\n    pass\n\n\nclass ConfigStore:\n    DELETE = object()\n\n    def __init__(self, store):\n        pass\n\n    def deep_merge(self, base, overlay):\n        pass\n\n    def resolve(self, name):\n        pass",
   "task_board": "class TaskBoard:\n\n    def add(self, timestamp, user, title, priority):\n        pass\n\n    def edit(self, timestamp, user, task_id, title, priority):\n        pass\n\n    def finish(self, timestamp, user, task_id):\n        pass\n\n    def get(self, timestamp, user, task_id):\n        pass",
   "timesheet": "class Timesheet:\n\n    def add_worker(self, worker_id, position, hourly_rate):\n        pass\n\n    def clock_in(self, worker_id, timestamp):\n        pass\n\n    def clock_out(self, worker_id, timestamp):\n        pass",
-  "tool_scheduler": "class CycleError(Exception):\n    pass\n\n\nclass ToolScheduler:\n\n    def run_one(self, calls, capacity):\n        pass"
+  "tool_scheduler": "class CycleError(Exception):\n    pass\n\n\nclass ToolScheduler:\n\n    def run_one(self, calls, capacity):\n        pass",
+  "change_directory": "def change_directory(cwd, destination):\n    pass"
 }

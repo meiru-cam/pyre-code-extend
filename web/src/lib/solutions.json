@@ -438,6 +438,15 @@
       }
     ]
   },
+  "change_directory": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "# Adapted from Schuture/OpenAI-Interview-Notes (code under the MIT License).\nfrom collections import deque\n\nMAX_EXPANSIONS = 16\n\n\nclass LinkLoopError(Exception):\n    pass\n\n\ndef _components(path):\n    return [piece for piece in path.split(\"/\") if piece]\n\n\ndef _start(cwd, destination, home):\n    \"\"\"The directory to start from and the pieces still to apply.\"\"\"\n    if destination == \"~\" or destination.startswith(\"~/\"):\n        return home, destination[2:]  # \"~\"[2:] is \"\", so a bare \"~\" stays at home\n    if destination.startswith(\"~\"):\n        raise ValueError(f\"~user is not supported: {destination!r}\")\n    if destination.startswith(\"/\"):\n        return \"/\", destination\n    return cwd, destination\n\n\ndef change_directory(cwd, destination, home=None, symlinks=None):\n    symlinks = symlinks or {}\n    base, rest = _start(cwd, destination, home)\n    stack = _components(base)  # cwd and home never lie inside a link\n    pending = deque(rest.split(\"/\"))\n    expansions = 0\n    while pending:\n        piece = pending.popleft()\n        if piece in (\"\", \".\"):\n            continue\n        if piece == \"..\":\n            if stack:  # at the root, .. stays at the root\n                stack.pop()\n            continue\n        target = symlinks.get(\"/\" + \"/\".join(stack + [piece]))\n        if target is None:\n            stack.append(piece)\n            continue\n        expansions += 1\n        if expansions > MAX_EXPANSIONS:\n            raise LinkLoopError(f\"more than {MAX_EXPANSIONS} link expansions resolving {destination!r}\")\n        if target.startswith(\"/\"):\n            stack = []\n        # a relative target starts from the link's own directory, which is what the stack holds now\n        pending.extendleft(reversed(target.split(\"/\")))\n    return \"/\" + \"/\".join(stack)",
+        "role": "solution"
+      }
+    ]
+  },
   "chat_activity": {
     "cells": [
       {

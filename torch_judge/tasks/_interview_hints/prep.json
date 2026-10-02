@@ -347,5 +347,14 @@
     "With a shared cap, what does the fixed tie rule do to agents with large ids, and how would you make it fairer?": "Agent 0 always wins ties. If it keeps adding calls, when does agent 9 run? What would you change to share slots more evenly?",
     "With both caps, why can one ready heap across all agents become slow, and what replaces it?": "With per-agent caps, the smallest ready call may belong to a full agent. How many calls would you pop and push back each time if you used one heap?",
     "Real tool calls have unknown durations. How would a live executor use the same dependency counts?": "Without known durations you only learn that a call finished. Which part of this scheduler still works when you can only react to completions?"
+  },
+  "change_directory": {
+    "Why does a stack of path components make `.` and `..` easy to handle?": "Write cwd as a list of names. What does a name do to that list, and what does \"..\" do? Which end of the list do both touch?",
+    "Why should `..` at the root stay at the root instead of raising an error?": "\"cd ..\" at \"/\" in a real shell leaves you at \"/\". What should your list do when \"..\" meets an empty list?",
+    "Which inputs make splitting on `/` produce empty pieces, and why is skipping them correct in each case?": "Split \"a//b/\" and \"/x\" on \"/\". Where do the empty strings come from in each, and does any of them name a directory?",
+    "Why does `~` expand only at the start of the destination, and why reject `~name` here?": "If \"~\" were expanded anywhere, what would \"notes/~draft\" become? Why is \"~kai\" a different request from \"~/kai\"?",
+    "Why must a link be expanded as soon as its component is added, before a later `..` can remove it?": "With x linking to /p/q, compare cancelling \"x/..\" as text with first following x and then going up. Which directory does each give?",
+    "Why cap the number of expansions instead of failing the first time a link repeats?": "A link to \".\" can appear many times in one path without looping. What would a 'seen this link before' rule do with it?",
+    "Why must `cd` be built into the shell instead of being a separate program the shell starts?": "If cd were a separate program, it would change its own working directory. Whose directory does the shell keep afterwards?"
   }
 }
