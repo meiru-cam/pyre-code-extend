@@ -149,5 +149,14 @@
     "Why can an event older than the clock minus the window be dropped without changing any later answer?": "Once the clock has reached C, which timestamps can every future event still carry? Compare an event below C - window with what the chat already holds.",
     "How would you partition millions of events per second across machines, and what about one very busy user?": "List what a single machine needs to answer active_sessions for one user. Which key keeps all of that on one machine, and what happens when one key gets most of the traffic?",
     "After a crash, how much history must a machine replay to rebuild its state?": "Which events can still affect any answer after a restart? Relate that to how much state the tracker is allowed to keep."
+  },
+  "version_search": {
+    "Why must versions be compared as number tuples, and what goes wrong with plain string comparison?": "Run sorted([\"4.9.3\", \"4.10.0\", \"4.2.0\"]) and look at the result. What should a version turn into before two of them are compared?",
+    "What property of the answers makes binary search valid here, and how many probes does it need?": "Draw the answers in version order as F F F T T T. Which single comparison tells you which half holds the first T, and how many halvings reach one version?",
+    "How do you make sure a binary search returns the first True and not just any True?": "Stop your search the moment you see a True and test it on F T T T. Which index did you return, and what should happen to the search range instead?",
+    "If support can regress, why can no strategy guarantee fewer probes than checking versions in order?": "Picture a list where only the very first version is supported, or only the very last. What can a probe of any other version tell you about them?",
+    "Why does a False representative rule out its whole group, and how does that give a logarithmic probe count?": "If a group's latest version is unsupported, what does the first rule say about every earlier patch in that group? Use that to decide which groups you never need to open.",
+    "Why is dependency resolution hard in general, and what do real resolvers do to prune the search?": "Each package can take several versions and each choice adds constraints. What do you do when a later constraint rules out a version you chose earlier, and how bad can that get?",
+    "How do you detect that a chosen set of versions has a dependency cycle?": "Count, for each chosen package, how many of its dependencies are not yet installed. What does it mean when no package has a count of zero but some are left?"
   }
 }

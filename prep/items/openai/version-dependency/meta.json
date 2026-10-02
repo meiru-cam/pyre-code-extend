@@ -1,0 +1,19 @@
+{
+  "title": "Version Dependency",
+  "summary": "Package-manager questions in four parts: find the earliest version that supports a feature with as few calls to a slow API as possible (monotone, with regressions, hierarchical bisection), then resolve dependency constraints with backtracking and a topological install order.",
+  "round": "coding",
+  "kind": "Coding",
+  "difficulty": "Medium",
+  "frequency": "medium",
+  "format": "4 parts / 75 min",
+  "topics": [
+    "binary-search",
+    "backtracking",
+    "topological-sort"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/coding/version-dependency",
+  "rubric": [],
+  "exercises": [
+    "version_search"
+  ]
+}

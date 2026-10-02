@@ -234,5 +234,13 @@
       "chat_activity"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/version-dependency",
+    "exercises": [
+      "version_search"
+    ],
+    "round": "coding"
   }
 ]
