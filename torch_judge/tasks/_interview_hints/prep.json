@@ -221,5 +221,14 @@
     "Why does the Hillis-Steele scan need associativity but not commutativity, and where does order matter?": "Draw x after each round for N = 4. Which pairs are multiplied, and what goes wrong if you swap the two factors?",
     "When is the scan faster than the loop, given that it does more total work?": "The scan does about N log N products and the loop N - 1. When does doing more total work still finish sooner?",
     "How would you cut the scan's memory, for example by recomputing rounds or using a Blelloch scan?": "Each round keeps its input for the backward pass. How could you avoid storing them all, and what would it cost in extra products?"
+  },
+  "nearest_neighbor": {
+    "Why does |q - x|^2 = |q|^2 - 2 q.x + |x|^2 let you avoid an (m, n, d) array?": "Broadcasting Q[:, None, :] - X[None, :, :] builds every difference at once. How big is that for 2000 x 2000 x 50 floats, and which expansion avoids it?",
+    "What are the shapes of each intermediate array in the vectorised version?": "Write the shape after each step: the norms of Q, the norms of X, the product Q @ X.T, and their sum. Which ones need a new axis to broadcast?",
+    "Why does np.argmin give the right tie-break, and when could the expanded form break a tie the exact distance would not?": "np.argmin returns the first minimum. When two training points are equally close in exact arithmetic, what can rounding in q2 - 2 q.x + x2 do to that tie?",
+    "Why can the |q|^2 term be dropped when building the layer, and what W and b remain?": "In -|q - x_i|^2 = 2 x_i.q - |x_i|^2 - |q|^2, which term is the same for every i? What does that leave as W and b?",
+    "Why must the softmax subtract each row's maximum before exponentiating?": "Try np.exp(1000.0). What changes if you subtract each row's largest logit first, and why does the softmax stay the same?",
+    "How would you serve nearest-neighbour search over millions of points?": "Comparing a query with every stored point costs O(n d). What do approximate indexes give up to answer faster?",
+    "What does softmax over negative distances say about confidence, and how would a temperature change it?": "Logits here are negative squared distances, often far apart. What does that do to the softmax, and what would dividing by a temperature change?"
   }
 }

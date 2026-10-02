@@ -298,5 +298,13 @@
       "prefix_scan"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/numpy-1nn-affine",
+    "exercises": [
+      "nearest_neighbor"
+    ],
+    "round": "coding"
   }
 ]

@@ -1034,6 +1034,15 @@
       }
     ]
   },
+  "nearest_neighbor": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "# Adapted from Schuture/OpenAI-Interview-Notes (code under the MIT License).\nimport numpy as np\n\n\nclass NearestNeighbor:\n    def _sq_dists(self, X_train, X_query):\n        # |q - x|^2 = |q|^2 - 2 q.x + |x|^2: (m, 1) + (m, n) + (1, n), never an (m, n, d) array\n        q2 = (X_query ** 2).sum(axis=1)[:, None]\n        x2 = (X_train ** 2).sum(axis=1)[None, :]\n        return q2 - 2.0 * X_query @ X_train.T + x2\n\n    def predict(self, X_train, y_train, X_query):\n        X_train, X_query = np.asarray(X_train, dtype=float), np.asarray(X_query, dtype=float)\n        nearest = np.argmin(self._sq_dists(X_train, X_query), axis=1)  # first minimum: smallest index wins\n        return np.asarray(y_train)[nearest]\n\n    def affine_layer(self, X_train):\n        # -|q - x_i|^2 = 2 x_i.q - |x_i|^2 - |q|^2, and -|q|^2 is the same for every i\n        X_train = np.asarray(X_train, dtype=float)\n        return 2.0 * X_train.T, -(X_train ** 2).sum(axis=1)\n\n    def predict_affine(self, X_train, y_train, X_query):\n        W, b = self.affine_layer(X_train)\n        logits = np.asarray(X_query, dtype=float) @ W + b\n        z = np.exp(logits - logits.max(axis=1, keepdims=True))  # shifting by the row max avoids overflow\n        probs = z / z.sum(axis=1, keepdims=True)\n        return probs, np.asarray(y_train)[np.argmax(probs, axis=1)]",
+        "role": "solution"
+      }
+    ]
+  },
   "noisy_annotators": {
     "cells": [
       {
