@@ -194,5 +194,37 @@
       "cluster_count"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/durable-kv-store",
+    "exercises": [
+      "durable_kv"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/ipv4-cidr-iterator",
+    "exercises": [
+      "ipv4_iterator"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/shard-rebalance",
+    "exercises": [
+      "shard_rebalance"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/text-editor",
+    "exercises": [
+      "text_editor"
+    ],
+    "round": "coding"
   }
 ]
