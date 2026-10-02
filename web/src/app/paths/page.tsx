@@ -44,13 +44,21 @@ export default function PathsPage() {
       .then((d) => setPaths(d.paths ?? []));
   }, []);
 
+  // Sections render only once the paths arrive, so a #group-… link opened directly needs this nudge.
+  useEffect(() => {
+    if (paths.length > 0 && window.location.hash) {
+      document.getElementById(window.location.hash.slice(1))?.scrollIntoView();
+    }
+  }, [paths.length]);
+
   const titleOf = (path: LearningPath) => (locale === 'zh' ? path.titleZh : path.titleEn);
   const continuePath = pickContinuePath(paths, lastPathId);
+  const grouped = groupPaths(paths);
 
   return (
     <div className="min-h-screen bg-bg">
       <TopNav />
-      <main className="max-w-[960px] mx-auto px-7 max-[640px]:px-4 pt-10 pb-20">
+      <main className="max-w-[1080px] mx-auto px-7 max-[640px]:px-4 pt-10 pb-20">
         <div className="mb-8">
           <div className="eyebrow mb-2.5">{t('paths')}</div>
           <h1 className="text-[clamp(28px,3.4vw,40px)] font-semibold tracking-[-0.03em] leading-[1.1] mb-2.5">
@@ -62,7 +70,7 @@ export default function PathsPage() {
         {continuePath && (
           <Link
             href={`/paths/${continuePath.id}`}
-            className="flex items-center gap-4 rounded-[12px] px-5 py-4 mb-10 group"
+            className="flex items-center gap-4 rounded-[12px] px-5 py-4 mb-6 group"
             style={{ background: 'var(--accent-wash)', border: '1px solid var(--accent)' }}
           >
             <span className="mono text-[11px] tracking-[0.14em] uppercase text-accent flex-shrink-0">{t('pathContinue')}</span>
@@ -74,9 +82,44 @@ export default function PathsPage() {
           </Link>
         )}
 
+        {grouped.length > 0 && (
+          <nav
+            aria-label={t('pathGroupsNav')}
+            className="grid grid-cols-5 max-[900px]:grid-cols-2 gap-3 mb-10"
+          >
+            {grouped.map(({ group, paths: members }) => (
+              <div
+                key={group}
+                className="rounded-[12px] px-4 py-3.5 min-w-0"
+                style={{ border: '1px solid var(--line)', background: 'var(--bg-elev)' }}
+              >
+                <a
+                  href={`#group-${group}`}
+                  className="flex items-baseline justify-between gap-2 mb-2.5 hover:text-accent transition-colors"
+                >
+                  <span className="text-sm font-semibold leading-snug">{t(GROUP_LABEL[group])}</span>
+                  <span className="mono text-[11px] text-text-3 flex-shrink-0">{members.length}</span>
+                </a>
+                <ul className="flex flex-col gap-1.5">
+                  {members.map((path) => (
+                    <li key={path.id} className="min-w-0">
+                      <Link
+                        href={`/paths/${path.id}`}
+                        className="block text-xs leading-snug text-text-2 hover:text-accent transition-colors"
+                      >
+                        {titleOf(path)}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </nav>
+        )}
+
         <div className="flex flex-col gap-9">
-          {groupPaths(paths).map(({ group, paths: members }) => (
-            <section key={group}>
+          {grouped.map(({ group, paths: members }) => (
+            <section key={group} id={`group-${group}`} className="scroll-mt-20">
               <h2 className="text-sm font-semibold tracking-[-0.01em] mb-2.5 px-1">{t(GROUP_LABEL[group])}</h2>
               <ul
                 className="rounded-[12px] overflow-hidden"
