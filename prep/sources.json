@@ -226,5 +226,37 @@
       "text_editor"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/event-window-aggregation",
+    "exercises": [
+      "chat_activity"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/version-dependency",
+    "exercises": [
+      "version_search"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/poker-hands",
+    "exercises": [
+      "poker_hands"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/weighted-data-batcher",
+    "exercises": [
+      "weighted_batcher"
+    ],
+    "round": "coding"
   }
 ]

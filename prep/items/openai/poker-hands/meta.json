@@ -1,0 +1,19 @@
+{
+  "title": "Three-Card Hands and Folding",
+  "summary": "Three-card poker hands ranked by a fixed hand-type and tie-break order across many players, extended with a flush type and then with a per-player fold rule after the second card that can end play with a walkover or a stalemate before any showdown.",
+  "round": "coding",
+  "kind": "Coding",
+  "difficulty": "Medium",
+  "frequency": "medium",
+  "format": "3 parts",
+  "topics": [
+    "simulation",
+    "sorting",
+    "rules-engine"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/coding/poker-hands",
+  "rubric": [],
+  "exercises": [
+    "poker_hands"
+  ]
+}

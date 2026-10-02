@@ -140,5 +140,41 @@
     "How does a trie answer a prefix query, and when would you keep it updated on each edit instead of rebuilding it?": "Walk a trie down the letters of the prefix, then think about what is below that node. What changes in the trie when one word is deleted from the text?",
     "Why does sending an index such as insert at 5 not work between replicas, and what do you send instead?": "Two replicas both send insert at 0 at the same moment. Apply each pair in both orders and compare. What could a character carry so its place does not depend on what arrived first?",
     "How can a delete arrive before the insert of its character, and how should a replica handle it?": "Follow three replicas where B deletes a character it received from A, and C hears from B before it hears from A. What should C remember when the delete names a character it has never seen?"
+  },
+  "chat_activity": {
+    "Why does the window follow the largest timestamp seen rather than the caller's chat or the wall clock?": "Suppose a quiet chat asks for its count long after everyone else has moved on. Whose timestamps decide what \"recent\" means, and what would go wrong if each chat used its own latest event?",
+    "When can a chat's entry be deleted, and what happens to memory if it never is?": "Run a stream where every event belongs to a new chat and count the entries your tracker holds after a million events. Which line would have to remove an entry, and when is it safe to run?",
+    "Why is each event evicted exactly once when events arrive in timestamp order, and what does that make the cost per call?": "Follow one event from the moment it is recorded until it leaves. How many times is it touched in total, and what does that say about the average cost per call?",
+    "Why does arrival order stop mattering once you keep each chat's highest ping and close timestamps?": "A ping at 10 and a close at 12 arrive in either order. What do you store per chat so that both orders end in the same state?",
+    "Why can an event older than the clock minus the window be dropped without changing any later answer?": "Once the clock has reached C, which timestamps can every future event still carry? Compare an event below C - window with what the chat already holds.",
+    "How would you partition millions of events per second across machines, and what about one very busy user?": "List what a single machine needs to answer active_sessions for one user. Which key keeps all of that on one machine, and what happens when one key gets most of the traffic?",
+    "After a crash, how much history must a machine replay to rebuild its state?": "Which events can still affect any answer after a restart? Relate that to how much state the tracker is allowed to keep."
+  },
+  "version_search": {
+    "Why must versions be compared as number tuples, and what goes wrong with plain string comparison?": "Run sorted([\"4.9.3\", \"4.10.0\", \"4.2.0\"]) and look at the result. What should a version turn into before two of them are compared?",
+    "What property of the answers makes binary search valid here, and how many probes does it need?": "Draw the answers in version order as F F F T T T. Which single comparison tells you which half holds the first T, and how many halvings reach one version?",
+    "How do you make sure a binary search returns the first True and not just any True?": "Stop your search the moment you see a True and test it on F T T T. Which index did you return, and what should happen to the search range instead?",
+    "If support can regress, why can no strategy guarantee fewer probes than checking versions in order?": "Picture a list where only the very first version is supported, or only the very last. What can a probe of any other version tell you about them?",
+    "Why does a False representative rule out its whole group, and how does that give a logarithmic probe count?": "If a group's latest version is unsupported, what does the first rule say about every earlier patch in that group? Use that to decide which groups you never need to open.",
+    "Why is dependency resolution hard in general, and what do real resolvers do to prune the search?": "Each package can take several versions and each choice adds constraints. What do you do when a later constraint rules out a version you chose earlier, and how bad can that get?",
+    "How do you detect that a chosen set of versions has a dependency cycle?": "Count, for each chosen package, how many of its dependencies are not yet installed. What does it mean when no package has a count of zero but some are left?"
+  },
+  "poker_hands": {
+    "How do you turn a hand into one value whose order matches the ranking rules?": "Python compares tuples element by element. What would you put first in a tuple so that any Pair beats any High Card, and what goes after it?",
+    "Why must a pair's tie-break compare the pair's rank before the third card?": "Take a pair of fives with a king against a pair of nines with a two. Which card decides it, and what happens if your tuple lists the king first?",
+    "How do you find every tied winner among 100,000 hands in one pass?": "One pass can compute every hand's key and the best key. What does a second pass over the keys give you, and why does it keep every tied player?",
+    "What changes in your key when a new hand type is inserted between two existing ones?": "If every hand type is a number at the front of the key, what do you renumber when a new type slots in between two others, and what stays the same?",
+    "Why does a fold not consume a card, and how do you make sure the next player gets it?": "Keep one index for the next card in the deck and move it only when a card is actually dealt. What goes wrong if a fold also moves it?",
+    "How would the key change for five-card hands with two pair, straights and full houses?": "With more cards, which hand types appear, and what does each one need after its type number so that two hands of the same type compare correctly?",
+    "How would you choose a fold rule that does better than the fixed ones?": "A fold rule sees two cards. How would you estimate, for each pair of first cards, the chance of winning if you stay, and fold when it is too low?"
+  },
+  "weighted_batcher": {
+    "What does the batcher need to remember per dataset between two calls, and why one value per dataset?": "Datasets are read at different rates. Which one number per dataset tells you where its next example is, and why does nothing else about the past matter?",
+    "Why is it a bug to open each dataset at offset 0 and skip forward to where it was?": "Opening at offset 0 and calling next() offset times gives the right example. How many examples does that cost after a long run, and what does get_iterator's offset give you instead?",
+    "What does one next_batch call cost, and what does the batcher keep between calls?": "Count the next() calls in one batch and the work done to find each quota. What lives on the batcher between calls, and how big is it?",
+    "Why are the offsets enough to resume, and why not save the open iterators too?": "A generator object cannot be written to JSON. If the offsets are saved and the iterators dropped, what does the restored batcher have to do before its first next()?",
+    "Why must a stochastic checkpoint carry the generator's current state rather than the seed?": "A generator built from the seed and one that has already drawn a thousand numbers give different next draws. Which of the two should a restored batcher match?",
+    "With the smallest count-to-weight rule, how far can a dataset's count drift from its ideal share, and why?": "Each pick goes to the dataset with the smallest count / weight. Compare any two datasets: how far apart can their ratios get before the lower one is picked?",
+    "How would you split the datasets across data-parallel ranks so no two ranks read the same example?": "If every rank opens every dataset at the same offsets, they read the same examples. How could each rank get its own disjoint slice of offsets?"
   }
 }
