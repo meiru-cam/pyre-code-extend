@@ -378,5 +378,13 @@
       "memory_fs"
     ],
     "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/ml-config-system",
+    "exercises": [
+      "config_store"
+    ],
+    "round": "coding"
   }
 ]

@@ -311,5 +311,14 @@
     "How would you keep size fast on a deep tree that changes often?": "Each directory could store the total under it. Which ancestors change when one file changes size, and how many are there?",
     "Why must cp check every owner's quota before copying anything?": "A copy touches files owned by several users. If you copy first and check later, what has to be undone when the third owner goes over?",
     "How would you make snapshots cheaper than a full copy of the tree?": "A snapshot only differs from the live tree where something changed since. Which nodes would a write have to copy, and which could both trees share?"
+  },
+  "config_store": {
+    "What should deep_merge do when the overlay holds a dict but the base holds a scalar, and why?": "The overlay says this key is now a dict of settings. If the base value is an int, what could merging into it even mean?",
+    "Why must merge results share no objects with their inputs?": "Resolve a config, then change one nested value in the result. Which other configs would see the change if a dict were shared?",
+    "How do you detect a cycle in the _base_ graph and report the loop, and why is a diamond not a cycle?": "Carry the list of names on the current path down the recursion. When a name shows up that is already on it, which slice of the list is the loop?",
+    "Why require + to create a key in an override instead of creating missing keys silently?": "A typo like modle.layers=12 on the command line: what should happen if it silently creates a new key, and when would anyone notice?",
+    "Why can a whole-string reference keep the referenced type while an embedded one cannot?": "Replacing the whole string can hand back any object. Splicing into a longer string needs text: what text would a list or None become?",
+    "Why is a bool rejected for an int field, given that bool subclasses int in Python?": "isinstance(True, int) is True. If a schema asks for a layer count and gets True, what would the run actually use?",
+    "Besides the config and its hash, what must a run record to be reproducible weeks later on other hardware?": "Two runs with the same config hash still differ. Which inputs live outside the config, such as code, data and libraries?"
   }
 }
