@@ -446,5 +446,14 @@
     "How do you choose max_calls, and what should the user see when the agent gives up?": "Each model call costs latency and tokens. What is the most rounds a good answer needs here, and what should the caller do with 'gave up after N calls'?",
     "What does a batch tool save, and what is lost when one lookup in the batch fails?": "A batch saves one model call per extra lookup. If the third lookup of five fails, what does the model learn from the error, and what would partial results need in the schema?",
     "When is it safe to run one turn's tool calls in parallel, and why must the results still go back in block order?": "Two calls in one turn read prices; two others write files. What could go wrong running the writes at once, and how does the model match results if they come back in finish order?"
+  },
+  "ticket_triage": {
+    "Why search for the first label tag instead of matching the whole reply, and which replies does each approach reject?": "Write three replies a model might give for a refund ticket: tags only, tags after a polite sentence, tags with a capital R. Which should count? Which pattern call finds a tag anywhere instead of requiring the whole reply to be the tag?",
+    "What should a retry prompt contain so the model can fix its format the second time?": "The first reply had no tag. What does the model need on its second try so it does not repeat the same mistake, and why stop after one retry?",
+    "How does the parser handle a label tag whose content is not an allowed label, and why return None rather than guess?": "The first label tag says 'billing', which is not an allowed label, and a later tag says 'refund'. Which answer is safer to return, and what does guessing hide from your metrics?",
+    "Why must a worked example never be one of the scored tickets, and how would you catch near-duplicates?": "If an example in the prompt is also a ticket being scored, what does the model see just before it is asked that ticket? How would you catch an example that is a light rewording of a ticket?",
+    "Why count a parse failure as wrong rather than leaving it out of accuracy?": "Ten tickets, two replies fail to parse, and the other eight are all right. Is accuracy 80% or 100%? Which number would hide a format regression?",
+    "Why compare two prompts with a paired sign test on the tickets where they disagree instead of comparing their accuracies?": "Prompt B wins on 6 tickets, A on 1, and they agree on 93. Why do only the 7 disagreements carry evidence, and what would a coin flip produce on 7 tickets?",
+    "With temperature above zero, how would you change the evaluation so one lucky run does not decide?": "At temperature 0.7 the same prompt can score differently on two runs. How many runs, or which paired design, would you use before calling a prompt better?"
   }
 }

@@ -598,5 +598,13 @@
       "tool_use_agent"
     ],
     "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/prompting-with-llms",
+    "exercises": [
+      "ticket_triage"
+    ],
+    "round": "coding"
   }
 ]
