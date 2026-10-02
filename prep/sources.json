@@ -242,5 +242,13 @@
       "version_search"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/poker-hands",
+    "exercises": [
+      "poker_hands"
+    ],
+    "round": "coding"
   }
 ]

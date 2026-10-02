@@ -158,5 +158,14 @@
     "Why does a False representative rule out its whole group, and how does that give a logarithmic probe count?": "If a group's latest version is unsupported, what does the first rule say about every earlier patch in that group? Use that to decide which groups you never need to open.",
     "Why is dependency resolution hard in general, and what do real resolvers do to prune the search?": "Each package can take several versions and each choice adds constraints. What do you do when a later constraint rules out a version you chose earlier, and how bad can that get?",
     "How do you detect that a chosen set of versions has a dependency cycle?": "Count, for each chosen package, how many of its dependencies are not yet installed. What does it mean when no package has a count of zero but some are left?"
+  },
+  "poker_hands": {
+    "How do you turn a hand into one value whose order matches the ranking rules?": "Python compares tuples element by element. What would you put first in a tuple so that any Pair beats any High Card, and what goes after it?",
+    "Why must a pair's tie-break compare the pair's rank before the third card?": "Take a pair of fives with a king against a pair of nines with a two. Which card decides it, and what happens if your tuple lists the king first?",
+    "How do you find every tied winner among 100,000 hands in one pass?": "One pass can compute every hand's key and the best key. What does a second pass over the keys give you, and why does it keep every tied player?",
+    "What changes in your key when a new hand type is inserted between two existing ones?": "If every hand type is a number at the front of the key, what do you renumber when a new type slots in between two others, and what stays the same?",
+    "Why does a fold not consume a card, and how do you make sure the next player gets it?": "Keep one index for the next card in the deck and move it only when a card is actually dealt. What goes wrong if a fold also moves it?",
+    "How would the key change for five-card hands with two pair, straights and full houses?": "With more cards, which hand types appear, and what does each one need after its type number so that two hands of the same type compare correctly?",
+    "How would you choose a fold rule that does better than the fixed ones?": "A fold rule sees two cards. How would you estimate, for each pair of first cards, the chance of winning if you stay, and fold when it is too low?"
   }
 }

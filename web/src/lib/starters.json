@@ -195,5 +195,6 @@
   "shard_rebalance": "class ShardManager:\n\n    def __init__(self):\n        pass\n\n    def rebalance(self, limit, shards):\n        pass",
   "text_editor": "class TextBuffer:\n\n    def __init__(self, text=\"\"):\n        pass\n\n    def __len__(self):\n        pass\n\n    def text(self):\n        pass\n\n    def insert(self, pos, text):\n        pass\n\n    def delete(self, start, end):\n        pass\n\n    def read(self, start, end):\n        pass",
   "chat_activity": "class ActivityTracker:\n\n    def __init__(self, window):\n        pass\n\n    def record_event(self, user_id, chat_id, timestamp):\n        pass\n\n    def recent_count(self, user_id, chat_id):\n        pass",
-  "version_search": "class PackageManager:\n\n    def earliest_supported(self, versions, is_supported):\n        pass"
+  "version_search": "class PackageManager:\n\n    def earliest_supported(self, versions, is_supported):\n        pass",
+  "poker_hands": "class PokerTable:\n\n    def hand_type(self, cards):\n        pass\n\n    def compare_hands(self, a, b):\n        pass\n\n    def rank_players(self, hands):\n        pass"
 }

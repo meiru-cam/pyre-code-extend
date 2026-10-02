@@ -230,6 +230,15 @@
       }
     ]
   },
+  "poker_hands": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "# Adapted from Schuture/OpenAI-Interview-Notes (code under the MIT License).\nRANKS = \"23456789TJQKA\"  # the index is the rank's value\nTYPE_NAMES = [\"High Card\", \"Pair\", \"Flush\", \"Three of a Kind\"]\n\n\ndef _key(cards):\n    \"\"\"One comparable tuple per hand: (type, tie-break), so tuple order is hand order.\"\"\"\n    ranks = sorted((RANKS.index(card[0]) for card in cards), reverse=True)\n    if ranks[0] == ranks[2]:\n        return (3, ranks[0])\n    if len({card[1] for card in cards}) == 1:\n        return (2, *ranks)\n    if ranks[0] == ranks[1]:  # after sorting, a pair is at [0:2] or [1:3]\n        return (1, ranks[0], ranks[2])\n    if ranks[1] == ranks[2]:\n        return (1, ranks[1], ranks[0])\n    return (0, *ranks)\n\n\nclass PokerTable:\n    def hand_type(self, cards):\n        return TYPE_NAMES[_key(cards)[0]]\n\n    def compare_hands(self, a, b):\n        ka, kb = _key(a), _key(b)\n        return (ka > kb) - (ka < kb)\n\n    def rank_players(self, hands):\n        keys = [_key(hand) for hand in hands]\n        best = max(keys)\n        return [i for i, k in enumerate(keys) if k == best]\n\n    def start_round(self, deck, strategies):\n        self._deck, self._strategies = deck, strategies\n        self._hands = [[] for _ in strategies]\n        self._folded = [False] * len(strategies)\n        self._next_card = 0  # moves only when a card is dealt, so a fold costs no card\n        self._calls = 0\n\n    def is_over(self):\n        return self._calls >= 3 * len(self._strategies)\n\n    def deal_card(self):\n        round_no, player = divmod(self._calls, len(self._strategies))\n        self._calls += 1\n        if round_no == 2 and self._strategies[player](list(self._hands[player])):\n            self._folded[player] = True\n            return f\"Player {player} folds.\"\n        card = self._deck[self._next_card]\n        self._next_card += 1\n        self._hands[player].append(card)\n        return f\"Player {player} is dealt {card}.\"\n\n    def check_result(self):\n        alive = [p for p, folded in enumerate(self._folded) if not folded]\n        if not alive:\n            return \"No winner: all players folded.\"\n        best = self.rank_players([self._hands[p] for p in alive])\n        if len(best) == 1:\n            return f\"Winner: Player {alive[best[0]]}\"\n        return \"Winner: Tie (Players \" + \", \".join(str(alive[i]) for i in best) + \")\"",
+        "role": "solution"
+      }
+    ]
+  },
   "relu": {
     "cells": [
       {
