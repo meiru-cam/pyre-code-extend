@@ -302,6 +302,7 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 - `scale` with `"factor"` `f > 0`: the new height is `max(1, round(H * f))` with Python's `round`, and likewise the width. Output pixel `(i, j)` copies source pixel `((2*i + 1) * H // (2 * newH), (2*j + 1) * W // (2 * newW))`.
 - `blur` with `"radius"` `r >= 0`: each value becomes the mean of the window of rows `i-r..i+r` and columns `j-r..j+r`, clipped to the image, per channel. With `n` pixels in the clipped window, the mean is `(total + n // 2) // n`. `r = 0` changes nothing.
 - `rotate` with `"angle"`, a multiple of `90`: rotates counter-clockwise by that many degrees, so a negative angle turns clockwise.
+- `apply_step` never calls itself, so each applied step is exactly one `apply_step` call.
 - `pipelines` is a dict from pipeline name to a list of steps, applied in order. An empty list saves the loaded image unchanged.
 
 ────────────────────────────────
@@ -312,7 +313,7 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Where it is used:** data loaders for vision models apply chains of augmentations to every image, and preprocessing jobs fan out over many images while sharing decoded inputs and common prefixes of work.
 
-Adapted from the image processing pipeline in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded. Pillow images become numpy arrays with exact step definitions: bilinear scaling becomes nearest-neighbour, the Gaussian blur becomes a box blur, and rotation is limited to multiples of 90 degrees. Folders and output paths become the `load` and `save` callbacks, worker processes become threads, and the rule that only file paths may cross a process boundary is left out.""",
+Adapted from the image processing pipeline in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded. Pillow images become numpy arrays with exact step definitions: bilinear scaling becomes nearest-neighbour, the Gaussian blur becomes a box blur, and rotation is limited to multiples of 90 degrees. Folders and output paths become the `load` and `save` callbacks, `process_images` and its two variants become `run`, `run_parallel` and `run_shared` on one class, images come in the order given rather than directory order, worker processes become threads, and the rule that only file paths may cross a process boundary is left out.""",
     "parts": [
         {
             "title": "Steps and a sequential run",
@@ -343,13 +344,14 @@ Adapted from the image processing pipeline in Schuture/Anthropic-Interview-Notes
             "description_en": r"""Keep Parts 1–2. Add `run_shared(image_names, pipelines, max_workers=None) -> None`.
 
 - It makes the same saves as `run_parallel`, under the same rules, but for each image every distinct prefix of steps is computed only once. Two steps are the same when their types and parameters are equal; the order of keys in a step dict does not matter.
-- Every step applied goes through `self.apply_step`, one call per application; `apply_step` never calls itself. Work is never shared between images.
-- While an image is processed, at most as many `apply_step` results are kept alive as the longest pipeline has steps. Results already saved count as freed.
+- Every step applied goes through `self.apply_step`, one call per application. Work is never shared between images.
+- While an image is processed, at most as many `apply_step` results are kept alive as the longest pipeline has steps. `save` keeps its own copy, so a saved result still counts while your code holds a reference to it.
 
 **Example:** one image `photo` and five pipelines:
 - `a` = `[flip_vertical, blur 1, grayscale]`, `b` = `[flip_vertical, blur 1]`, `c` = `[flip_vertical, blur 1, rotate 180]` with the blur written as `{"radius": 1, "type": "blur"}`
 - `d` = `[]` saves the image as loaded; `e` = `[grayscale]`
-- running each pipeline alone costs 9 step applications; `run_shared` makes 5: `flip_vertical`, then `blur 1` on it, then `grayscale` and `rotate 180` on that, plus `grayscale` on the original""",
+- running each pipeline alone costs 9 step applications; `run_shared` makes 5: `flip_vertical`, then `blur 1` on it, then `grayscale` and `rotate 180` on that, plus `grayscale` on the original
+- `load("photo")` is called once""",
         },
     ],
     "hints": [

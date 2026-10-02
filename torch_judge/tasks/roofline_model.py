@@ -65,8 +65,8 @@ def check(got, want, label):
             near(got[key], w, (label, key))
 
 def rand_hw(rng):
-    return dict(peak_flops=rng.choice([100e12, 312e12, 400e12, 989e12]), hbm_bandwidth=rng.choice([0.9e12, 1.5e12, 2e12, 3.35e12]),
-                hbm_capacity=rng.choice([16e9, 24e9, 40e9, 80e9]), link_bandwidth=rng.choice([25e9, 50e9, 200e9, 450e9]))
+    return dict(peak_flops=rng.choice([100e12, 300e12, 400e12, 900e12]), hbm_bandwidth=rng.choice([0.9e12, 1.6e12, 2e12, 3.2e12]),
+                hbm_capacity=rng.choice([16e9, 24e9, 48e9, 96e9]), link_bandwidth=rng.choice([20e9, 50e9, 200e9, 450e9]))
 """
 
 TESTS = [
@@ -76,8 +76,8 @@ near(r.ridge(), 200.0, "ridge")
 a = r.matmul(16, 8192, 8192)
 assert a["flops"] == 2147483648 and a["bytes"] == 134742016, a
 assert a["bound"] == "memory" and abs(a["time"] - 6.7371008e-05) < 1e-12, a
-b = r.matmul(4096, 4096, 4096)
-assert b["bound"] == "compute" and abs(b["intensity"] - 1365.333) < 1e-3, b
+b = r.matmul(6144, 3072, 5120)
+assert b["bound"] == "compute" and abs(b["intensity"] - 1462.857) < 1e-3, b
 """},
     {"name": "Part 1: random shapes and machines", "part": 1, "visibility": "unshown", "behavior": "numerics.stability",
      "failure_message": "matmul disagreed with 2mkn FLOPs, s(mk + kn + mn) bytes, their ratio, the two times, their maximum or the bound label on random shapes, machines and element sizes, or an exact tie between compute and memory time was not labelled compute.",
@@ -103,7 +103,7 @@ assert abs(st["compute_time"] - 0.2473901162496) < 1e-9, st
 for seed in range(200):
     rng = random.Random(1000 + seed)
     hw, s = rand_hw(rng), rng.choice([1, 2, 4])
-    L, T, d, f = rng.randint(1, 96), rng.choice([1, 16, 2048, 20000]), rng.choice([512, 4096, 8192]), rng.choice([2048, 16384, 32768])
+    L, T, d, f = rng.randint(1, 96), rng.choice([1, 16, 2048, 20000]), rng.choice([512, 4096, 6144]), rng.choice([2048, 16384, 28672])
     check({fn}(**hw, bytes_per_element=s).stack(L, T, d, f), m_stack(hw, s, L, T, d, f), (seed, L, T, d, f))
 """},
     {"name": "Part 3: the worked example", "part": 3, "behavior": "scheduler.concurrency", "code": _MODEL + r"""
@@ -119,7 +119,7 @@ assert abs(pipe["latency"] - 0.2478934327296) < 1e-9 and abs(ten["latency"] - 0.
 for seed in range(200):
     rng = random.Random(2000 + seed)
     hw, s = rand_hw(rng), rng.choice([1, 2])
-    L, T, d, f = rng.randint(2, 96), rng.choice([16, 2048, 20000]), rng.choice([512, 4096, 8192]), rng.choice([2048, 16384, 32768])
+    L, T, d, f = rng.randint(2, 96), rng.choice([16, 2048, 20000]), rng.choice([512, 4096, 6144]), rng.choice([2048, 16384, 28672])
     got = {fn}(**hw, bytes_per_element=s).two_devices(L, T, d, f)
     want = m_two(hw, s, L, T, d, f)
     check(got["pipeline"], want["pipeline"], (seed, "pipeline", L))
@@ -127,13 +127,13 @@ for seed in range(200):
 """},
     {"name": "Part 4: the worked example", "part": 4, "behavior": "routing.selection", "code": _MODEL + r"""
 r = {fn}(**HW)
-ten = r.ffn(2048, 6144, 24576, 8, "tensor")
-tok = r.ffn(2048, 6144, 24576, 8, "token")
-slow = r.ffn(2048, 6144, 24576, 8, "tensor", link_bandwidth=12.5e9)
+ten = r.ffn(1536, 6144, 24576, 8, "tensor")
+tok = r.ffn(1536, 6144, 24576, 8, "token")
+slow = r.ffn(1536, 6144, 24576, 8, "tensor", link_bandwidth=12.5e9)
 assert ten["weight_bytes"] == 75497472 and tok["weight_bytes"] == 603979776, (ten, tok)
-assert abs(ten["comm_bytes"] - 44040192) < 1 and tok["comm_bytes"] == 0, (ten, tok)
-assert ten["bound"] == tok["bound"] == "compute" and slow["bound"] == "communication", (ten["bound"], tok["bound"], slow["bound"])
-assert abs(ten["latency"] - 0.00060674801664) < 1e-12 and abs(tok["latency"] - 0.00038654705664) < 1e-12, (ten, tok)
+assert abs(ten["comm_bytes"] - 33030144) < 1 and tok["comm_bytes"] == 0, (ten, tok)
+assert ten["bound"] == "compute" and tok["bound"] == "memory" and slow["bound"] == "communication", (ten["bound"], tok["bound"], slow["bound"])
+assert abs(ten["latency"] - 0.00045506101248) < 1e-12 and abs(tok["latency"] - 0.000313786368) < 1e-12, (ten, tok)
 """},
     {"name": "Part 4: random sharding sweeps", "part": 4, "visibility": "unshown", "behavior": "routing.selection",
      "failure_message": "ffn disagreed with the model on FLOPs, weight bytes, compute, memory or communication time, latency or the bound for tensor or token sharding over p from 1 to 64 with or without a link override, or an unknown scheme did not raise ValueError.",
@@ -142,7 +142,7 @@ for seed in range(300):
     rng = random.Random(3000 + seed)
     hw, s = rand_hw(rng), rng.choice([1, 2])
     p = rng.choice([1, 2, 4, 8, 16, 32, 64])
-    T, d, f = rng.choice([64, 2048, 16384]), rng.choice([1024, 4096, 8192]), rng.choice([4096, 16384, 32768])
+    T, d, f = rng.choice([64, 2048, 16384]), rng.choice([1024, 4096, 6144]), rng.choice([4096, 16384, 28672])
     scheme = rng.choice(["tensor", "token"])
     link = rng.choice([None, 12.5e9, 25e9, 900e9])
     r = {fn}(**hw, bytes_per_element=s)
@@ -169,7 +169,7 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 **Rules for every part:**
 - `Roofline(peak_flops, hbm_bandwidth, hbm_capacity, link_bandwidth, bytes_per_element=2)`: FLOP/s, bytes/s, bytes, and bytes/s that one device can send to another while also receiving as much. `s = bytes_per_element` is the size of every stored or sent value.
 - A matmul of an `m×k` matrix by a `k×n` matrix costs `2*m*k*n` FLOPs. It moves `s*(m*k + k*n + m*n)` bytes: each input is read once and the output written once.
-- Its compute time is FLOPs over `peak_flops`, its memory time is bytes over `hbm_bandwidth`, and its time is the larger of the two, as compute and memory traffic overlap inside one kernel.
+- Its compute time is FLOPs over `peak_flops`, its memory time is bytes over `hbm_bandwidth`, and its time is the larger of the two: within one kernel, arithmetic and memory traffic proceed side by side.
 - Return plain numbers in dicts with exactly the keys named. The tests compare with a relative tolerance of `1e-9`.
 
 ────────────────────────────────
@@ -180,7 +180,7 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Where it is used:** choosing batch sizes for inference, sizing a model to an accelerator, and picking tensor, pipeline or data parallelism all start from these back-of-envelope numbers.
 
-Adapted from the matmul performance modelling question in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded. The hand estimates become graded functions on a `Roofline` class with the hardware passed in, and the machines, shapes and layer counts are new. The written explanations are left out. The interview questions ask for them instead.""",
+Adapted from the matmul performance modelling question in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded. The hand estimates become graded functions on a `Roofline` class with the hardware passed in, and the machines, shapes and layer counts are new. Communicated values use the same element size as stored ones, and the sweep over `p` becomes one `p` per `ffn` call. The written explanations are left out. The interview questions ask for them instead.""",
     "parts": [
         {
             "title": "One matmul",
@@ -192,7 +192,7 @@ Adapted from the matmul performance modelling question in Schuture/Anthropic-Int
 
 **Example:** `Roofline(400e12, 2e12, 24e9, 200e9)` has `ridge()` `200.0`:
 - `matmul(16, 8192, 8192)` has `flops` `2147483648`, `bytes` `134742016`, intensity about `15.9`, `bound` `"memory"` and `time` `6.7371008e-05`
-- `matmul(4096, 4096, 4096)` has intensity about `1365.3` and `bound` `"compute"`""",
+- `matmul(6144, 3072, 5120)` has intensity about `1462.9` and `bound` `"compute"`""",
         },
         {
             "title": "A layer stack on one device",
@@ -208,7 +208,7 @@ Adapted from the matmul performance modelling question in Schuture/Anthropic-Int
         },
         {
             "title": "Pipeline or tensor parallel",
-            "description_en": r"""Keep Parts 1–2. Add `two_devices(layers, T, d, f) -> {"pipeline": {...}, "tensor": {...}}` for the Part 2 stack on two devices. Each scheme reports `latency`, `peak_bytes` (the larger of the two devices) and `sent_bytes` (the most either device sends).
+            "description_en": r"""Keep Parts 1–2. Add `two_devices(layers, T, d, f) -> {"pipeline": {...}, "tensor": {...}}` for the Part 2 stack on two devices, with `layers >= 2`. Each scheme reports `latency`, `peak_bytes` (the larger of the two devices) and `sent_bytes` (the most either device sends).
 
 - Pipeline: with `h = layers // 2`, the first device runs layers `1..h` and sends layer `h`'s output to the second device, which runs the rest. `latency` is the first device's summed kernel times, plus that output's bytes over `link_bandwidth`, plus the second device's summed kernel times.
 - Pipeline peak memory on a device is its own layers' weights plus `s*T*(d + f)`.
@@ -230,9 +230,9 @@ Adapted from the matmul performance modelling question in Schuture/Anthropic-Int
 - Return `flops`, `weight_bytes`, `compute_time` and `memory_time` (each summed over the two matmuls), and `comm_bytes`. `comm_time` is `comm_bytes` over `link_bandwidth`, or over the argument when it is given.
 - `latency` is the two kernel times plus `comm_time`, since the all-reduce cannot overlap. `bound` names the largest of compute, memory and communication time, as `"compute"`, `"memory"` or `"communication"`, with ties going to the earlier name.
 
-**Example:** on the Part 1 machine, `ffn(2048, 6144, 24576, 8, ...)`:
-- `"tensor"` holds `75497472` weight bytes, sends `44040192` bytes, is compute bound, and takes about `607` microseconds
-- `"token"` holds `603979776` weight bytes, is compute bound, and takes about `387` microseconds
+**Example:** on the Part 1 machine, `ffn(1536, 6144, 24576, 8, ...)`:
+- `"tensor"` holds `75497472` weight bytes, sends `33030144` bytes, is compute bound, and takes about `455` microseconds
+- `"token"` holds `603979776` weight bytes, sends nothing, is memory bound, and takes about `314` microseconds
 - `"tensor"` with `link_bandwidth=12.5e9` is communication bound""",
         },
     ],

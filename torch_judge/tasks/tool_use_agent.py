@@ -15,7 +15,7 @@ TICKERS = {t for t, _ in CLOSES}
 
 def get_close(ticker, date):
     if ticker not in TICKERS:
-        raise LookupError(f"unknown ticker: {ticker}")
+        raise LookupError(f"no such ticker {ticker}")
     if (ticker, date) not in CLOSES:
         raise ValueError(f"no close for {ticker} on {date}")
     return CLOSES[ticker, date]
@@ -164,7 +164,7 @@ assert got == "gave up after 3 calls", got
 assert client.calls == 3, client.calls
 """},
     {"name": "Part 2: failing tools and the call cap", "part": 2, "visibility": "unshown", "behavior": "budget.enforcement",
-     "failure_message": "With unknown tickers, missing dates and an unknown tool name mixed in, a tool_result was not the error text with is_error True; or with max_calls from 1 to 5 the loop called create more than max_calls times, gave up when the last allowed call ended the turn, returned the wrong text, or ran the tools of the response that hit the cap.",
+     "failure_message": "With unknown tickers, missing dates and an unknown tool name mixed in, a tool_result was not the error text with is_error True; or with max_calls from 1 to 6 the loop called create more than max_calls times, gave up when the last allowed call ended the turn, returned the wrong text, or ran the tools of the response that hit the cap.",
      "code": _MODEL + r"""
 for seed in range(80):
     rng = random.Random(100 + seed)
@@ -269,7 +269,7 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Where it is used:** every agent built on a chat model with tools runs this loop, from coding agents to research assistants. Pairing results by id, handing errors back, capping turns and batching lookups decide its cost and reliability.
 
-Adapted from the agent tool-use loop in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded. The notebook globals become a `ToolAgent` class with a `run_tool` method, the live model becomes a scripted client, the stock table is new, and `create` takes only `system`, `messages` and `tools`. The source's third part, a batch tool plus a prompt that asks the model to batch, becomes the graded `batch_tool`, and the parallel calls become a separate fourth part.""",
+Adapted from the agent tool-use loop in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded. The notebook globals become a `ToolAgent` class with a `run_tool` method, the live model becomes a scripted client, the stock table is new (`get_quote` becomes `get_close`, with new error texts), and `create` takes only `system`, `messages` and `tools`. The `unknown tool` error result and the rule that the capped response's tools are not run are new. The source's third part, a `get_quotes(lookups)` tool plus a prompt that asks the model to batch, becomes the graded `batch_tool`, which builds `<name>_batch(calls)` for any tool, and the parallel calls become a separate fourth part.""",
     "parts": [
         {
             "title": "Fix the loop",
@@ -303,6 +303,7 @@ Adapted from the agent tool-use loop in Schuture/Anthropic-Interview-Notes (CC B
 - `batch_function(calls)` calls `function(**call)` for each call in order and returns the list of results. The first exception propagates, and no later call is made. `batch_tool` never changes `tool`.
 
 **Example:** with the batch of `get_close` offered, the question `"Which of ACME, BOLT and CRUX closed highest on 2026-03-03?"` takes two calls to `create`:
+- the spec is named `"get_close_batch"`, and its `input_schema` wraps `get_close`'s schema as the items of `calls`
 - call 1 returns one block for `"get_close_batch"` with three calls in `calls`
 - its result's `content` is `"[72.0, 19.0, 299.5]"`, and call 2 answers""",
         },

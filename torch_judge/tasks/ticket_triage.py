@@ -69,10 +69,10 @@ def rand_tickets(rng, n, prefix="t"):
 
 TESTS = [
     {"name": "Part 1: the worked example", "part": 1, "behavior": "protocol.validation", "code": _MODEL + r"""
-ticket = "Please send me last quarter's invoices as PDFs."
-model = FakeModel({ticket: ("Looks like a refund request about invoices.", "Sure.\n<label> Refund </label>\n<reason>Asks for copies of invoices.</reason>")})
+ticket = "I was billed after cancelling; please return the charge."
+model = FakeModel({ticket: ("Looks like a refund request after a cancellation.", "Sure.\n<label> Refund </label>\n<reason>Wants a charge returned.</reason>")})
 got = {fn}(model, LABELS).classify(ticket, EXAMPLES)
-assert got == {"label": "refund", "reason": "Asks for copies of invoices.", "retried": True}, got
+assert got == {"label": "refund", "reason": "Wants a charge returned.", "retried": True}, got
 assert len(model.calls) == 2, len(model.calls)
 """},
     {"name": "Part 1: the parser", "part": 1, "visibility": "unshown", "behavior": "protocol.validation",
@@ -235,7 +235,7 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Where it is used:** classification with a model, such as routing tickets, tagging content or grading answers, runs this loop. A tagged output format, one retry, held-out examples and paired comparisons keep the numbers honest.
 
-Adapted from the prompting and evaluation question in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded. The notebook functions become a `TicketTriage` class with the labels passed in, the live model becomes a fake `complete`, and the tickets are new. The colleague's buggy evaluation cell is left out; its bugs become rules of `score` and `evaluate`. The error-analysis write-up is left out, and the decision rule becomes the graded `winner` field.""",
+Adapted from the prompting and evaluation question in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded. The notebook functions become a `TicketTriage` class with the labels passed in (the tests use refund, outage, question and login), the live model becomes a fake `complete`, and the tickets are new. The system prompt is checked only for labels and worked examples, not for label definitions or the tie-break rule, and the retry prompt need not say why the reply failed. `alpha` and `winner` are new. The colleague's buggy evaluation cell is left out; its bugs become rules of `score` and `evaluate`. The error-analysis write-up is left out, and the decision rule becomes the graded `winner` field.""",
     "parts": [
         {
             "title": "Prompt, parser and one retry",
@@ -244,13 +244,13 @@ Adapted from the prompting and evaluation question in Schuture/Anthropic-Intervi
 - `parse_reply` finds the first `<label>` tag anywhere in the reply; text around and between tags is ignored, and tags may span lines. If there is no such tag, or its content, stripped and lower-cased, is not in `labels`, it returns `None`.
 - Otherwise it returns `{"label": <that label>, "reason": <the stripped content of the first <reason> tag, or "">}`.
 - `classify` calls `complete` with a system prompt and a prompt, passing `temperature` through. The system prompt names every label and shows each worked example with its text, `<label>{label}</label>` and `<reason>{reason}</reason>`. The prompt holds the ticket text.
-- If the reply does not parse, `classify` calls `complete` exactly once more, with a prompt holding the ticket text and the failed reply, and parses that reply instead.
+- If the reply does not parse, `classify` calls `complete` exactly once more, with the same system prompt and temperature and a prompt holding the ticket text and the failed reply, and parses that reply instead.
 - It returns `{"label", "reason", "retried"}`. `retried` is `True` exactly when a second call was made; when neither reply parses, `label` is `None` and `reason` is `""`.
 
-**Example:** with `labels = ["refund", "outage", "question", "login"]`, the ticket `"Please send me last quarter's invoices as PDFs."`:
-- the first reply is `"Looks like a refund request about invoices."`, which has no tag
-- the retry's reply is `"Sure.\n<label> Refund </label>\n<reason>Asks for copies of invoices.</reason>"`
-- `classify` returns `{"label": "refund", "reason": "Asks for copies of invoices.", "retried": True}` after two calls""",
+**Example:** with `labels = ["refund", "outage", "question", "login"]`, the ticket `"I was billed after cancelling; please return the charge."`:
+- the first reply is `"Looks like a refund request after a cancellation."`, which has no tag
+- the retry's reply is `"Sure.\n<label> Refund </label>\n<reason>Wants a charge returned.</reason>"`
+- `classify` returns `{"label": "refund", "reason": "Wants a charge returned.", "retried": True}` after two calls""",
         },
         {
             "title": "An evaluation harness",
@@ -318,7 +318,7 @@ class TicketTriage:
             f"Ticket: {ex['text']}\n<label>{ex['label']}</label>\n<reason>{ex['reason']}</reason>" for ex in examples)
         return (
             "You triage support tickets. Choose exactly one label from: " + ", ".join(self.labels) + ".\n"
-            "When a ticket touches several labels, choose the action support must take now.\n"
+            "If a ticket fits several labels, pick the one for what must be fixed first.\n"
             "Reply with exactly one <label>...</label> tag holding the label, then one <reason>...</reason> "
             "tag with a short justification, and nothing else.\n\nWorked examples:\n\n" + shots)
 
