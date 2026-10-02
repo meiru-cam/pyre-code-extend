@@ -257,5 +257,14 @@
     "Lazy expiry checks a field when it is read; what does that cost in memory, and when would you add an active sweep?": "A field that expired is still sitting in the dict. When is it removed, and how much memory can dead fields take if nobody reads them?",
     "Why must a backup store time left instead of an absolute expiry, and what breaks if it stores the expiry?": "A field saved at time 5 with expiry 10 is restored at time 50. With an absolute expiry, is it alive at 50? With time left, when does it expire?",
     "How would you make backups cheaper than a full copy each time?": "Most fields do not change between two backups. Could a backup share the unchanged parts with the previous one instead of copying them?"
+  },
+  "recipe_book": {
+    "Why does the name check need its own index keyed by casefold, and what does casefold handle that lower does not?": "Scanning every recipe to test a name is O(n). Which dict answers who holds a name in O(1)? Try \"STRASSE\" and \"straße\" with lower() and with casefold().",
+    "Why must ingredient lists be copied when they come in and when they go out?": "You store the list the caller passed, and the caller appends to it later. What does get_recipe return now? What if the caller edits a list you returned?",
+    "When a recipe is renamed, which entries of the name index must change, and what bug appears if the old one is left behind?": "Rename \"Pie\" to \"Tart\". Which name-index entries must you add and remove? If the \"pie\" entry stays, what happens when someone else adds \"PIE\"?",
+    "How would you keep list_recipes and the searches fast if the book held millions of recipes?": "Each listing sorts every recipe. What could you keep sorted between writes, and what would an ingredient-to-recipes index cost on update?",
+    "Why add new owner-aware methods instead of changing the signatures of add_recipe and delete_recipe?": "Changing add_recipe's signature in place breaks every caller that still uses the old form. What does adding a new method keep working?",
+    "Why should rollback append a copy instead of truncating history back to the old version?": "Truncating history on rollback loses the versions after it. With an append, what can an auditor still see, and how would you undo the rollback?",
+    "How would you store versions more cheaply than a full copy of each one?": "Most edits change one ingredient. Could a version store only the difference from the previous one, and what would reading an old version then cost?"
   }
 }

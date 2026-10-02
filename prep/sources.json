@@ -330,5 +330,13 @@
       "record_store"
     ],
     "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/oa-recipe-manager",
+    "exercises": [
+      "recipe_book"
+    ],
+    "round": "coding"
   }
 ]
