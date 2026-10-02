@@ -248,5 +248,41 @@
     "How do you choose splitters for a sample sort, and what happens when one value dominates?": "If every rank sends a few evenly spaced samples, what do the sorted samples say about where to cut? What happens if half the data is one value?",
     "Where would barriers or a fixed message order matter to avoid deadlock?": "Two ranks each wait in recv for the other before sending. What happens, and what ordering of sends and receives avoids it?",
     "How would these protocols change with collectives such as all-reduce and all-to-all, or with many more ranks?": "Which of these steps is an all-to-all, and which is a reduce? How does the message count grow with P?"
+  },
+  "record_store": {
+    "Why does a dict of dicts fit this store better than one dict keyed by (key, field) pairs?": "Every call names a key and then a field. If you had to read one field of one record, which lookups would you do, and which layout makes both O(1)?",
+    "Why does every method return a string, and what should get and delete return when nothing is there?": "The caller always gets a string back. What is the string for nothing found, and for a delete that removed nothing?",
+    "What can go wrong if delete removes a field without first checking that it exists?": "If delete skips the existence check, what does it return for a field that was never there, and what happens to a key that was never written?",
+    "How would you keep scan fast if records held millions of fields and scans were frequent?": "Sorting all fields on every scan costs O(f log f). What could you keep sorted between writes, and what would each set then cost?",
+    "Lazy expiry checks a field when it is read; what does that cost in memory, and when would you add an active sweep?": "A field that expired is still sitting in the dict. When is it removed, and how much memory can dead fields take if nobody reads them?",
+    "Why must a backup store time left instead of an absolute expiry, and what breaks if it stores the expiry?": "A field saved at time 5 with expiry 10 is restored at time 50. With an absolute expiry, is it alive at 50? With time left, when does it expire?",
+    "How would you make backups cheaper than a full copy each time?": "Most fields do not change between two backups. Could a backup share the unchanged parts with the previous one instead of copying them?"
+  },
+  "recipe_book": {
+    "Why does the name check need its own index keyed by casefold, and what does casefold handle that lower does not?": "Scanning every recipe to test a name is O(n). Which dict answers who holds a name in O(1)? Try \"GROSS\" and \"groß\" with lower() and with casefold().",
+    "Why must ingredient lists be copied when they come in and when they go out?": "You store the list the caller passed, and the caller appends to it later. What does get_recipe return now? What if the caller edits a list you returned?",
+    "When a recipe is renamed, which entries of the name index must change, and what bug appears if the old one is left behind?": "Rename \"Pie\" to \"Tart\". Which name-index entries must you add and remove? If the \"pie\" entry stays, what happens when someone else adds \"PIE\"?",
+    "How would you keep list_recipes and the searches fast if the book held millions of recipes?": "Each listing sorts every recipe. What could you keep sorted between writes, and what would an ingredient-to-recipes index cost on update?",
+    "Why add new owner-aware methods instead of changing the signatures of add_recipe and delete_recipe?": "Changing add_recipe's signature in place breaks every caller that still uses the old form. What does adding a new method keep working?",
+    "Why should rollback append a copy instead of truncating history back to the old version?": "Truncating history on rollback loses the versions after it. With an append, what can an auditor still see, and how would you undo the rollback?",
+    "How would you store versions more cheaply than a full copy of each one?": "Most edits change one ingredient. Could a version store only the difference from the previous one, and what would reading an old version then cost?"
+  },
+  "boot_debugger": {
+    "Why is a set of visited lines enough to detect a loop here, and what makes the state just pc?": "acc never decides where pc goes next. If pc comes back to a line it already ran, what will every step after that look like?",
+    "Why must landing past the end be an error rather than another way to finish?": "A goto that lands at n + 3 leaves no next line, just like landing on n. Why should a caller be able to tell those two cases apart?",
+    "Why must an out-of-range pc be caught before indexing program[pc], and what does Python do with a negative index?": "A goto -9 on line 2 sets pc to -7. What does program[-7] return in Python, and what would the simulation do next if nothing stopped it?",
+    "Why is trying every switch and rerunning O(n^2), and how does reachability from the end make the repair O(n)?": "Each line has one successor. Walking backwards from n over those edges marks every line that ends the run. How does that answer each switch in O(1)?",
+    "Why can only lines on the looping path be the corrupted one?": "If a line is never reached by the looping run, does switching it change anything that run does?",
+    "How would you report every malformed line at once instead of stopping at the first?": "Collecting errors into a list instead of raising at once: what would the caller get back, and which line numbers would it need?",
+    "If several lines could be corrupted, how would the repair search change?": "With two corrupted lines, each pair of switches is a candidate. How many pairs are there, and can the reachability idea still prune them?"
+  },
+  "chat_room": {
+    "Why does module-level state make the legacy function hard to test, and what does injecting a dict into each bot change?": "Run two tests in one process against the legacy code. Which module-level names carry over from the first test, and what would a second room need instead?",
+    "Why must FocusBot read time from an injected clock rather than the system clock?": "A bot that calls time.time() gives a different answer on every run. How would a test check that a session ending at 527 is over at 527?",
+    "How do you show that the refactored room produces exactly the legacy log, rather than trusting that the two code paths look alike?": "Two code paths that look alike can still differ on \"/cheer   @Kai  \" or \"/vote  b \". What would you feed both paths, and what would you compare?",
+    "Should a room catch exceptions from bots, and what do you lose when it does?": "If one bot raises, the room can stop or skip it. Which choice keeps the chat working, and where must the error still show up?",
+    "Why check command ownership at registration rather than when a message arrives?": "Two bots both claim /vote. Detected at registration, who sees the error? Detected when a message arrives, which bot should answer?",
+    "What does an event bus buy over PollBot calling CheerBot directly, and what does it cost in traceability?": "PollBot calling CheerBot directly needs a reference to it. With a bus, what does PollBot know about who reacts, and how would you trace a line back to its source?",
+    "Should publish return lines to the publisher, or should handlers write to the log themselves?": "If handlers wrote to the log themselves, how would the cheer line end up right after the vote line, and who would own the log?"
   }
 }

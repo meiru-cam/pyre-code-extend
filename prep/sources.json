@@ -322,5 +322,37 @@
       "cluster_stats"
     ],
     "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/oa-in-memory-database",
+    "exercises": [
+      "record_store"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/oa-recipe-manager",
+    "exercises": [
+      "recipe_book"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/bootloader-loop-fix",
+    "exercises": [
+      "boot_debugger"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/chat-bot-refactoring",
+    "exercises": [
+      "chat_room"
+    ],
+    "round": "coding"
   }
 ]

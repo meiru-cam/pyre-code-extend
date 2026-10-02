@@ -1,0 +1,20 @@
+{
+  "title": "Boot Program Simulator: Find and Fix the Loop",
+  "summary": "Simulate a tiny boot program of plus/next/jump instructions, detect the infinite loop that one corrupted instruction causes, then locate and repair that single instruction — first by trying every possible fix, then in linear time with a reverse-reachability graph.",
+  "round": "coding",
+  "kind": "Coding · simulation, cycle detection",
+  "difficulty": "Medium",
+  "frequency": "low",
+  "format": "3 parts / 55 min",
+  "topics": [
+    "simulation",
+    "cycle-detection",
+    "graphs",
+    "parsing"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/coding/bootloader-loop-fix",
+  "rubric": [],
+  "exercises": [
+    "boot_debugger"
+  ]
+}

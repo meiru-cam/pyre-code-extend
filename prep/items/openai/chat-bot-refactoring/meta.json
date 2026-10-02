@@ -1,0 +1,20 @@
+{
+  "title": "Chat Bot Refactoring",
+  "summary": "Read a working but tangled chat service whose three slash-command bots share global state, refactor it into bot classes behind one interface without changing a single log line, add a cross-bot rule over an event bus, and write the tests.",
+  "round": "coding",
+  "kind": "Refactoring",
+  "difficulty": "Medium",
+  "frequency": "medium",
+  "format": "4 parts",
+  "topics": [
+    "refactoring",
+    "oop-design",
+    "event-driven",
+    "testing"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/coding/chat-bot-refactoring",
+  "rubric": [],
+  "exercises": [
+    "chat_room"
+  ]
+}
