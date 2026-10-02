@@ -167,5 +167,14 @@
     "Why does a fold not consume a card, and how do you make sure the next player gets it?": "Keep one index for the next card in the deck and move it only when a card is actually dealt. What goes wrong if a fold also moves it?",
     "How would the key change for five-card hands with two pair, straights and full houses?": "With more cards, which hand types appear, and what does each one need after its type number so that two hands of the same type compare correctly?",
     "How would you choose a fold rule that does better than the fixed ones?": "A fold rule sees two cards. How would you estimate, for each pair of first cards, the chance of winning if you stay, and fold when it is too low?"
+  },
+  "weighted_batcher": {
+    "What does the batcher need to remember per dataset between two calls, and why one value per dataset?": "Datasets are read at different rates. Which one number per dataset tells you where its next example is, and why does nothing else about the past matter?",
+    "Why is it a bug to open each dataset at offset 0 and skip forward to where it was?": "Opening at offset 0 and calling next() offset times gives the right example. How many examples does that cost after a long run, and what does get_iterator's offset give you instead?",
+    "What does one next_batch call cost, and what does the batcher keep between calls?": "Count the next() calls in one batch and the work done to find each quota. What lives on the batcher between calls, and how big is it?",
+    "Why are the offsets enough to resume, and why not save the open iterators too?": "A generator object cannot be written to JSON. If the offsets are saved and the iterators dropped, what does the restored batcher have to do before its first next()?",
+    "Why must a stochastic checkpoint carry the generator's current state rather than the seed?": "A generator built from the seed and one that has already drawn a thousand numbers give different next draws. Which of the two should a restored batcher match?",
+    "With the smallest count-to-weight rule, how far can a dataset's count drift from its ideal share, and why?": "Each pick goes to the dataset with the smallest count / weight. Compare any two datasets: how far apart can their ratios get before the lower one is picked?",
+    "How would you split the datasets across data-parallel ranks so no two ranks read the same example?": "If every rank opens every dataset at the same offsets, they read the same examples. How could each rank get its own disjoint slice of offsets?"
   }
 }

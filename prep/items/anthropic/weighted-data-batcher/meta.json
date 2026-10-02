@@ -1,0 +1,20 @@
+{
+  "title": "Weighted Data Batcher with Checkpointing",
+  "summary": "Build a DataBatcher that draws each batch from several named datasets in proportion to integer weights, checkpoints and resumes so a paused run continues with byte-identical batches, and handles batch sizes that do not divide evenly across the weights.",
+  "round": "coding",
+  "kind": "Coding · sampling, checkpointing",
+  "difficulty": "Hard",
+  "frequency": "medium",
+  "format": "3 parts / 55 min",
+  "topics": [
+    "sampling",
+    "checkpointing",
+    "iterators",
+    "data-loading"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/coding/weighted-data-batcher",
+  "rubric": [],
+  "exercises": [
+    "weighted_batcher"
+  ]
+}

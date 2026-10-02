@@ -250,5 +250,13 @@
       "poker_hands"
     ],
     "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/weighted-data-batcher",
+    "exercises": [
+      "weighted_batcher"
+    ],
+    "round": "coding"
   }
 ]
