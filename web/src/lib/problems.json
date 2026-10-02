@@ -27005,6 +27005,173 @@
           "hint": "Readers share and writers need the lock alone. Which mode is which, and what limit does the writer's batch need?"
         }
       ]
+    },
+    {
+      "id": "resumable_iterator",
+      "title": "Resumable Iterator",
+      "titleZh": "Resumable Iterator",
+      "difficulty": "Medium",
+      "functionName": "ResumableIterator",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Build `ResumableIterator`, an iterator that can report its position and later continue from a saved one: first over a list, then over rows that may be empty, then over lists nested to any depth.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior, so one `ResumableIterator` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- `ResumableIterator(items, depth=1)` walks data nested `depth` levels deep: whatever `depth` indexing steps reach is an item, even if it is a list. Items come in order of their index tuples.\n- It is a Python iterator: `iter(it)` returns `it`, and `next(it)` returns the next item or raises `StopIteration`.\n- `get_state()` returns a tuple of `depth` ints: the index tuple of the item `next` would return, or `(len(items), 0, ..., 0)` once nothing is left.\n- `set_state(state)` accepts exactly those tuples for its own data, and lists too, since JSON turns tuples into lists. It may move backward or forward at any time.\n- `set_state` raises `TypeError` for anything that is not a tuple or list of `depth` ints (a `bool` is not an int), and otherwise `ValueError` for a state `get_state` could never return. A rejected state changes nothing.\n- The data is never changed while an iterator walks it.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** it looks like an easy iterator until empty lists and saved states meet. Each later part adds one requirement: rows that may be empty force a single meaning for every position, and any depth forces a loop where recursion and rescans were enough before.\n\n**Where it is used:** data loaders that resume an epoch after a crash or preemption, streaming jobs that checkpoint their offset in each partition, and paginated APIs that hand back a cursor.\n\nAdapted from the resumable iterators question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, as one class with a `depth` argument instead of an abstract base class and three subclasses. The source's first part, the abstract interface, becomes the Rules above, and Parts 2 and 3 add speed checks.",
+      "descriptionZh": "Build `ResumableIterator`, an iterator that can report its position and later continue from a saved one: first over a list, then over rows that may be empty, then over lists nested to any depth.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior, so one `ResumableIterator` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- `ResumableIterator(items, depth=1)` walks data nested `depth` levels deep: whatever `depth` indexing steps reach is an item, even if it is a list. Items come in order of their index tuples.\n- It is a Python iterator: `iter(it)` returns `it`, and `next(it)` returns the next item or raises `StopIteration`.\n- `get_state()` returns a tuple of `depth` ints: the index tuple of the item `next` would return, or `(len(items), 0, ..., 0)` once nothing is left.\n- `set_state(state)` accepts exactly those tuples for its own data, and lists too, since JSON turns tuples into lists. It may move backward or forward at any time.\n- `set_state` raises `TypeError` for anything that is not a tuple or list of `depth` ints (a `bool` is not an int), and otherwise `ValueError` for a state `get_state` could never return. A rejected state changes nothing.\n- The data is never changed while an iterator walks it.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** it looks like an easy iterator until empty lists and saved states meet. Each later part adds one requirement: rows that may be empty force a single meaning for every position, and any depth forces a loop where recursion and rescans were enough before.\n\n**Where it is used:** data loaders that resume an epoch after a crash or preemption, streaming jobs that checkpoint their offset in each partition, and paginated APIs that hand back a cursor.\n\nAdapted from the resumable iterators question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, as one class with a `depth` argument instead of an abstract base class and three subclasses. The source's first part, the abstract interface, becomes the Rules above, and Parts 2 and 3 add speed checks.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Part 1: the worked example",
+          "code": "\nimport json\ndef kind(call):\n    try:\n        call()\n    except Exception as e:\n        return type(e).__name__\n    return None\nit = {fn}([\"ox\", \"elk\", \"yak\"])\nstart = it.get_state()\nassert start == (0,)\nassert list(it) == [\"ox\", \"elk\", \"yak\"]\nassert it.get_state() == (3,)\nit.set_state(json.loads(json.dumps((1,))))\nassert next(it) == \"elk\"\nassert kind(lambda: it.set_state((4,))) == \"ValueError\"\nassert kind(lambda: it.set_state((True,))) == \"TypeError\"\nassert kind(lambda: it.set_state(\"2\")) == \"TypeError\"\nassert next(it) == \"yak\"\nit.set_state(start)\nassert next(it) == \"ox\"\n",
+          "behavior": "checkpoint.recovery",
+          "part": 1
+        },
+        {
+          "name": "Part 1: checks, order and failed calls",
+          "visibility": "unshown",
+          "behavior": "protocol.validation",
+          "failureMessage": "TypeError comes first, for a state that is not a tuple or list, has the wrong length, or holds a non-int or a bool; then ValueError for an index outside 0..len(items); a rejected state leaves the position alone; an empty list starts at (0,); iter(it) is it; states may move backward after StopIteration.",
+          "hiddenCode": "\nimport json, random, time\n\ndef flatten(items, depth, prefix=()):\n    if depth == 1:\n        return [(prefix + (i,), x) for i, x in enumerate(items)]\n    out = []\n    for i, sub in enumerate(items):\n        out += flatten(sub, depth - 1, prefix + (i,))\n    return out\n\nclass Model:\n    def __init__(self, items, depth):\n        self.flat = flatten(items, depth)\n        self.end = (len(items),) + (0,) * (depth - 1)\n        self.index = {t: k for k, (t, _) in enumerate(self.flat)}\n        self.depth, self.at = depth, 0\n    def next(self):\n        if self.at == len(self.flat):\n            return (\"stop\",)\n        self.at += 1\n        return (\"ok\", self.flat[self.at - 1][1])\n    def get(self):\n        return self.flat[self.at][0] if self.at < len(self.flat) else self.end\n    def set(self, state):\n        if not isinstance(state, (tuple, list)) or len(state) != self.depth or not all(type(i) is int for i in state):\n            return (\"raise\", \"TypeError\")\n        state = tuple(state)\n        if state == self.end:\n            self.at = len(self.flat)\n        elif state in self.index:\n            self.at = self.index[state]\n        else:\n            return (\"raise\", \"ValueError\")\n        return (\"ok\", None)\n\ndef nested(rng, depth, width, empty):\n    if depth == 0:\n        return rng.randint(0, 99)\n    if rng.random() < empty:\n        return []\n    return [nested(rng, depth - 1, width, empty) for _ in range(rng.randint(1, width))]\n\ndef attempt(call):\n    try:\n        return (\"ok\", call())\n    except StopIteration:\n        return (\"stop\",)\n    except Exception as e:\n        return (\"raise\", type(e).__name__)\n\ndef compare(fn, items, depth, rng, steps, label):\n    it = fn(items, depth) if depth != 1 or rng.random() < 0.5 else fn(items)\n    m = Model(items, depth)\n    states = [t for t, _ in m.flat] + [m.end]\n    for step in range(steps):\n        r = rng.random()\n        if r < 0.45:\n            got, want = attempt(lambda: next(it)), m.next()\n        elif r < 0.65:\n            got, want = (\"ok\", it.get_state()), (\"ok\", m.get())\n            assert type(got[1]) is tuple, (label, step, got)\n        else:\n            if rng.random() < 0.6:\n                s = rng.choice(states)\n            else:\n                s = tuple(rng.randint(-1, 4) for _ in range(depth))\n            if rng.random() < 0.3:\n                s = json.loads(json.dumps(s))\n            got, want = attempt(lambda: it.set_state(s)), m.set(s)\n        assert got == want, (label, step, got, want, items)\n\nit = {fn}([])\nassert it.get_state() == (0,) and attempt(lambda: next(it)) == (\"stop\",)\nit = {fn}([[1], [2]])\nassert iter(it) is it\nassert next(it) == [1]\nassert attempt(lambda: it.set_state((5, \"x\"))) == (\"raise\", \"TypeError\")\nassert attempt(lambda: it.set_state((-1,))) == (\"raise\", \"ValueError\")\nassert attempt(lambda: it.set_state((1.0,))) == (\"raise\", \"TypeError\")\nassert attempt(lambda: it.set_state(None)) == (\"raise\", \"TypeError\")\nassert attempt(lambda: it.set_state(())) == (\"raise\", \"TypeError\")\nassert attempt(lambda: it.set_state((3,))) == (\"raise\", \"ValueError\")\nassert it.get_state() == (1,) and next(it) == [2]\nassert attempt(lambda: next(it)) == (\"stop\",) and attempt(lambda: next(it)) == (\"stop\",)\nit.set_state([0])\nassert [x for x in it] == [[1], [2]]\nstate = it.get_state()\nit.set_state((2,))\nassert it.get_state() == state == (2,)\n",
+          "part": 1
+        },
+        {
+          "name": "Part 1: random calls",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "On random lists and random next, get_state and set_state calls, including states sent through JSON, a result or error differed from a model that lists every position up front.",
+          "hiddenCode": "\nimport json, random, time\n\ndef flatten(items, depth, prefix=()):\n    if depth == 1:\n        return [(prefix + (i,), x) for i, x in enumerate(items)]\n    out = []\n    for i, sub in enumerate(items):\n        out += flatten(sub, depth - 1, prefix + (i,))\n    return out\n\nclass Model:\n    def __init__(self, items, depth):\n        self.flat = flatten(items, depth)\n        self.end = (len(items),) + (0,) * (depth - 1)\n        self.index = {t: k for k, (t, _) in enumerate(self.flat)}\n        self.depth, self.at = depth, 0\n    def next(self):\n        if self.at == len(self.flat):\n            return (\"stop\",)\n        self.at += 1\n        return (\"ok\", self.flat[self.at - 1][1])\n    def get(self):\n        return self.flat[self.at][0] if self.at < len(self.flat) else self.end\n    def set(self, state):\n        if not isinstance(state, (tuple, list)) or len(state) != self.depth or not all(type(i) is int for i in state):\n            return (\"raise\", \"TypeError\")\n        state = tuple(state)\n        if state == self.end:\n            self.at = len(self.flat)\n        elif state in self.index:\n            self.at = self.index[state]\n        else:\n            return (\"raise\", \"ValueError\")\n        return (\"ok\", None)\n\ndef nested(rng, depth, width, empty):\n    if depth == 0:\n        return rng.randint(0, 99)\n    if rng.random() < empty:\n        return []\n    return [nested(rng, depth - 1, width, empty) for _ in range(rng.randint(1, width))]\n\ndef attempt(call):\n    try:\n        return (\"ok\", call())\n    except StopIteration:\n        return (\"stop\",)\n    except Exception as e:\n        return (\"raise\", type(e).__name__)\n\ndef compare(fn, items, depth, rng, steps, label):\n    it = fn(items, depth) if depth != 1 or rng.random() < 0.5 else fn(items)\n    m = Model(items, depth)\n    states = [t for t, _ in m.flat] + [m.end]\n    for step in range(steps):\n        r = rng.random()\n        if r < 0.45:\n            got, want = attempt(lambda: next(it)), m.next()\n        elif r < 0.65:\n            got, want = (\"ok\", it.get_state()), (\"ok\", m.get())\n            assert type(got[1]) is tuple, (label, step, got)\n        else:\n            if rng.random() < 0.6:\n                s = rng.choice(states)\n            else:\n                s = tuple(rng.randint(-1, 4) for _ in range(depth))\n            if rng.random() < 0.3:\n                s = json.loads(json.dumps(s))\n            got, want = attempt(lambda: it.set_state(s)), m.set(s)\n        assert got == want, (label, step, got, want, items)\n\nfor seed in range(200):\n    rng = random.Random(seed)\n    compare({fn}, [rng.randint(0, 9) for _ in range(rng.randint(0, 6))], 1, rng, 40, seed)\n",
+          "part": 1
+        },
+        {
+          "name": "Part 2: the worked example",
+          "code": "\ndef kind(call):\n    try:\n        call()\n    except Exception as e:\n        return type(e).__name__\n    return None\nit = {fn}([[], [4, 8], [], [6]], 2)\nassert it.get_state() == (1, 0)\nassert next(it) == 4 and it.get_state() == (1, 1)\nassert next(it) == 8 and it.get_state() == (3, 0)\nsaved = it.get_state()\nassert next(it) == 6 and it.get_state() == (4, 0)\nfor bad in [(0, 0), (1, 2), (2, 0)]:\n    assert kind(lambda: it.set_state(bad)) == \"ValueError\", bad\nit.set_state(saved)\nassert list(it) == [6]\nassert {fn}([[], []], 2).get_state() == (2, 0)\n",
+          "behavior": "edge.empty_or_boundary",
+          "part": 2
+        },
+        {
+          "name": "Part 2: states across instances",
+          "visibility": "unshown",
+          "behavior": "checkpoint.recovery",
+          "failureMessage": "A state is checked only against the receiving iterator's own data: on data of the same shape iteration continues at the same index tuple, on another shape it is accepted only if it names an item or the end there; the exhausted state is (len(items), 0); a 2-int state is required.",
+          "hiddenCode": "\nimport json, random, time\n\ndef flatten(items, depth, prefix=()):\n    if depth == 1:\n        return [(prefix + (i,), x) for i, x in enumerate(items)]\n    out = []\n    for i, sub in enumerate(items):\n        out += flatten(sub, depth - 1, prefix + (i,))\n    return out\n\nclass Model:\n    def __init__(self, items, depth):\n        self.flat = flatten(items, depth)\n        self.end = (len(items),) + (0,) * (depth - 1)\n        self.index = {t: k for k, (t, _) in enumerate(self.flat)}\n        self.depth, self.at = depth, 0\n    def next(self):\n        if self.at == len(self.flat):\n            return (\"stop\",)\n        self.at += 1\n        return (\"ok\", self.flat[self.at - 1][1])\n    def get(self):\n        return self.flat[self.at][0] if self.at < len(self.flat) else self.end\n    def set(self, state):\n        if not isinstance(state, (tuple, list)) or len(state) != self.depth or not all(type(i) is int for i in state):\n            return (\"raise\", \"TypeError\")\n        state = tuple(state)\n        if state == self.end:\n            self.at = len(self.flat)\n        elif state in self.index:\n            self.at = self.index[state]\n        else:\n            return (\"raise\", \"ValueError\")\n        return (\"ok\", None)\n\ndef nested(rng, depth, width, empty):\n    if depth == 0:\n        return rng.randint(0, 99)\n    if rng.random() < empty:\n        return []\n    return [nested(rng, depth - 1, width, empty) for _ in range(rng.randint(1, width))]\n\ndef attempt(call):\n    try:\n        return (\"ok\", call())\n    except StopIteration:\n        return (\"stop\",)\n    except Exception as e:\n        return (\"raise\", type(e).__name__)\n\ndef compare(fn, items, depth, rng, steps, label):\n    it = fn(items, depth) if depth != 1 or rng.random() < 0.5 else fn(items)\n    m = Model(items, depth)\n    states = [t for t, _ in m.flat] + [m.end]\n    for step in range(steps):\n        r = rng.random()\n        if r < 0.45:\n            got, want = attempt(lambda: next(it)), m.next()\n        elif r < 0.65:\n            got, want = (\"ok\", it.get_state()), (\"ok\", m.get())\n            assert type(got[1]) is tuple, (label, step, got)\n        else:\n            if rng.random() < 0.6:\n                s = rng.choice(states)\n            else:\n                s = tuple(rng.randint(-1, 4) for _ in range(depth))\n            if rng.random() < 0.3:\n                s = json.loads(json.dumps(s))\n            got, want = attempt(lambda: it.set_state(s)), m.set(s)\n        assert got == want, (label, step, got, want, items)\n\na = {fn}([[1, 2], [], [3]], 2)\nnext(a)\ns = a.get_state()\nb = {fn}([[\"x\", \"y\"], [], [\"z\"]], 2)\nb.set_state(s)\nassert list(b) == [\"y\", \"z\"]\nc = {fn}([[0], [5, 6, 7]], 2)\nassert attempt(lambda: c.set_state(s)) == (\"raise\", \"ValueError\")\nc.set_state((1, 2))\nassert list(c) == [7] and c.get_state() == (2, 0)\nassert attempt(lambda: c.set_state((2, 1))) == (\"raise\", \"ValueError\")\nassert attempt(lambda: c.set_state((1,))) == (\"raise\", \"TypeError\")\nc.set_state((2, 0))\nassert attempt(lambda: next(c)) == (\"stop\",)\n",
+          "part": 2
+        },
+        {
+          "name": "Part 2: random rows",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "On random rows, many of them empty, a result or error differed from a model that lists every (row, column) position up front.",
+          "hiddenCode": "\nimport json, random, time\n\ndef flatten(items, depth, prefix=()):\n    if depth == 1:\n        return [(prefix + (i,), x) for i, x in enumerate(items)]\n    out = []\n    for i, sub in enumerate(items):\n        out += flatten(sub, depth - 1, prefix + (i,))\n    return out\n\nclass Model:\n    def __init__(self, items, depth):\n        self.flat = flatten(items, depth)\n        self.end = (len(items),) + (0,) * (depth - 1)\n        self.index = {t: k for k, (t, _) in enumerate(self.flat)}\n        self.depth, self.at = depth, 0\n    def next(self):\n        if self.at == len(self.flat):\n            return (\"stop\",)\n        self.at += 1\n        return (\"ok\", self.flat[self.at - 1][1])\n    def get(self):\n        return self.flat[self.at][0] if self.at < len(self.flat) else self.end\n    def set(self, state):\n        if not isinstance(state, (tuple, list)) or len(state) != self.depth or not all(type(i) is int for i in state):\n            return (\"raise\", \"TypeError\")\n        state = tuple(state)\n        if state == self.end:\n            self.at = len(self.flat)\n        elif state in self.index:\n            self.at = self.index[state]\n        else:\n            return (\"raise\", \"ValueError\")\n        return (\"ok\", None)\n\ndef nested(rng, depth, width, empty):\n    if depth == 0:\n        return rng.randint(0, 99)\n    if rng.random() < empty:\n        return []\n    return [nested(rng, depth - 1, width, empty) for _ in range(rng.randint(1, width))]\n\ndef attempt(call):\n    try:\n        return (\"ok\", call())\n    except StopIteration:\n        return (\"stop\",)\n    except Exception as e:\n        return (\"raise\", type(e).__name__)\n\ndef compare(fn, items, depth, rng, steps, label):\n    it = fn(items, depth) if depth != 1 or rng.random() < 0.5 else fn(items)\n    m = Model(items, depth)\n    states = [t for t, _ in m.flat] + [m.end]\n    for step in range(steps):\n        r = rng.random()\n        if r < 0.45:\n            got, want = attempt(lambda: next(it)), m.next()\n        elif r < 0.65:\n            got, want = (\"ok\", it.get_state()), (\"ok\", m.get())\n            assert type(got[1]) is tuple, (label, step, got)\n        else:\n            if rng.random() < 0.6:\n                s = rng.choice(states)\n            else:\n                s = tuple(rng.randint(-1, 4) for _ in range(depth))\n            if rng.random() < 0.3:\n                s = json.loads(json.dumps(s))\n            got, want = attempt(lambda: it.set_state(s)), m.set(s)\n        assert got == want, (label, step, got, want, items)\n\nfor seed in range(300):\n    rng = random.Random(1000 + seed)\n    compare({fn}, nested(rng, 2, 4, 0.4), 2, rng, 40, seed)\n",
+          "part": 2
+        },
+        {
+          "name": "Part 2: long runs of empty rows",
+          "visibility": "unshown",
+          "behavior": "performance.complexity",
+          "failureMessage": "Walking 100,000 rows, most of them empty, with get_state after every item took too long: keep the position and move forward from it, never rescan from the first row.",
+          "hiddenCode": "\nimport time\nrows = [[i] if i % 4 == 0 else [] for i in range(100000)]\nstart = time.perf_counter()\nit = {fn}(rows, 2)\ntotal = 0\nfor x in it:\n    total += x\n    it.get_state()\nelapsed = time.perf_counter() - start\nassert total == sum(range(0, 100000, 4)) and it.get_state() == (100000, 0)\nassert elapsed < 2.0, f\"{elapsed:.2f}s for 100,000 rows\"\n",
+          "part": 2
+        },
+        {
+          "name": "Part 3: the worked example",
+          "code": "\ndata = [[], [[], [[2, 4]]], [[], [[8]]]]\nit = {fn}(data, 3)\nassert it.get_state() == (1, 1, 0)\nassert next(it) == [2, 4]\nassert it.get_state() == (2, 1, 0)\nassert next(it) == [8] and it.get_state() == (3, 0, 0)\nit.set_state([1, 1, 0])\nassert list(it) == [[2, 4], [8]]\ndeep = {fn}(data, 4)\nassert list(deep) == [2, 4, 8]\n",
+          "behavior": "edge.empty_or_boundary",
+          "part": 3
+        },
+        {
+          "name": "Part 3: random nesting",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "On random data nested 1 to 5 levels, with empty lists at any level, a result or error differed from a model that lists every index tuple up front.",
+          "hiddenCode": "\nimport json, random, time\n\ndef flatten(items, depth, prefix=()):\n    if depth == 1:\n        return [(prefix + (i,), x) for i, x in enumerate(items)]\n    out = []\n    for i, sub in enumerate(items):\n        out += flatten(sub, depth - 1, prefix + (i,))\n    return out\n\nclass Model:\n    def __init__(self, items, depth):\n        self.flat = flatten(items, depth)\n        self.end = (len(items),) + (0,) * (depth - 1)\n        self.index = {t: k for k, (t, _) in enumerate(self.flat)}\n        self.depth, self.at = depth, 0\n    def next(self):\n        if self.at == len(self.flat):\n            return (\"stop\",)\n        self.at += 1\n        return (\"ok\", self.flat[self.at - 1][1])\n    def get(self):\n        return self.flat[self.at][0] if self.at < len(self.flat) else self.end\n    def set(self, state):\n        if not isinstance(state, (tuple, list)) or len(state) != self.depth or not all(type(i) is int for i in state):\n            return (\"raise\", \"TypeError\")\n        state = tuple(state)\n        if state == self.end:\n            self.at = len(self.flat)\n        elif state in self.index:\n            self.at = self.index[state]\n        else:\n            return (\"raise\", \"ValueError\")\n        return (\"ok\", None)\n\ndef nested(rng, depth, width, empty):\n    if depth == 0:\n        return rng.randint(0, 99)\n    if rng.random() < empty:\n        return []\n    return [nested(rng, depth - 1, width, empty) for _ in range(rng.randint(1, width))]\n\ndef attempt(call):\n    try:\n        return (\"ok\", call())\n    except StopIteration:\n        return (\"stop\",)\n    except Exception as e:\n        return (\"raise\", type(e).__name__)\n\ndef compare(fn, items, depth, rng, steps, label):\n    it = fn(items, depth) if depth != 1 or rng.random() < 0.5 else fn(items)\n    m = Model(items, depth)\n    states = [t for t, _ in m.flat] + [m.end]\n    for step in range(steps):\n        r = rng.random()\n        if r < 0.45:\n            got, want = attempt(lambda: next(it)), m.next()\n        elif r < 0.65:\n            got, want = (\"ok\", it.get_state()), (\"ok\", m.get())\n            assert type(got[1]) is tuple, (label, step, got)\n        else:\n            if rng.random() < 0.6:\n                s = rng.choice(states)\n            else:\n                s = tuple(rng.randint(-1, 4) for _ in range(depth))\n            if rng.random() < 0.3:\n                s = json.loads(json.dumps(s))\n            got, want = attempt(lambda: it.set_state(s)), m.set(s)\n        assert got == want, (label, step, got, want, items)\n\nfor seed in range(300):\n    rng = random.Random(2000 + seed)\n    depth = rng.randint(1, 5)\n    compare({fn}, nested(rng, depth, 3, 0.3), depth, rng, 40, seed)\n",
+          "part": 3
+        },
+        {
+          "name": "Part 3: very deep data",
+          "visibility": "unshown",
+          "behavior": "performance.complexity",
+          "failureMessage": "Data nested 3,000 levels deep failed or was too slow: walk levels with a loop and keep the lists along the current position instead of recursing or walking from the top on every call.",
+          "hiddenCode": "\nimport time\ndepth = 3000\ndata = [\"leaf\"]\nfor _ in range(depth - 1):\n    data = [[], data, []]\nstart = time.perf_counter()\nit = {fn}(data, depth)\nstate = it.get_state()\nassert len(state) == depth and state[:3] == (1, 1, 1) and state[-1] == 0\nassert next(it) == \"leaf\"\nassert it.get_state() == (3,) + (0,) * (depth - 1)\nfor _ in range(200):\n    it.set_state(state)\n    assert next(it) == \"leaf\"\nassert time.perf_counter() - start < 3.0\n",
+          "part": 3
+        }
+      ],
+      "parts": [
+        {
+          "title": "A flat list",
+          "descriptionEn": "**Signature:** `ResumableIterator(items)` with `get_state() -> tuple` and `set_state(state)`, where `items` is a list, possibly empty.\n\n- The state is `(i,)`, the index of the next item; it is `(len(items),)` at the end.\n- `set_state` accepts `(i,)` or `[i]` for `0 <= i <= len(items)`.\n\n**Example:** `it = ResumableIterator([\"ox\", \"elk\", \"yak\"])`:\n- `get_state()` is `(0,)`; `list(it)` is `[\"ox\", \"elk\", \"yak\"]`, and then `get_state()` is `(3,)`\n- after `set_state([1])`, as it comes back from JSON, `next(it)` is `\"elk\"`\n- `set_state((4,))` raises `ValueError`; `set_state((True,))` and `set_state(\"2\")` raise `TypeError`"
+        },
+        {
+          "title": "Rows that may be empty",
+          "descriptionEn": "Keep Part 1. `ResumableIterator(rows, 2)` walks a list of rows, any of which may be empty, row by row.\n\n- A state names an item that exists, so it skips ahead past empty rows and ended rows at once: it never points into an empty row or one past the end of a row.\n- The state at the end is `(len(rows), 0)`.\n- A state is checked only against this iterator's own rows, so a state saved on other rows of the same shape continues at the same position.\n- 100,000 rows with a `get_state()` after every item must take well under a second.\n\n**Example:** `it = ResumableIterator([[], [4, 8], [], [6]], 2)`:\n- `get_state()` is `(1, 0)` before any `next`; after `4` it is `(1, 1)`, and after `8` it is already `(3, 0)`\n- after `6` it is `(4, 0)`\n- `(0, 0)`, `(1, 2)` and `(2, 0)` all raise `ValueError`"
+        },
+        {
+          "title": "Any depth",
+          "descriptionEn": "Keep Parts 1–2. `depth` may be any positive integer, and a list at any level may be empty.\n\n- The same rules hold at every level: a state never points into an empty list or one past the end of a list, and the end is `(len(items), 0, ..., 0)`.\n- Data nested 3,000 levels deep must work, so do not recurse once per level.\n\n**Example:** `data = [[], [[], [[2, 4]]], [[], [[8]]]]` with `depth=3`:\n- `get_state()` starts at `(1, 1, 0)`; `next` gives `[2, 4]`, then the state is `(2, 1, 0)`\n- `next` gives `[8]`, and the state is `(3, 0, 0)`\n- with `depth=4`, the same data gives `2`, `4` and `8`"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "What single number tells you where you are in a list, and what value should it have once every item is used? Which inputs to set_state are the wrong kind of value, and which are the right kind but out of range?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Keep one index of the next item. next returns items[index] and adds one, or raises StopIteration at len(items). get_state returns (index,). set_state first checks the type (tuple or list, one element, an int that is not a bool), then the range 0..len(items), and only then stores the index."
+        }
+      ],
+      "modelConnections": [
+        "Training data loaders save their position with each checkpoint so a preempted job resumes mid-epoch without repeating or skipping samples.",
+        "Streaming evaluation and data pipelines keep offsets per shard so a restart continues where each shard left off."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "A state is a plain tuple of ints, so it survives JSON and can be stored with a checkpoint.",
+          "Normalising every position to the next real item gives each state exactly one spelling.",
+          "Keeping the lists along the current path makes next amortised O(1) and set_state O(depth)."
+        ],
+        "cons": [
+          "The state says nothing about the data, so a state from different data is accepted whenever it happens to fit.",
+          "Moving past a long run of empty lists costs time proportional to the run, once.",
+          "Changing the data while iterating breaks the contract with no detection."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What should get_state return before the first next, and what once every item is used?",
+          "hint": "Before any next call, which item comes next? Once every item is used, what single number can still be a valid position?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why must set_state check the type before the range, and why is a bool rejected?",
+          "hint": "set_state((1.5,)) and set_state((9,)) are both wrong, but differently. Which one is the wrong kind of value? Is True an int in Python?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why must set_state accept a list as well as a tuple, and what has to stay unchanged when it rejects a state?",
+          "hint": "What type does a tuple become after json.dumps and json.loads? If set_state raises halfway, what could already have changed?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why should a position always point at the next real item instead of the place where iteration stopped?",
+          "hint": "Rows [[1], [], [2]]: after the 1, is the position (0, 1) or (2, 0)? How many spellings should one position have?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why does a state from other data of the same shape continue correctly, and what can go wrong on a different shape?",
+          "hint": "A state saved on [[a, b], [c]] is given to [[x, y], [z]]. What does it point at there? What about [[x], [y, z]]?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How do you make next fast after a long run of empty lists, and what do you keep between calls?",
+          "hint": "After an item, where does the search for the next one start? What do you keep so the next call does not walk from the top?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How would you detect that a saved state belongs to different data?",
+          "hint": "What could you store next to the indices so that set_state notices the state came from different data?"
+        }
+      ]
     }
   ]
 }

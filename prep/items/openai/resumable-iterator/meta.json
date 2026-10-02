@@ -1,0 +1,19 @@
+{
+  "title": "Resumable Iterators (1D, 2D, Arbitrary Depth)",
+  "summary": "Iterators that can hand out their position and later be restored to it: an abstract interface, a flat list, a list of lists with empty rows, then nesting of any depth.",
+  "round": "coding",
+  "kind": "Coding",
+  "difficulty": "Medium",
+  "frequency": "rare",
+  "format": "4 parts",
+  "topics": [
+    "iterator",
+    "oop-design",
+    "state"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/coding/resumable-iterator",
+  "rubric": [],
+  "exercises": [
+    "resumable_iterator"
+  ]
+}

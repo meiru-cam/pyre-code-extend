@@ -392,5 +392,14 @@
     "Why must a fair batch stay at the front until both its holders and its woken-but-not-yet-running members are gone?": "A batch reaches the front and its members are woken, but none has run yet. What breaks if you remove the batch as soon as its holder count is zero?",
     "When a timed-out batch leaves the queue, why merge its neighbours, and what would go wrong without it?": "Queue: A running, B (one waiter), A (waiting). B times out. Which A batch should the last waiter be in, and when may it hold?",
     "How would you build a shared/exclusive lock on top of this, and what must change for the exclusive mode?": "Readers share and writers need the lock alone. Which mode is which, and what limit does the writer's batch need?"
+  },
+  "resumable_iterator": {
+    "What should get_state return before the first next, and what once every item is used?": "Before any next call, which item comes next? Once every item is used, what single number can still be a valid position?",
+    "Why must set_state check the type before the range, and why is a bool rejected?": "set_state((1.5,)) and set_state((9,)) are both wrong, but differently. Which one is the wrong kind of value? Is True an int in Python?",
+    "Why must set_state accept a list as well as a tuple, and what has to stay unchanged when it rejects a state?": "What type does a tuple become after json.dumps and json.loads? If set_state raises halfway, what could already have changed?",
+    "Why should a position always point at the next real item instead of the place where iteration stopped?": "Rows [[1], [], [2]]: after the 1, is the position (0, 1) or (2, 0)? How many spellings should one position have?",
+    "Why does a state from other data of the same shape continue correctly, and what can go wrong on a different shape?": "A state saved on [[a, b], [c]] is given to [[x, y], [z]]. What does it point at there? What about [[x], [y, z]]?",
+    "How do you make next fast after a long run of empty lists, and what do you keep between calls?": "After an item, where does the search for the next one start? What do you keep so the next call does not walk from the top?",
+    "How would you detect that a saved state belongs to different data?": "What could you store next to the indices so that set_state notices the state came from different data?"
   }
 }
