@@ -28,10 +28,10 @@ MUTATIONS = [
     ("ties by id", 2, [('(len(self._recipes[r]["versions"][-1][1]), self._recipes[r]["seq"])', '(len(self._recipes[r]["versions"][-1][1]), r)')]),
     ("ingredient substring match", 2, [("any(i.casefold() == want for i in", "any(want in i.casefold() for i in")]),
     ("prefix case-sensitive", 2, [('r["name"].casefold().startswith(want)', 'r["name"].startswith(prefix)')]),
-    ("editors may remove", 3, [('''        if self._owner(recipe_id) is None or self._owner(recipe_id) != user_id:
+    ("editors may remove", 3, [('''        if self._owner(recipe_id) != user_id:
             return False  # editors may edit but never delete''', '''        if not self._can_edit(user_id, recipe_id):
             return False''')]),
-    ("anyone may grant", 3, [("if self._owner(recipe_id) is None or self._owner(recipe_id) != owner_id or user_id not in self._users:",
+    ("anyone may grant", 3, [("if self._owner(recipe_id) != owner_id or user_id not in self._users:",
                              "if self._owner(recipe_id) is None or user_id not in self._users:")]),
     ("unregistered owner accepted", 3, [("return owner_id in self._users and self._create(", "return self._create(")]),
     ("ownerless recipes editable", 3, [('return bool(recipe and recipe["owner"] is not None\n                    and (user_id == recipe["owner"] or user_id in recipe["editors"]))',

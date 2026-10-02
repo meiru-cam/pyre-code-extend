@@ -259,7 +259,7 @@
     "How would you make backups cheaper than a full copy each time?": "Most fields do not change between two backups. Could a backup share the unchanged parts with the previous one instead of copying them?"
   },
   "recipe_book": {
-    "Why does the name check need its own index keyed by casefold, and what does casefold handle that lower does not?": "Scanning every recipe to test a name is O(n). Which dict answers who holds a name in O(1)? Try \"STRASSE\" and \"straße\" with lower() and with casefold().",
+    "Why does the name check need its own index keyed by casefold, and what does casefold handle that lower does not?": "Scanning every recipe to test a name is O(n). Which dict answers who holds a name in O(1)? Try \"GROSS\" and \"groß\" with lower() and with casefold().",
     "Why must ingredient lists be copied when they come in and when they go out?": "You store the list the caller passed, and the caller appends to it later. What does get_recipe return now? What if the caller edits a list you returned?",
     "When a recipe is renamed, which entries of the name index must change, and what bug appears if the old one is left behind?": "Rename \"Pie\" to \"Tart\". Which name-index entries must you add and remove? If the \"pie\" entry stays, what happens when someone else adds \"PIE\"?",
     "How would you keep list_recipes and the searches fast if the book held millions of recipes?": "Each listing sorts every recipe. What could you keep sorted between writes, and what would an ingredient-to-recipes index cost on update?",
@@ -270,7 +270,7 @@
   "boot_debugger": {
     "Why is a set of visited lines enough to detect a loop here, and what makes the state just pc?": "acc never decides where pc goes next. If pc comes back to a line it already ran, what will every step after that look like?",
     "Why must landing past the end be an error rather than another way to finish?": "A goto that lands at n + 3 leaves no next line, just like landing on n. Why should a caller be able to tell those two cases apart?",
-    "In what order do you check normal end, out of range and already visited, and what breaks if the order changes?": "Suppose you test \"already visited\" before \"pc == n\". Can n ever be in the visited set? Then can an out-of-range pc? Which order is safe?",
+    "Why must an out-of-range pc be caught before indexing program[pc], and what does Python do with a negative index?": "A goto -9 on line 2 sets pc to -7. What does program[-7] return in Python, and what would the simulation do next if nothing stopped it?",
     "Why is trying every switch and rerunning O(n^2), and how does reachability from the end make the repair O(n)?": "Each line has one successor. Walking backwards from n over those edges marks every line that ends the run. How does that answer each switch in O(1)?",
     "Why can only lines on the looping path be the corrupted one?": "If a line is never reached by the looping run, does switching it change anything that run does?",
     "How would you report every malformed line at once instead of stopping at the first?": "Collecting errors into a list instead of raising at once: what would the caller get back, and which line numbers would it need?",

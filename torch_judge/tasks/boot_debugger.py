@@ -98,7 +98,7 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Where it is used:** emulators and bytecode interpreters detect loops and bad jumps the same way, and control-flow graphs with one successor per node are how compilers and static analysers reason about reachability.
 
-Adapted from the boot loader loop question in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, on one class, with renamed operations. The linear repair is checked by speed on a large program.""",
+Adapted from the boot loader loop question in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, on one class, with renamed operations and methods (`run`, `find_fix`, `parse`). Values use ASCII digits only. The linear repair is checked by speed on large programs.""",
     "parts": [
         {
             "title": "Run and detect the loop",
@@ -110,9 +110,9 @@ Adapted from the boot loader loop question in Schuture/Anthropic-Interview-Notes
 - Run in `O(n)` time: a program of `100000` lines must finish well under a second.
 
 **Example:**
-- lines `0` to `8`: `add +3`, `skip +4`, `add +10`, `goto +3`, `add +50`, `goto -3`, `goto -4`, `add +1`, `skip -8`
-- the run visits lines `0`, `1`, `2`, `3`, `6`, and line `6` jumps back to line `2`
-- the result is `(False, 13, 2)`""",
+- lines `0` to `7`: `skip +2`, `add +5`, `goto +4`, `add -1`, `goto -3`, `add +20`, `goto -3`, `add +2`
+- the run visits lines `0`, `1`, `2`, `6`, `3`, `4`, and line `4` jumps back to line `1`
+- the result is `(False, 4, 1)`: `5 - 1`""",
         },
         {
             "title": "Find the corrupted line",
@@ -126,8 +126,9 @@ Adapted from the boot loader loop question in Schuture/Anthropic-Interview-Notes
 - Run in `O(n)` time. Trying every line and rerunning the program costs `O(n²)`, which is too slow for the tests: a program of `40000` lines must finish in about a second.
 
 **Example**, the program from Part 1:
-- switching line `6` to `skip -4` gives the path `0`, `1`, `2`, `3`, `6`, `7`, `8`, then `pc = 9`, the end
-- the result is `(6, 14)`: `3 + 10 + 1`""",
+- switching line `6` to `skip -3` gives the path `0`, `1`, `2`, `6`, `7`, then `pc = 8`, the end
+- switching line `4` instead runs `add +20` and comes back to line `6`, a loop, so it is not the repair
+- the result is `(6, 7)`: `5 + 2`""",
         },
         {
             "title": "Parse the program text",
@@ -137,20 +138,21 @@ Adapted from the boot loader loop question in Schuture/Anthropic-Interview-Notes
 
 - Each line of `text` holds at most one instruction. Everything from a `#` to the end of its line is a comment.
 - A line that is empty or only whitespace after removing the comment adds nothing.
-- Every other line must split on whitespace into exactly two tokens: an op from the rules, then a sign `+` or `-` followed by one or more digits `0` to `9`. `+0` and `-0` are both zero; `5`, `+5.0`, `++5` and `+ 5` are not valid.
+- Every other line must split on whitespace into exactly two tokens: an op from the rules, then a sign `+` or `-` followed by one or more digits `0` to `9`. `+0` and `-0` are both zero; `12`, `+1e3`, `--4` and `+ 7` are not valid.
 - Return the instructions in order, numbered from `0` no matter how many lines were skipped.
 - Define `class ParseError(ValueError)` with an attribute `line_number`. On a malformed line, raise it with the 1-based number of that line in `text`, counting blank and comment lines.
 
-**Example:** the text below parses to `[("add", 3), ("skip", 4), ("goto", 2), ("add", 100), ("add", -1)]`, and `run` on it gives `(True, 2, None)`:
-- line 1: `# warm start`
-- line 2: `add +3`
+**Example:** these eight lines parse to `[("goto", 3), ("add", 1), ("goto", 3), ("add", 2), ("goto", -3)]`, and `run` on it gives `(True, 3, None)`:
+- line 1: `goto +3   # over the next two`
+- line 2: `add +1`
 - line 3: blank
-- line 4: `skip +4   # value unused`
-- line 5: `goto +2`
-- line 6: `add +100  # never runs`
-- line 7: `add -1`
+- line 4: `goto +3`
+- line 5: `# back edge below`
+- line 6: `add +2`
+- line 7: only spaces
+- line 8: `goto -3`
 
-`"add 5"` on line 2 of a text raises `ParseError` with `line_number == 2`, and so do `"jump +1"`, `"goto +1 +1"` and `"skip"`.""",
+In a text whose first three lines are a comment, `add +1` and a blank line, a fourth line `goto 4` raises `ParseError` with `line_number == 4`; so do `nop +1`, `add +2 +3` and a bare `add`.""",
         },
     ],
     "hints": [
@@ -175,8 +177,8 @@ Adapted from the boot loader loop question in Schuture/Anthropic-Interview-Notes
     },
     "tests": [
         {"name": "Part 1: the worked example", "part": 1, "behavior": "state.invariant", "code": r"""
-program = [("add", 3), ("skip", 4), ("add", 10), ("goto", 3), ("add", 50), ("goto", -3), ("goto", -4), ("add", 1), ("skip", -8)]
-assert {fn}().run(program) == (False, 13, 2)
+program = [("skip", 2), ("add", 5), ("goto", 4), ("add", -1), ("goto", -3), ("add", 20), ("goto", -3), ("add", 2)]
+assert {fn}().run(program) == (False, 4, 1)
 """},
         {"name": "Part 1: ends, bounds and self-loops", "part": 1, "visibility": "unshown", "behavior": "edge.empty_or_boundary",
          "failure_message": "An empty program ends at once with acc 0; landing exactly on n ends normally; any other pc outside 0..n raises ProgramError; goto 0 is a loop on its own line; the loop's acc is the value before the repeat.",
@@ -210,8 +212,8 @@ assert d.run(prog) == (False, n - 1, 0)
 assert time.perf_counter() - start < 2.0, "run must be linear in the program length"
 """},
         {"name": "Part 2: the worked example", "part": 2, "behavior": "state.invariant", "code": r"""
-program = [("add", 3), ("skip", 4), ("add", 10), ("goto", 3), ("add", 50), ("goto", -3), ("goto", -4), ("add", 1), ("skip", -8)]
-assert {fn}().find_fix(program) == (6, 14)
+program = [("skip", 2), ("add", 5), ("goto", 4), ("add", -1), ("goto", -3), ("add", 20), ("goto", -3), ("add", 2)]
+assert {fn}().find_fix(program) == (6, 7)
 """},
         {"name": "Part 2: random corrupted programs", "part": 2, "visibility": "unshown", "behavior": "state.invariant",
          "failure_message": "On a random program with exactly one repairing switch, the line or the final acc differed from trying every switch; a switch that sends pc out of range is never the repair.",
@@ -234,16 +236,21 @@ prog[a - 1] = ("add", 7)
 start = time.perf_counter()
 assert d.find_fix(prog) == (a, 7)
 assert time.perf_counter() - start < 2.0, "find_fix must be linear, not one rerun per line"
+chain = [("add", 7)] + [("goto", 1)] * (n - 2) + [("goto", -(n - 1))]
+start = time.perf_counter()
+assert d.find_fix(chain) == (n - 1, 7)
+assert time.perf_counter() - start < 2.0, "find_fix must be linear even when every wrong switch runs far before looping"
 """},
         {"name": "Part 3: the worked example", "part": 3, "behavior": "protocol.validation", "code": _HELPERS + r"""
-text = "# warm start\nadd +3\n\nskip +4   # value unused\ngoto +2\nadd +100  # never runs\nadd -1"
+text = "goto +3   # over the next two\nadd +1\n\ngoto +3\n# back edge below\nadd +2\n   \ngoto -3"
 d = {fn}()
 program = d.parse(text)
-assert program == [("add", 3), ("skip", 4), ("goto", 2), ("add", 100), ("add", -1)]
-assert d.run(program) == (True, 2, None)
-for bad in ["add 5", "jump +1", "goto +1 +1", "skip"]:
-    e = raises("ParseError", lambda: d.parse("add +1\n" + bad))
-    assert e.line_number == 2, (bad, e.line_number)
+assert program == [("goto", 3), ("add", 1), ("goto", 3), ("add", 2), ("goto", -3)]
+assert d.run(program) == (True, 3, None)
+for head, bad, line in [("# boot\nadd +1\n\n", "goto 4", 4), ("# boot\nadd +1\n\n", "nop +1", 4),
+                        ("add +1\n", "add +2 +3", 2), ("\n\n\n\n# x\n", "add", 6)]:
+    e = raises("ParseError", lambda: d.parse(head + bad + "\nadd +1"))
+    assert e.line_number == line, (bad, e.line_number, line)
 """},
         {"name": "Part 3: strict tokens and line numbers", "part": 3, "visibility": "unshown", "behavior": "protocol.validation",
          "failure_message": "A value needs exactly one sign and only ASCII digits; ParseError subclasses ValueError and carries the 1-based line number counting blank and comment lines; whitespace-only and comment-only lines add nothing; text after # is ignored.",
@@ -251,7 +258,7 @@ for bad in ["add 5", "jump +1", "goto +1 +1", "skip"]:
 d = {fn}()
 assert d.parse("") == [] and d.parse("\n  \n# only\n\t#x\n") == []
 assert d.parse("  goto   -0\t\nskip +0#c\nadd +007 # x # y\r\n") == [("goto", 0), ("skip", 0), ("add", 7)]
-for bad in ["add +5.0", "add ++5", "add + 5", "add +", "add -x", "ADD +1", "add +٣", "add +5 # ok\nadd 5", "+5 add"]:
+for bad in ["add 12", "add +1e3", "add --4", "add + 7", "add +", "add -x", "ADD +1", "add +٣", "add +5 # ok\nadd 5", "+5 add"]:
     text = "# header\n\nadd +1\n" + bad
     e = raises("ParseError", lambda: d.parse(text))
     assert isinstance(e, ValueError), "ParseError must subclass ValueError"
@@ -344,7 +351,7 @@ class BootDebugger:
             "Why must landing past the end be an error rather than another way to finish?",
         ],
         deep_dive=[
-            "In what order do you check normal end, out of range and already visited, and what breaks if the order changes?",
+            "Why must an out-of-range pc be caught before indexing program[pc], and what does Python do with a negative index?",
         ],
         tradeoffs=[
             "Why is trying every switch and rerunning O(n^2), and how does reachability from the end make the repair O(n)?",

@@ -7,13 +7,14 @@ _HELPERS = r"""
 import random
 
 def learner(name):
-    funcs = [f for f in vars({fn}).values() if hasattr(f, "__globals__")]
-    assert funcs, "{fn} must define its methods in Python"
-    names = funcs[0].__globals__
+    funcs = [f for k in {fn}.__mro__ for f in vars(k).values() if hasattr(f, "__globals__")]
+    names = next((f.__globals__ for f in funcs if f.__globals__.get("{fn}") is {fn}), None)
+    assert names is not None, "{fn} must define its methods in Python"
     assert name in names, f"define a class named {name}"
     return names[name]
 
-LEGACY = '''# Legacy chat bots: one function and module-level state. Its log is the behavior to keep.
+LEGACY = '''# Adapted from Schuture/OpenAI-Interview-Notes (code under the MIT License).
+# Legacy chat bots: one function and module-level state. Its log is the behavior to keep.
 cheers = {}
 focus_end = {}
 poll = {}
@@ -96,41 +97,145 @@ def random_script(rng, n):
         who, other = rng.choice(NAMES), rng.choice(NAMES)
         text = rng.choice([
             f"/cheer @{other}", f"/cheer {other}", "/cheer @", f"/cheer   @{other}  ", f"/Cheer @{other}", f"/cheer@{other}",
-            f"/focus {rng.choice(['1', '5', '30', '0', '-3', 'abc', ' 12 ', '2.5', ''])}",
-            f"/poll Q{rng.randint(0, 9)} | x | y", "/poll Lunch? | a | b | c", "/poll Only | one", "/poll  |  p | q ",
-            f"/vote {rng.choice(['a', 'B', 'c', 'z', '', ' b '])}", "/votes A",
+            f"/focus {rng.choice(['1', '5', '30', '0', '-3', 'abc', ' 12 ', '2.5', '', '٣', '²'])}",
+            f"/poll Q{rng.randint(0, 9)} | x | y", "/poll Lunch? | a | b | c", "/poll Solo | lone", "/poll  |  p | q ",
+            f"/vote {rng.choice(['a', 'B', 'c', 'z', '', ' b '])}", "/votes A", "/vote\tb", f"/cheer\t@{other}",
             f"hi {other}", f"{other} and {rng.choice(NAMES)}", "plain text",
         ])
         out.append((who, text, now))
     return out
 """
 
-TESTS = [
-    {"name": "Part 1: the worked example", "part": 1, "behavior": "state.invariant", "code": _HELPERS + r"""
+
+TASK = {
+    "title": "Chat Bot Refactoring",
+    "difficulty": "Medium",
+    "version": 1,
+    "function_name": "ChatRoom",
+    "description_en": r"""Refactor the legacy `handle_message` in the starter code into bot classes behind one interface, then make them safe to extend and let them talk through events.
+
+The requirement arrives in parts. Each part keeps every earlier behavior, so one set of classes passes all parts at the end. Pass every test of the current part to reveal the next one.
+
+**Rules for every part:**
+- The starter's `handle_message(sender, text, now)` is the behavior to keep. `now` is minutes since midnight of the first day and never decreases. Times print as `HH:MM` of the day, so minute `1505` prints `01:05`.
+- A command counts only at the very start of the text: the word, one space, then an argument whose surrounding whitespace is ignored.
+- `/cheer @name` with at least one character after `@` adds 1 to `name`'s cheers. Line: `CheerBot: {sender} cheered {target}, now at {count}.` with the target as written, `@` included.
+- `/focus n`, where `n` is ASCII digits worth at least `1`, sets the sender's session to end at `now + n`, replacing any old one. Line: `FocusBot: {sender} is focusing until {HH:MM}.`
+- On every message, for each user with a session whose name is a substring of the text and whose end is after `now`, FocusBot first adds `FocusBot: {user} is focusing until {HH:MM}, please wait.` These lines come before every other bot line for the message, in the order users first started a session, and are decided before a `/focus` in the same message.
+- `/poll question | option | option ...` splits on `|` and strips each piece. With at least two options it replaces any poll in progress; options get labels `A`, `B`, … and zero votes. Line: `PollBot: {sender} asks {question} [A) {option}, B) {option}]`.
+- `/vote x` matches `x` case-insensitively against the current poll's labels and adds a vote. Line: `PollBot: {sender} chose {LABEL} ({option}); A: {votes}, B: {votes}`, every label in order.
+- Anything else, including a malformed command, gets no bot line.
+
+────────────────────────────────
+
+**Background — context only. Everything above this line is the requirement.**
+
+**Why this shows up in interviews:** it is a refactoring round: the code works, and the task is to change its shape without changing its output, then show the new shape is easy to extend and test. Each later part adds one requirement.
+
+**Where it is used:** Slack and Discord bot frameworks, plugin systems with a registry, and services that replace module-level globals with injected state so each test gets a fresh instance.
+
+Adapted from the chat bot refactoring question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, with new line formats and a new legacy function. The source's reading questions become graded rules: failure isolation and command ownership in Part 2. Any object with `can_handle` and `handle` counts as a bot, with no required base class. The fixed close at three votes becomes a `close_at` argument, by default never, and Part 3 arrives through optional `bus` and `close_at` arguments; `publish` returns the handlers' lines. `/focus` accepts ASCII digits only. The unit-testing part is not graded.""",
+    "parts": [
+        {
+            "title": "Bots behind one interface",
+            "description_en": r"""**Classes:**
+- `Clock(now=0)` holds an attribute `now`.
+- `CheerBot(cheer_counts)`, `FocusBot(clock, focus_until)` and `PollBot(poll_state)` each have `can_handle(sender, text) -> bool` and `handle(sender, text) -> list[str]`.
+- `ChatRoom(clock)` has `register(bot)` and `send(sender, text, now) -> list[str]`.
+
+**Rules:**
+- Each bot keeps its state only in the dict it was given and changes that dict in place: `cheer_counts` maps names to counts, `focus_until` maps users to end minutes, and the layout of `poll_state` is yours, empty meaning no poll. Two bots given the same dict share that state. Nothing lives at module level.
+- `FocusBot` reads the time only from `clock.now`. Never read the system clock.
+- `can_handle` is `True` exactly when `handle` would return at least one line.
+- `send` sets `clock.now = now`, appends `"{sender}: {text}"`, then, for each bot in registration order whose `can_handle` is `True`, appends the lines from `handle`. It returns a copy of the whole log.
+- With `FocusBot`, `CheerBot` and `PollBot` registered in that order on one clock, the log equals `handle_message`'s for every sequence of messages.
+
+**Example**, those three bots:
+- `send("Ines", "/poll Retro day? | Thu | Fri", 470)` adds `PollBot: Ines asks Retro day? [A) Thu, B) Fri]`
+- `send("Omar", "/focus 45", 482)` adds `FocusBot: Omar is focusing until 08:47.`
+- `send("Omar", "/vote a", 485)` adds `PollBot: Omar chose A (Thu); A: 1, B: 0`
+- `send("Ines", "Omar, got a sec?", 490)` adds `FocusBot: Omar is focusing until 08:47, please wait.`
+- `send("Kai", "/cheer Omar", 527)` adds nothing: no `@`, and Omar's session ended at 527""",
+        },
+        {
+            "title": "Isolation and command ownership",
+            "description_en": r"""Keep Part 1. The room now accepts any bot and protects itself from bad ones.
+
+- Any object with `can_handle` and `handle` can be registered. `handle` is called only when `can_handle` returned `True` for that message.
+- Each bot may have an attribute `commands`, a tuple of command words such as `("/roll",)`. A bot without it claims nothing. The built-in bots claim `("/cheer",)`, `("/focus",)` and `("/poll", "/vote")`.
+- `register` raises `ValueError` if the bot claims a command word that a registered bot already claims, and then registers nothing.
+- If a bot's `can_handle` or `handle` raises, `send` appends `"{class name}: failed"` instead of its lines and goes on with the next bot.
+
+**Example:** register the three built-in bots, then a `DiceBot` with `commands = ("/roll",)` that answers `/roll` with `["DiceBot: 4"]`:
+- `send("Kai", "/roll", 10)` adds `DiceBot: 4`
+- registering another bot with `commands = ("/vote", "/tally")` raises `ValueError`, and later messages behave as if it was never offered
+- a bot whose `handle` raises adds a line such as `BrokenBot: failed`, and bots after it still run""",
+        },
+        {
+            "title": "Events between bots",
+            "description_en": r"""Keep Parts 1–2. `PollBot` and `CheerBot` now cooperate without referring to each other.
+
+**Classes:**
+- `Event(type, data)` holds attributes `type` (a `str`) and `data` (a `dict`).
+- `EventBus()` has `subscribe(event_type, handler)` and `publish(event) -> list[str]`. `publish` calls `handler(event)` for every handler subscribed to `event.type`, in subscription order. Each handler returns a list of lines, and `publish` returns them all, concatenated.
+- `PollBot(poll_state, bus=None, close_at=None)` and `CheerBot(cheer_counts, bus=None)`. With the defaults, both behave exactly as in Parts 1–2.
+
+**Rules:**
+- `CheerBot` given a bus subscribes to `"poll_closed"` when it is created. For each such event it adds 1 to the cheers of `event.data["author"]` and returns `CheerBot: {author}'s poll is decided, now at {count}.`
+- When a vote brings an option to `close_at` votes, `PollBot` ends the poll: a later `/vote` behaves as if no poll is in progress. If it has a bus, it publishes `Event("poll_closed", {"author": ...})` and puts the returned lines right after its own vote line.
+- `PollBot` and `CheerBot` never call each other; they share only the bus.
+
+**Example**, one bus, `PollBot({}, bus, close_at=2)` and `CheerBot({"Ines": 1}, bus)` registered:
+- `send("Ines", "/poll Retro day? | Thu | Fri", 500)`, then `send("Omar", "/vote b", 505)`
+- `send("Kai", "/vote B", 506)` adds `PollBot: Kai chose B (Fri); A: 0, B: 2` and then `CheerBot: Ines's poll is decided, now at 2.`
+- `send("Omar", "/vote a", 507)` adds nothing""",
+        },
+    ],
+    "hints": [
+        {"level": 1, "kind": "questions", "content": "Which three module-level names hold state in the legacy code, and which bot owns each one? If a test creates two rooms, what must be different about where that state lives? Why does FocusBot need to be registered first?"},
+        {"level": 2, "kind": "analysis", "content": "Move each legacy block into its bot's handle, reading and writing self._state, the dict passed to __init__. can_handle can call the same parsing helper and check for a result. FocusBot.handle builds the reminders first, then applies /focus. ChatRoom keeps a list of bots and a log; send sets clock.now, appends the echo line, loops over the bots and returns list(self._log)."},
+    ],
+    "model_connections": [
+        "Agent frameworks route each tool call to one registered tool by name, and refuse a second tool claiming the same name for the same reason register refuses a clashing command.",
+        "Training loops use callbacks and event hooks, such as on_step_end, so logging, checkpointing and early stopping react to the trainer without the trainer knowing about them.",
+    ],
+    "pro_con_analysis": {
+        "pros": [
+            "Injected state makes every bot testable alone with a fresh dict and a fake clock.",
+            "A registry of command words turns a silent clash between bots into an error at registration.",
+            "An event bus lets one bot react to another without either importing the other.",
+        ],
+        "cons": [
+            "Behavior that spans bots, such as reminders coming first, now depends on registration order instead of being visible in one function.",
+            "Catching every exception per bot can hide real bugs unless the failure is logged somewhere useful.",
+            "Events make the flow harder to follow: the line after a vote comes from a handler you cannot see from PollBot.",
+        ],
+    },
+    "tests": [
+        {"name": "Part 1: the worked example", "part": 1, "behavior": "state.invariant", "code": _HELPERS + r"""
 room = default_room()
-log = run(room, [("Ines", "Morning all", 480), ("Omar", "/focus 45", 482), ("Ines", "Omar, got a sec?", 490),
-                 ("Kai", "/cheer @Ines", 495), ("Ines", "/poll Retro day? | Thu | Fri", 500), ("Omar", "/vote a", 505),
-                 ("Kai", "/vote B", 506), ("Kai", "/cheer Omar", 527)])
+log = run(room, [("Ines", "/poll Retro day? | Thu | Fri", 470), ("Omar", "/focus 45", 482), ("Omar", "/vote a", 485),
+                 ("Kai", "/cheer @Ines", 488), ("Ines", "Omar, got a sec?", 490), ("Kai", "/vote B", 506),
+                 ("Kai", "/cheer Omar", 527)])
 assert log == [
-    "Ines: Morning all",
-    "Omar: /focus 45",
-    "FocusBot: Omar is focusing until 08:47.",
-    "Ines: Omar, got a sec?",
-    "FocusBot: Omar is focusing until 08:47, please wait.",
-    "Kai: /cheer @Ines",
-    "CheerBot: Kai cheered @Ines, now at 1.",
     "Ines: /poll Retro day? | Thu | Fri",
     "PollBot: Ines asks Retro day? [A) Thu, B) Fri]",
+    "Omar: /focus 45",
+    "FocusBot: Omar is focusing until 08:47.",
     "Omar: /vote a",
     "PollBot: Omar chose A (Thu); A: 1, B: 0",
+    "Kai: /cheer @Ines",
+    "CheerBot: Kai cheered @Ines, now at 1.",
+    "Ines: Omar, got a sec?",
+    "FocusBot: Omar is focusing until 08:47, please wait.",
     "Kai: /vote B",
     "PollBot: Kai chose B (Fri); A: 1, B: 1",
     "Kai: /cheer Omar",
 ], log
 """},
-    {"name": "Part 1: random scripts match the legacy log", "part": 1, "visibility": "unshown", "behavior": "state.invariant",
-     "failure_message": "On a random message sequence, the room's log differed from the legacy handle_message log: check reminder order and timing, command parsing, poll replacement and vote matching.",
-     "code": _HELPERS + r"""
+        {"name": "Part 1: random scripts match the legacy log", "part": 1, "visibility": "unshown", "behavior": "state.invariant",
+         "failure_message": "On a random message sequence, the room's log differed from the legacy handle_message log: check reminder order and timing, command parsing, poll replacement and vote matching.",
+         "code": _HELPERS + r"""
 for seed in range(150):
     script = random_script(random.Random(seed), 40)
     got, want = run(default_room(), script), legacy_log(script)
@@ -138,9 +243,9 @@ for seed in range(150):
         assert g == w, (seed, i, g, w)
     assert len(got) == len(want), (seed, len(got), len(want))
 """},
-    {"name": "Part 1: injected state, clock and fresh rooms", "part": 1, "visibility": "unshown", "behavior": "state.invariant",
-     "failure_message": "Bots must keep state only in the dict they were given (changed in place, shared when the dict is shared), read time only from the injected clock, answer can_handle exactly when handle has lines, and two rooms must not share anything; send returns a copy of the log.",
-     "code": _HELPERS + r"""
+        {"name": "Part 1: injected state, clock and fresh rooms", "part": 1, "visibility": "unshown", "behavior": "state.invariant",
+         "failure_message": "Bots must keep state only in the dict they were given (changed in place, shared when the dict is shared), read time only from the injected clock, answer can_handle exactly when handle has lines, and two rooms must not share anything; send returns a copy of the log.",
+         "code": _HELPERS + r"""
 Clock, FocusBot, CheerBot, PollBot = (learner(n) for n in ("Clock", "FocusBot", "CheerBot", "PollBot"))
 counts = {"Ines": 4}
 cheer = CheerBot(counts)
@@ -155,6 +260,9 @@ assert focus.handle("Ann", "/focus 5") == ["FocusBot: Ann is focusing until 01:4
 clock.now = 130
 assert not focus.can_handle("Ann", "ask Omar"), "a session ending at 130 is over at 130"
 assert focus.can_handle("Ann", "/focus 1440") and focus.handle("Ann", "/focus 1440") == ["FocusBot: Ann is focusing until 02:10."]
+assert FocusBot(Clock(100), {"cus": 200}).handle("cus", "/focus 5") == ["FocusBot: cus is focusing until 03:20, please wait.",
+                                                                        "FocusBot: cus is focusing until 01:45."], "reminders come first and see the old session"
+assert FocusBot(Clock(100), {"cus": 50}).handle("cus", "/focus 5") == ["FocusBot: cus is focusing until 01:45."], "the new session does not remind its own message"
 order = FocusBot(Clock(0), {})
 order.handle("Kai", "/focus 50")
 order.handle("Ines", "/focus 60")
@@ -176,14 +284,22 @@ log = room_a.send("Kai", "/cheer @Ines", 3)
 assert log[-1] == "CheerBot: Kai cheered @Ines, now at 2."
 log.append("junk")
 assert room_a.send("Kai", "x", 4)[-2:] == ["CheerBot: Kai cheered @Ines, now at 2.", "Kai: x"]
-"""},
-    {"name": "Part 2: the worked example", "part": 2, "behavior": "contract.signature", "code": _HELPERS + r"""
-class PingBot:
-    commands = ("/ping",)
+class Shy:
     def can_handle(self, sender, text):
-        return text == "/ping"
+        return text == "speak"
     def handle(self, sender, text):
-        return ["PingBot: pong"]
+        return ["Shy: hi"]
+room_a.register(Shy())
+assert room_a.send("Kai", "quiet", 5)[-1] == "Kai: quiet", "handle runs only when can_handle is True"
+assert room_a.send("Kai", "speak", 6)[-1] == "Shy: hi"
+"""},
+        {"name": "Part 2: the worked example", "part": 2, "behavior": "contract.signature", "code": _HELPERS + r"""
+class DiceBot:
+    commands = ("/roll",)
+    def can_handle(self, sender, text):
+        return text == "/roll"
+    def handle(self, sender, text):
+        return ["DiceBot: 4"]
 class VoteCounter:
     commands = ("/vote", "/tally")
     def can_handle(self, sender, text):
@@ -196,8 +312,8 @@ class BrokenBot:
     def handle(self, sender, text):
         raise RuntimeError("boom")
 room = default_room()
-room.register(PingBot())
-assert room.send("Kai", "/ping", 10)[-2:] == ["Kai: /ping", "PingBot: pong"]
+room.register(DiceBot())
+assert room.send("Kai", "/roll", 10)[-2:] == ["Kai: /roll", "DiceBot: 4"]
 try:
     room.register(VoteCounter())
     raise AssertionError("a clashing command must raise ValueError")
@@ -210,11 +326,11 @@ class LateBot:
     def handle(self, sender, text):
         return ["LateBot: ok"]
 room.register(LateBot())
-assert room.send("Kai", "/ping", 11)[-4:] == ["Kai: /ping", "PingBot: pong", "BrokenBot: failed", "LateBot: ok"]
+assert room.send("Kai", "/roll", 11)[-4:] == ["Kai: /roll", "DiceBot: 4", "BrokenBot: failed", "LateBot: ok"]
 """},
-    {"name": "Part 2: dispatch rules and failures", "part": 2, "visibility": "unshown", "behavior": "protocol.validation",
-     "failure_message": "handle must be called only after can_handle is True; a bot without commands claims nothing; a rejected bot must not be registered at all; built-in bots claim /cheer, /focus, /poll and /vote; an exception in can_handle or handle becomes one '<class name>: failed' line and later bots still run.",
-     "code": _HELPERS + r"""
+        {"name": "Part 2: dispatch rules and failures", "part": 2, "visibility": "unshown", "behavior": "protocol.validation",
+         "failure_message": "handle must be called only after can_handle is True; a bot without commands claims nothing; a rejected bot must not be registered at all; built-in bots claim /cheer, /focus, /poll and /vote; an exception in can_handle or handle becomes one '<class name>: failed' line and later bots still run.",
+         "code": _HELPERS + r"""
 Clock = learner("Clock")
 calls = []
 class Picky:
@@ -225,7 +341,10 @@ class Picky:
         calls.append("handle")
         return ["Picky: " + text[1:]]
 class Quiet:
-    pass
+    def can_handle(self, sender, text):
+        return False
+    def handle(self, sender, text):
+        return []
 class Silent:
     def can_handle(self, sender, text):
         return True
@@ -241,6 +360,8 @@ room = {fn}(Clock())
 room.register(Picky())
 room.register(Silent())
 room.register(Picky())
+room.register(Quiet())
+room.register(Quiet())
 assert room.send("a", "hello", 1) == ["a: hello"] and calls == ["can", "can"]
 assert room.send("a", "!hi", 2)[-2:] == ["Picky: hi", "Picky: hi"]
 room.register(BadCheck())
@@ -259,9 +380,9 @@ for word in ["/cheer", "/focus", "/poll", "/vote"]:
 empty = {fn}(Clock())
 assert empty.send("a", "/cheer @b", 5) == ["a: /cheer @b"]
 """},
-    {"name": "Part 2: legacy log with extra bots", "part": 2, "visibility": "unshown", "behavior": "state.invariant",
-     "failure_message": "With a failing bot and an always-silent bot registered after the three built-in bots, the log must equal the legacy log plus one '<class name>: failed' line per message.",
-     "code": _HELPERS + r"""
+        {"name": "Part 2: legacy log with extra bots", "part": 2, "visibility": "unshown", "behavior": "state.invariant",
+         "failure_message": "With a failing bot and an always-silent bot registered after the three built-in bots, the log must equal the legacy log plus one '<class name>: failed' line per message.",
+         "code": _HELPERS + r"""
 class Flaky:
     def can_handle(self, sender, text):
         return True
@@ -288,7 +409,7 @@ for seed in range(60):
         expected += ns["log"][start:] + ["Flaky: failed"]
     assert got == expected, seed
 """},
-    {"name": "Part 3: the worked example", "part": 3, "behavior": "events.ordering", "code": _HELPERS + r"""
+        {"name": "Part 3: the worked example", "part": 3, "behavior": "events.ordering", "code": _HELPERS + r"""
 Clock, CheerBot, PollBot, EventBus = (learner(n) for n in ("Clock", "CheerBot", "PollBot", "EventBus"))
 bus = EventBus()
 room = {fn}(Clock())
@@ -299,9 +420,9 @@ room.send("Omar", "/vote b", 505)
 assert room.send("Kai", "/vote B", 506)[-3:] == ["Kai: /vote B", "PollBot: Kai chose B (Fri); A: 0, B: 2", "CheerBot: Ines's poll is decided, now at 2."]
 assert room.send("Omar", "/vote a", 507)[-1] == "Omar: /vote a"
 """},
-    {"name": "Part 3: bus contract and closing rules", "part": 3, "visibility": "unshown", "behavior": "events.ordering",
-     "failure_message": "publish must call handlers for the event's type in subscription order and return their lines concatenated; a poll closes when one option reaches close_at, publishes poll_closed with the author once, accepts no later votes, and a new poll can start; without a bus or close_at, bots behave as in Part 1; neither bot may hold the other.",
-     "code": _HELPERS + r"""
+        {"name": "Part 3: bus contract and closing rules", "part": 3, "visibility": "unshown", "behavior": "events.ordering",
+         "failure_message": "publish must call handlers for the event's type in subscription order and return their lines concatenated; a poll closes when one option reaches close_at, publishes poll_closed with the author once, accepts no later votes, and a new poll can start; without a bus or close_at, bots behave as in Part 1.",
+         "code": _HELPERS + r"""
 Clock, CheerBot, PollBot, EventBus, Event = (learner(n) for n in ("Clock", "CheerBot", "PollBot", "EventBus", "Event"))
 bus = EventBus()
 seen = []
@@ -337,14 +458,10 @@ endless.handle("Cy", "/poll S | m | n")
 for _ in range(5):
     endless.handle("Dee", "/vote a")
 assert endless.can_handle("Dee", "/vote b"), "without close_at a poll never closes"
-both = [CheerBot({}, EventBus()), PollBot({}, EventBus(), close_at=2)]
-for bot in both:
-    for value in vars(bot).values():
-        assert not isinstance(value, (CheerBot, PollBot)), "PollBot and CheerBot must not hold each other"
 """},
-    {"name": "Part 3: random scripts with closing polls", "part": 3, "visibility": "unshown", "behavior": "events.ordering",
-     "failure_message": "With a bus and close_at = 3, the log must equal the legacy log except that a poll closes when an option reaches 3 votes and the author's cheer line follows the closing vote line.",
-     "code": _HELPERS + r"""
+        {"name": "Part 3: random scripts with closing polls", "part": 3, "visibility": "unshown", "behavior": "events.ordering",
+         "failure_message": "With a bus and close_at = 3, the log must equal the legacy log except that a poll closes when an option reaches 3 votes and the author's cheer line follows the closing vote line.",
+         "code": _HELPERS + r"""
 Clock, FocusBot, CheerBot, PollBot, EventBus = (learner(n) for n in ("Clock", "FocusBot", "CheerBot", "PollBot", "EventBus"))
 CLOSING = LEGACY.replace(
     '''            log.append(f"PollBot: {sender} chose {letter} ({poll['options'][letter]}); {tally}")''',
@@ -368,113 +485,7 @@ for seed in range(120):
     room.register(PollBot({}, bus, close_at=3))
     assert run(room, script) == ns["log"], seed
 """},
-]
-
-TASK = {
-    "title": "Chat Bot Refactoring",
-    "difficulty": "Medium",
-    "version": 1,
-    "function_name": "ChatRoom",
-    "description_en": r"""Refactor the legacy `handle_message` in the starter code into bot classes behind one interface, then make them safe to extend and let them talk through events.
-
-The requirement arrives in parts. Each part keeps every earlier behavior, so one set of classes passes all parts at the end. Pass every test of the current part to reveal the next one.
-
-**Rules for every part:**
-- The starter's `handle_message(sender, text, now)` is the behavior to keep. `now` is minutes since midnight of the first day and never decreases. Times print as `HH:MM` of the day, so minute `1450` prints `00:10`.
-- A command counts only at the very start of the text: the word, one space, then an argument whose surrounding whitespace is ignored.
-- `/cheer @name` with at least one character after `@` adds 1 to `name`'s cheers. Line: `CheerBot: {sender} cheered {target}, now at {count}.` with the target as written, `@` included.
-- `/focus n`, where `n` is ASCII digits worth at least `1`, sets the sender's session to end at `now + n`, replacing any old one. Line: `FocusBot: {sender} is focusing until {HH:MM}.`
-- On every message, for each user with a session whose name is a substring of the text and whose end is after `now`, FocusBot first adds `FocusBot: {user} is focusing until {HH:MM}, please wait.` These lines come before every other bot line for the message, in the order users first started a session, and are decided before a `/focus` in the same message.
-- `/poll question | option | option ...` splits on `|` and strips each piece. With at least two options it replaces any poll in progress; options get labels `A`, `B`, … and zero votes. Line: `PollBot: {sender} asks {question} [A) {option}, B) {option}]`.
-- `/vote x` matches `x` case-insensitively against the current poll's labels and adds a vote. Line: `PollBot: {sender} chose {LABEL} ({option}); A: {votes}, B: {votes}`, every label in order.
-- Anything else, including a malformed command, gets no bot line.
-
-────────────────────────────────
-
-**Background — context only. Everything above this line is the requirement.**
-
-**Why this shows up in interviews:** it is a refactoring round: the code works, and the task is to change its shape without changing its output, then show the new shape is easy to extend and test. Each later part adds one requirement.
-
-**Where it is used:** Slack and Discord bot frameworks, plugin systems with a registry, and services that replace module-level globals with injected state so each test gets a fresh instance.
-
-Adapted from the chat bot refactoring question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, with new line formats and a new legacy function. The source's reading questions become graded rules: failure isolation and command ownership in Part 2. Its unit-testing part is not graded.""",
-    "parts": [
-        {
-            "title": "Bots behind one interface",
-            "description_en": r"""**Classes:**
-- `Clock(now=0)` holds an attribute `now`.
-- `CheerBot(cheer_counts)`, `FocusBot(clock, focus_until)` and `PollBot(poll_state)` each have `can_handle(sender, text) -> bool` and `handle(sender, text) -> list[str]`.
-- `ChatRoom(clock)` has `register(bot)` and `send(sender, text, now) -> list[str]`.
-
-**Rules:**
-- Each bot keeps its state only in the dict it was given and changes that dict in place: `cheer_counts` maps names to counts, `focus_until` maps users to end minutes, and the layout of `poll_state` is yours, empty meaning no poll. Two bots given the same dict share that state. Nothing lives at module level.
-- `FocusBot` reads the time only from `clock.now`. Never read the system clock.
-- `can_handle` is `True` exactly when `handle` would return at least one line.
-- `send` sets `clock.now = now`, appends `"{sender}: {text}"`, then, for each bot in registration order whose `can_handle` is `True`, appends the lines from `handle`. It returns a copy of the whole log.
-- With `FocusBot`, `CheerBot` and `PollBot` registered in that order on one clock, the log equals `handle_message`'s for every sequence of messages.
-
-**Example**, those three bots:
-- `send("Omar", "/focus 45", 482)` adds `FocusBot: Omar is focusing until 08:47.`
-- `send("Ines", "Omar, got a sec?", 490)` adds `FocusBot: Omar is focusing until 08:47, please wait.`
-- `send("Ines", "/poll Retro day? | Thu | Fri", 500)` adds `PollBot: Ines asks Retro day? [A) Thu, B) Fri]`
-- `send("Omar", "/vote a", 505)` adds `PollBot: Omar chose A (Thu); A: 1, B: 0`
-- `send("Kai", "/cheer Omar", 527)` adds nothing: no `@`, and Omar's session ended at 527""",
-        },
-        {
-            "title": "Isolation and command ownership",
-            "description_en": r"""Keep Part 1. The room now accepts any bot and protects itself from bad ones.
-
-- Any object with `can_handle` and `handle` can be registered. `handle` is called only when `can_handle` returned `True` for that message.
-- Each bot may have an attribute `commands`, a tuple of command words such as `("/ping",)`. A bot without it claims nothing. The built-in bots claim `("/cheer",)`, `("/focus",)` and `("/poll", "/vote")`.
-- `register` raises `ValueError` if the bot claims a command word that a registered bot already claims, and then registers nothing.
-- If a bot's `can_handle` or `handle` raises, `send` appends `"{class name}: failed"` instead of its lines and goes on with the next bot.
-
-**Example:** register the three built-in bots, then a `PingBot` with `commands = ("/ping",)` that answers `/ping` with `["PingBot: pong"]`:
-- `send("Kai", "/ping", 10)` adds `PingBot: pong`
-- registering another bot with `commands = ("/vote", "/tally")` raises `ValueError`, and later messages behave as if it was never offered
-- a bot whose `handle` raises adds a line such as `BrokenBot: failed`, and bots after it still run""",
-        },
-        {
-            "title": "Events between bots",
-            "description_en": r"""Keep Parts 1–2. `PollBot` and `CheerBot` now cooperate without referring to each other.
-
-**Classes:**
-- `Event(type, data)` holds attributes `type` (a `str`) and `data` (a `dict`).
-- `EventBus()` has `subscribe(event_type, handler)` and `publish(event) -> list[str]`. `publish` calls every handler subscribed to `event.type` in subscription order and returns all the lines they return, concatenated.
-- `PollBot(poll_state, bus=None, close_at=None)` and `CheerBot(cheer_counts, bus=None)`. With the defaults, both behave exactly as in Part 1.
-
-**Rules:**
-- `CheerBot` given a bus subscribes to `"poll_closed"` when it is created. For each such event it adds 1 to the cheers of `event.data["author"]` and returns `CheerBot: {author}'s poll is decided, now at {count}.`
-- When a vote brings an option to `close_at` votes, `PollBot` ends the poll: a later `/vote` behaves as if no poll is in progress. If it has a bus, it publishes `Event("poll_closed", {"author": ...})` and puts the returned lines right after its own vote line.
-- `PollBot` and `CheerBot` hold no reference to each other.
-
-**Example**, one bus, `PollBot({}, bus, close_at=2)` and `CheerBot({"Ines": 1}, bus)` registered:
-- `send("Ines", "/poll Retro day? | Thu | Fri", 500)`, then `send("Omar", "/vote b", 505)`
-- `send("Kai", "/vote B", 506)` adds `PollBot: Kai chose B (Fri); A: 0, B: 2` and then `CheerBot: Ines's poll is decided, now at 2.`
-- `send("Omar", "/vote a", 507)` adds nothing""",
-        },
     ],
-    "hints": [
-        {"level": 1, "kind": "questions", "content": "Which three module-level names hold state in the legacy code, and which bot owns each one? If a test creates two rooms, what must be different about where that state lives? Why does FocusBot need to be registered first?"},
-        {"level": 2, "kind": "analysis", "content": "Move each legacy block into its bot's handle, reading and writing self._state, the dict passed to __init__. can_handle can call the same parsing helper and check for a result. FocusBot.handle builds the reminders first, then applies /focus. ChatRoom keeps a list of bots and a log; send sets clock.now, appends the echo line, loops over the bots and returns list(self._log)."},
-    ],
-    "model_connections": [
-        "Agent frameworks route each tool call to one registered tool by name, and refuse a second tool claiming the same name for the same reason register refuses a clashing command.",
-        "Training loops use callbacks and event hooks, such as on_step_end, so logging, checkpointing and early stopping react to the trainer without the trainer knowing about them.",
-    ],
-    "pro_con_analysis": {
-        "pros": [
-            "Injected state makes every bot testable alone with a fresh dict and a fake clock.",
-            "A registry of command words turns a silent clash between bots into an error at registration.",
-            "An event bus lets one bot react to another without either importing the other.",
-        ],
-        "cons": [
-            "Behavior that spans bots, such as reminders coming first, now depends on registration order instead of being visible in one function.",
-            "Catching every exception per bot can hide real bugs unless the failure is logged somewhere useful.",
-            "Events make the flow harder to follow: the line after a vote comes from a handler you cannot see from PollBot.",
-        ],
-    },
-    "tests": TESTS,
     "solution": r'''# Adapted from Schuture/OpenAI-Interview-Notes (code under the MIT License).
 from abc import ABC, abstractmethod
 

@@ -30,8 +30,8 @@ class Model:
 
 def random_ops(rng, n, levels):
     ids, names = ["a", "b", "c", "d"], ["Stew", "stew", "STEW ", "Pie", "pie crust", "Soup", "Salad"]
-    foods = ["Salt", "salt", "egg", "Egg", "oil", "rice"]
-    users = ["u1", "u2", "u3"]
+    foods = ["Cumin", "cumin", "leek", "Leek", "dill", "kale"]
+    users = ["k1", "k2", "k3"]
     model, out = Model(), []
     for _ in range(n):
         ops = ["add", "add", "get", "update", "delete"]
@@ -57,7 +57,7 @@ def random_ops(rng, n, levels):
         elif op == "list":
             args, want = (), model.listing()
         elif op == "find":
-            food = rng.choice(foods + ["sal"])
+            food = rng.choice(foods + ["cum"])
             args, want = (food,), [r for r in model.listing() if any(i.casefold() == food.casefold() for i in r["ingredients"])]
         elif op == "prefix":
             pre = rng.choice(["", "s", "ST", "pie", "Pie c", "x"])
@@ -130,7 +130,7 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Where it is used:** content management systems, wikis with page history and access control, and any CRUD service with unique slugs.
 
-Adapted from the recipe manager online assessment in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, on one class. The source replaces `add_recipe` and `delete_recipe` with owner-aware forms in its third level; here the owner-aware forms are new methods, `add_owned_recipe` and `remove_recipe`, so the earlier ones keep working. Users take only an id.""",
+Adapted from the recipe manager online assessment in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, on one class. The source replaces `add_recipe` and `delete_recipe` with owner-aware forms in its third level; here the owner-aware forms are new methods, `add_owned_recipe` and `remove_recipe`, so the earlier ones keep working: `update_recipe` and `delete_recipe` stay callable with no permission check, and in Part 4 `update_recipe` also adds a version. A recipe made by plain `add_recipe` has no owner, so edit, remove, grant and rollback refuse it. Users take only an id, and `add_owned_recipe` takes the owner first.""",
     "parts": [
         {
             "title": "Add, read, update and delete",
@@ -141,11 +141,11 @@ Adapted from the recipe manager online assessment in Schuture/Anthropic-Intervie
 - `delete_recipe(recipe_id) -> bool` removes the recipe and returns `True`, or returns `False` if there is none. Its id and name are free again.
 
 **Example:**
-- `add_recipe("d1", "Lentil Stew", ["lentils", "onion", "cumin"])` is `True`
-- `add_recipe("d2", "lentil STEW", ["lentils"])` is `False`: the name clashes
-- `update_recipe("d1", "LENTIL STEW", ["lentils", "onion"])` is `True`, and `get_recipe("d1")` is `{"id": "d1", "name": "LENTIL STEW", "ingredients": ["lentils", "onion"]}`
-- `add_recipe("d3", "Flatbread", ["flour", "water"])` is `True`; `update_recipe("d3", "Lentil stew", [])` is `False`
-- `delete_recipe("d3")` is `True`, then `False`; `add_recipe("d4", "FLATBREAD", ["flour"])` is `True`""",
+- `add_recipe("d1", "Lentil Stew", ["lentils", "onion", "cumin"])` and `add_recipe("d3", "Flatbread", ["flour", "water"])` are `True`
+- `update_recipe("d3", "LENTIL stew", [])` is `False`: the name clashes with `d1`
+- `delete_recipe("d1")` is `True`, which frees the name: `add_recipe("d2", "lentil STEW", ["lentils"])` is `True`
+- `update_recipe("d2", "Lentil Stew", ["lentils", "leek"])` is `True`: only the case of its own name changes, and `get_recipe("d2")` is `{"id": "d2", "name": "Lentil Stew", "ingredients": ["lentils", "leek"]}`
+- `get_recipe("d1")` is `None`, a second `delete_recipe("d1")` is `False`, and `add_recipe("d3", "Pita", [])` is `False`: `d3` exists""",
         },
         {
             "title": "List and search",
@@ -175,22 +175,22 @@ Adapted from the recipe manager online assessment in Schuture/Anthropic-Intervie
 - `edit_recipe(user_id, recipe_id, name, ingredients) -> bool` works like `update_recipe`, but only for the owner or a granted editor.
 - `remove_recipe(user_id, recipe_id) -> bool` works like `delete_recipe`, but only for the owner. Editors may not remove.
 - A recipe made by `add_recipe` has no owner: `edit_recipe` and `remove_recipe` refuse it for every user.
-- Reading and searching stay open to everyone.
+- `update_recipe` and `delete_recipe` keep working on every recipe with no permission check. Reading and searching stay open to everyone.
+- Removing a recipe, by `remove_recipe` or `delete_recipe`, drops its owner and editors: a new recipe with the same id starts with none.
 
 **Example:**
-- `add_user("chef-a")` and `add_user("chef-b")` are `True`; `add_user("chef-b")` again is `False`
-- `add_owned_recipe("chef-a", "d1", "Pea Soup", ["peas", "mint"])` is `True`; with owner `"chef-z"` it would be `False`
-- `grant_editor("chef-a", "d1", "chef-z")` is `False`: not a user
-- `grant_editor("chef-a", "d1", "chef-b")` is `True`, then `edit_recipe("chef-b", "d1", "Pea and Mint Soup", ["peas", "mint", "stock"])` is `True`
-- `remove_recipe("chef-b", "d1")` is `False`; `remove_recipe("chef-a", "d1")` is `True`
-- after `add_recipe("d3", "Toast", ["bread"])`, `edit_recipe("chef-a", "d3", "Toast", [])` is `False`""",
+- `add_recipe("d3", "Crispbread", ["rye"])` and `add_user("chef-a")` are `True`; `edit_recipe("chef-a", "d3", "Crispbread", [])` is `False`: `d3` has no owner
+- `add_owned_recipe("chef-a", "d1", "Pea Soup", ["peas", "mint"])` is `True`; `add_owned_recipe("chef-z", "d2", "Oatcake", ["oats"])` is `False`
+- `add_user("chef-b")` is `True`, a second time `False`
+- `grant_editor("chef-a", "d1", "chef-b")` is `True`; then `remove_recipe("chef-b", "d1")` is `False` and `edit_recipe("chef-b", "d1", "Pea and Mint Soup", ["peas", "mint", "stock"])` is `True`
+- `grant_editor("chef-a", "d1", "chef-z")` is `False`: not a user; `remove_recipe("chef-a", "d1")` is `True`""",
         },
         {
             "title": "Version history and rollback",
             "description_en": r"""Keep Parts 1–3. Every successful change now adds a version instead of overwriting.
 
 - Creating a recipe makes version `1`. Each successful `update_recipe`, `edit_recipe` or `rollback_recipe` appends the next version. Versions are numbered from `1` and never change or disappear while the recipe exists.
-- `get_recipe` and the Part 2 methods use the latest version.
+- `get_recipe` and the Part 2 methods use the latest version. A new recipe under a deleted id starts again at version `1`.
 
 **Signatures:**
 - `get_recipe_history(recipe_id) -> list[dict] | None` returns `{"version": k, "name": ..., "ingredients": [...]}` for every version, oldest first, or `None` if there is no such recipe.
@@ -199,7 +199,7 @@ Adapted from the recipe manager online assessment in Schuture/Anthropic-Intervie
 
 **Example:** `chef-a` owns `d1`, made as `"Chili"` `["beans", "chili"]`, then edited to `"Chili"` `["beans", "chili", "corn"]` and to `"Smoky Chili"` `["beans", "chipotle"]`:
 - `rollback_recipe("chef-a", "d1", 1)` is `True`: version `4` is `"Chili"` `["beans", "chili"]`, and `get_recipe("d1")["name"]` is `"Chili"`
-- `get_version("d1", 3)["name"]` is `"Smoky Chili"`; `get_version("d1", 5)` is `None`
+- `get_version("d1", 3)["name"]` is `"Smoky Chili"`; `get_version("d1", 9)` is `None`
 - `add_recipe("d2", "smoky chili", ["beans"])` is `True`, so `rollback_recipe("chef-a", "d1", 3)` is now `False`""",
         },
     ],
@@ -227,31 +227,31 @@ Adapted from the recipe manager online assessment in Schuture/Anthropic-Intervie
         {"name": "Part 1: the worked example", "part": 1, "behavior": "state.invariant", "code": r"""
 book = {fn}()
 assert book.add_recipe("d1", "Lentil Stew", ["lentils", "onion", "cumin"]) is True
-assert book.add_recipe("d2", "lentil STEW", ["lentils"]) is False
-assert book.add_recipe("d1", "Flatbread", ["flour"]) is False
-assert book.get_recipe("d7") is None
-assert book.update_recipe("d1", "LENTIL STEW", ["lentils", "onion"]) is True
-assert book.get_recipe("d1") == {"id": "d1", "name": "LENTIL STEW", "ingredients": ["lentils", "onion"]}
 assert book.add_recipe("d3", "Flatbread", ["flour", "water"]) is True
-assert book.update_recipe("d3", "Lentil stew", []) is False
-assert book.delete_recipe("d3") is True
-assert book.delete_recipe("d3") is False
-assert book.add_recipe("d4", "FLATBREAD", ["flour"]) is True
+assert book.update_recipe("d3", "LENTIL stew", []) is False
+assert book.delete_recipe("d1") is True
+assert book.add_recipe("d2", "lentil STEW", ["lentils"]) is True
+assert book.update_recipe("d2", "Lentil Stew", ["lentils", "leek"]) is True
+assert book.get_recipe("d2") == {"id": "d2", "name": "Lentil Stew", "ingredients": ["lentils", "leek"]}
+assert book.get_recipe("d1") is None
+assert book.delete_recipe("d1") is False
+assert book.add_recipe("d3", "Pita", []) is False
+assert book.get_recipe("d3")["name"] == "Flatbread"
 """},
         {"name": "Part 1: copies, clashes and freed names", "part": 1, "visibility": "unshown", "behavior": "state.invariant",
          "failure_message": "Ingredient lists must be copied in and out; names clash only by casefold (a trailing space is a different name); a failed call changes nothing; renaming frees the old name and deleting frees both id and name.",
          "code": r"""
 book = {fn}()
-mine = ["salt", "salt", "egg"]
+mine = ["dill", "dill", "kale"]
 assert book.add_recipe("a", "Pie", mine)
 mine.append("oops")
 got = book.get_recipe("a")
-assert got["ingredients"] == ["salt", "salt", "egg"], "order and duplicates kept, input list copied"
+assert got["ingredients"] == ["dill", "dill", "kale"], "order and duplicates kept, input list copied"
 got["ingredients"].clear()
-assert book.get_recipe("a")["ingredients"] == ["salt", "salt", "egg"], "returned list must be a copy"
+assert book.get_recipe("a")["ingredients"] == ["dill", "dill", "kale"], "returned list must be a copy"
 assert book.add_recipe("b", "Pie ", ["x"]) is True, "a trailing space makes a different name"
-assert book.add_recipe("c", "STRASSE", []) is True
-assert book.add_recipe("d", "straße", []) is False, "casefold, not lower: straße and STRASSE clash"
+assert book.add_recipe("c", "GROSS", []) is True
+assert book.add_recipe("d", "groß", []) is False, "casefold, not lower: groß and GROSS clash"
 assert book.update_recipe("a", "pie ", ["y"]) is False and book.get_recipe("a")["name"] == "Pie"
 assert book.update_recipe("missing", "Tart", []) is False
 assert book.update_recipe("a", "Tart", ["z"]) is True
@@ -306,18 +306,18 @@ for seed in range(150):
 """},
         {"name": "Part 3: the worked example", "part": 3, "behavior": "protocol.validation", "code": r"""
 book = {fn}()
-assert book.add_user("chef-a") is True and book.add_user("chef-b") is True
-assert book.add_user("chef-b") is False
+assert book.add_recipe("d3", "Crispbread", ["rye"]) is True
+assert book.add_user("chef-a") is True
+assert book.edit_recipe("chef-a", "d3", "Crispbread", []) is False
 assert book.add_owned_recipe("chef-a", "d1", "Pea Soup", ["peas", "mint"]) is True
-assert book.add_owned_recipe("chef-z", "d2", "Toastie", ["bread"]) is False and book.get_recipe("d2") is None
-assert book.grant_editor("chef-a", "d1", "chef-z") is False
+assert book.add_owned_recipe("chef-z", "d2", "Oatcake", ["oats"]) is False and book.get_recipe("d2") is None
+assert book.add_user("chef-b") is True and book.add_user("chef-b") is False
 assert book.grant_editor("chef-a", "d1", "chef-b") is True
+assert book.remove_recipe("chef-b", "d1") is False
 assert book.edit_recipe("chef-b", "d1", "Pea and Mint Soup", ["peas", "mint", "stock"]) is True
 assert book.get_recipe("d1")["name"] == "Pea and Mint Soup"
-assert book.remove_recipe("chef-b", "d1") is False
+assert book.grant_editor("chef-a", "d1", "chef-z") is False
 assert book.remove_recipe("chef-a", "d1") is True
-assert book.add_recipe("d3", "Toast", ["bread"]) is True
-assert book.edit_recipe("chef-a", "d3", "Toast", []) is False
 """},
         {"name": "Part 3: who may do what", "part": 3, "visibility": "unshown", "behavior": "protocol.validation",
          "failure_message": "Only the owner may grant or remove; the owner or a granted editor may edit; unregistered users and missing recipes always get False; a recipe without an owner refuses edit and remove; editors of one recipe have no rights on another.",
@@ -333,7 +333,7 @@ assert book.grant_editor("e", "r", "e") is False, "only the owner may grant"
 assert book.grant_editor("o", "r", "e") and book.grant_editor("o", "r", "e"), "granting twice is fine"
 assert book.grant_editor("o", "missing", "e") is False
 assert book.edit_recipe("e", "r", "BUN", []) is False, "the name clash still applies"
-assert book.edit_recipe("e", "r", "Pho 2", ["rice"]) is True
+assert book.edit_recipe("e", "r", "Pho 2", ["noodles", "basil"]) is True
 assert book.edit_recipe("e", "s", "Bun 2", []) is False, "rights are per recipe"
 assert book.edit_recipe("nobody", "r", "Pho 3", []) is False
 assert book.remove_recipe("e", "r") is False and book.remove_recipe("nobody", "r") is False
@@ -345,6 +345,10 @@ assert book.remove_recipe("o", "r") is True
 assert book.get_recipe("r") is None
 assert book.add_owned_recipe("x", "r", "Pho", [])
 assert book.edit_recipe("e", "r", "Pho 4", []) is False, "a new recipe with an old id has no old editors"
+assert book.add_owned_recipe("o", "z", "Laksa", []) and book.grant_editor("o", "z", "e")
+assert book.delete_recipe("z") is True
+assert book.add_owned_recipe("x", "z", "Laksa", [])
+assert book.edit_recipe("e", "z", "Laksa 2", []) is False, "delete_recipe drops the editors too"
 """},
         {"name": "Part 3: random calls", "part": 3, "visibility": "unshown", "behavior": "protocol.validation",
          "failure_message": "On a random sequence of calls with users, owners and editors, a return value differed from a simple model.",
@@ -362,7 +366,7 @@ assert book.rollback_recipe("chef-a", "d1", 1) is True
 assert book.get_version("d1", 4) == {"version": 4, "name": "Chili", "ingredients": ["beans", "chili"]}
 assert book.get_recipe("d1")["name"] == "Chili"
 assert book.get_version("d1", 3)["name"] == "Smoky Chili"
-assert book.get_version("d1", 5) is None
+assert book.get_version("d1", 9) is None
 assert len(book.get_recipe_history("d1")) == 4
 assert book.add_recipe("d2", "smoky chili", ["beans"]) is True
 assert book.rollback_recipe("chef-a", "d1", 3) is False
@@ -380,7 +384,7 @@ assert book.update_recipe("p", "Taken", []) and book.update_recipe("p", "Plain",
 assert [h["version"] for h in book.get_recipe_history("p")] == [1, 2, 3, 4]
 assert book.get_version("p", 0) is None and book.get_version("p", -1) is None
 assert book.rollback_recipe("o", "p", 1) is False, "no owner, so no rollback"
-book.add_owned_recipe("o", "r", "Rice", ["rice"])
+book.add_owned_recipe("o", "r", "Risotto", ["arborio"])
 book.add_recipe("q", "Taken", [])
 assert book.edit_recipe("o", "r", "TAKEN", []) is False
 assert len(book.get_recipe_history("r")) == 1, "a failed edit adds no version"
@@ -388,12 +392,12 @@ assert book.rollback_recipe("e", "r", 1) is False, "no permission"
 book.grant_editor("o", "r", "e")
 assert book.rollback_recipe("e", "r", 1) is True, "rolling back to the latest version appends a copy"
 assert book.rollback_recipe("e", "r", 9) is False and book.rollback_recipe("e", "r", 0) is False
-assert book.get_recipe_history("r") == [{"version": 1, "name": "Rice", "ingredients": ["rice"]},
-                                         {"version": 2, "name": "Rice", "ingredients": ["rice"]}]
+assert book.get_recipe_history("r") == [{"version": 1, "name": "Risotto", "ingredients": ["arborio"]},
+                                         {"version": 2, "name": "Risotto", "ingredients": ["arborio"]}]
 book.get_recipe_history("r")[0]["ingredients"].append("junk")
 book.get_version("r", 1)["ingredients"].append("junk")
-assert book.get_version("r", 1)["ingredients"] == ["rice"]
-assert book.edit_recipe("o", "r", "rICE", ["x"]) and book.rollback_recipe("o", "r", 1), "its own old name is no clash"
+assert book.get_version("r", 1)["ingredients"] == ["arborio"]
+assert book.edit_recipe("o", "r", "rISOTTO", ["x"]) and book.rollback_recipe("o", "r", 1), "its own old name is no clash"
 assert book.remove_recipe("o", "r")
 assert book.add_owned_recipe("o", "r", "New", []) and len(book.get_recipe_history("r")) == 1
 """},
@@ -488,7 +492,7 @@ class RecipeBook:
                     and (user_id == recipe["owner"] or user_id in recipe["editors"]))
 
     def grant_editor(self, owner_id, recipe_id, user_id):
-        if self._owner(recipe_id) is None or self._owner(recipe_id) != owner_id or user_id not in self._users:
+        if self._owner(recipe_id) != owner_id or user_id not in self._users:
             return False
         self._recipes[recipe_id]["editors"].add(user_id)
         return True
@@ -497,7 +501,7 @@ class RecipeBook:
         return self._can_edit(user_id, recipe_id) and self._change(recipe_id, name, ingredients)
 
     def remove_recipe(self, user_id, recipe_id):
-        if self._owner(recipe_id) is None or self._owner(recipe_id) != user_id:
+        if self._owner(recipe_id) != user_id:
             return False  # editors may edit but never delete
         self._drop(recipe_id)
         return True

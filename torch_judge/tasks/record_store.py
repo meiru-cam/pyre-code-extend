@@ -107,7 +107,7 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Where it is used:** Redis hashes with per-field expiry, caches with time-to-live, and snapshot and restore in key-value stores.
 
-Adapted from the in-memory database online assessment in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, on one class.""",
+Adapted from the in-memory database online assessment in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, on one class with a new name.""",
     "parts": [
         {
             "title": "Set, get and delete fields",
@@ -117,10 +117,10 @@ Adapted from the in-memory database online assessment in Schuture/Anthropic-Inte
 - `delete(key, field) -> str` removes the field and returns `"true"`, or returns `"false"` if there was nothing to remove.
 
 **Example:**
-- `set("lamp-2", "color", "amber")` and `set("lamp-2", "watts", "40")` both return `""`
-- `get("lamp-2", "color")` is `"amber"`; `get("lamp-2", "lumens")` and `get("lamp-5", "color")` are `""`
-- `delete("lamp-2", "watts")` is `"true"`, then the same call again is `"false"`
-- `set("lamp-2", "color", "teal")` replaces the value, so `get("lamp-2", "color")` is `"teal"`""",
+- `set("cam-1", "lens", "35mm")`, `set("cam-1", "iso", "400")` and `set("cam-4", "lens", "50mm")` each return `""`
+- `set("cam-1", "iso", "800")` replaces the value, so `get("cam-1", "iso")` is `"800"`
+- `get("cam-4", "iso")` and `get("cam-9", "lens")` are `""`
+- `delete("cam-4", "lens")` is `"true"`; after it, `get("cam-4", "lens")` is `""` and the same delete is `"false"`""",
         },
         {
             "title": "Scan a record",
@@ -130,10 +130,10 @@ Adapted from the in-memory database online assessment in Schuture/Anthropic-Inte
 - `scan(key) -> str` lists every field of the record as `"name(value)"` items joined by `", "`, sorted by field name with Python's default string order. A missing or empty record gives `""`.
 - `scan_by_prefix(key, prefix) -> str` does the same for the fields whose name starts with `prefix`. An empty `prefix` matches every field.
 
-**Example:** after `set("lamp-2", "watts", "9")`, `set("lamp-2", "bulb", "led")` and `set("lamp-2", "base", "e27")`:
-- `scan_by_prefix("lamp-2", "b")` is `"base(e27), bulb(led)"`
-- `scan("lamp-2")` is `"base(e27), bulb(led), watts(9)"`
-- `scan_by_prefix("lamp-2", "x")` and `scan("lamp-5")` are `""`""",
+**Example:** after `set("cam-1", "exp", "1/60")`, `set("cam-1", "Ext", "no")`, `set("cam-1", "expo", "+1")` and `set("cam-1", "exif", "yes")`:
+- `scan("cam-1")` is `"Ext(no), exif(yes), exp(1/60), expo(+1)"`: uppercase sorts first
+- `scan_by_prefix("cam-1", "ex")` is `"exif(yes), exp(1/60), expo(+1)"`
+- `scan_by_prefix("cam-1", "x")` and `scan("cam-9")` are `""`""",
         },
         {
             "title": "Timestamps and expiring fields",
@@ -152,12 +152,12 @@ Adapted from the in-memory database online assessment in Schuture/Anthropic-Inte
 - Writing a field again starts over. `set_at_with_ttl` gives a new window counted from its own `timestamp`. A write without a ttl, plain or `_at`, makes the field permanent.
 
 **Example:**
-- `set_at_with_ttl(3, "lamp-2", "mode", "dim", 4)`: `mode` exists from 3 to 6
-- `set_at_with_ttl(5, "lamp-2", "mode", "bright", 3)`: the window is now 5 to 7
-- `set_at(6, "lamp-2", "room", "den")`, then `scan_at(7, "lamp-2")` is `"mode(bright), room(den)"`
-- `scan_at(8, "lamp-2")` is `"room(den)"`, and `delete_at(8, "lamp-2", "mode")` is `"false"`
-- `set_at_with_ttl(9, "lamp-2", "mode", "off", 2)`, then `set_at(10, "lamp-2", "mode", "auto")`: at 11, `scan_at` is `"mode(auto), room(den)"`
-- a plain `get("lamp-2", "mode")` now runs at 11 and returns `"auto"`; the clock becomes 12""",
+- `set_at_with_ttl(10, "cam-1", "flash", "on", 6)`: `flash` exists from 10 to 15
+- `set_at_with_ttl(12, "cam-1", "flash", "auto", 2)`: the window is now 12 to 13, shorter than before
+- `get_at(13, "cam-1", "flash")` is `"auto"` and `get_at(14, "cam-1", "flash")` is `""`
+- `set_at(14, "cam-1", "mode", "raw")`, then `delete_at(15, "cam-1", "flash")` is `"false"`
+- `set_at_with_ttl(20, "cam-1", "flash", "off", 3)`, then `set_at(21, "cam-1", "flash", "off")` makes it permanent: `get_at(30, "cam-1", "flash")` is `"off"`
+- a plain `get("cam-1", "mode")` now runs at 30 and returns `"raw"`; the clock becomes 31 and never moves backward""",
         },
         {
             "title": "Backup and restore",
@@ -169,11 +169,11 @@ Adapted from the in-memory database online assessment in Schuture/Anthropic-Inte
 - Later writes never change a saved backup, and a restore deletes no backup. Restoring the same backup twice gives the same state both times.
 
 **Example:**
-- `set_at_with_ttl(2, "lamp-2", "mode", "dim", 8)` exists from 2 to 9; `set_at(2, "lamp-2", "room", "den")` is permanent
-- `backup(5)` saves `room` and `mode` with 5 ticks left
-- `set_at(6, "lamp-2", "room", "hall")`, then `delete_at(7, "lamp-2", "mode")` is `"true"`
-- `restore(50, 5)`: `get_at(50, "lamp-2", "room")` is `"den"`
-- `get_at(54, "lamp-2", "mode")` is `"dim"` and `get_at(55, "lamp-2", "mode")` is `""`, because `50 + 5 = 55`""",
+- `set_at_with_ttl(1, "cam-1", "temp", "hot", 3)`, `set_at(1, "cam-1", "owner", "li")` and `set_at_with_ttl(2, "cam-1", "lock", "yes", 10)`
+- `backup(5)` saves `owner` and `lock` with 7 ticks left; `temp` expired at 4, so it is not saved
+- `set_at(6, "cam-1", "owner", "mo")`, `backup(8)`, then `set_at(9, "cam-1", "note", "new")`
+- `restore(40, 6)` uses the backup from 5: `get_at(40, "cam-1", "owner")` is `"li"` and `get_at(40, "cam-1", "note")` is `""`
+- `get_at(46, "cam-1", "lock")` is `"yes"` and `get_at(47, "cam-1", "lock")` is `""`, because `40 + 7 = 47`""",
         },
     ],
     "hints": [
@@ -191,7 +191,7 @@ Adapted from the in-memory database online assessment in Schuture/Anthropic-Inte
             "Saving time left makes a restored field behave as if the gap between backup and restore never happened.",
         ],
         "cons": [
-            "Lazy expiry keeps dead fields in memory until something reads or overwrites them.",
+            "Lazy expiry keeps dead fields in memory until the field is overwritten or a restore replaces the whole state.",
             "A scan sorts every live field of the record, so it costs O(f log f) on each call.",
             "Every backup is a full copy, so memory grows with the number of backups times the store size.",
         ],
@@ -199,15 +199,17 @@ Adapted from the in-memory database online assessment in Schuture/Anthropic-Inte
     "tests": [
         {"name": "Part 1: the worked example", "part": 1, "behavior": "state.invariant", "code": r"""
 store = {fn}()
-assert store.set("lamp-2", "color", "amber") == ""
-assert store.set("lamp-2", "watts", "40") == ""
-assert store.get("lamp-2", "color") == "amber"
-assert store.get("lamp-2", "lumens") == ""
-assert store.get("lamp-5", "color") == ""
-assert store.delete("lamp-2", "watts") == "true"
-assert store.delete("lamp-2", "watts") == "false"
-assert store.set("lamp-2", "color", "teal") == ""
-assert store.get("lamp-2", "color") == "teal"
+assert store.set("cam-1", "lens", "35mm") == ""
+assert store.set("cam-1", "iso", "400") == ""
+assert store.set("cam-4", "lens", "50mm") == ""
+assert store.set("cam-1", "iso", "800") == ""
+assert store.get("cam-1", "iso") == "800"
+assert store.get("cam-4", "iso") == ""
+assert store.get("cam-9", "lens") == ""
+assert store.delete("cam-4", "lens") == "true"
+assert store.get("cam-4", "lens") == ""
+assert store.delete("cam-4", "lens") == "false"
+assert store.get("cam-1", "lens") == "35mm"
 """},
         {"name": "Part 1: missing keys and fields", "part": 1, "visibility": "unshown", "behavior": "edge.empty_or_boundary",
          "failure_message": "get must return the empty string, not None, for a missing key or field; delete returns the string \"false\" when the key or field is missing and \"true\" only when it removed something.",
@@ -234,13 +236,14 @@ for seed in range(150):
 """},
         {"name": "Part 2: the worked example", "part": 2, "behavior": "state.invariant", "code": r"""
 store = {fn}()
-store.set("lamp-2", "watts", "9")
-store.set("lamp-2", "bulb", "led")
-store.set("lamp-2", "base", "e27")
-assert store.scan_by_prefix("lamp-2", "b") == "base(e27), bulb(led)"
-assert store.scan("lamp-2") == "base(e27), bulb(led), watts(9)"
-assert store.scan_by_prefix("lamp-2", "x") == ""
-assert store.scan("lamp-5") == ""
+store.set("cam-1", "exp", "1/60")
+store.set("cam-1", "Ext", "no")
+store.set("cam-1", "expo", "+1")
+store.set("cam-1", "exif", "yes")
+assert store.scan("cam-1") == "Ext(no), exif(yes), exp(1/60), expo(+1)"
+assert store.scan_by_prefix("cam-1", "ex") == "exif(yes), exp(1/60), expo(+1)"
+assert store.scan_by_prefix("cam-1", "x") == ""
+assert store.scan("cam-9") == ""
 """},
         {"name": "Part 2: ordering, prefixes and emptied records", "part": 2, "visibility": "unshown", "behavior": "edge.empty_or_boundary",
          "failure_message": "scan sorts by field name with Python's default order (uppercase before lowercase), joins items with \", \", and a prefix must match the start of the name, not anywhere in it; a record whose fields were all deleted scans as \"\".",
@@ -265,16 +268,17 @@ for seed in range(150):
 """},
         {"name": "Part 3: the worked example", "part": 3, "behavior": "state.invariant", "code": r"""
 store = {fn}()
-assert store.set_at_with_ttl(3, "lamp-2", "mode", "dim", 4) == ""
-assert store.set_at_with_ttl(5, "lamp-2", "mode", "bright", 3) == ""
-assert store.set_at(6, "lamp-2", "room", "den") == ""
-assert store.scan_at(7, "lamp-2") == "mode(bright), room(den)"
-assert store.scan_at(8, "lamp-2") == "room(den)"
-assert store.delete_at(8, "lamp-2", "mode") == "false"
-store.set_at_with_ttl(9, "lamp-2", "mode", "off", 2)
-store.set_at(10, "lamp-2", "mode", "auto")
-assert store.scan_at(11, "lamp-2") == "mode(auto), room(den)"
-assert store.get("lamp-2", "mode") == "auto"
+assert store.set_at_with_ttl(10, "cam-1", "flash", "on", 6) == ""
+assert store.set_at_with_ttl(12, "cam-1", "flash", "auto", 2) == ""
+assert store.get_at(13, "cam-1", "flash") == "auto"
+assert store.get_at(14, "cam-1", "flash") == ""
+assert store.set_at(14, "cam-1", "mode", "raw") == ""
+assert store.delete_at(15, "cam-1", "flash") == "false"
+store.set_at_with_ttl(20, "cam-1", "flash", "off", 3)
+store.set_at(21, "cam-1", "flash", "off")
+assert store.get_at(30, "cam-1", "flash") == "off"
+assert store.get("cam-1", "mode") == "raw"
+assert store.scan_at(31, "cam-1") == "flash(off), mode(raw)"
 """},
         {"name": "Part 3: window edges and the shared clock", "part": 3, "visibility": "unshown", "behavior": "edge.empty_or_boundary",
          "failure_message": "A field set with ttl at time t exists at t + ttl - 1 and is gone at t + ttl; rewriting it with a ttl restarts the window from the new time; plain calls run at the clock and move it on by one, and _at calls set the clock.",
@@ -309,15 +313,19 @@ for seed in range(200):
 """},
         {"name": "Part 4: the worked example", "part": 4, "behavior": "checkpoint.recovery", "code": r"""
 store = {fn}()
-store.set_at_with_ttl(2, "lamp-2", "mode", "dim", 8)
-store.set_at(2, "lamp-2", "room", "den")
+store.set_at_with_ttl(1, "cam-1", "temp", "hot", 3)
+store.set_at(1, "cam-1", "owner", "li")
+store.set_at_with_ttl(2, "cam-1", "lock", "yes", 10)
 assert store.backup(5) == ""
-store.set_at(6, "lamp-2", "room", "hall")
-assert store.delete_at(7, "lamp-2", "mode") == "true"
-assert store.restore(50, 5) == ""
-assert store.get_at(50, "lamp-2", "room") == "den"
-assert store.get_at(54, "lamp-2", "mode") == "dim"
-assert store.get_at(55, "lamp-2", "mode") == ""
+store.set_at(6, "cam-1", "owner", "mo")
+assert store.backup(8) == ""
+store.set_at(9, "cam-1", "note", "new")
+assert store.restore(40, 6) == ""
+assert store.get_at(40, "cam-1", "owner") == "li"
+assert store.get_at(40, "cam-1", "note") == ""
+assert store.get_at(40, "cam-1", "temp") == ""
+assert store.get_at(46, "cam-1", "lock") == "yes"
+assert store.get_at(47, "cam-1", "lock") == ""
 """},
         {"name": "Part 4: choosing and reusing backups", "part": 4, "visibility": "unshown", "behavior": "checkpoint.recovery",
          "failure_message": "restore must pick the latest backup at or before timestamp_to_restore, keep every backup for later restores, replace the whole current state, and leave the backup unchanged by writes made after it is taken or restored.",
@@ -346,7 +354,7 @@ store.restore(12, 10)
 assert store.get_at(12, "c", "h") == "second", "a second backup at the same time replaces the first"
 """},
         {"name": "Part 4: time left resumes at restore", "part": 4, "visibility": "unshown", "behavior": "checkpoint.recovery",
-         "failure_message": "A backup must skip fields already expired at its time and save time left, not an absolute expiry, so a restored field expires at restore time plus the time it had left.",
+         "failure_message": "A backup must save each field's time left, not an absolute expiry, so a restored field expires at restore time plus the time it had left.",
          "code": r"""
 store = {fn}()
 store.set_at_with_ttl(0, "k", "gone", "1", 3)
