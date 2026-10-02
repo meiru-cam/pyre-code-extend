@@ -302,5 +302,14 @@
     "Why fall back only on a missing name and not on a cycle or an overlong chain?": "A second zone can supply a missing name. Can it repair a loop or a chain that is too long in the primary zone?",
     "Why use the smallest TTL on the chain for the cache entry, and why not cache errors?": "If one record on the chain changes after 30 seconds, how long may the cached answer live? What would caching a NameNotFoundError hide once the name is added?",
     "How do you stop eight callers from resolving the same name at once without making different names wait for each other?": "Keep one record per name for the resolution in progress. Where does a second caller for that name wait, and what lock does a caller for another name touch?"
+  },
+  "memory_fs": {
+    "How do you represent directories and files so that both mkdir and write can walk the same path?": "If a directory is a dict of names and a file is a different object, what does each step of a walk check before it goes one level deeper?",
+    "Why normalise and validate a path in one helper instead of in each method?": "Count the ways a path can be bad: no leading slash, empty segments, dots. If each method parses on its own, how many copies of those rules exist?",
+    "What must write check, and in which order, so that a failed call creates no parent directories?": "Walk the whole path read-only first. Which failures can you find before the first dict is created, and what is left to do after that?",
+    "How do you stop mv from moving a directory into its own subtree?": "Compare the two paths as lists of segments. When is one list a prefix of the other, and why is a plain string prefix check wrong for /a and /ab?",
+    "How would you keep size fast on a deep tree that changes often?": "Each directory could store the total under it. Which ancestors change when one file changes size, and how many are there?",
+    "Why must cp check every owner's quota before copying anything?": "A copy touches files owned by several users. If you copy first and check later, what has to be undone when the third owner goes over?",
+    "How would you make snapshots cheaper than a full copy of the tree?": "A snapshot only differs from the live tree where something changed since. Which nodes would a write have to copy, and which could both trees share?"
   }
 }

@@ -370,5 +370,13 @@
       "dns_resolver"
     ],
     "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/oa-file-system",
+    "exercises": [
+      "memory_fs"
+    ],
+    "round": "coding"
   }
 ]
