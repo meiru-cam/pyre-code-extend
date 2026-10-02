@@ -614,5 +614,13 @@
       "roofline_model"
     ],
     "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/agentic-pr-review",
+    "exercises": [
+      "queue_pr_review"
+    ],
+    "round": "coding"
   }
 ]
