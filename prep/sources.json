@@ -346,5 +346,13 @@
       "boot_debugger"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/chat-bot-refactoring",
+    "exercises": [
+      "chat_room"
+    ],
+    "round": "coding"
   }
 ]

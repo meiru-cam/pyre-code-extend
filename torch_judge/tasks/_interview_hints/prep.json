@@ -275,5 +275,14 @@
     "Why can only lines on the looping path be the corrupted one?": "If a line is never reached by the looping run, does switching it change anything that run does?",
     "How would you report every malformed line at once instead of stopping at the first?": "Collecting errors into a list instead of raising at once: what would the caller get back, and which line numbers would it need?",
     "If several lines could be corrupted, how would the repair search change?": "With two corrupted lines, each pair of switches is a candidate. How many pairs are there, and can the reachability idea still prune them?"
+  },
+  "chat_room": {
+    "Why does module-level state make the legacy function hard to test, and what does injecting a dict into each bot change?": "Run two tests in one process against the legacy code. Which module-level names carry over from the first test, and what would a second room need instead?",
+    "Why must FocusBot read time from an injected clock rather than the system clock?": "A bot that calls time.time() gives a different answer on every run. How would a test check that a session ending at 527 is over at 527?",
+    "How do you show that the refactored room produces exactly the legacy log, rather than trusting that the two code paths look alike?": "Two code paths that look alike can still differ on \"/cheer   @Kai  \" or \"/vote  b \". What would you feed both paths, and what would you compare?",
+    "Should a room catch exceptions from bots, and what do you lose when it does?": "If one bot raises, the room can stop or skip it. Which choice keeps the chat working, and where must the error still show up?",
+    "Why check command ownership at registration rather than when a message arrives?": "Two bots both claim /vote. Detected at registration, who sees the error? Detected when a message arrives, which bot should answer?",
+    "What does an event bus buy over PollBot calling CheerBot directly, and what does it cost in traceability?": "PollBot calling CheerBot directly needs a reference to it. With a bus, what does PollBot know about who reacts, and how would you trace a line back to its source?",
+    "Should publish return lines to the publisher, or should handlers write to the log themselves?": "If handlers wrote to the log themselves, how would the cheer line end up right after the vote line, and who would own the log?"
   }
 }
