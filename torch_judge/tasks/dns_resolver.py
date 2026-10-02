@@ -130,12 +130,13 @@ for seed in range(300):
         check(r, zone, None, limit, name, seed)
 """},
     {"name": "Part 3: the worked example", "part": 3, "behavior": "state.invariant", "code": _HELPERS + r"""
-primary = {"api.lab.test.": CNAME("gone.lab.test.")}
-fallback = {"api.lab.test.": A("10.0.0.7", ttl=30)}
-assert {fn}(primary, fallback).resolve("api.lab.test") == ["10.0.0.7"]
-looping = {"api.lab.test.": CNAME("api.lab.test.")}
-raises("ResolutionCycleError", lambda: {fn}(looping, fallback).resolve("api.lab.test"), "api.lab.test.")
-raises("NameNotFoundError", lambda: {fn}({}, {}).resolve("none.lab.test"), "none.lab.test.")
+primary = {"img.lab.test.": CNAME("cdn.lab.test.")}
+fallback = {"img.lab.test.": CNAME("edge.lab.test.", ttl=30), "edge.lab.test.": A("10.0.0.7", ttl=30),
+            "cdn.lab.test.": A("10.9.9.9", ttl=30)}
+assert {fn}(primary, fallback).resolve("img.lab.test") == ["10.0.0.7"]
+raises("NameNotFoundError", lambda: {fn}({"m.lab.test.": CNAME("n.lab.test.")}, {}).resolve("m.lab.test"), "m.lab.test.")
+long_chain = {"a.lab.test.": CNAME("b.lab.test."), "b.lab.test.": CNAME("c.lab.test."), "c.lab.test.": A("10.0.0.1")}
+raises("ChainTooLongError", lambda: {fn}(long_chain, {"a.lab.test.": A("10.0.0.2")}, 1).resolve("a.lab.test"), "a.lab.test.")
 """},
     {"name": "Part 3: fallback rules", "part": 3, "visibility": "unshown", "behavior": "state.invariant",
      "failure_message": "Only NameNotFoundError falls through; the fallback starts fresh from the query name, never from the missing target; its own NameNotFoundError names its own missing name; a too-long chain in the primary never falls back.",
@@ -240,25 +241,30 @@ class SlowZone(dict):
     def get(self, key, default=None):
         self._touch(key)
         return super().get(key, default)
-zone = SlowZone({"www.lab.test.": CNAME("web.lab.test."), "web.lab.test.": A("192.0.2.4"),
-                 "shop.lab.test.": CNAME("web.lab.test.")}, slow={"www.lab.test.", "shop.lab.test."})
+zone = SlowZone({"feed.lab.test.": CNAME("cache.lab.test."), "img.lab.test.": CNAME("cache.lab.test."),
+                 "cache.lab.test.": A("10.1.1.1"), "loop.lab.test.": CNAME("loop.lab.test.")},
+                slow={"feed.lab.test.", "img.lab.test.", "loop.lab.test."})
 r = {fn}(zone)
-results, errors = [], []
-gate = threading.Barrier(9)
-def call(name):
-    gate.wait()
-    try:
-        results.append((name, r.resolve(name)))
-    except Exception as e:
-        errors.append(repr(e))
-threads = [threading.Thread(target=call, args=("www.lab.test",)) for _ in range(8)] + [threading.Thread(target=call, args=("shop.lab.test",))]
-for t in threads:
-    t.start()
-for t in threads:
-    t.join(10)
-assert not errors, errors
-assert sorted(results) == sorted([("www.lab.test", ["192.0.2.4"])] * 8 + [("shop.lab.test", ["192.0.2.4"])])
-assert zone.hits["www.lab.test."] <= 3, f"www.lab.test. was looked up {zone.hits['www.lab.test.']} times: the 8 callers resolved it separately"
+def run(names):
+    results, gate = [], threading.Barrier(len(names))
+    def call(name):
+        gate.wait()
+        try:
+            results.append((name, r.resolve(name)))
+        except Exception as e:
+            results.append((name, type(e).__name__))
+    threads = [threading.Thread(target=call, args=(n,)) for n in names]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(10)
+    return sorted(results)
+got = run(["feed.lab.test"] * 6 + ["img.lab.test"])
+assert got == sorted([("feed.lab.test", ["10.1.1.1"])] * 6 + [("img.lab.test", ["10.1.1.1"])]), got
+assert zone.hits["feed.lab.test."] <= 3, f"feed.lab.test. was looked up {zone.hits['feed.lab.test.']} times: the six callers resolved it separately"
+got = run(["loop.lab.test"] * 4)
+assert got == [("loop.lab.test", "ResolutionCycleError")] * 4, got
+assert zone.hits["loop.lab.test."] <= 4, f"loop.lab.test. was looked up {zone.hits['loop.lab.test.']} times: the four callers resolved it separately"
 """},
     {"name": "Part 5: errors, copies and parallel names", "part": 5, "visibility": "unshown", "behavior": "scheduler.concurrency",
      "failure_message": "Callers waiting on a shared resolution must all get the same error when it fails, each caller gets its own list, a later call after a failure resolves again, and resolutions of different names must run at the same time rather than one after another.",
@@ -341,7 +347,7 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Where it is used:** stub resolvers and DNS caches, service discovery with aliases, and any cache that must stop a burst of identical misses from hitting the backend at once.
 
-Adapted from the DNS resolver online assessment in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, on one class. Records are tuples instead of record classes, zone keys arrive normalised, and zones are read at resolve time so updates and coalescing can be observed.""",
+Adapted from the DNS resolver online assessment in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, on one class renamed `DnsResolver`, with no required common base class for the errors. Records are tuples instead of record classes, zone keys arrive normalised, and zones are read at resolve time so updates and coalescing can be observed.""",
     "parts": [
         {
             "title": "Normalise and look up",
@@ -362,7 +368,7 @@ Adapted from the DNS resolver online assessment in Schuture/Anthropic-Interview-
 
 - From the normalised query name, follow `CNAME` records, normalising each target, until an `A` record. The chain length is the number of `CNAME` records followed.
 - Keep the set of names visited, starting with the query. If a target is already in it, raise `ResolutionCycleError` with `name` set to that target. Check this before the length.
-- If the chain would get longer than `max_chain_length`, raise `ChainTooLongError` with `name` set to the normalised query name.
+- Count each `CNAME` as you follow it. If the count passes `max_chain_length`, raise `ChainTooLongError` with `name` set to the normalised query name, before looking up the target.
 - A missing name anywhere on the chain raises `NameNotFoundError` with that name.
 
 **Example:** add `"www.lab.test.": ("CNAME", "Front.lab.test", 300)` and `"front.lab.test.": ("CNAME", "web.lab.test.", 45)`:
@@ -378,9 +384,9 @@ Adapted from the DNS resolver online assessment in Schuture/Anthropic-Interview-
 - `ResolutionCycleError` and `ChainTooLongError` from `zone` are raised at once; the fallback is not tried.
 
 **Example:**
-- `zone = {"api.lab.test.": ("CNAME", "gone.lab.test.", 60)}` and `fallback_zone = {"api.lab.test.": ("A", ["10.0.0.7"], 30)}`: `resolve("api.lab.test")` is `["10.0.0.7"]`
-- if `zone` instead maps `api.lab.test.` to itself, `resolve` raises `ResolutionCycleError`, although the fallback has an answer
-- `DnsResolver({}, {}).resolve("none.lab.test")` raises `NameNotFoundError` naming `"none.lab.test."`""",
+- `zone = {"img.lab.test.": ("CNAME", "cdn.lab.test.", 60)}` and a fallback holding `"img.lab.test.": ("CNAME", "edge.lab.test.", 30)`, `"edge.lab.test.": ("A", ["10.0.0.7"], 30)` and `"cdn.lab.test.": ("A", ["10.9.9.9"], 30)`: `resolve("img.lab.test")` is `["10.0.0.7"]`, because the fallback starts again from `img.lab.test.` instead of picking up at `cdn.lab.test.`
+- if neither zone has the query, the fallback's error is raised: `zone = {"m.lab.test.": ("CNAME", "n.lab.test.", 60)}` with an empty fallback raises `NameNotFoundError` naming `"m.lab.test."`, not `"n.lab.test."`
+- a chain in `zone` longer than `max_chain_length` raises `ChainTooLongError` even if the fallback could answer the query""",
         },
         {
             "title": "TTL cache",
@@ -406,7 +412,9 @@ Adapted from the DNS resolver online assessment in Schuture/Anthropic-Interview-
 - Calls for different names never wait for each other's resolution, even when their chains share records.
 - The cache, the clock and any bookkeeping are safe to use from many threads without locks of the caller's own.
 
-**Example:** eight threads call `resolve("www.lab.test")` at the same moment while a ninth calls `resolve("shop.lab.test")`, an alias of `web.lab.test.`. The zone is read for `www.lab.test.` by one resolution only, all nine calls return `["192.0.2.4"]`, and the `shop` resolution runs alongside the `www` one.""",
+**Example:** `feed.lab.test.` and `img.lab.test.` are both aliases of `cache.lab.test.`, and `loop.lab.test.` is an alias of itself:
+- six threads call `resolve("feed.lab.test")` at once while a seventh calls `resolve("img.lab.test")`: all seven get `["10.1.1.1"]`, and `feed.lab.test.` is read by one resolution only
+- four threads call `resolve("loop.lab.test")` at once: all four raise `ResolutionCycleError`, again from one resolution""",
         },
     ],
     "hints": [
@@ -474,7 +482,7 @@ class DnsResolver:
         self._lock = threading.Lock()
 
     def _walk(self, zone, start):
-        """Level 2 resolution inside one zone: (addresses, smallest ttl read)."""
+        """Resolve start inside one zone: (addresses, smallest ttl read)."""
         name, seen, chain, ttl = start, {start}, 0, None
         while True:
             if name not in zone:
@@ -525,8 +533,8 @@ class DnsResolver:
             with self._lock:
                 self._cache[name] = (addresses, self._clock + ttl)
             return list(addresses)
-        except DNSError as error:
-            flight.error = error
+        except Exception as error:
+            flight.error = error  # waiting callers re-raise it
             raise
         finally:
             with self._lock:
@@ -535,11 +543,11 @@ class DnsResolver:
 ''',
     "interview_questions": interview(
         concept=[
-            "Why normalise names before every lookup, and what goes wrong if only the query is normalised?",
+            "Why normalise the query before the lookup instead of storing every spelling of a name in the zone?",
             "Why should a missing name raise an error with the name attached instead of returning an empty list?",
         ],
         deep_dive=[
-            "How do you design the error classes so a caller can catch every resolution error at once and still tell them apart?",
+            "Why must resolve return a new list on every call, and what breaks if it returns the zone's own list?",
         ],
         tradeoffs=[
             "Why must a cycle be checked before the chain length, and what would the caller see otherwise?",

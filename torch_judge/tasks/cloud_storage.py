@@ -206,16 +206,16 @@ for seed in range(200):
     {"name": "Part 4: the worked example", "part": 4, "behavior": "checkpoint.recovery", "code": r"""
 cs = {fn}()
 cs.add_user("u-cy", 60)
-assert cs.add_file_by("u-cy", "scan.tif", 33) == 27
-assert cs.compress_file("u-cy", "scan.tif") == "scan.tif.zip" and cs.get_file_size("scan.tif.zip") == 17
-assert cs.decompress_file("u-cy", "scan.tif.zip") == "scan.tif" and cs.get_file_size("scan.tif") == 34
+assert cs.add_file_by("u-cy", "scan.tif", 41) == 19
+assert cs.compress_file("u-cy", "scan.tif") == "scan.tif.zip" and cs.get_file_size("scan.tif.zip") == 21
 assert cs.backup_user("u-cy") is True
-assert cs.add_file_by("u-cy", "x.tif", 20) == 6
-assert cs.restore_user("u-cy") == 26 and cs.get_file_size("x.tif") is None
-cs.compress_file("u-cy", "scan.tif")
-cs.add_file("scan.tif", 1)
+assert cs.add_file_by("u-cy", "x.tif", 30) == 9
+assert cs.decompress_file("u-cy", "scan.tif.zip") is None and cs.get_file_size("scan.tif.zip") == 21
+assert cs.restore_user("u-cy") == 39 and cs.get_file_size("x.tif") is None
+assert cs.decompress_file("u-cy", "scan.tif.zip") == "scan.tif" and cs.get_file_size("scan.tif") == 42
+cs.add_file("scan.tif.zip", 1)
 assert cs.restore_user("u-cy") is None
-assert cs.get_file_size("scan.tif.zip") == 17 and cs.get_file_size("scan.tif") == 1
+assert cs.get_file_size("scan.tif") == 42 and cs.get_file_size("scan.tif.zip") == 1
 """},
     {"name": "Part 4: compression rules", "part": 4, "visibility": "unshown", "behavior": "budget.enforcement",
      "failure_message": "compress rounds up (size 1 stays 1) and may run on a .zip file; both directions need the user to own the file; decompress needs the .zip suffix, a free plain name and room for the extra bytes, and doubles exactly.",
@@ -239,6 +239,7 @@ cs.add_file_by("u", "y", 1)
 assert cs.decompress_file("u", "y.zip") is None, "y already exists"
 assert cs.decompress_file("u", "x.zip") is None, "x already exists"
 cs.add_file_by("u", "w.zip", 7)
+assert cs.decompress_file("v", "w.zip") is None, "v does not own it"
 assert cs.decompress_file("u", "w.zip") == "w" and cs.get_file_size("w") == 14
 """},
     {"name": "Part 4: backups across merges and blocked restores", "part": 4, "visibility": "unshown", "behavior": "checkpoint.recovery",
@@ -295,7 +296,7 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Where it is used:** object stores and shared drives with per-user quotas, account merges, and per-user restore points.
 
-Adapted from the cloud storage online assessment in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, on one class. The compressed suffix is `.zip`.""",
+Adapted from the cloud storage online assessment in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, on one class. The compressed suffix is `.zip` instead of `.cmp`.""",
     "parts": [
         {
             "title": "Files, copies and sizes",
@@ -336,12 +337,12 @@ Adapted from the cloud storage online assessment in Schuture/Anthropic-Interview
 - `merge_user(target, source) -> int | None` gives all of `source`'s files to `target`, adds `source`'s capacity to `target`'s, and deletes the user `source`. It returns `target`'s remaining capacity, or `None` if the two ids are equal or either user does not exist.
 - `copy_file` now gives the copy the source's owner. If there is an owner, the copy counts against it, and `copy_file` returns `False` when the owner's remaining capacity is less than the size.
 
-**Example:**
+**Example:** with `a.log` (70 bytes, no owner) from Part 1:
 - `add_user("u-ana", 100)` and `add_user("u-ben", 50)` are `True`; `add_file_by("u-ben", "b1", 50)` is `0`
 - `copy_file("b1", "b2")` is `False`: `u-ben` has no room for a 50-byte copy
 - `merge_user("u-ana", "u-ben")` is `100`: capacity `150`, used `50`
 - now `copy_file("b1", "b2")` is `True` and the copy belongs to `u-ana`, leaving `50`
-- `add_file_by("u-ben", "x", 1)` is `None`: the user is gone; `add_file_by("u-ana", "a.log", 1)` is `None`: the name exists with no owner""",
+- after the merge, `add_file_by("u-ben", "x", 1)` is `None`; `add_file_by("u-ana", "a.log", 1)` is `None` too, since that name is taken""",
         },
         {
             "title": "Compression, backup and restore",
@@ -351,14 +352,14 @@ Adapted from the cloud storage online assessment in Schuture/Anthropic-Interview
 - `compress_file(user_id, name) -> str | None` replaces the user's file `name` with `name + ".zip"`, same owner, size `ceil(size / 2)`, and returns the new name. It returns `None` if the user does not exist, does not own `name`, or `name + ".zip"` exists. A `.zip` file can be compressed again.
 - `decompress_file(user_id, name) -> str | None` replaces the user's file `name`, which must end in `.zip`, with the name minus that suffix and double the size, and returns the new name. It returns `None` if the user does not exist, does not own `name`, the name has no `.zip` suffix, the shorter name exists, or `name`'s size is more than the remaining capacity, since doubling adds exactly that many bytes.
 - `backup_user(user_id) -> bool` saves the user's capacity and the names and sizes of its files, replacing any earlier backup. It returns `False` if the user does not exist.
-- `restore_user(user_id) -> int | None` returns the user to its backup: files it owns now that the backup lacks are deleted, files in the backup it does not own now are created again, and files in both are left as they are; the capacity is restored. It returns the remaining capacity. It returns `None` if the user does not exist, has no backup, or a file to create again is held by someone else or by nobody.
+- `restore_user(user_id) -> int | None` returns the user to its backup: files it owns now that the backup lacks are deleted, files in the backup it does not own now are created again, and files in both are left as they are; the capacity is restored. It returns the remaining capacity, which may be negative. It returns `None` if the user does not exist, has no backup, or a file to create again is held by someone else or by nobody.
 - A backup can be restored many times. `merge_user` deletes `source`'s backup with the user, so a new user under that id starts without one.
 
 **Example:**
-- `add_user("u-cy", 60)` and `add_file_by("u-cy", "scan.tif", 33)` is `27`
-- `compress_file("u-cy", "scan.tif")` is `"scan.tif.zip"`, size `17`; `decompress_file("u-cy", "scan.tif.zip")` is `"scan.tif"`, size `34`, not `33`
-- `backup_user("u-cy")`, then `add_file_by("u-cy", "x.tif", 20)` is `6`; `restore_user("u-cy")` is `26` and `x.tif` is gone
-- `compress_file("u-cy", "scan.tif")`, then `add_file("scan.tif", 1)`: `restore_user("u-cy")` is `None`, because `scan.tif` is now someone else's name""",
+- `add_user("u-cy", 60)` and `add_file_by("u-cy", "scan.tif", 41)` is `19`; `compress_file("u-cy", "scan.tif")` is `"scan.tif.zip"`, size `21`
+- `backup_user("u-cy")`, then `add_file_by("u-cy", "x.tif", 30)` is `9`, and `decompress_file("u-cy", "scan.tif.zip")` is `None`: doubling needs `21` more bytes
+- `restore_user("u-cy")` is `39` and `x.tif` is gone; now `decompress_file("u-cy", "scan.tif.zip")` is `"scan.tif"`, size `42`
+- `add_file("scan.tif.zip", 1)`, then `restore_user("u-cy")` is `None`: the backup needs `scan.tif.zip`, which now has no owner""",
         },
     ],
     "hints": [

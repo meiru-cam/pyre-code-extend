@@ -153,15 +153,13 @@ def replay(fs, calls, label):
 TESTS = [
     {"name": "Part 1: the worked example", "part": 1, "behavior": "state.invariant", "code": r"""
 fs = {fn}()
-assert fs.write("/proj/src/main.py", "print(1)") is True
-assert fs.mkdir("/proj//docs/") is True and fs.mkdir("/proj/docs") is True
-assert fs.ls("/proj") == ["docs", "src"]
-assert fs.read("/proj/src/main.py") == "print(1)"
-assert fs.write("/proj/src/main.py/x", "a") is False
-assert fs.mkdir("/proj/./docs") is False
-assert fs.read("/proj/docs") is None and fs.ls("/proj/src/main.py") is None
+assert fs.mkdir("/proj//docs/") is True
+assert fs.write("/proj/src/main.py", "print(1)") is True and fs.read("/proj/src/main.py") == "print(1)"
+assert fs.ls("/proj") == ["docs", "src"] and fs.ls("/") == ["proj"]
 assert fs.write("/proj/docs", "x") is False
-assert fs.ls("/") == ["proj"]
+assert fs.mkdir("/proj/src/main.py/x") is False
+assert fs.read("/proj/../proj/src/main.py") is None
+assert fs.ls("/proj/src") == ["main.py"]
 """},
     {"name": "Part 1: paths and kinds", "part": 1, "visibility": "unshown", "behavior": "edge.empty_or_boundary",
      "failure_message": "Paths must start with /, collapse repeated slashes and one trailing slash, and reject . and .. components; the root is a directory that cannot be written; mkdir fails when any part of the path is a file; ls sorts in Python order (uppercase first).",
@@ -187,16 +185,17 @@ for seed in range(150):
 """},
     {"name": "Part 2: the worked example", "part": 2, "behavior": "state.invariant", "code": r"""
 fs = {fn}()
-fs.write("/proj/src/a.py", "abc")
-fs.write("/proj/src/b.py", "hello")
-assert fs.cp("/proj/src", "/backup/src") is True
-fs.write("/backup/src/a.py", "changed!")
-assert fs.read("/proj/src/a.py") == "abc"
-assert fs.size("/proj") == 8 and fs.size("/backup") == 13
-assert fs.mv("/proj/src/b.py", "/proj/b.py") is True
-assert fs.ls("/proj") == ["b.py", "src"]
-assert fs.mv("/proj", "/proj/src/inner") is False
-assert fs.rm("/proj/src") is True and fs.size("/proj") == 5
+fs.write("/lab/notes.md", "hi")
+fs.write("/lab/run/log.txt", "step 1")
+assert fs.mv("/lab/run", "/archive/run1") is True
+assert fs.ls("/lab") == ["notes.md"] and fs.read("/archive/run1/log.txt") == "step 1"
+assert fs.cp("/lab/notes.md", "/archive/run1/log.txt") is True
+assert fs.read("/archive/run1/log.txt") == "hi" and fs.size("/archive") == 2
+fs.write("/archive/run1/log.txt", "edited")
+assert fs.read("/lab/notes.md") == "hi", "a copy is independent"
+assert fs.cp("/lab/notes.md", "/archive") is False
+assert fs.mv("/archive", "/archive/run1/old") is False
+assert fs.rm("/lab/notes.md") is True and fs.size("/lab") == 0 and fs.ls("/lab") == []
 assert fs.rm("/") is False
 """},
     {"name": "Part 2: move and copy rules", "part": 2, "visibility": "unshown", "behavior": "state.invariant",
@@ -229,15 +228,16 @@ for seed in range(200):
 """},
     {"name": "Part 3: the worked example", "part": 3, "behavior": "budget.enforcement", "code": r"""
 fs = {fn}()
-assert fs.add_user("dev", 12) is True and fs.add_user("admin", 5) is False and fs.add_user("dev", 1) is False
-assert fs.write("/u/dev/a.txt", "0123456789", owner="dev") is True
-assert fs.write("/u/dev/b.txt", "xyz", owner="dev") is False
-assert fs.write("/u/dev/a.txt", "short") is False, "a.txt belongs to dev, not admin"
-assert fs.write("/u/dev/b.txt", "xy", owner="dev") is True
-assert fs.update_capacity("dev", 3) == 1
-assert fs.read("/u/dev/a.txt") is None and fs.read("/u/dev/b.txt") == "xy"
-assert fs.cp("/u/dev/b.txt", "/u/dev/c.txt") is False
-assert fs.mv("/u/dev/b.txt", "/u/dev/c.txt") is True
+assert fs.add_user("ml", 10) is True and fs.add_user("ops", 3) is True
+assert fs.add_user("admin", 5) is False and fs.add_user("ml", 1) is False
+assert fs.write("/team/ml/w.bin", "aaaa", owner="ml") is True and fs.write("/team/ops/cfg", "bb", owner="ops") is True
+assert fs.cp("/team", "/team2") is False and fs.ls("/") == ["team"]
+assert fs.mv("/team", "/team2") is True
+assert fs.write("/team2/ops/cfg", "ccc") is False
+assert fs.write("/x/p1", "zz", owner="ml") is True and fs.write("/x/p0", "zz", owner="ml") is True
+assert fs.update_capacity("ml", 2) == 2
+assert fs.read("/team2/ml/w.bin") is None and fs.read("/x/p0") is None and fs.read("/x/p1") == "zz"
+assert fs.ls("/team2/ml") == [], "eviction leaves the directory in place"
 """},
     {"name": "Part 3: owners, quotas and eviction order", "part": 3, "visibility": "unshown", "behavior": "budget.enforcement",
      "failure_message": "Unknown owners fail; an overwrite frees the old size first; cp of a directory fails as a whole if any owner would go over; mv keeps owners and never checks quotas; rm frees bytes; update_capacity evicts largest first, ties by path, and returns 0 when nothing must go and None for unknown users or negative capacity.",
@@ -272,18 +272,15 @@ for seed in range(200):
 """},
     {"name": "Part 4: the worked example", "part": 4, "behavior": "checkpoint.recovery", "code": r"""
 fs = {fn}()
-fs.write("/log/today.txt", "one")
-assert fs.snapshot("s1") is True
-fs.write("/log/today.txt", "two")
-assert fs.snapshot("s1") is False
-fs.add_user("ana", 8)
-fs.write("/log/ana.txt", "abcdef", owner="ana")
-assert fs.snapshot("s2") is True
-fs.update_capacity("ana", 1)
-assert fs.restore("s1") is True and fs.read("/log/today.txt") == "one" and fs.read("/log/ana.txt") is None
-assert fs.restore("s2") is True and fs.read("/log/ana.txt") == "abcdef" and fs.read("/log/today.txt") == "two"
-assert fs.write("/log/more.txt", "xyz", owner="ana") is False, "ana's capacity of 8 came back with the snapshot"
-assert fs.restore("none") is False
+assert fs.add_user("bo", 6) is True and fs.write("/a.txt", "1") is True
+assert fs.snapshot("base") is True
+assert fs.add_user("cy", 3) is True and fs.write("/c.txt", "xyz", owner="cy") is True
+assert fs.restore("base") is True
+assert fs.read("/c.txt") is None and fs.add_user("cy", 1) is True
+assert fs.write("/a.txt", "2") is True
+assert fs.restore("base") is True and fs.read("/a.txt") == "1"
+assert fs.add_user("bo", 1) is False and fs.write("/b.txt", "123456", owner="bo") is True
+assert fs.snapshot("base") is False and fs.restore("nope") is False
 """},
     {"name": "Part 4: snapshots stay independent", "part": 4, "visibility": "unshown", "behavior": "checkpoint.recovery",
      "failure_message": "Changes after a snapshot or after a restore must never reach the stored snapshot, restoring twice gives the same state, and users added after a snapshot disappear on restore.",
@@ -333,7 +330,7 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Where it is used:** in-memory file systems for tests (pyfakefs, memfs), container layers with quotas, and copy-on-write snapshots in ZFS or btrfs.
 
-Adapted from the file system online assessment in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, on one class.""",
+Adapted from the file system online assessment in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, on one class with a new name.""",
     "parts": [
         {
             "title": "Directories and files",
@@ -344,10 +341,10 @@ Adapted from the file system online assessment in Schuture/Anthropic-Interview-N
 - `ls(path) -> list[str] | None` returns the names directly inside a directory, files and directories together, sorted in Python's default string order. It returns `None` if there is no directory there.
 
 **Example:**
-- `write("/proj/src/main.py", "print(1)")` is `True` and creates `/proj` and `/proj/src`
-- `mkdir("/proj//docs/")` is `True`, then `ls("/proj")` is `["docs", "src"]`
-- `write("/proj/src/main.py/x", "a")` and `mkdir("/proj/./docs")` are `False`
-- `read("/proj/docs")` and `ls("/proj/src/main.py")` are `None`; `write("/proj/docs", "x")` is `False`""",
+- `mkdir("/proj//docs/")` is `True`; `write("/proj/src/main.py", "print(1)")` is `True` and creates `/proj/src`
+- `ls("/proj")` is `["docs", "src"]` and `ls("/")` is `["proj"]`
+- `write("/proj/docs", "x")` is `False` because `/proj/docs` is a directory, and `mkdir("/proj/src/main.py/x")` is `False` because a parent is a file
+- `read("/proj/../proj/src/main.py")` is `None`: `..` makes the path invalid""",
         },
         {
             "title": "Move, copy, delete and size",
@@ -360,11 +357,11 @@ Adapted from the file system online assessment in Schuture/Anthropic-Interview-N
 - `rm(path) -> bool` deletes a file, or a directory with everything in it. It returns `False` for an invalid or missing path and for `"/"`.
 - `size(path) -> int | None` is a file's size, or the total size of all files under a directory. It returns `None` for an invalid or missing path.
 
-**Example:** after `write("/proj/src/a.py", "abc")` and `write("/proj/src/b.py", "hello")`:
-- `cp("/proj/src", "/backup/src")` is `True`; writing `"changed!"` to `/backup/src/a.py` leaves `/proj/src/a.py` as `"abc"`
-- `size("/proj")` is `8` and `size("/backup")` is `13`
-- `mv("/proj/src/b.py", "/proj/b.py")` is `True`, so `ls("/proj")` is `["b.py", "src"]`
-- `mv("/proj", "/proj/src/inner")` is `False`; `rm("/proj/src")` is `True`, leaving `size("/proj")` at `5`; `rm("/")` is `False`""",
+**Example:** after `write("/lab/notes.md", "hi")` and `write("/lab/run/log.txt", "step 1")`:
+- `mv("/lab/run", "/archive/run1")` is `True` and moves the whole directory, so `ls("/lab")` is `["notes.md"]`
+- `cp("/lab/notes.md", "/archive/run1/log.txt")` is `True`: the file replaces the file, and `size("/archive")` is `2`
+- `cp("/lab/notes.md", "/archive")` is `False`: a file cannot replace a directory
+- `mv("/archive", "/archive/run1/old")` is `False`; `rm("/lab/notes.md")` is `True`, leaving `size("/lab")` at `0`""",
         },
         {
             "title": "Owners and quotas",
@@ -373,30 +370,27 @@ Adapted from the file system online assessment in Schuture/Anthropic-Interview-N
 - The user `"admin"` always exists and has no limit. Every file has an owner fixed when it is created. A file counts against its owner's capacity unless the owner is `"admin"`.
 - `add_user(user_id, capacity) -> bool` registers a user with no files. It returns `False` if the id is `"admin"` or taken, or `capacity < 0`.
 - `write(path, content, owner="admin")` also returns `False` if `owner` is not `"admin"` or a registered user, if a file exists at `path` with a different owner, or if the owner's total after the write, the old content no longer counted, would be over capacity.
-- `mv` and `cp` keep each file's owner, and fail if a file they would overwrite has a different owner. `cp` counts the copies like writes and fails as a whole if any owner would go over capacity; `mv` never fails on capacity.
+- `mv` and `cp` keep each file's owner. They fail if `dst` is a file whose owner differs from `src`'s owner. A directory that replaces a directory discards everything under it, whatever the owners. `cp` counts the copies like writes and fails as a whole if any owner would go over capacity; `mv` never fails on capacity.
 - `rm` and every overwrite free the removed bytes from their owner.
-- `update_capacity(user_id, capacity) -> int | None` sets the capacity. While the user is over it, delete its largest file, ties going to the smaller full path string, and return how many files were deleted. It returns `None` for an unknown user, `"admin"`, or `capacity < 0`.
+- `update_capacity(user_id, capacity) -> int | None` sets the capacity. While the user is over it, delete its largest file, ties going to the smaller full path string, and return how many files were deleted. Their directories stay, even if empty. It returns `None` for an unknown user, `"admin"`, or `capacity < 0`.
 
-**Example:**
-- `add_user("dev", 12)` is `True`; `add_user("admin", 5)` is `False`
-- `write("/u/dev/a.txt", "0123456789", owner="dev")` is `True`; then writing `"xyz"` to `/u/dev/b.txt` as `dev` is `False`: `13 > 12`
-- `write("/u/dev/a.txt", "short")` is `False`: the default owner is `"admin"`
-- writing `"xy"` to `/u/dev/b.txt` as `dev` is `True`; `update_capacity("dev", 3)` is `1`, deleting `a.txt`
-- `cp("/u/dev/b.txt", "/u/dev/c.txt")` is `False`, while `mv` to the same place is `True`""",
+**Example:** `add_user("ml", 10)` and `add_user("ops", 3)`, then `write("/team/ml/w.bin", "aaaa", owner="ml")` and `write("/team/ops/cfg", "bb", owner="ops")`:
+- `cp("/team", "/team2")` is `False` and creates nothing: `ops` would need `4` bytes
+- `mv("/team", "/team2")` is `True`, since moves never check quotas; `write("/team2/ops/cfg", "ccc")` is `False`, since the default owner is `"admin"`
+- writing `"zz"` as `ml` to `/x/p1` and then `/x/p0` brings `ml` to `8`; `update_capacity("ml", 2)` is `2`: it deletes `w.bin`, the largest, then `/x/p0`, which wins the tie with `/x/p1` by path order""",
         },
         {
             "title": "Snapshots",
             "description_en": r"""Keep Parts 1–3 and save and restore the whole state.
 
-- `snapshot(snapshot_id) -> bool` saves every directory, file, owner and user capacity under the id. It returns `False` if the id was used before.
+- `snapshot(snapshot_id) -> bool` saves every directory, file and owner, and every registered user with its capacity, under the id. It returns `False` if the id was used before.
 - `restore(snapshot_id) -> bool` replaces the whole state with a copy of that snapshot. It returns `False` for an unknown id.
 - Nothing done after a snapshot, including after restoring it, may change it, so restoring the same id twice gives the same state.
 
-**Example:**
-- `write("/log/today.txt", "one")`, `snapshot("s1")`, then writing `"two"`; a second `snapshot("s1")` is `False`
-- `add_user("ana", 8)`, write `"abcdef"` to `/log/ana.txt` as `ana`, `snapshot("s2")`, then `update_capacity("ana", 1)` deletes it
-- `restore("s1")` brings back `"one"` and no `ana.txt`; `restore("s2")` brings back `ana.txt`, `"two"`, and `ana`'s capacity of `8`
-- `restore("none")` is `False`""",
+**Example:** `add_user("bo", 6)`, `write("/a.txt", "1")`, then `snapshot("base")` is `True`:
+- `add_user("cy", 3)` and a write of `/c.txt` as `cy`, then `restore("base")`: `/c.txt` is gone and `cy` is no longer a user, so `add_user("cy", 1)` is `True`
+- `write("/a.txt", "2")`, then `restore("base")` again: `read("/a.txt")` is `"1"`
+- `snapshot("base")` is `False` and `restore("nope")` is `False`""",
         },
     ],
     "hints": [
@@ -434,7 +428,7 @@ class _File:
 
 def _parts(path):
     """Components of a valid path, [] for the root, or None for an invalid path."""
-    if not isinstance(path, str) or not path.startswith("/"):
+    if not path.startswith("/"):
         return None
     parts = [p for p in path.split("/") if p]  # collapses repeated and trailing slashes
     return None if any(p in (".", "..") for p in parts) else parts
@@ -486,7 +480,7 @@ class MemoryFS:
         if owner != ADMIN:
             self._used[owner] += delta
 
-    # -- level 1 ---------------------------------------------------------
+    # -- part 1 ----------------------------------------------------------
     def mkdir(self, path):
         parts = _parts(path)
         if parts is None:
@@ -531,7 +525,7 @@ class MemoryFS:
         node = None if parts is None else self._get(parts)
         return sorted(node) if isinstance(node, dict) else None
 
-    # -- level 2 ---------------------------------------------------------
+    # -- part 2 ----------------------------------------------------------
     def _transfer(self, src, dst, keep_source):
         sp, dp = _parts(src), _parts(dst)
         if sp is None or dp is None:
@@ -551,8 +545,9 @@ class MemoryFS:
             return False
         moved = copy.deepcopy(node) if keep_source else node
         delta = {}
-        for _, f in _files(target, "/") if target is not None else ():
-            delta[f.owner] = delta.get(f.owner, 0) - len(f.content)  # overwritten files free their bytes
+        if target is not None:
+            for _, f in _files(target, "/"):
+                delta[f.owner] = delta.get(f.owner, 0) - len(f.content)  # overwritten files free their bytes
         if keep_source:
             for _, f in _files(moved, "/"):
                 delta[f.owner] = delta.get(f.owner, 0) + len(f.content)
@@ -591,7 +586,7 @@ class MemoryFS:
             return None
         return sum(len(f.content) for _, f in _files(node, "/"))
 
-    # -- level 3 ---------------------------------------------------------
+    # -- part 3 ----------------------------------------------------------
     def add_user(self, user_id, capacity):
         if user_id == ADMIN or user_id in self._capacity or capacity < 0:
             return False
@@ -612,7 +607,7 @@ class MemoryFS:
             evicted += 1
         return evicted
 
-    # -- level 4 ---------------------------------------------------------
+    # -- part 4 ----------------------------------------------------------
     def snapshot(self, snapshot_id):
         if snapshot_id in self._snapshots:
             return False

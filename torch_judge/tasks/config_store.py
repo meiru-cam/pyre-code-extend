@@ -34,13 +34,14 @@ TESTS = [
     {"name": "Part 1: the worked example", "part": 1, "behavior": "state.invariant", "code": _HELPERS + r"""
 D = {fn}.DELETE
 store = {
-    "defaults": {"model": {"layers": 6, "width": 512, "dropout": 0.1}, "data": {"path": "/data/tiny", "shuffle": True}},
-    "big": {"_base_": ["defaults"], "model": {"layers": 24, "width": 1024}},
-    "noisy": {"data": {"augment": "flip"}},
-    "run7": {"_base_": ["big", "noisy"], "model": {"dropout": D}, "data": {"shuffle": False}},
+    "root": {"optim": {"name": "adam", "lr": 0.001}, "steps": 1000},
+    "long": {"_base_": ["root"], "steps": 5000},
+    "sgd": {"_base_": ["root"], "optim": {"name": "sgd"}},
+    "mix": {"_base_": ["long", "sgd"], "steps": {"warmup": 100, "total": D}},
 }
-assert {fn}(store).resolve("run7") == {"model": {"layers": 24, "width": 1024},
-                                       "data": {"path": "/data/tiny", "shuffle": False, "augment": "flip"}}
+cs = {fn}(store)
+assert cs.resolve("long") == {"optim": {"name": "adam", "lr": 0.001}, "steps": 5000}
+assert cs.resolve("mix") == {"optim": {"name": "sgd", "lr": 0.001}, "steps": {"warmup": 100}}
 """},
     {"name": "Part 1: merge rules and copies", "part": 1, "visibility": "unshown", "behavior": "state.invariant",
      "failure_message": "deep_merge must drop DELETE keys (also inside a dict whose base was not a dict), let a non-dict overlay replace a dict, merge dicts key by key, and return values shared with neither input; resolve must leave the store unchanged and never return _base_.",
@@ -108,14 +109,21 @@ for seed in range(200):
 """},
     {"name": "Part 2: the worked example", "part": 2, "behavior": "protocol.validation", "code": r"""
 cs = {fn}({})
-config = {"model": {"layers": 24, "width": 1024}, "data": {"path": "/data/tiny", "shuffle": False, "augment": "flip"},
-          "tag": "L${model.layers}-w${model.width}", "eval_width": "${model.width}"}
-over = cs.apply_overrides(config, ["model.layers=12", "+data.workers=4", "data.path='/data/full'"])
-assert config["model"]["layers"] == 24, "the input config must not change"
+config = {"optim": {"name": "sgd", "lr": 0.001}, "seeds": [1, 2], "log": {"dir": "/runs", "verbose": False},
+          "name": "${optim.name}-v${log.verbose}", "all_seeds": "${seeds}"}
+over = cs.apply_overrides(config, ["+log.tags=['ab', 'cd']", "optim.lr=1e-2", "log.verbose=true"])
+assert config["optim"]["lr"] == 0.001 and "tags" not in config["log"], "the input config must not change"
 final = cs.resolve_interpolations(over)
-assert final == {"model": {"layers": 12, "width": 1024},
-                 "data": {"path": "/data/full", "shuffle": False, "augment": "flip", "workers": 4},
-                 "tag": "L12-w1024", "eval_width": 1024}, final
+assert final == {"optim": {"name": "sgd", "lr": 0.01}, "seeds": [1, 2],
+                 "log": {"dir": "/runs", "verbose": True, "tags": ["ab", "cd"]},
+                 "name": "sgd-vtrue", "all_seeds": [1, 2]}, final
+for bad, kind in [("log.level=1", "OverrideKeyError"), ("optim.lr=fast", "OverrideSyntaxError")]:
+    try:
+        cs.apply_overrides(config, [bad])
+    except Exception as e:
+        assert type(e).__name__ == kind, (bad, type(e).__name__)
+    else:
+        raise AssertionError(f"{bad} must raise {kind}")
 """},
     {"name": "Part 2: override grammar", "part": 2, "visibility": "unshown", "behavior": "protocol.validation",
      "failure_message": "Values are null, true, false, integers, floats (with a dot and digits, or an exponent), quoted strings without escapes, or flat lists of those with spaces only inside brackets and around commas; anything else raises OverrideSyntaxError. Paths need existing dict keys unless prefixed with +, which creates missing dicts; descending into a non-dict raises OverrideKeyError. Later overrides win.",
@@ -169,22 +177,15 @@ class ModelCfg:
     width: int
     dropout: float = 0.0
 @dataclasses.dataclass
-class DataCfg:
-    path: str
-    shuffle: bool
-    workers: int = 0
-@dataclasses.dataclass
 class RunCfg:
     model: ModelCfg
-    data: DataCfg
     tag: str
     seeds: list[int] = dataclasses.field(default_factory=list)
 cs = {fn}({})
-good = {"model": {"layers": 12, "width": 1024}, "data": {"path": "/data/full", "shuffle": False, "workers": 4}, "tag": "L12"}
-assert cs.validate(good, RunCfg) == []
-bad = {"model": {"layers": 12, "width": "1024", "depth": 3}, "data": {"path": "/d", "shuffle": False}, "seeds": [1, "2"]}
-assert sorted(cs.validate(bad, RunCfg)) == sorted([("model.width", "expected int, got str"), ("model.depth", "not in schema"),
-                                                    ("tag", "missing"), ("seeds.1", "expected int, got str")])
+assert cs.validate({"model": {"layers": 12, "width": 1024, "dropout": 1}, "tag": "L12"}, RunCfg) == []
+bad = {"model": {"layers": True, "width": 512, "depth": 3}, "seeds": [1, "2"]}
+assert sorted(cs.validate(bad, RunCfg)) == sorted([("model.layers", "expected int, got bool"), ("seeds.1", "expected int, got str"),
+                                                    ("model.depth", "not in schema"), ("tag", "missing")])
 """},
     {"name": "Part 3: types, bools and nesting", "part": 3, "visibility": "unshown", "behavior": "contract.signature",
      "failure_message": "A bool never satisfies int or float, an int satisfies float, a list[X] checks each element at path.index, a nested schema needs a dict and is checked inside, None fails every type, optional fields may be absent, every mismatch is collected, and a non-dict config raises TypeError.",
@@ -216,19 +217,18 @@ raises("TypeError", lambda: cs.validate([1], Root))
 """},
     {"name": "Part 4: the worked example", "part": 4, "behavior": "state.invariant", "code": r"""
 cs = {fn}({})
-final = {"model": {"layers": 12, "width": 1024}, "data": {"path": "/data/full", "workers": 4}, "seeds": [1, 2]}
-frozen = cs.freeze(final)
+cfg = {"model": {"layers": 12}, "seeds": [1, 2]}
+frozen = cs.freeze(cfg)
 assert frozen["model"]["layers"] == 12 and frozen["seeds"] == (1, 2)
 try:
     frozen["model"]["layers"] = 99
     raise AssertionError("assigning into a frozen config must raise TypeError")
 except TypeError:
     pass
-same = {"seeds": [1, 2], "data": {"workers": 4, "path": "/data/full"}, "model": {"width": 1024, "layers": 12}}
-assert cs.config_hash(final) == cs.config_hash(same)
-assert cs.config_hash(final) != cs.config_hash({**final, "seeds": [2, 1]})
+assert cs.config_hash(cfg) == cs.config_hash({"seeds": [1, 2], "model": {"layers": 12}})
+assert cs.config_hash(cfg) != cs.config_hash({**cfg, "seeds": [2, 1]})
 """},
-    {"name": "Part 4: freezing and hashing edge cases", "part": 4, "visibility": "unshown", "behavior": "numerics.stability",
+    {"name": "Part 4: freezing and hashing edge cases", "part": 4, "visibility": "unshown", "behavior": "state.invariant",
      "failure_message": "freeze must turn every dict into a read-only mapping and every list into a tuple at all depths without changing the input; config_hash returns the same str for equal content regardless of key order or object identity, a different one for 2 vs 2.0, 0.0 vs -0.0, True vs 1, 'a' vs ['a'] and changed nesting, and raises ValueError for NaN or infinity.",
      "code": _HELPERS + r"""
 cs = {fn}({})
@@ -275,7 +275,7 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 **Rules for every part:**
 - A config is a `dict` with `str` keys whose values are dicts, lists, or scalars: `int`, `float`, `bool`, `str` or `None`, nested to any depth.
 - `ConfigStore(store)` takes a `dict` from config name to config. Every method returns new objects and never changes `store` or any argument.
-- Errors are your own classes, recognised by class name. Every one of them subclasses a class named `ConfigError`.
+- Errors are your own classes, recognised by class name, and each subclasses a class named `ConfigError`. The only exceptions are the built-in `TypeError` and `ValueError` where a part names them.
 
 ────────────────────────────────
 
@@ -285,7 +285,7 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Where it is used:** Hydra and OmegaConf (composition, overrides like `+key=value`, `${...}` interpolation), mmcv's `_base_` files, and experiment trackers that hash configs to identify runs.
 
-Adapted from the ML config system question in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, on one class. The functions become methods, validation errors are `(path, message)` tuples with short fixed messages, and the question about what else to record for reproducibility is left to the interview questions.""",
+Adapted from the ML config system question in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, on one class. The functions become methods with shorter names (`resolve`, `validate`, `freeze`), validation errors are `(path, message)` tuples with short fixed messages, `config_hash` must also tell `True` from `1`, cycle messages start at the first repeated name, and the question about what else to record for reproducibility is left to the interview questions.""",
     "parts": [
         {
             "title": "Compose from bases",
@@ -302,8 +302,10 @@ Adapted from the ML config system question in Schuture/Anthropic-Interview-Notes
 - Raise `ConfigNotFoundError` if `name` or any name reached through `_base_` is missing.
 - Raise `ConfigCycleError` if a config is its own base, directly or through others. Its message spells the loop starting and ending at the repeated name, such as `"x -> y -> z -> x"`.
 
-**Example:** `defaults` holds `model` `{"layers": 6, "width": 512, "dropout": 0.1}` and `data` `{"path": "/data/tiny", "shuffle": True}`; `big` has `_base_: ["defaults"]` and `model` `{"layers": 24, "width": 1024}`; `noisy` holds `data` `{"augment": "flip"}`; `run7` has `_base_: ["big", "noisy"]`, `model` `{"dropout": DELETE}` and `data` `{"shuffle": False}`:
-- `resolve("run7")` is `{"model": {"layers": 24, "width": 1024}, "data": {"path": "/data/tiny", "shuffle": False, "augment": "flip"}}`""",
+**Example:** `root` holds `optim` `{"name": "adam", "lr": 0.001}` and `steps` `1000`; `long` has `_base_: ["root"]` and `steps` `5000`; `sgd` has `_base_: ["root"]` and `optim` `{"name": "sgd"}`; `mix` has `_base_: ["long", "sgd"]` and `steps` `{"warmup": 100, "total": DELETE}`:
+- `resolve("long")` is `{"optim": {"name": "adam", "lr": 0.001}, "steps": 5000}`
+- `resolve("mix")` is `{"optim": {"name": "sgd", "lr": 0.001}, "steps": {"warmup": 100}}`: `sgd` comes later and brings `steps` `1000` from `root`, which replaces `long`'s `5000`; then `mix`'s dict replaces the number, and `total` is left out
+- `root` is reached twice, through `long` and `sgd`, and that is not a cycle""",
         },
         {
             "title": "Overrides and references",
@@ -312,14 +314,19 @@ Adapted from the ML config system question in Schuture/Anthropic-Interview-Notes
 **`apply_overrides(config, overrides) -> dict`** applies each string in order to a copy:
 - An override is `path=value` or `+path=value`. `path` is names matching `[A-Za-z_]\w*` joined by `.`, each a dict key.
 - Without `+`, every key on the path must exist, or raise `OverrideKeyError`. With `+`, missing keys are created as dicts and the last one is set. Either way, a key before the last that exists but is not a dict raises `OverrideKeyError`.
-- `value` is `null`, `true`, `false`, an integer like `-12`, a float with a dot and digits or an exponent like `3.50` or `1e3`, a string in single or double quotes with no escapes, or a list of those in `[...]`. Spaces are allowed only just inside the brackets and around commas. Anything else raises `OverrideSyntaxError`.
+- `value` is `null`, `true`, `false`, an integer like `-12`, a float with a dot and digits, an exponent, or both, like `3.50`, `1e3` or `2.5E-4`, a string in single or double quotes with no escapes, or a list of those in `[...]`. Spaces are allowed only just inside the brackets and around commas.
+- An override that does not have this form, or whose path or value breaks these rules, raises `OverrideSyntaxError`.
 
 **`resolve_interpolations(config) -> dict`** replaces `${path}` references in string values, also inside lists:
 - A string that is exactly one reference becomes the referenced value, of any type, with its own references resolved first.
 - A reference inside a longer string needs an `int`, `float`, `bool` or `str` and is replaced by its text; bools write `true` and `false`.
-- Raise `InterpolationError` for a missing path or a list, dict or `None` inside a longer string. Raise `InterpolationCycleError` if a value needs itself; its message spells the loop of paths, such as `"p.q -> r -> p.q"`.
+- Raise `InterpolationError` for a missing path or a list, dict or `None` inside a longer string. Raise `InterpolationCycleError` if a value needs itself; its message spells the loop of paths starting and ending at the first path that repeats, such as `"p.q -> r -> p.q"`, with no path from before the loop.
+- A reference is `${` + a path as above + `}`. Any other text, such as `${ a }` or `${l.0}`, stays as it is.
 
-**Example:** with `tag` `"L${model.layers}-w${model.width}"` and `eval_width` `"${model.width}"` added to `run7`'s result, the overrides `model.layers=12`, `+data.workers=4` and `data.path='/data/full'`, then `resolve_interpolations`, give `layers` `12`, `workers` `4`, `path` `"/data/full"`, `tag` `"L12-w1024"` and `eval_width` the int `1024`.""",
+**Example:** `config = {"optim": {"name": "sgd", "lr": 0.001}, "seeds": [1, 2], "log": {"dir": "/runs", "verbose": False}, "name": "${optim.name}-v${log.verbose}", "all_seeds": "${seeds}"}`:
+- `apply_overrides(config, ["+log.tags=['ab', 'cd']", "optim.lr=1e-2", "log.verbose=true"])` sets `log.tags` to `["ab", "cd"]`, `optim.lr` to `0.01` and `log.verbose` to `True`, and leaves `config` unchanged
+- `resolve_interpolations` of that result turns `name` into `"sgd-vtrue"` and `all_seeds` into the list `[1, 2]`
+- `apply_overrides(config, ["log.level=1"])` raises `OverrideKeyError`, and `"optim.lr=fast"` raises `OverrideSyntaxError`""",
         },
         {
             "title": "Validate against a schema",
@@ -331,10 +338,12 @@ Adapted from the ML config system question in Schuture/Anthropic-Interview-Notes
 - Return one `(path, message)` per problem, in any order, collecting all of them. `path` is the dotted path from the root, with list positions as numbers, such as `"seeds.1"`.
 - Messages: `"missing"` for an absent required field; `"not in schema"` for a key the schema class does not declare; `"expected {type}, got {type}"` for a wrong type, using class names and `None`, such as `"expected int, got str"`.
 - A `bool` never satisfies `int` or `float`. An `int` satisfies `float`. A nested schema needs a dict and is checked inside; a `list[X]` needs a list and each element is checked.
+- A value of the wrong kind for a nested schema or a list reports the schema's class name or `list`, such as `"expected ModelCfg, got int"` or `"expected list, got str"`.
 - Raise `TypeError` if `config` is not a dict.
 
-**Example:** for a `RunCfg` with `model: ModelCfg` (`layers: int`, `width: int`, `dropout: float = 0.0`), `data: DataCfg`, `tag: str` and `seeds: list[int]` with a default:
-- a config with `width` `"1024"`, an extra `model.depth`, no `tag`, and `seeds` `[1, "2"]` gives `("model.width", "expected int, got str")`, `("model.depth", "not in schema")`, `("tag", "missing")` and `("seeds.1", "expected int, got str")`""",
+**Example:** for a `RunCfg` with `model: ModelCfg` (`layers: int`, `width: int`, `dropout: float = 0.0`), `tag: str` and `seeds: list[int]` with a default:
+- `{"model": {"layers": 12, "width": 1024, "dropout": 1}, "tag": "L12"}` gives `[]`: an `int` is a valid `float`, and `seeds` may be left out
+- `{"model": {"layers": True, "width": 512, "depth": 3}, "seeds": [1, "2"]}` gives `("model.layers", "expected int, got bool")`, `("seeds.1", "expected int, got str")`, `("model.depth", "not in schema")` and `("tag", "missing")`""",
         },
         {
             "title": "Freeze and hash",
@@ -343,13 +352,13 @@ Adapted from the ML config system question in Schuture/Anthropic-Interview-Notes
 - `freeze(config)` returns a read-only copy: every dict becomes a `types.MappingProxyType` and every list a `tuple`, at every depth. Assigning into any level raises `TypeError`.
 - `config_hash(config) -> str` returns the same string for configs with equal content, whatever the key order. It differs whenever any value differs, including `2` and `2.0`, `0.0` and `-0.0`, and `True` and `1`. It raises `ValueError` if the config holds a `NaN` or an infinite float.
 
-**Example:**
-- `freeze(final)["model"]["layers"]` reads `12`, and `freeze(final)["seeds"]` is `(1, 2)`; assigning to `["model"]["layers"]` raises `TypeError`
-- the same config written with its keys in another order has the same hash; with `seeds` `[2, 1]` the hash changes""",
+**Example:** with `cfg = {"model": {"layers": 12}, "seeds": [1, 2]}`:
+- `freeze(cfg)["model"]["layers"]` reads `12`, and `freeze(cfg)["seeds"]` is `(1, 2)`; assigning to `["model"]["layers"]` raises `TypeError`
+- `{"seeds": [1, 2], "model": {"layers": 12}}` has the same hash as `cfg`; with `seeds` `[2, 1]` the hash changes""",
         },
     ],
     "hints": [
-        {"level": 1, "kind": "questions", "content": "deep_merge has four cases per key. Which one must you check first so a DELETE inside a nested dict still works when the base had no dict there? For resolve, what do you need to remember while recursing to notice that a name leads back to itself?"},
+        {"level": 1, "kind": "questions", "content": "deep_merge has four cases per key. When the overlay holds a dict and the base does not, what base do you recurse with? For resolve, what do you need to remember while recursing to notice that a name leads back to itself?"},
         {"level": 2, "kind": "analysis", "content": "deep_merge: start from deep copies of base's keys; for each overlay key, skip and drop it if the value is DELETE, recurse with base[key] or {} if it is a dict, else store a deep copy. resolve(name, path=()): if name in path, raise with the loop; if missing, raise not found; merge each base's resolve(base, path + (name,)), then the own keys."},
     ],
     "model_connections": [
@@ -415,7 +424,7 @@ class _Delete:
 _PATH = r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*"
 _SCALAR = r"""null|true|false|-?[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?|'[^']*'|"[^"]*\""""
 _OVERRIDE = re.compile(rf"(\+?)({_PATH})=(.*)", re.S)
-_LIST = re.compile(rf"\[\s*(?:(?:{_SCALAR})(?:\s*,\s*(?:{_SCALAR}))*)?\s*\]")
+_LIST = re.compile(rf"\[ *(?:(?:{_SCALAR})(?: *, *(?:{_SCALAR}))*)? *\]")
 _REF = re.compile(rf"\$\{{({_PATH})\}}")
 
 
