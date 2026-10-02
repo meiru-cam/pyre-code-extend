@@ -51,7 +51,7 @@
   "mixed_precision": "def mixed_precision_step(model, optimizer, loss_fn, x, y, loss_scale=1024.0) -> float:\n    pass",
   "paged_attention": "def paged_attention(Q: torch.Tensor, k_pages: torch.Tensor, v_pages: torch.Tensor, block_table: torch.Tensor, context_len: int, block_size: int) -> torch.Tensor:\n    pass",
   "ring_attention": "def ring_attention(Q: torch.Tensor, K: torch.Tensor, V: torch.Tensor, num_devices: int) -> torch.Tensor:\n    pass",
-  "tensor_parallel": "import numpy as np\n\n\nclass TensorParallel:\n    def split(self, A, n, axis):\n        pass\n\n    def all_gather(self, shards, axis):\n        pass\n\n    def all_reduce(self, shards):\n        pass",
+  "tensor_parallel": "class TensorParallelMLP(nn.Module):\n\n    def __init__(self, d_model: int, d_ff: int, world_size: int):\n        super().__init__()\n        pass\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        pass",
   "fsdp_step": "def fsdp_step(param_shards: list, grad_fn, world_size: int) -> list:\n    pass",
   "max_pool2d": "def max_pool2d(x: torch.Tensor, kernel_size: int, stride: int = None) -> torch.Tensor:\n    pass",
   "focal_loss": "def focal_loss(logits: torch.Tensor, targets: torch.Tensor, alpha: float = 0.25, gamma: float = 2.0) -> torch.Tensor:\n    pass",

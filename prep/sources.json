@@ -474,13 +474,5 @@
       "inference_engine"
     ],
     "round": "coding"
-  },
-  {
-    "company": "openai",
-    "item": "coding/sharded-matmul-backprop",
-    "exercises": [
-      "tensor_parallel"
-    ],
-    "round": "coding"
   }
 ]
