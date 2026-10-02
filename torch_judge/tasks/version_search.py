@@ -196,9 +196,9 @@ Adapted from the version dependency question in Schuture/OpenAI-Interview-Notes 
 - `is_supported` may now turn `False` again in a later version, and back to `True` after that.
 - Return the earliest version for which it is `True`, or `None`. `earliest_supported` keeps Part 1's assumption and limit.
 
-**Example:** `versions = ["7.0.3", "7.0.0", "7.0.4", "7.0.1", "7.0.2"]`, where patches `0` to `4` answer `False`, `False`, `True`, `False`, `True`:
-- the answer is `"7.0.2"`; `"7.0.4"` is supported too, but later
-- a binary search can land on `7.0.4`, because the answers are not one `False` stretch then one `True` stretch""",
+**Example:** `versions = ["7.0.3", "7.0.0", "7.0.4", "7.0.1", "7.0.2"]`, where patches `0` to `4` answer `False`, `True`, `False`, `False`, `True`:
+- the answer is `"7.0.1"`; `"7.0.4"` is supported too, but later
+- a binary search probes `7.0.2`, sees `False`, and lands on `7.0.4`, because the answers are not one `False` stretch then one `True` stretch""",
         },
         {
             "title": "Few probes over grouped versions",
@@ -296,8 +296,8 @@ one = {"9.9.9": True}
 assert manager.earliest_supported(["9.9.9"], Probe(one)) == "9.9.9"
 """},
         {"name": "Part 2: the worked example", "part": 2, "behavior": "state.invariant", "code": r"""
-answers = {"7.0.0": False, "7.0.1": False, "7.0.2": True, "7.0.3": False, "7.0.4": True}
-assert {fn}().earliest_supported_any(["7.0.3", "7.0.0", "7.0.4", "7.0.1", "7.0.2"], lambda v: answers[v]) == "7.0.2"
+answers = {"7.0.0": False, "7.0.1": True, "7.0.2": False, "7.0.3": False, "7.0.4": True}
+assert {fn}().earliest_supported_any(["7.0.3", "7.0.0", "7.0.4", "7.0.1", "7.0.2"], lambda v: answers[v]) == "7.0.1"
 """},
         {"name": "Part 2: support that comes and goes", "part": 2, "visibility": "unshown", "behavior": "state.invariant",
          "failure_message": "When support can turn off and on again, the result must be the numerically earliest supported version, or None, with no version probed twice.",

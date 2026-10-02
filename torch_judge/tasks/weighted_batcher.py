@@ -280,7 +280,8 @@ for seed in range(150):
     model = Model(lengths, weights, batch_size, "stochastic", seed)
     for _ in range(rng.randint(1, 6)):
         if rng.random() < 0.4:
-            state = json.loads(json.dumps(b.state_dict()))
+            state = b.state_dict()
+            assert json.loads(json.dumps(state)) == state, "state_dict() must survive a JSON round trip unchanged"
             b = {fn}(Registry(lengths), weights, batch_size, allocation="stochastic", seed=seed + 1000)
             b.load_state_dict(state)
         assert b.next_batch() == model.next_batch(), (seed, weights, batch_size)

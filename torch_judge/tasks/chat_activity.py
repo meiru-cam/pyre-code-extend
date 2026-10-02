@@ -77,7 +77,7 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Where it is used:** rate limiters, presence indicators and live dashboards all count recent events per key without keeping history.
 
-Adapted from the sliding-window event aggregation question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, on one class.""",
+Adapted from the sliding-window event aggregation question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, on one class. A ping and a close with the same timestamp are decided by arrival order in every part, so one rule serves all three.""",
     "parts": [
         {
             "title": "Recent event count",
@@ -122,7 +122,7 @@ Adapted from the sliding-window event aggregation question in Schuture/OpenAI-In
 - The clock `C` is the largest value seen so far among every recorded `timestamp` and every `now` passed in. It never goes back: `now` is at least every timestamp recorded before it and at least every earlier `now`. With `now=None`, `C` is unchanged.
 - The window is `C - window` to `C`. `recent_count` and `active_sessions` answer for that window.
 - An event whose `timestamp` is below `C - window` when it arrives is ignored entirely: it changes nothing, now or later.
-- Activity depends on timestamps, not arrival order: a chat is active when its ping with the highest timestamp is inside the window and no close has a higher timestamp. At equal timestamps the event recorded later wins, as before.
+- Activity is decided by timestamps: a chat is active when its ping with the highest timestamp is inside the window and no close has a higher timestamp. Arrival order only breaks ties: at equal timestamps the event recorded later wins, as before.
 - The memory rule now uses `C`: state may be kept only for chats with an event inside `C - window` to `C`.
 
 **Example**, `window = 5`:
@@ -144,7 +144,7 @@ Adapted from the sliding-window event aggregation question in Schuture/OpenAI-In
     ],
     "pro_con_analysis": {
         "pros": [
-            "A queue in timestamp order lets each event be evicted exactly once, so the cost per call is amortized constant.",
+            "A queue in timestamp order lets each event be evicted exactly once, so eviction adds only amortized constant work per call.",
             "Deleting a key's entry when its count reaches zero bounds memory by the chats in the window.",
             "Keeping each chat's highest ping and close timestamps makes the answer independent of arrival order.",
         ],
@@ -311,7 +311,7 @@ calls = []
 for i in range(20000):
     ts = i // 4 + 50 - rng.randint(0, 8)
     kind = "close" if i % 3 == 0 else "ping"
-    calls.append(lambda t, i=i, ts=ts, kind=kind: t.record_event(f"user{i % 50000}", f"chat{i}", ts, kind))
+    calls.append(lambda t, i=i, ts=ts, kind=kind: t.record_event(f"user{i}", f"chat{i}", ts, kind))
 early, late = traced_peak_after(calls, {fn}(5), {2000, 20000})
 assert late - early < 1_000_000, f"memory grew by {(late - early) / 1e6:.1f} MB"
 """},
@@ -393,7 +393,7 @@ class ActivityTracker:
             "When can a chat's entry be deleted, and what happens to memory if it never is?",
         ],
         deep_dive=[
-            "Why does each event cost amortized O(1) to evict when events arrive in timestamp order?",
+            "Why is each event evicted exactly once when events arrive in timestamp order, and what does that make the cost per call?",
         ],
         tradeoffs=[
             "Why does arrival order stop mattering once you keep each chat's highest ping and close timestamps?",

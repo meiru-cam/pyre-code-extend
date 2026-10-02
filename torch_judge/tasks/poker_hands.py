@@ -101,7 +101,7 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Rules for every part:**
 - A card is two characters, a rank then a suit. Ranks go `2 < 3 < 4 < 5 < 6 < 7 < 8 < 9 < T < J < Q < K < A`, where `T` is ten. Suits are `C`, `D`, `H`, `S`.
-- A hand is a list of three distinct cards, such as `["9H", "TC", "9D"]`.
+- A hand is a list of three distinct cards, such as `["5S", "JD", "5C"]`.
 - Suit never breaks a tie.
 - There may be up to 100,000 players; the work must grow linearly with the number of cards.
 
@@ -155,7 +155,7 @@ Each hand has one type, strongest first:
 
 **Signature:** `start_round(deck, strategies) -> None`, `deal_card() -> str`, `is_over() -> bool`, `check_result() -> str`
 
-- `strategies[i]` belongs to player `i`, so there are `N = len(strategies)` players. `deck` holds at least `3 * N` cards in the order they are drawn.
+- `strategies[i]` belongs to player `i`, so there are `N = len(strategies)` players. `deck` holds at least `3 * N` cards in the order they are drawn; it may repeat a card.
 - The round is three passes over players `0` to `N - 1`. Each `deal_card()` call handles the next player of the current pass and returns one line.
 - In passes 1 and 2 the player gets the next undrawn card: `"Player {i} is dealt {card}."`.
 - In pass 3, call `strategies[i]` once with the player's two cards in the order dealt. If it returns `True`, the player folds and gets no card: `"Player {i} folds."`. The next player then draws the card this player would have had. Otherwise the player gets the next card as usual.
