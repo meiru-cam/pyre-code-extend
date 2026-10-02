@@ -203,5 +203,14 @@
     "Where does the weight log(r (K - 1) / (1 - r)) come from, and why floor it at zero?": "Write the likelihood of a sample's votes for class c, assuming annotator j is right with probability r and otherwise picks one wrong class at random. Which term depends on c?",
     "What goes wrong if most annotators share the same bias?": "If three of five annotators always say class 0, what is the consensus on a class-2 sample, and which annotators get flagged?",
     "How would you iterate this into Dawid-Skene, and what would each step estimate?": "Alternate two steps: estimate each sample's class from weighted votes, then re-estimate each annotator's accuracy from those classes. What changes each round?"
+  },
+  "web_crawler": {
+    "Why mark a URL as seen when it is discovered rather than when it is fetched?": "Two pages in the queue both link to page X. If X is marked seen only when it is fetched, how many times is it fetched?",
+    "Why must the seen set hold normalised URLs, and what does normalisation change here?": "http://x.io/a#top and http://x.io/a are the same page. If the seen set stores raw links, what happens?",
+    "What does a breadth-first crawl cost in calls and memory for P pages and L links?": "Each page is fetched once and each link is looked at once. What does that make the total work and the size of the seen set?",
+    "In a thread-pool crawl, which thread should update the seen set, and what race appears if workers do it without a lock?": "If every worker thread checks the seen set and then adds to it, what can happen between the check and the add? Who else could own that set?",
+    "How do you bound in-flight calls in asyncio without limiting how many tasks you create?": "A semaphore counts permits. Where do you acquire it so that tasks can exist freely but only a few calls run?",
+    "Why must a blocking call run in a thread when you use asyncio, and what breaks if it does not?": "If a coroutine calls a blocking function directly, what can the event loop do while it waits? Which helper runs it in a thread?",
+    "What else would you normalise or respect in a production crawler, such as robots.txt or per-host rate limits?": "Besides the fragment, which differences in a URL point to the same page, and what would a polite crawler limit per host?"
   }
 }

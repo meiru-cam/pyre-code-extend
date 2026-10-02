@@ -282,5 +282,13 @@
       "noisy_annotators"
     ],
     "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/concurrent-web-crawler",
+    "exercises": [
+      "web_crawler"
+    ],
+    "round": "coding"
   }
 ]

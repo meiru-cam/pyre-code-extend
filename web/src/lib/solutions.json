@@ -1458,6 +1458,15 @@
       }
     ]
   },
+  "web_crawler": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "# Adapted from Schuture/Anthropic-Interview-Notes (code under the MIT License).\nimport asyncio\nfrom collections import deque\nfrom concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait\nfrom urllib.parse import urlparse\n\n\ndef _normalise(url):\n    return url.split(\"#\", 1)[0]  # only the fragment goes; scheme, host, port and path stay\n\n\nclass WebCrawler:\n    def _new_links(self, links, host, seen):\n        \"\"\"The normalised in-scope links not seen before; marks them seen.\"\"\"\n        fresh = []\n        for link in links:\n            url = _normalise(link)\n            if urlparse(url).hostname == host and url not in seen:\n                seen.add(url)\n                fresh.append(url)\n        return fresh\n\n    @staticmethod\n    def _fetch(parser, url):\n        try:\n            return parser.get_urls(url)\n        except Exception:  # a failed page still counts as crawled; it just has no links\n            return []\n\n    def crawl(self, start_url, html_parser):\n        start = _normalise(start_url)\n        host, seen, queue = urlparse(start).hostname, {start}, deque([start])\n        while queue:\n            url = queue.popleft()\n            queue.extend(self._new_links(self._fetch(html_parser, url), host, seen))\n        return sorted(seen)\n\n    def crawl_concurrent(self, start_url, html_parser, max_workers=8):\n        start = _normalise(start_url)\n        host, seen = urlparse(start).hostname, {start}\n        # only this thread touches `seen`; workers just fetch, so no lock is needed\n        with ThreadPoolExecutor(max_workers=max_workers) as pool:\n            pending = {pool.submit(self._fetch, html_parser, start)}\n            while pending:\n                done, pending = wait(pending, return_when=FIRST_COMPLETED)\n                for future in done:\n                    for url in self._new_links(future.result(), host, seen):\n                        pending.add(pool.submit(self._fetch, html_parser, url))\n        return sorted(seen)\n\n    async def crawl_async(self, start_url, html_parser, concurrency=8):\n        start = _normalise(start_url)\n        host, seen = urlparse(start).hostname, {start}\n        gate = asyncio.Semaphore(concurrency)\n        tasks = set()\n\n        async def visit(url):\n            async with gate:  # at most `concurrency` blocking calls in flight\n                links = await asyncio.to_thread(self._fetch, html_parser, url)\n            for new in self._new_links(links, host, seen):\n                tasks.add(asyncio.create_task(visit(new)))\n\n        tasks.add(asyncio.create_task(visit(start)))\n        while tasks:\n            done, _ = await asyncio.wait(tasks)\n            tasks.difference_update(done)\n        return sorted(seen)",
+        "role": "solution"
+      }
+    ]
+  },
   "agent_rollout_truncation": {
     "cells": [
       {
