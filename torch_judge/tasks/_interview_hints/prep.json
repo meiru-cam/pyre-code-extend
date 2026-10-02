@@ -419,5 +419,14 @@
     "What goes wrong if a stopped sequence keeps its blocks until the end of the step?": "A sequence finishes but keeps its blocks until the end of the step. What can a later sequence in the same step not get?",
     "Why chain block hashes from the start of the sequence, and why stop reusing at the first miss?": "Two prompts share their first block but differ in the second. Why must the hash of block 2 depend on block 1, and why stop at the first miss?",
     "Why preempt the most recently admitted sequence, and when would swapping blocks out beat recomputing them?": "The newest sequence has the fewest tokens to recompute. When would copying its blocks to host memory beat recomputing them?"
+  },
+  "sharded_linear": {
+    "With seven columns and three devices, how wide is each shard, and why give the extra columns to the first devices?": "7 columns over 3 devices: what are the widths if the extra columns go first? What does np.array_split give?",
+    "What is the difference between all_gather and all_reduce, and what does each device hold afterwards?": "After all_gather, does every device hold a piece or the whole array? After all_reduce, what does each device hold?",
+    "Why should a collective return a separate array for every device, and what bug can a shared array cause?": "Two devices get the same array object. Device 0 adds 1 to it in place. What does device 1 now see?",
+    "In column-parallel backward, why does dX need an all-reduce while dW needs no communication?": "Device k only has W_k's columns. Write dX as a sum over devices: which term can device k compute alone?",
+    "In row-parallel forward, why must partial outputs be summed, and why does the backward pass need no communication?": "Each device's X_k @ W_k is a partial Y. Why must they be summed? In the backward pass, what does device k need to get dX_k?",
+    "Why put the column-parallel layer before tanh and the row-parallel layer after it, and what would the opposite order cost?": "tanh is elementwise. After a column split, does any device need another device's hidden columns to apply it?",
+    "How would you check sharded gradients against an unsharded reference, and which tolerances would you use?": "Compare with an unsharded reference built from the same weights. Which dtype, and which tolerances, catch a missing factor but not rounding?"
   }
 }

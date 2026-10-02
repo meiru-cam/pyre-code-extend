@@ -27512,6 +27512,159 @@
           "hint": "The newest sequence has the fewest tokens to recompute. When would copying its blocks to host memory beat recomputing them?"
         }
       ]
+    },
+    {
+      "id": "sharded_linear",
+      "title": "Sharded Linear Layers",
+      "titleZh": "Sharded Linear Layers",
+      "difficulty": "Hard",
+      "functionName": "ShardedLinear",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Build `ShardedLinear`, which simulates devices as list entries: first shards and collectives, then the forward and backward pass of a column-parallel and a row-parallel linear layer, then a sharded two-layer MLP.\n\nThe requirement arrives in parts. Each part adds methods to the same `ShardedLinear` class and keeps the earlier ones working. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- A device is one entry of a Python list; entry `k` holds device `k`'s NumPy array. All arrays are `float64`.\n- A layer computes `Y = X @ W` with `X` of shape `(B, d_in)` and `W` of shape `(d_in, d_out)`.\n- A shard is a contiguous slice along one axis. With `n` devices and an axis of length `L`, the first `L % n` shards hold `L // n + 1` entries and the rest `L // n`, so `np.array_split` order. `n` never exceeds `L`.\n- Every exchange of data between devices goes through `self.all_gather` or `self.all_reduce`. The tests count these calls, so call them on `self`, and only where the data must move.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** it checks that you can derive matmul gradients by hand and say where communication is unavoidable. Each later part adds one requirement: the column split, the row split, and the two composed into the MLP block every tensor-parallel transformer uses.\n\n**Where it is used:** Megatron-LM's tensor parallelism splits attention and MLP weights this way, with one all-reduce in the forward pass and one in the backward pass of each block; DeepSpeed and PyTorch's DTensor offer the same layouts.\n\nAdapted from the sharded matmul question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, as methods of one class with shorter names. The source's derivation part becomes interview questions, its bug hunt becomes Part 4, writing the MLP step correctly, and the collectives return separate copies and are counted.",
+      "descriptionZh": "Build `ShardedLinear`, which simulates devices as list entries: first shards and collectives, then the forward and backward pass of a column-parallel and a row-parallel linear layer, then a sharded two-layer MLP.\n\nThe requirement arrives in parts. Each part adds methods to the same `ShardedLinear` class and keeps the earlier ones working. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- A device is one entry of a Python list; entry `k` holds device `k`'s NumPy array. All arrays are `float64`.\n- A layer computes `Y = X @ W` with `X` of shape `(B, d_in)` and `W` of shape `(d_in, d_out)`.\n- A shard is a contiguous slice along one axis. With `n` devices and an axis of length `L`, the first `L % n` shards hold `L // n + 1` entries and the rest `L // n`, so `np.array_split` order. `n` never exceeds `L`.\n- Every exchange of data between devices goes through `self.all_gather` or `self.all_reduce`. The tests count these calls, so call them on `self`, and only where the data must move.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** it checks that you can derive matmul gradients by hand and say where communication is unavoidable. Each later part adds one requirement: the column split, the row split, and the two composed into the MLP block every tensor-parallel transformer uses.\n\n**Where it is used:** Megatron-LM's tensor parallelism splits attention and MLP weights this way, with one all-reduce in the forward pass and one in the backward pass of each block; DeepSpeed and PyTorch's DTensor offer the same layouts.\n\nAdapted from the sharded matmul question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, as methods of one class with shorter names. The source's derivation part becomes interview questions, its bug hunt becomes Part 4, writing the MLP step correctly, and the collectives return separate copies and are counted.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Part 1: the worked example",
+          "code": "\nimport numpy as np\ntp = {fn}()\nA = np.arange(14.0).reshape(2, 7)\nparts = tp.split(A, 3, 1)\nassert [p.shape for p in parts] == [(2, 3), (2, 2), (2, 2)]\nassert np.array_equal(parts[1], [[3.0, 4.0], [10.0, 11.0]])\ncopies = tp.all_gather(parts, 1)\nassert len(copies) == 3 and all(np.array_equal(c, A) for c in copies)\nsums = tp.all_reduce([np.ones(2), 2 * np.ones(2), 4 * np.ones(2)])\nassert len(sums) == 3 and all(np.array_equal(s, [7.0, 7.0]) for s in sums)\nsums[0][0] = -1.0\nassert sums[1][0] == 7.0, \"each device gets its own copy\"\n",
+          "behavior": "tensor.shape",
+          "part": 1
+        },
+        {
+          "name": "Part 1: shapes, axes and copies",
+          "visibility": "unshown",
+          "behavior": "tensor.shape",
+          "failureMessage": "split must give n contiguous shards with the remainder spread one entry at a time over the first shards, along either axis; all_gather must concatenate along the given axis; all_reduce must sum elementwise; every device must get its own array, separate from the inputs and from the other devices.",
+          "hiddenCode": "\nimport numpy as np\n\ndef spy(cls):\n    class Spy(cls):\n        def __init__(self):\n            self.calls = []\n        def all_gather(self, shards, axis):\n            self.calls.append(\"all_gather\")\n            return super().all_gather(shards, axis)\n        def all_reduce(self, shards):\n            self.calls.append(\"all_reduce\")\n            return super().all_reduce(shards)\n    return Spy()\n\ndef close(a, b):\n    return np.asarray(a).shape == np.asarray(b).shape and np.allclose(a, b, rtol=1e-10, atol=1e-10)\n\ndef pieces(A, n, axis):\n    size = A.shape[axis]\n    out, start = [], 0\n    for k in range(n):\n        width = size // n + (1 if k < size % n else 0)\n        out.append(np.take(A, range(start, start + width), axis=axis))\n        start += width\n    return out\n\nrng = np.random.default_rng(1)\ntp = {fn}()\nfor trial in range(100):\n    A = rng.standard_normal((rng.integers(1, 9), rng.integers(1, 9)))\n    axis = int(rng.integers(0, 2))\n    n = int(rng.integers(1, A.shape[axis] + 1))\n    parts = tp.split(A, n, axis)\n    assert len(parts) == n and all(close(p, q) for p, q in zip(parts, pieces(A, n, axis))), (trial, A.shape, n, axis)\n    gathered = tp.all_gather(parts, axis)\n    assert len(gathered) == n and all(close(g, A) for g in gathered)\n    gathered[0] += 1\n    assert close(parts[0], pieces(A, n, axis)[0]) and (n == 1 or close(gathered[-1], A))\n    terms = [rng.standard_normal(A.shape) for _ in range(n)]\n    summed = tp.all_reduce(terms)\n    assert len(summed) == n and all(close(s, sum(terms)) for s in summed)\n    summed[0] += 1\n    assert n == 1 or close(summed[-1], sum(terms))\n",
+          "part": 1
+        },
+        {
+          "name": "Part 2: the worked example",
+          "code": "\nimport numpy as np\ntp = {fn}()\nX = np.array([[1.0, 2.0], [0.0, -1.0]])\nW = np.array([[1.0, 0.0, 2.0], [3.0, -1.0, 1.0]])\nW_shards = [W[:, :2], W[:, 2:]]\nY_shards = tp.column_forward(X, W_shards)\nassert np.allclose(Y_shards[0], [[7.0, -2.0], [-3.0, 1.0]]) and np.allclose(Y_shards[1], [[4.0], [-1.0]])\ndY_shards = [np.ones((2, 2)), np.ones((2, 1))]\ndW_shards, dX_shards = tp.column_backward(X, W_shards, dY_shards)\nassert np.allclose(dW_shards[0], [[1.0, 1.0], [1.0, 1.0]]) and np.allclose(dW_shards[1], [[1.0], [1.0]])\nassert len(dX_shards) == 2 and all(np.allclose(d, [[3.0, 3.0], [3.0, 3.0]]) for d in dX_shards)\n",
+          "behavior": "gradient.flow",
+          "part": 2
+        },
+        {
+          "name": "Part 2: random column shards against autograd",
+          "visibility": "unshown",
+          "behavior": "gradient.flow",
+          "failureMessage": "Column-parallel results differed from torch autograd on the unsharded layer, or the communication was wrong: column_forward must not communicate, and column_backward must combine the devices' dX contributions with exactly one call to self.all_reduce.",
+          "hiddenCode": "\nimport numpy as np\n\ndef spy(cls):\n    class Spy(cls):\n        def __init__(self):\n            self.calls = []\n        def all_gather(self, shards, axis):\n            self.calls.append(\"all_gather\")\n            return super().all_gather(shards, axis)\n        def all_reduce(self, shards):\n            self.calls.append(\"all_reduce\")\n            return super().all_reduce(shards)\n    return Spy()\n\ndef close(a, b):\n    return np.asarray(a).shape == np.asarray(b).shape and np.allclose(a, b, rtol=1e-10, atol=1e-10)\n\ndef pieces(A, n, axis):\n    size = A.shape[axis]\n    out, start = [], 0\n    for k in range(n):\n        width = size // n + (1 if k < size % n else 0)\n        out.append(np.take(A, range(start, start + width), axis=axis))\n        start += width\n    return out\n\nrng = np.random.default_rng(2)\nfor trial in range(60):\n    B, d_in, d_out = (int(v) for v in rng.integers(1, 9, size=3))\n    n = int(rng.integers(1, d_out + 1))\n    X, W, dY = rng.standard_normal((B, d_in)), rng.standard_normal((d_in, d_out)), rng.standard_normal((B, d_out))\n    tp = spy({fn})\n    W_shards, dY_shards = pieces(W, n, 1), pieces(dY, n, 1)\n    Y_shards = tp.column_forward(X, W_shards)\n    assert tp.calls == [], (\"column_forward communicated\", tp.calls)\n    Xt, Wt = torch.tensor(X, requires_grad=True), torch.tensor(W, requires_grad=True)\n    Yt = Xt @ Wt\n    Yt.backward(torch.tensor(dY))\n    assert close(np.concatenate(Y_shards, axis=1), Yt.detach().numpy()), trial\n    dW_shards, dX_shards = tp.column_backward(X, W_shards, dY_shards)\n    assert tp.calls == [\"all_reduce\"], (\"column_backward collectives\", tp.calls)\n    assert all(close(a, b) for a, b in zip(dW_shards, pieces(Wt.grad.numpy(), n, 1))), trial\n    assert len(dX_shards) == n and all(close(d, Xt.grad.numpy()) for d in dX_shards), trial\n",
+          "part": 2
+        },
+        {
+          "name": "Part 3: the worked example",
+          "code": "\nimport numpy as np\ntp = {fn}()\nX = np.array([[1.0, 2.0, -1.0], [0.0, 1.0, 1.0]])\nW = np.array([[1.0, 2.0], [0.0, 1.0], [3.0, -1.0]])\nX_shards, W_shards = [X[:, :2], X[:, 2:]], [W[:2], W[2:]]\nY_shards = tp.row_forward(X_shards, W_shards)\nassert len(Y_shards) == 2 and all(np.allclose(y, [[-2.0, 5.0], [3.0, 0.0]]) for y in Y_shards)\ndY = np.array([[1.0, 0.0], [0.0, 2.0]])\ndW_shards, dX_shards = tp.row_backward(X_shards, W_shards, dY)\nassert np.allclose(dW_shards[0], [[1.0, 0.0], [2.0, 2.0]]) and np.allclose(dW_shards[1], [[-1.0, 2.0]])\nassert np.allclose(dX_shards[0], [[1.0, 0.0], [4.0, 2.0]]) and np.allclose(dX_shards[1], [[3.0], [-2.0]])\n",
+          "behavior": "gradient.flow",
+          "part": 3
+        },
+        {
+          "name": "Part 3: random row shards against autograd",
+          "visibility": "unshown",
+          "behavior": "gradient.flow",
+          "failureMessage": "Row-parallel results differed from torch autograd on the unsharded layer, or the communication was wrong: row_forward must sum the devices' partial outputs with exactly one call to self.all_reduce, and row_backward must not communicate.",
+          "hiddenCode": "\nimport numpy as np\n\ndef spy(cls):\n    class Spy(cls):\n        def __init__(self):\n            self.calls = []\n        def all_gather(self, shards, axis):\n            self.calls.append(\"all_gather\")\n            return super().all_gather(shards, axis)\n        def all_reduce(self, shards):\n            self.calls.append(\"all_reduce\")\n            return super().all_reduce(shards)\n    return Spy()\n\ndef close(a, b):\n    return np.asarray(a).shape == np.asarray(b).shape and np.allclose(a, b, rtol=1e-10, atol=1e-10)\n\ndef pieces(A, n, axis):\n    size = A.shape[axis]\n    out, start = [], 0\n    for k in range(n):\n        width = size // n + (1 if k < size % n else 0)\n        out.append(np.take(A, range(start, start + width), axis=axis))\n        start += width\n    return out\n\nrng = np.random.default_rng(3)\nfor trial in range(60):\n    B, d_in, d_out = (int(v) for v in rng.integers(1, 9, size=3))\n    n = int(rng.integers(1, d_in + 1))\n    X, W, dY = rng.standard_normal((B, d_in)), rng.standard_normal((d_in, d_out)), rng.standard_normal((B, d_out))\n    tp = spy({fn})\n    X_shards, W_shards = pieces(X, n, 1), pieces(W, n, 0)\n    Xt, Wt = torch.tensor(X, requires_grad=True), torch.tensor(W, requires_grad=True)\n    Yt = Xt @ Wt\n    Yt.backward(torch.tensor(dY))\n    Y_shards = tp.row_forward(X_shards, W_shards)\n    assert tp.calls == [\"all_reduce\"], (\"row_forward collectives\", tp.calls)\n    assert len(Y_shards) == n and all(close(y, Yt.detach().numpy()) for y in Y_shards), trial\n    dW_shards, dX_shards = tp.row_backward(X_shards, W_shards, dY)\n    assert tp.calls == [\"all_reduce\"], (\"row_backward communicated\", tp.calls)\n    assert all(close(a, b) for a, b in zip(dW_shards, pieces(Wt.grad.numpy(), n, 0))), trial\n    assert all(close(a, b) for a, b in zip(dX_shards, pieces(Xt.grad.numpy(), n, 1))), trial\n",
+          "part": 3
+        },
+        {
+          "name": "Part 4: the worked example",
+          "code": "\nimport numpy as np\ntp = {fn}()\nX = np.array([[0.5, -1.0]])\nW1 = np.array([[1.0, 0.0, 2.0], [0.0, 1.0, 1.0]])\nW2 = np.array([[1.0], [2.0], [-1.0]])\nloss, dW1_shards, dW2_shards, dX = tp.mlp_step(X, [W1[:, :2], W1[:, 2:]], [W2[:2], W2[2:]], np.array([[0.0]]))\nH = np.tanh(X @ W1)\nY = H @ W2\nassert np.isclose(loss, float(Y[0, 0] ** 2))\ndZ = (2 * Y @ W2.T) * (1 - H ** 2)\nassert np.allclose(np.concatenate(dW1_shards, axis=1), X.T @ dZ)\nassert np.allclose(np.concatenate(dW2_shards, axis=0), H.T @ (2 * Y))\nassert np.allclose(dX, dZ @ W1.T)\n",
+          "behavior": "gradient.flow",
+          "part": 4
+        },
+        {
+          "name": "Part 4: random MLPs against autograd",
+          "visibility": "unshown",
+          "behavior": "gradient.flow",
+          "failureMessage": "The sharded MLP's loss or gradients differed from torch autograd on the unsharded model (tanh after layer 1, mean squared error over every entry), with uneven splits, or it did not use exactly two all_reduce calls: one in the forward pass, one for dX.",
+          "hiddenCode": "\nimport numpy as np\n\ndef spy(cls):\n    class Spy(cls):\n        def __init__(self):\n            self.calls = []\n        def all_gather(self, shards, axis):\n            self.calls.append(\"all_gather\")\n            return super().all_gather(shards, axis)\n        def all_reduce(self, shards):\n            self.calls.append(\"all_reduce\")\n            return super().all_reduce(shards)\n    return Spy()\n\ndef close(a, b):\n    return np.asarray(a).shape == np.asarray(b).shape and np.allclose(a, b, rtol=1e-10, atol=1e-10)\n\ndef pieces(A, n, axis):\n    size = A.shape[axis]\n    out, start = [], 0\n    for k in range(n):\n        width = size // n + (1 if k < size % n else 0)\n        out.append(np.take(A, range(start, start + width), axis=axis))\n        start += width\n    return out\n\nrng = np.random.default_rng(4)\nfor trial in range(60):\n    B, d_in, d_hidden, d_out = (int(v) for v in rng.integers(1, 9, size=4))\n    n = int(rng.integers(1, d_hidden + 1))\n    X, target = rng.standard_normal((B, d_in)), rng.standard_normal((B, d_out))\n    W1, W2 = rng.standard_normal((d_in, d_hidden)) * 0.7, rng.standard_normal((d_hidden, d_out)) * 0.7\n    tp = spy({fn})\n    loss, dW1_shards, dW2_shards, dX = tp.mlp_step(X, pieces(W1, n, 1), pieces(W2, n, 0), target)\n    assert tp.calls == [\"all_reduce\", \"all_reduce\"], (\"mlp_step collectives\", tp.calls)\n    Xt, W1t, W2t = (torch.tensor(a, requires_grad=True) for a in (X, W1, W2))\n    lt = ((torch.tanh(Xt @ W1t) @ W2t - torch.tensor(target)) ** 2).mean()\n    lt.backward()\n    assert np.isclose(loss, lt.item(), rtol=1e-10, atol=1e-12), trial\n    assert all(close(a, b) for a, b in zip(dW1_shards, pieces(W1t.grad.numpy(), n, 1))), trial\n    assert all(close(a, b) for a, b in zip(dW2_shards, pieces(W2t.grad.numpy(), n, 0))), trial\n    assert close(dX, Xt.grad.numpy()), trial\n",
+          "part": 4
+        }
+      ],
+      "parts": [
+        {
+          "title": "Shards and collectives",
+          "descriptionEn": "**Signatures:** `split(A, n, axis) -> list`, `all_gather(shards, axis) -> list`, `all_reduce(shards) -> list`\n\n- `split` cuts `A` into `n` shards along `axis` by the shard rule.\n- `all_gather` concatenates the shards along `axis` and gives every device the full array.\n- `all_reduce` sums same-shaped arrays elementwise and gives every device the sum.\n- Each returned entry is its own array: changing one device's copy changes no other device and no input.\n\n**Example:** `A = np.arange(14.0).reshape(2, 7)` and `n = 3` along axis `1`:\n- the shards have shapes `(2, 3)`, `(2, 2)` and `(2, 2)`; the middle one is `[[3, 4], [10, 11]]`\n- `all_gather` of them along axis `1` gives `A` three times\n- `all_reduce` of `[1, 1]`, `[2, 2]` and `[4, 4]` gives `[7, 7]` three times"
+        },
+        {
+          "title": "Column parallel",
+          "descriptionEn": "Keep Part 1. `W` is split along `d_out`, and every device holds all of `X`.\n\n- `column_forward(X, W_shards) -> list` returns each device's own columns of `Y`, without gathering them.\n- `column_backward(X, W_shards, dY_shards) -> (dW_shards, dX_shards)`: `dY_shards[k]` is `dL/dY` for device `k`'s columns. `dW_shards[k]` matches `W_shards[k]`, and every entry of `dX_shards` is the full `dL/dX`.\n\n**Example:** `X = [[1, 2], [0, -1]]` and `W = [[1, 0, 2], [3, -1, 1]]`, split into two columns and one:\n- the output shards are `[[7, -2], [-3, 1]]` and `[[4], [-1]]`\n- with every entry of `dY` equal to `1`, the `dW` shards are all ones, and both devices get `dX = [[3, 3], [3, 3]]`, the sum of each device's share"
+        },
+        {
+          "title": "Row parallel",
+          "descriptionEn": "Keep Parts 1–2. `W` is split along `d_in`, and `X` is split along its columns to match.\n\n- `row_forward(X_shards, W_shards) -> list` gives every device the full `Y`.\n- `row_backward(X_shards, W_shards, dY) -> (dW_shards, dX_shards)`: `dY` is the full `dL/dY`, already on every device. `dW_shards[k]` matches `W_shards[k]`, and `dX_shards[k]` matches `X_shards[k]`.\n\n**Example:** `X = [[1, 2, -1], [0, 1, 1]]` and `W = [[1, 2], [0, 1], [3, -1]]`, split after the second entry of `d_in`:\n- both devices get `Y = [[-2, 5], [3, 0]]`\n- with `dY = [[1, 0], [0, 2]]`, the `dW` shards are `[[1, 0], [2, 2]]` and `[[-1, 2]]`\n- the `dX` shards are `[[1, 0], [4, 2]]` and `[[3], [-2]]`"
+        },
+        {
+          "title": "A sharded MLP",
+          "descriptionEn": "Keep Parts 1–3. Add `mlp_step(X, W1_shards, W2_shards, target) -> (loss, dW1_shards, dW2_shards, dX)`.\n\n- Layer 1 is column parallel from `d_in` to `d_hidden`, followed by `tanh`. Layer 2 is row parallel from `d_hidden` to `d_out`, taking each device's `tanh` output as its `X` shard.\n- `loss` is the mean of `(Y - target) ** 2` over every entry, as a float. Return the gradients of `loss` for each shard of `W1` and `W2`, and the full `dX`.\n- Use exactly two `all_reduce` calls and no `all_gather`.\n\n**Example:** `X = [[0.5, -1]]`, `W1 = [[1, 0, 2], [0, 1, 1]]` split into two columns and one, `W2 = [[1], [2], [-1]]` split to match, `target = [[0]]`:\n- `H = tanh(X @ W1)` and `Y = H @ W2`, so `loss = Y ** 2`\n- `dW2` is `H.T @ (2 * Y)`, and the gradient reaching `X @ W1` is `(2 * Y @ W2.T) * (1 - H ** 2)`"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Seven columns over three devices: which device gets the extra one, and where does each shard start? If every device received the same array object, what would happen when one device changed its copy?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "np.array_split already puts the extra entries in the first shards, along any axis. all_gather is np.concatenate along the axis, all_reduce is an elementwise sum of the list; return a fresh copy per device, for example [total.copy() for _ in shards], so no two devices share an array."
+        }
+      ],
+      "modelConnections": [
+        "Megatron-style transformer blocks put a column-parallel layer before the nonlinearity and a row-parallel layer after it, so each MLP needs one all-reduce forward and one backward.",
+        "Attention heads are split the same way: the QKV projection is column parallel and the output projection row parallel."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Column then row parallel lets the elementwise tanh run on local shards with no communication between the layers.",
+          "Each device stores only its slice of the weights, so models too large for one device fit.",
+          "The communication pattern is fixed and known in advance, which makes it easy to overlap with compute."
+        ],
+        "cons": [
+          "Every block still needs an all-reduce in each direction, which dominates when devices are linked by a slow network.",
+          "Uneven splits leave some devices with more work than others.",
+          "Elementwise operations that mix columns, such as layer norm, need the full activations and break the pattern."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "With seven columns and three devices, how wide is each shard, and why give the extra columns to the first devices?",
+          "hint": "7 columns over 3 devices: what are the widths if the extra columns go first? What does np.array_split give?"
+        },
+        {
+          "stage": "concept",
+          "question": "What is the difference between all_gather and all_reduce, and what does each device hold afterwards?",
+          "hint": "After all_gather, does every device hold a piece or the whole array? After all_reduce, what does each device hold?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why should a collective return a separate array for every device, and what bug can a shared array cause?",
+          "hint": "Two devices get the same array object. Device 0 adds 1 to it in place. What does device 1 now see?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "In column-parallel backward, why does dX need an all-reduce while dW needs no communication?",
+          "hint": "Device k only has W_k's columns. Write dX as a sum over devices: which term can device k compute alone?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "In row-parallel forward, why must partial outputs be summed, and why does the backward pass need no communication?",
+          "hint": "Each device's X_k @ W_k is a partial Y. Why must they be summed? In the backward pass, what does device k need to get dX_k?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why put the column-parallel layer before tanh and the row-parallel layer after it, and what would the opposite order cost?",
+          "hint": "tanh is elementwise. After a column split, does any device need another device's hidden columns to apply it?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How would you check sharded gradients against an unsharded reference, and which tolerances would you use?",
+          "hint": "Compare with an unsharded reference built from the same weights. Which dtype, and which tolerances, catch a missing factor but not rounding?"
+        }
+      ]
     }
   ]
 }
