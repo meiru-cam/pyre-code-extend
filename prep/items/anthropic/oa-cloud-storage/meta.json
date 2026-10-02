@@ -1,0 +1,20 @@
+{
+  "title": "Online Assessment: Cloud File Storage",
+  "summary": "Build a cloud storage class over four levels that each unlock once the previous one's tests pass: named files with sizes and copies; prefix/suffix search across the store; per-user accounts with storage quotas; and file compression paired with per-user backup and restore.",
+  "round": "coding",
+  "kind": "Online assessment · 4 levels",
+  "difficulty": "Medium",
+  "frequency": "low",
+  "format": "4 levels / 90 min",
+  "topics": [
+    "oop-design",
+    "hash-map",
+    "storage-quotas",
+    "string-matching"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/coding/oa-cloud-storage",
+  "rubric": [],
+  "exercises": [
+    "cloud_storage"
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "title": "Online Assessment: In-Memory File System",
+  "summary": "Implement an in-memory, path-based file system across four levels: create, read and list files and directories; move, copy and delete them with exact overwrite semantics; add per-user storage quotas; and add point-in-time snapshots of the whole file system.",
+  "round": "coding",
+  "kind": "Online assessment · 4 levels",
+  "difficulty": "Medium",
+  "frequency": "low",
+  "format": "4 levels / 90 min",
+  "topics": [
+    "filesystem",
+    "tree",
+    "path-normalization",
+    "quota",
+    "oop-design"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/coding/oa-file-system",
+  "rubric": [],
+  "exercises": [
+    "memory_fs"
+  ]
+}

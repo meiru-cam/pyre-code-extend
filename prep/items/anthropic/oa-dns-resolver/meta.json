@@ -1,0 +1,21 @@
+{
+  "title": "Online Assessment: DNS Resolver",
+  "summary": "A five-level, gated online assessment: resolve names against a static in-memory DNS zone, extended level by level with CNAME-chain following and cycle detection, a fallback zone, a per-record TTL cache with lazy expiry, and thread-safe resolution that coalesces concurrent callers of the same name into one upstream lookup.",
+  "round": "coding",
+  "kind": "Online assessment · 5 levels",
+  "difficulty": "Medium",
+  "frequency": "low",
+  "format": "5 levels / 90 min",
+  "topics": [
+    "dns",
+    "recursion",
+    "caching",
+    "ttl",
+    "concurrency"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/coding/oa-dns-resolver",
+  "rubric": [],
+  "exercises": [
+    "dns_resolver"
+  ]
+}

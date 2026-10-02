@@ -1,0 +1,21 @@
+{
+  "title": "ML Experiment Configuration System",
+  "summary": "Configs are named nested dicts in an in-memory store. Compose them through bases with a deep merge and a delete marker, apply typed command-line overrides and interpolation, validate the result against a dataclass schema collecting every error, then freeze it and hash it for reruns.",
+  "round": "coding",
+  "kind": "Coding · configuration systems, validation",
+  "difficulty": "Hard",
+  "frequency": "low",
+  "format": "4 parts / 55 min",
+  "topics": [
+    "deep-merge",
+    "cycle-detection",
+    "cli-overrides",
+    "schema-validation",
+    "reproducibility"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/coding/ml-config-system",
+  "rubric": [],
+  "exercises": [
+    "config_store"
+  ]
+}

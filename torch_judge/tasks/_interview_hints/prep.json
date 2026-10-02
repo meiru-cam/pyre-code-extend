@@ -284,5 +284,41 @@
     "Why check command ownership at registration rather than when a message arrives?": "Two bots both claim /vote. Detected at registration, who sees the error? Detected when a message arrives, which bot should answer?",
     "What does an event bus buy over PollBot calling CheerBot directly, and what does it cost in traceability?": "PollBot calling CheerBot directly needs a reference to it. With a bus, what does PollBot know about who reacts, and how would you trace a line back to its source?",
     "Should publish return lines to the publisher, or should handlers write to the log themselves?": "If handlers wrote to the log themselves, how would the cheer line end up right after the vote line, and who would own the log?"
+  },
+  "cloud_storage": {
+    "What is the whole state of a file here, and which data structure holds it?": "A file has a name and a size. What lookup does every method start with, and which structure answers it in O(1)?",
+    "Why must a failed call change nothing, and how do you make sure copy_file never leaves a half-made file?": "If copy_file writes the destination before it finds the source is missing, what has the caller been told, and what is now stored?",
+    "Which checks must copy_file make, and in which order, before it creates the destination?": "List the ways a copy can fail. If every check runs before the first write, can any of them leave something behind?",
+    "Would you keep a running used total per user or recompute it from the files, and what does each cost?": "A running total must change on every create and delete. How many places in your code touch files, and what happens if one forgets?",
+    "How would you make find_files fast for millions of files with frequent prefix searches?": "Every match shares the prefix. Which structure lets you jump straight to the names that start with it instead of scanning all of them?",
+    "Why does decompress_file compare the current size, not the doubled size, against the remaining capacity?": "The file grows from s to 2s. How many new bytes does that need, and is that the same number as the doubled size?",
+    "What can go wrong when restore matches files by name only, and how would you avoid it?": "A user compresses a file and then decompresses it, so the same name comes back with a different size. If restore only compares names, what does it leave as it is, and is that the size the backup saved?"
+  },
+  "dns_resolver": {
+    "Why normalise the query before the lookup instead of storing every spelling of a name in the zone?": "A name can be typed with any case and with or without the final dot. How many keys would the zone need if it stored each spelling, and who would have to keep them in step?",
+    "Why should a missing name raise an error with the name attached instead of returning an empty list?": "An empty list could mean \"no addresses\" or \"no such name\". How would a caller tell them apart, and which name would it want to log?",
+    "Why must resolve return a new list on every call, and what breaks if it returns the zone's own list?": "Suppose a caller appends to the list it got back. Where does that change show up on the next call if the list is the one stored in the zone?",
+    "Why must a cycle be checked before the chain length, and what would the caller see otherwise?": "A two-name loop with a limit of 1: which check fires first if length goes first, and does that error describe what is really wrong?",
+    "Why fall back only on a missing name and not on a cycle or an overlong chain?": "A second zone can supply a missing name. Can it repair a loop or a chain that is too long in the primary zone?",
+    "Why use the smallest TTL on the chain for the cache entry, and why not cache errors?": "If one record on the chain changes after 30 seconds, how long may the cached answer live? What would caching a NameNotFoundError hide once the name is added?",
+    "How do you stop eight callers from resolving the same name at once without making different names wait for each other?": "Keep one record per name for the resolution in progress. Where does a second caller for that name wait, and what lock does a caller for another name touch?"
+  },
+  "memory_fs": {
+    "How do you represent directories and files so that both mkdir and write can walk the same path?": "If a directory is a dict of names and a file is a different object, what does each step of a walk check before it goes one level deeper?",
+    "Why normalise and validate a path in one helper instead of in each method?": "Count the ways a path can be bad: no leading slash, empty segments, dots. If each method parses on its own, how many copies of those rules exist?",
+    "What must write check, and in which order, so that a failed call creates no parent directories?": "Walk the whole path read-only first. Which failures can you find before the first dict is created, and what is left to do after that?",
+    "How do you stop mv from moving a directory into its own subtree?": "Compare the two paths as lists of segments. When is one list a prefix of the other, and why is a plain string prefix check wrong for /a and /ab?",
+    "How would you keep size fast on a deep tree that changes often?": "Each directory could store the total under it. Which ancestors change when one file changes size, and how many are there?",
+    "Why must cp check every owner's quota before copying anything?": "A copy touches files owned by several users. If you copy first and check later, what has to be undone when the third owner goes over?",
+    "How would you make snapshots cheaper than a full copy of the tree?": "A snapshot only differs from the live tree where something changed since. Which nodes would a write have to copy, and which could both trees share?"
+  },
+  "config_store": {
+    "What should deep_merge do when the overlay holds a dict but the base holds a scalar, and why?": "The overlay says this key is now a dict of settings. If the base value is an int, what could merging into it even mean?",
+    "Why must merge results share no objects with their inputs?": "Resolve a config, then change one nested value in the result. Which other configs would see the change if a dict were shared?",
+    "How do you detect a cycle in the _base_ graph and report the loop, and why is a diamond not a cycle?": "Suppose the recursion for x reaches y and then x again. What would it need to carry down to notice, and why does reaching the same base from two different children not count?",
+    "Why require + to create a key in an override instead of creating missing keys silently?": "A typo like modle.layers=12 on the command line: what should happen if it silently creates a new key, and when would anyone notice?",
+    "Why can a whole-string reference keep the referenced type while an embedded one cannot?": "Replacing the whole string can hand back any object. Splicing into a longer string needs text: what text would a list or None become?",
+    "Why is a bool rejected for an int field, given that bool subclasses int in Python?": "isinstance(True, int) is True. If a schema asks for a layer count and gets True, what would the run actually use?",
+    "Besides the config and its hash, what must a run record to be reproducible weeks later on other hardware?": "Two runs with the same config hash still differ. Which inputs live outside the config, such as code, data and libraries?"
   }
 }

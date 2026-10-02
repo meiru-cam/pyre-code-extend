@@ -354,5 +354,37 @@
       "chat_room"
     ],
     "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/oa-cloud-storage",
+    "exercises": [
+      "cloud_storage"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/oa-dns-resolver",
+    "exercises": [
+      "dns_resolver"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/oa-file-system",
+    "exercises": [
+      "memory_fs"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/ml-config-system",
+    "exercises": [
+      "config_store"
+    ],
+    "round": "coding"
   }
 ]
