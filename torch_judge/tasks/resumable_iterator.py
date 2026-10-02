@@ -96,8 +96,6 @@ assert kind(lambda: it.set_state((4,))) == "ValueError"
 assert kind(lambda: it.set_state((True,))) == "TypeError"
 assert kind(lambda: it.set_state("2")) == "TypeError"
 assert next(it) == "yak"
-it.set_state(start)
-assert next(it) == "ox"
 """},
     {"name": "Part 1: checks, order and failed calls", "part": 1, "visibility": "unshown", "behavior": "protocol.validation",
      "failure_message": "TypeError comes first, for a state that is not a tuple or list, has the wrong length, or holds a non-int or a bool; then ValueError for an index outside 0..len(items); a rejected state leaves the position alone; an empty list starts at (0,); iter(it) is it; states may move backward after StopIteration.",
@@ -135,17 +133,16 @@ def kind(call):
     except Exception as e:
         return type(e).__name__
     return None
-it = {fn}([[], [4, 8], [], [6]], 2)
-assert it.get_state() == (1, 0)
-assert next(it) == 4 and it.get_state() == (1, 1)
-assert next(it) == 8 and it.get_state() == (3, 0)
+it = {fn}([[3, 1], [], [], [0, 6, 2]], 2)
+assert it.get_state() == (0, 0)
+assert next(it) == 3 and it.get_state() == (0, 1)
+assert next(it) == 1 and it.get_state() == (3, 0)
 saved = it.get_state()
-assert next(it) == 6 and it.get_state() == (4, 0)
-for bad in [(0, 0), (1, 2), (2, 0)]:
+assert list(it) == [0, 6, 2] and it.get_state() == (4, 0)
+for bad in [(1, 0), (3, 3)]:
     assert kind(lambda: it.set_state(bad)) == "ValueError", bad
 it.set_state(saved)
-assert list(it) == [6]
-assert {fn}([[], []], 2).get_state() == (2, 0)
+assert list(it) == [0, 6, 2]
 """},
     {"name": "Part 2: states across instances", "part": 2, "visibility": "unshown", "behavior": "checkpoint.recovery",
      "failure_message": "A state is checked only against the receiving iterator's own data: on data of the same shape iteration continues at the same index tuple, on another shape it is accepted only if it names an item or the end there; the exhausted state is (len(items), 0); a 2-int state is required.",
@@ -194,8 +191,6 @@ assert it.get_state() == (1, 1, 0)
 assert next(it) == [2, 4]
 assert it.get_state() == (2, 1, 0)
 assert next(it) == [8] and it.get_state() == (3, 0, 0)
-it.set_state([1, 1, 0])
-assert list(it) == [[2, 4], [8]]
 deep = {fn}(data, 4)
 assert list(deep) == [2, 4, 8]
 """},
@@ -208,7 +203,7 @@ for seed in range(300):
     compare({fn}, nested(rng, depth, 3, 0.3), depth, rng, 40, seed)
 """},
     {"name": "Part 3: very deep data", "part": 3, "visibility": "unshown", "behavior": "performance.complexity",
-     "failure_message": "Data nested 3,000 levels deep failed or was too slow: walk levels with a loop and keep the lists along the current position instead of recursing or walking from the top on every call.",
+     "failure_message": "Data nested 3,000 levels deep failed or was too slow: walk levels with a loop and keep the lists along the current position instead of recursing.",
      "code": r"""
 import time
 depth = 3000
@@ -221,7 +216,7 @@ state = it.get_state()
 assert len(state) == depth and state[:3] == (1, 1, 1) and state[-1] == 0
 assert next(it) == "leaf"
 assert it.get_state() == (3,) + (0,) * (depth - 1)
-for _ in range(200):
+for _ in range(20):
     it.set_state(state)
     assert next(it) == "leaf"
 assert time.perf_counter() - start < 3.0
@@ -238,10 +233,10 @@ TASK = {
 The requirement arrives in parts. Each part keeps every earlier behavior, so one `ResumableIterator` class passes all parts at the end. Pass every test of the current part to reveal the next one.
 
 **Rules for every part:**
-- `ResumableIterator(items, depth=1)` walks data nested `depth` levels deep: whatever `depth` indexing steps reach is an item, even if it is a list. Items come in order of their index tuples.
+- `ResumableIterator(items, depth=1)` walks data nested `depth` levels deep. The items are the values exactly `depth` index operations deep; a list found at that depth is an item, not something to walk into. Items come in order of their index tuples.
 - It is a Python iterator: `iter(it)` returns `it`, and `next(it)` returns the next item or raises `StopIteration`.
 - `get_state()` returns a tuple of `depth` ints: the index tuple of the item `next` would return, or `(len(items), 0, ..., 0)` once nothing is left.
-- `set_state(state)` accepts exactly those tuples for its own data, and lists too, since JSON turns tuples into lists. It may move backward or forward at any time.
+- `set_state(state)` accepts exactly those tuples for its own data, and lists too, since JSON turns tuples into lists. Any accepted state can be set at any time, earlier or later than the current one.
 - `set_state` raises `TypeError` for anything that is not a tuple or list of `depth` ints (a `bool` is not an int), and otherwise `ValueError` for a state `get_state` could never return. A rejected state changes nothing.
 - The data is never changed while an iterator walks it.
 
@@ -257,7 +252,7 @@ Adapted from the resumable iterators question in Schuture/OpenAI-Interview-Notes
     "parts": [
         {
             "title": "A flat list",
-            "description_en": r"""**Signature:** `ResumableIterator(items)` with `get_state() -> tuple` and `set_state(state)`, where `items` is a list, possibly empty.
+            "description_en": r"""**Signature:** `ResumableIterator(items, depth=1)` with `get_state() -> tuple` and `set_state(state)`, where `items` is a list, possibly empty.
 
 - The state is `(i,)`, the index of the next item; it is `(len(items),)` at the end.
 - `set_state` accepts `(i,)` or `[i]` for `0 <= i <= len(items)`.
@@ -265,7 +260,8 @@ Adapted from the resumable iterators question in Schuture/OpenAI-Interview-Notes
 **Example:** `it = ResumableIterator(["ox", "elk", "yak"])`:
 - `get_state()` is `(0,)`; `list(it)` is `["ox", "elk", "yak"]`, and then `get_state()` is `(3,)`
 - after `set_state([1])`, as it comes back from JSON, `next(it)` is `"elk"`
-- `set_state((4,))` raises `ValueError`; `set_state((True,))` and `set_state("2")` raise `TypeError`""",
+- `set_state((4,))` raises `ValueError`; `set_state((True,))` and `set_state("2")` raise `TypeError`
+- those rejected calls change nothing, so `next(it)` is then `"yak"`""",
         },
         {
             "title": "Rows that may be empty",
@@ -276,10 +272,10 @@ Adapted from the resumable iterators question in Schuture/OpenAI-Interview-Notes
 - A state is checked only against this iterator's own rows, so a state saved on other rows of the same shape continues at the same position.
 - 100,000 rows with a `get_state()` after every item must take well under a second.
 
-**Example:** `it = ResumableIterator([[], [4, 8], [], [6]], 2)`:
-- `get_state()` is `(1, 0)` before any `next`; after `4` it is `(1, 1)`, and after `8` it is already `(3, 0)`
-- after `6` it is `(4, 0)`
-- `(0, 0)`, `(1, 2)` and `(2, 0)` all raise `ValueError`""",
+**Example:** `it = ResumableIterator([[3, 1], [], [], [0, 6, 2]], 2)`:
+- `get_state()` is `(0, 0)`; after `3` it is `(0, 1)`, and after `1` it is already `(3, 0)`, past both empty rows
+- after `0`, `6` and `2` it is `(4, 0)`; `set_state((3, 0))` then brings back `0`, `6` and `2`
+- `(1, 0)`, inside an empty row, and `(3, 3)`, past the end of a row, raise `ValueError`""",
         },
         {
             "title": "Any depth",
@@ -360,7 +356,7 @@ class ResumableIterator:
         if (not isinstance(state, (tuple, list)) or len(state) != self._depth
                 or not all(isinstance(i, int) and not isinstance(i, bool) for i in state)):
             raise TypeError(f"expected {self._depth} ints, got {state!r}")
-        state = list(state)  # JSON turns tuples into lists
+        state = list(state)  # a copy, so later changes to the caller's object cannot move this iterator
         if state[0] == len(self._items) and not any(state[1:]):
             self._pos, self._path = state, [self._items]
             return

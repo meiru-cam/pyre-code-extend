@@ -9,6 +9,7 @@ import numpy as np
 def spy(cls):
     class Spy(cls):
         def __init__(self):
+            super().__init__()
             self.calls = []
         def all_gather(self, shards, axis):
             self.calls.append("all_gather")
@@ -35,19 +36,19 @@ TESTS = [
     {"name": "Part 1: the worked example", "part": 1, "behavior": "tensor.shape", "code": r"""
 import numpy as np
 tp = {fn}()
-A = np.arange(14.0).reshape(2, 7)
-parts = tp.split(A, 3, 1)
-assert [p.shape for p in parts] == [(2, 3), (2, 2), (2, 2)]
-assert np.array_equal(parts[1], [[3.0, 4.0], [10.0, 11.0]])
-copies = tp.all_gather(parts, 1)
-assert len(copies) == 3 and all(np.array_equal(c, A) for c in copies)
+A = np.arange(20.0).reshape(10, 2)
+parts = tp.split(A, 4, 0)
+assert [p.shape for p in parts] == [(3, 2), (3, 2), (2, 2), (2, 2)]
+assert np.array_equal(parts[1], [[6.0, 7.0], [8.0, 9.0], [10.0, 11.0]])
+copies = tp.all_gather(parts, 0)
+assert len(copies) == 4 and all(np.array_equal(c, A) for c in copies)
 sums = tp.all_reduce([np.ones(2), 2 * np.ones(2), 4 * np.ones(2)])
 assert len(sums) == 3 and all(np.array_equal(s, [7.0, 7.0]) for s in sums)
 sums[0][0] = -1.0
 assert sums[1][0] == 7.0, "each device gets its own copy"
 """},
     {"name": "Part 1: shapes, axes and copies", "part": 1, "visibility": "unshown", "behavior": "tensor.shape",
-     "failure_message": "split must give n contiguous shards with the remainder spread one entry at a time over the first shards, along either axis; all_gather must concatenate along the given axis; all_reduce must sum elementwise; every device must get its own array, separate from the inputs and from the other devices.",
+     "failure_message": "split must give n contiguous shards with the first `L % n` shards one longer, along either axis; all_gather must concatenate along the given axis; all_reduce must sum elementwise; every device must get its own array, separate from the inputs and from the other devices.",
      "code": _HELP + r"""
 rng = np.random.default_rng(1)
 tp = {fn}()
@@ -182,10 +183,10 @@ TASK = {
 The requirement arrives in parts. Each part adds methods to the same `ShardedLinear` class and keeps the earlier ones working. Pass every test of the current part to reveal the next one.
 
 **Rules for every part:**
-- A device is one entry of a Python list; entry `k` holds device `k`'s NumPy array. All arrays are `float64`.
+- Each simulated device is an index `k`: in every list the methods take or return, entry `k` is device `k`'s NumPy array, always `float64`.
 - A layer computes `Y = X @ W` with `X` of shape `(B, d_in)` and `W` of shape `(d_in, d_out)`.
-- A shard is a contiguous slice along one axis. With `n` devices and an axis of length `L`, the first `L % n` shards hold `L // n + 1` entries and the rest `L // n`, so `np.array_split` order. `n` never exceeds `L`.
-- Every exchange of data between devices goes through `self.all_gather` or `self.all_reduce`. The tests count these calls, so call them on `self`, and only where the data must move.
+- Shards are cut along a single axis, each one an unbroken run of it. With `n` devices and an axis of length `L`, the first `L % n` shards hold `L // n + 1` entries and the rest `L // n`, so `np.array_split` order. `n` never exceeds `L`.
+- Data moves between devices only inside `self.all_gather` and `self.all_reduce`. The tests count these calls on `self`, and each part names the calls it expects.
 
 ────────────────────────────────
 
@@ -195,7 +196,7 @@ The requirement arrives in parts. Each part adds methods to the same `ShardedLin
 
 **Where it is used:** Megatron-LM's tensor parallelism splits attention and MLP weights this way, with one all-reduce in the forward pass and one in the backward pass of each block; DeepSpeed and PyTorch's DTensor offer the same layouts.
 
-Adapted from the sharded matmul question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, as methods of one class with shorter names. The source's derivation part becomes interview questions, its bug hunt becomes Part 4, writing the MLP step correctly, and the collectives return separate copies and are counted.""",
+Adapted from the sharded matmul question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, as methods of one class: `shard_columns` and `shard_rows` become one `split` with an axis (without the source's seeded bug), `column_parallel_forward`/`backward` and `row_parallel_forward`/`backward` become `column_*` and `row_*`, and `layer1_*`, `layer2_*` and `mse_loss_and_grad` merge into `mlp_step`. `mlp_step` also returns the loss, and the tests check against autograd instead of asking you to. The source's derivation part becomes interview questions, its bug hunt becomes Part 4, writing the MLP step correctly, and the collectives return separate copies and are counted.""",
     "parts": [
         {
             "title": "Shards and collectives",
@@ -206,17 +207,17 @@ Adapted from the sharded matmul question in Schuture/OpenAI-Interview-Notes (CC 
 - `all_reduce` sums same-shaped arrays elementwise and gives every device the sum.
 - Each returned entry is its own array: changing one device's copy changes no other device and no input.
 
-**Example:** `A = np.arange(14.0).reshape(2, 7)` and `n = 3` along axis `1`:
-- the shards have shapes `(2, 3)`, `(2, 2)` and `(2, 2)`; the middle one is `[[3, 4], [10, 11]]`
-- `all_gather` of them along axis `1` gives `A` three times
-- `all_reduce` of `[1, 1]`, `[2, 2]` and `[4, 4]` gives `[7, 7]` three times""",
+**Example:** `A = np.arange(20.0).reshape(10, 2)` and `n = 4` along axis `0`:
+- the shards have shapes `(3, 2)`, `(3, 2)`, `(2, 2)` and `(2, 2)`; the second one is `[[6, 7], [8, 9], [10, 11]]`
+- `all_gather` of them along axis `0` gives `A` four times
+- `all_reduce` of `[1, 1]`, `[2, 2]` and `[4, 4]` gives `[7, 7]` three times; changing one copy leaves the other two at `[7, 7]`""",
         },
         {
             "title": "Column parallel",
             "description_en": r"""Keep Part 1. `W` is split along `d_out`, and every device holds all of `X`.
 
-- `column_forward(X, W_shards) -> list` returns each device's own columns of `Y`, without gathering them.
-- `column_backward(X, W_shards, dY_shards) -> (dW_shards, dX_shards)`: `dY_shards[k]` is `dL/dY` for device `k`'s columns. `dW_shards[k]` matches `W_shards[k]`, and every entry of `dX_shards` is the full `dL/dX`.
+- `column_forward(X, W_shards) -> list` returns each device's own columns of `Y`, with no collective call.
+- `column_backward(X, W_shards, dY_shards) -> (dW_shards, dX_shards)`: `dY_shards[k]` is `dL/dY` for device `k`'s columns. `dW_shards[k]` matches `W_shards[k]`, and every entry of `dX_shards` is the full `dL/dX`. Combine the devices' shares of `dX` with exactly one `self.all_reduce` call, and make no other collective call.
 
 **Example:** `X = [[1, 2], [0, -1]]` and `W = [[1, 0, 2], [3, -1, 1]]`, split into two columns and one:
 - the output shards are `[[7, -2], [-3, 1]]` and `[[4], [-1]]`
@@ -226,8 +227,8 @@ Adapted from the sharded matmul question in Schuture/OpenAI-Interview-Notes (CC 
             "title": "Row parallel",
             "description_en": r"""Keep Parts 1–2. `W` is split along `d_in`, and `X` is split along its columns to match.
 
-- `row_forward(X_shards, W_shards) -> list` gives every device the full `Y`.
-- `row_backward(X_shards, W_shards, dY) -> (dW_shards, dX_shards)`: `dY` is the full `dL/dY`, already on every device. `dW_shards[k]` matches `W_shards[k]`, and `dX_shards[k]` matches `X_shards[k]`.
+- `row_forward(X_shards, W_shards) -> list` gives every device the full `Y`, with exactly one `self.all_reduce` call and no other.
+- `row_backward(X_shards, W_shards, dY) -> (dW_shards, dX_shards)`: `dY` is the full `dL/dY`, already on every device. `dW_shards[k]` matches `W_shards[k]`, and `dX_shards[k]` matches `X_shards[k]`. It makes no collective call.
 
 **Example:** `X = [[1, 2, -1], [0, 1, 1]]` and `W = [[1, 2], [0, 1], [3, -1]]`, split after the second entry of `d_in`:
 - both devices get `Y = [[-2, 5], [3, 0]]`
@@ -244,11 +245,12 @@ Adapted from the sharded matmul question in Schuture/OpenAI-Interview-Notes (CC 
 
 **Example:** `X = [[0.5, -1]]`, `W1 = [[1, 0, 2], [0, 1, 1]]` split into two columns and one, `W2 = [[1], [2], [-1]]` split to match, `target = [[0]]`:
 - `H = tanh(X @ W1)` and `Y = H @ W2`, so `loss = Y ** 2`
-- `dW2` is `H.T @ (2 * Y)`, and the gradient reaching `X @ W1` is `(2 * Y @ W2.T) * (1 - H ** 2)`""",
+- `dW2` is `H.T @ (2 * Y)`, and the gradient reaching `X @ W1` is `dZ = (2 * Y @ W2.T) * (1 - H ** 2)`
+- `dW1` is `X.T @ dZ` and `dX` is `dZ @ W1.T`""",
         },
     ],
     "hints": [
-        {"level": 1, "kind": "questions", "content": "Seven columns over three devices: which device gets the extra one, and where does each shard start? If every device received the same array object, what would happen when one device changed its copy?"},
+        {"level": 1, "kind": "questions", "content": "Ten rows over four devices: which devices get an extra one, and where does each shard start? If every device received the same array object, what would happen when one device changed its copy?"},
         {"level": 2, "kind": "analysis", "content": "np.array_split already puts the extra entries in the first shards, along any axis. all_gather is np.concatenate along the axis, all_reduce is an elementwise sum of the list; return a fresh copy per device, for example [total.copy() for _ in shards], so no two devices share an array."},
     ],
     "model_connections": [
@@ -264,7 +266,7 @@ Adapted from the sharded matmul question in Schuture/OpenAI-Interview-Notes (CC 
         "cons": [
             "Every block still needs an all-reduce in each direction, which dominates when devices are linked by a slow network.",
             "Uneven splits leave some devices with more work than others.",
-            "Elementwise operations that mix columns, such as layer norm, need the full activations and break the pattern.",
+            "Operations that mix the hidden columns, such as layer norm or softmax, need the full activations and break the pattern.",
         ],
     },
     "tests": TESTS,
@@ -318,7 +320,7 @@ class ShardedLinear:
 ''',
     "interview_questions": interview(
         concept=[
-            "With seven columns and three devices, how wide is each shard, and why give the extra columns to the first devices?",
+            "With ten rows and four devices, how many rows does each shard get, and why give the extra rows to the first devices?",
             "What is the difference between all_gather and all_reduce, and what does each device hold afterwards?",
         ],
         deep_dive=[

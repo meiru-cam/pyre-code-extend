@@ -11,12 +11,12 @@ from tests.quality.parts_gate import assert_first_fails_in_part, assert_part_mut
 TASK_ID = "sharded_linear"
 
 MUTATIONS = [
-    ("remainder to the last shards", 1, [("        return [np.array(piece) for piece in np.array_split(A, n, axis=axis)]", "        return [np.array(piece) for piece in np.array_split(A[::-1] if axis == 0 else A[:, ::-1], n, axis=axis)][::-1]")]),
+    ("remainder to the last shards", 1, [("        return [np.array(piece) for piece in np.array_split(A, n, axis=axis)]", "        return [np.array(p) for p in np.split(A, np.cumsum([A.shape[axis] // n + (k >= n - A.shape[axis] % n) for k in range(n)])[:-1], axis=axis)]")]),
     ("gather ignores the axis", 1, [("full = np.concatenate(shards, axis=axis)", "full = np.concatenate(shards, axis=0)")]),
     ("devices share one array", 1, [("return [full.copy() for _ in shards]", "return [full for _ in shards]")]),
     ("reduce shares one array", 1, [("return [total.copy() for _ in shards]", "return [total for _ in shards]")]),
     ("reduce averages", 1, [("total = np.sum(shards, axis=0)", "total = np.mean(shards, axis=0)")]),
-    ("column dW transposed", 2, [("dW_shards = [X.T @ dYk for dYk in dY_shards]", "dW_shards = [(dYk.T @ X).T for dYk in dY_shards[::-1]]")]),
+    ("column dW shards reversed", 2, [("dW_shards = [X.T @ dYk for dYk in dY_shards]", "dW_shards = [(dYk.T @ X).T for dYk in dY_shards[::-1]]")]),
     ("column dX from one device", 2, [("return dW_shards, self.all_reduce(partial)", "return dW_shards, [partial[0].copy() for _ in partial]")]),
     ("column forward gathers", 2, [("        return [X @ Wk for Wk in W_shards]  # no", "        self.all_gather(W_shards, 1)\n        return [X @ Wk for Wk in W_shards]  # no")]),
     ("row forward not reduced", 3, [("return self.all_reduce([Xk @ Wk for Xk, Wk in zip(X_shards, W_shards)])", "return [Xk @ Wk for Xk, Wk in zip(X_shards, W_shards)]")]),

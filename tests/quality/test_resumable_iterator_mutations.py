@@ -19,6 +19,8 @@ MUTATIONS = [
     ("rejected state half applied", 1, [("        for k, i in enumerate(state):\n            if not 0", "        self._pos = state\n        for k, i in enumerate(state):\n            if not 0")]),
     ("end state rejected", 1, [("        if state[0] == len(self._items) and not any(state[1:]):", "        if False:")]),
     ("state shared with the caller", 1, [("        return tuple(self._pos)", "        return self._pos")]),
+    ("range checked before type", 1, [("    def set_state(self, state):\n        if (not isinstance", "    def set_state(self, state):\n        if isinstance(state, (tuple, list)) and state and isinstance(state[0], int) and not 0 <= state[0] <= len(self._items):\n            raise ValueError(state)\n        if (not isinstance")]),
+    ("end state accepts a nonzero inner index", 2, [("        if state[0] == len(self._items) and not any(state[1:]):", "        if state[0] == len(self._items):")]),
     ("empty rows not skipped up front", 2, [("        self._path = [items]  # the list at each level along the current position\n        self._settle()", "        self._path = [items]  # the list at each level along the current position\n        self._settle() if depth == 1 else None")]),
     ("end state keeps inner index", 2, [("            pos[k] = 0\n            pos[k - 1] += 1", "            pos[k - 1] += 1")]),
     ("end of row accepted", 2, [("            if not 0 <= i < len(path[k]):", "            if not 0 <= i <= len(path[k]) - (k == 0):")]),

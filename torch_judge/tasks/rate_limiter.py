@@ -63,7 +63,7 @@ clock.t = 5
 assert lim.allow("ana") is False, "the second rule allows one request per 10 seconds"
 clock.t = 20
 assert lim.allow("ana") is True, "the rejected request at 5 must not count under the first rule"
-clock.t = 30
+clock.t = 35
 assert lim.allow("ana") is False, "two admitted requests in 1000 seconds"
 """},
     {"name": "Part 2: random times on several rules", "part": 2, "visibility": "unshown", "behavior": "effects.idempotency",
@@ -105,28 +105,32 @@ for rules in ([(1, 60), BIG], [BIG, (1, 60)]):
             pass
     lim = {fn}(rules, Clock(), hold)
     results = []
-    threads = [threading.Thread(target=lambda: results.append(lim.allow("ana"))) for _ in range(2)]
+    threads = [threading.Thread(target=lambda: results.append(lim.allow("ana")), daemon=True) for _ in range(2)]
     for t in threads:
         t.start()
+    deadline = time.monotonic() + 3
     for t in threads:
-        t.join(10)
+        t.join(max(0, deadline - time.monotonic()))
+    assert not any(t.is_alive() for t in threads), "allow did not return: is the lock held while waiting forever?"
     assert sorted(results) == [False, True], (rules, results)
 """},
     {"name": "Part 4: many threads", "part": 4, "visibility": "unshown", "behavior": "concurrency.thread_safety",
      "failure_message": "16 threads calling allow at the same instant, with a checkpoint that yields, admitted more requests than a rule allows: decide and record under one lock.",
      "code": _MODEL + r"""
-for rules in ([(5, 1000), BIG], [BIG, (5, 1000)], [(7, 1000), (5, 500)]):
+for rules in ([(6, 1000), BIG], [BIG, (6, 1000)], [(8, 1000), (6, 500)]):
     lim = {fn}(rules, Clock(), lambda: time.sleep(0.001))
     results = []
     def worker():
         for _ in range(3):
             results.append(lim.allow("ana"))
-    threads = [threading.Thread(target=worker) for _ in range(16)]
+    threads = [threading.Thread(target=worker, daemon=True) for _ in range(16)]
     for t in threads:
         t.start()
+    deadline = time.monotonic() + 3
     for t in threads:
-        t.join(20)
-    assert results.count(True) == 5, (rules, results.count(True))
+        t.join(max(0, deadline - time.monotonic()))
+    assert not any(t.is_alive() for t in threads), "allow did not return within 3 seconds"
+    assert results.count(True) == 6, (rules, results.count(True))
 """},
 ]
 
@@ -142,8 +146,8 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 **Rules for every part:**
 - `RateLimiter(rules, clock=time.time, checkpoint=lambda: None)`: `rules` is a list of `(max_requests, period_seconds)` pairs, and `clock()` returns the current time in seconds. Time never goes backward.
 - `allow(user_id) -> bool` reads the clock once and returns `True` if the request is admitted. Users never affect each other.
-- A request admitted at time `t` counts against a rule while `now - t <= period` for that rule, and not after. A request fits under a rule when fewer than `max_requests` of the user's admitted requests count against it.
-- `allow` calls `checkpoint()` exactly once, after deciding and before recording anything.
+- An admitted request stays live under a rule for `period` seconds inclusive: live while `now - t <= period`, expired just after. A rule has room while the user's live count under it is below `max_requests`.
+- `allow` calls `checkpoint()` exactly once, between the decision and the first write to any log.
 - Keep the constructor and `allow`; the rest of the class is yours to change.
 
 ────────────────────────────────
@@ -154,7 +158,7 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Where it is used:** API gateways and model-serving endpoints limit requests per key per minute, hour and day, and the same check-then-record pattern guards quotas, credits and inventory.
 
-Adapted from the rate limiter bug hunt in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded. The starter is new code with its own bugs, the limiter takes a list of rules instead of three named tiers, `should_allow_request` is renamed `allow`, and the decorator is left out.""",
+Adapted from the rate limiter bug hunt in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded. The starter is new code with its own bugs, the limiter takes a list of rules instead of three named tiers, `should_allow_request` is renamed `allow`, and the decorator and the source's "write a failing test for each bug" deliverable are left out.""",
     "parts": [
         {
             "title": "The edge of the window",
@@ -165,20 +169,19 @@ Adapted from the rate limiter bug hunt in Schuture/OpenAI-Interview-Notes (CC BY
 
 **Example:** `rules = [(2, 60), (10**9, 10**9)]`, with the clock moved by hand:
 - at `0`, two calls for `"ana"` are admitted; at `59` a third is rejected, while `"ben"` is admitted
-- at `60`, `"ana"` is still rejected: both requests from `0` count until the end of second `60`
+- at exactly `60` the requests from `0` still count, so `"ana"` is rejected; any time after `60` they no longer count
 - at `60.5`, `"ana"` is admitted""",
         },
         {
             "title": "Every rule decides before any records",
             "description_en": r"""Keep Part 1. Several rules can reject now.
 
-- A request is admitted only if it fits under every rule. An admitted request then counts under every rule.
-- A rejected request counts under no rule, even if some rules had room for it.
+- Check every rule first. Only if all have room is the time logged, in every rule's log; otherwise nothing is logged.
 
 **Example:** `rules = [(2, 1000), (1, 10), (10**9, 10**9)]`:
 - at `0`, `"ana"` is admitted; at `5` she is rejected by the second rule
 - at `20` she is admitted: the rejected request at `5` used none of the first rule's two places
-- at `30` she is rejected, with two admitted requests in the last `1000` seconds""",
+- at `35` she is rejected by the first rule alone, with two admitted requests in the last `1000` seconds""",
         },
         {
             "title": "Every rule slides",

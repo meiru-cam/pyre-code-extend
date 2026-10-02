@@ -413,15 +413,15 @@
   },
   "inference_engine": {
     "Why must a sequence hold room for len(token_ids) + 1 tokens before next_token is called?": "next_token appends one token. If the blocks only fit the tokens you already have, where does the new one go?",
-    "How many blocks does a 7-token prompt need at prefill, and why reserve them in one allocate call?": "A 7-token prompt plus the token prefill generates is 8 tokens. How many 4-token blocks is that, and why not ask the allocator one block at a time?",
+    "How many blocks does a 7-token prompt need at prefill, and why reserve them in one allocate call?": "How many tokens must fit before next_token runs, and how many BLOCK_SIZE blocks does that take? What could go wrong between two separate allocate calls?",
     "Which state does the engine keep for itself, and which already lives in the provided Sequence and BlockAllocator?": "The Sequence already stores its tokens, status and block ids. What does the engine still need: which requests wait, and in what order?",
     "Why does admission stop at the first request that does not fit instead of skipping to a shorter one?": "The first waiting request is too long for what is left of the budget, the second is short. What would admitting the second do to the first over many steps?",
     "What goes wrong if a stopped sequence keeps its blocks until the end of the step?": "A sequence finishes but keeps its blocks until the end of the step. What can a later sequence in the same step not get?",
     "Why chain block hashes from the start of the sequence, and why stop reusing at the first miss?": "Two prompts share their first block but differ in the second. Why must the hash of block 2 depend on block 1, and why stop at the first miss?",
-    "Why preempt the most recently admitted sequence, and when would swapping blocks out beat recomputing them?": "The newest sequence has the fewest tokens to recompute. When would copying its blocks to host memory beat recomputing them?"
+    "Why preempt the most recently admitted sequence, and when would swapping blocks out beat recomputing them?": "Which running sequence has had the least time to make progress, and is that always the one with the fewest tokens? What does recompute cost per token compared with copying a block to host memory and back?"
   },
   "sharded_linear": {
-    "With seven columns and three devices, how wide is each shard, and why give the extra columns to the first devices?": "7 columns over 3 devices: what are the widths if the extra columns go first? What does np.array_split give?",
+    "With ten rows and four devices, how many rows does each shard get, and why give the extra rows to the first devices?": "10 rows over 4 devices: what are the heights if the extra rows go first? What does np.array_split give?",
     "What is the difference between all_gather and all_reduce, and what does each device hold afterwards?": "After all_gather, does every device hold a piece or the whole array? After all_reduce, what does each device hold?",
     "Why should a collective return a separate array for every device, and what bug can a shared array cause?": "Two devices get the same array object. Device 0 adds 1 to it in place. What does device 1 now see?",
     "In column-parallel backward, why does dX need an all-reduce while dW needs no communication?": "Device k only has W_k's columns. Write dX as a sum over devices: which term can device k compute alone?",

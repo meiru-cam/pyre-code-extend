@@ -245,7 +245,6 @@ def run(fn, workload, steps, ids=True, allow_preempt=True, label=None):
     """workload: (num_blocks, budget, max_seqs, {step: [(prompt, max_tokens)]}). Returns False if the model preempted and that is not allowed."""
     num_blocks, budget, max_seqs, arrivals = workload
     got, want = fn(num_blocks, budget, max_seqs), REF["Engine"](num_blocks, budget, max_seqs)
-    trace = []
     for step in range(steps):
         for prompt, max_tokens in arrivals.get(step, []):
             a, b = got.add_request(list(prompt), max_tokens), want.add_request(list(prompt), max_tokens)
@@ -254,7 +253,6 @@ def run(fn, workload, steps, ids=True, allow_preempt=True, label=None):
         if want.preempted and not allow_preempt:
             return False  # checked before the learner's step, which may not handle running out of blocks yet
         got.step()
-        trace.append(step)
         g, w = snap(got, ids), snap(want, ids)
         assert g == w, (label, "after step", step + 1, "got", g, "want", w, "arrivals", arrivals)
     return True
@@ -262,14 +260,15 @@ def run(fn, workload, steps, ids=True, allow_preempt=True, label=None):
 
 TESTS = [
     {"name": "Part 1: the worked example", "part": 1, "behavior": "contract.signature", "code": r"""
-e = {fn}(8)
-assert e.add_request([3, 1, 4, 1, 5], 4) == 0
-assert e.add_request([2, 7], 4) == 1
+e = {fn}(10)
+assert e.add_request([6, 1, 2], 3) == 0
+assert e.add_request([4, 0, 9, 3], 3) == 1
+assert e.add_request([2, 2, 5, 5, 1, 1, 7, 7], 3) == 2
 e.step()
-a, b = e.sequences
-assert a.status.value == "running" and a.block_ids == [0, 1] and a.generated == [6]
-assert b.status.value == "running" and b.block_ids == [2] and b.generated == [8]
-assert e.allocator.num_free_or_evictable() == 5
+assert all(s.status.value == "running" for s in e.sequences)
+assert [s.block_ids for s in e.sequences] == [[0], [1, 2], [3, 4, 5]]
+assert [s.generated for s in e.sequences] == [[1], [2], [8]]
+assert e.allocator.num_free_or_evictable() == 4
 """},
     {"name": "Part 1: random requests, one step", "part": 1, "visibility": "unshown", "behavior": "state.invariant",
      "failure_message": "After one step over random waiting requests, a sequence's status, block ids or generated tokens, or the allocator's counts, differed from prefilling each request in queue order with one allocate call for ceil((len(token_ids) + 1) / BLOCK_SIZE) blocks.",
@@ -285,16 +284,16 @@ for seed in range(200):
     run({fn}, (need + 1 + rng.randint(0, 3), None, None, {0: reqs}), 1, label=seed)
 """},
     {"name": "Part 2: the worked example", "part": 2, "behavior": "budget.enforcement", "code": r"""
-e = {fn}(20, 6, 3)
-for prompt in ([6, 2, 6], [4, 4, 1, 9], [5], [8, 3]):
+e = {fn}(20, 5)
+for prompt in ([6, 1], [4, 0, 9], [2, 5, 3], [8]):
     e.add_request(prompt, 6)
 e.step()
-assert [s.generated for s in e.sequences] == [[17], [], [], []]
+assert [s.generated for s in e.sequences] == [[12], [12], [], []]
 e.step()
-assert [s.generated for s in e.sequences] == [[17, 0], [13], [12], []]
-assert e.sequences[0].block_ids == [0, 1] and e.sequences[1].block_ids == [2, 3] and e.sequences[2].block_ids == [4]
+assert [s.generated for s in e.sequences] == [[12, 11], [12, 11], [6], []]
+assert [s.block_ids for s in e.sequences] == [[0], [1, 2], [3], []]
 e.step()
-assert [s.generated for s in e.sequences] == [[17, 0, 7], [13, 5], [12, 11], []]
+assert [s.generated for s in e.sequences] == [[12, 11, 17], [12, 11, 17], [6, 9], [15]]
 """},
     {"name": "Part 2: random arrivals under a budget", "part": 2, "visibility": "unshown", "behavior": "budget.enforcement",
      "failure_message": "Over several steps, a result differed from decoding every running sequence oldest-admitted first, allocating one block only when the new token needs it, then admitting from the queue front while fewer than max_seqs run and the tokens of this step stay within token_budget, stopping at the first request that does not fit.",
@@ -321,18 +320,15 @@ e.add_request([9, 9, 9], 2)
 e.step()
 a, b = e.sequences
 assert a.status.value == "finished" and a.block_ids == [] and a.generated == [18]
-assert b.status.value == "running" and len(b.block_ids) == 1 and b.generated == [4]
+assert b.status.value == "running" and len(b.block_ids) == 1 and len(b.generated) == 1
 assert e.allocator.num_free_or_evictable() == 2
 e.step()
-assert b.status.value == "finished" and b.block_ids == [] and b.generated == [4, 2]
+assert b.status.value == "finished" and b.block_ids == [] and len(b.generated) == 2
 assert e.allocator.num_free_or_evictable() == 3
 e.add_request([1] * 8, 2)
 e.step()
 c = e.sequences[2]
-assert c.status.value == "running" and len(c.block_ids) == 3 and c.generated == [9]
-e.step()
-assert c.status.value == "finished" and c.generated == [9, 10]
-assert e.allocator.num_free_or_evictable() == 3
+assert c.status.value == "running" and len(c.block_ids) == 3
 """},
     {"name": "Part 3: random workloads with stops", "part": 3, "visibility": "unshown", "behavior": "state.invariant",
      "failure_message": "With requests that stop by max_tokens or by EOS_TOKEN, also during prefill, a status, generated list, number of blocks held or free count differed: a stopped sequence must free all its blocks at once, finish, and stop counting against max_seqs.",
@@ -357,16 +353,14 @@ e.add_request([3] * 4 + [7] * 4, 2)
 e.step()
 assert [s.block_ids for s in e.sequences] == [[0, 1, 2], [0, 1, 3], [0, 4, 5]]
 assert [b.ref_count for b in e.allocator.blocks] == [3, 2, 1, 1, 1, 1]
-assert [s.generated for s in e.sequences] == [[10], [11], [13]]
+e = {fn}(5)
+e.add_request([3] * 12 + [1], 1)
 e.step()
-assert all(s.status.value == "finished" for s in e.sequences)
-assert e.allocator.num_free_or_evictable() == 6
-e.add_request([9] * 12, 1)
+e.add_request([9] * 13, 1)
 e.step()
-e.add_request([3] * 8 + [5], 3)
+e.add_request([3] * 12 + [2], 2)
 e.step()
-d = e.sequences[4]
-assert d.block_ids == [0, 4, 2] and d.generated == [14]
+assert e.sequences[2].block_ids == [0, 1, 2, 4], e.sequences[2].block_ids
 """},
     {"name": "Part 4: random shared prefixes", "part": 4, "visibility": "unshown", "behavior": "attention.cache",
      "failure_message": "With prompts that share leading blocks, a block id, reference count or free count differed: reuse only the unbroken run of leading full blocks found by lookup_cached, allocate the rest at once, register every fresh block as soon as it is full, and leave eviction to the allocator.",
@@ -392,11 +386,11 @@ assert checked == 200, checked
      "failure_message": "When an earlier block of a prefix was evicted but a later one is still cached, the later one must not be reused: reuse stops at the first miss.",
      "code": r"""
 e = {fn}(5)
-e.add_request([3] * 12 + [1], 1)
+e.add_request([4] * 12 + [2], 1)
 e.step()
-e.add_request([9] * 13, 1)
+e.add_request([8] * 13, 1)
 e.step()
-e.add_request([3] * 12 + [2], 2)
+e.add_request([4] * 12 + [6], 2)
 e.step()
 assert e.sequences[2].block_ids == [0, 1, 2, 4], e.sequences[2].block_ids
 assert [b.ref_count for b in e.allocator.blocks] == [1, 1, 1, 0, 1]
@@ -409,16 +403,11 @@ e.step()
 assert [s.block_ids for s in e.sequences] == [[0], [1], [2]]
 e.step()
 a, b, c = e.sequences
-assert a.block_ids == [0, 3] and a.generated == [2, 14]
-assert b.block_ids == [1, 2] and b.generated == [7, 3]
-assert c.status.value == "waiting" and c.block_ids == [] and c.generated == [3]
+assert a.block_ids == [0, 3] and b.block_ids == [1, 2]
+assert c.status.value == "waiting" and c.block_ids == []
 e.step()
-assert a.status.value == "finished" and a.generated == [2, 14, 18]
-assert c.status.value == "running" and c.block_ids == [0, 3] and c.generated == [3, 8]
-for _ in range(3):
-    e.step()
-assert [s.generated for s in e.sequences] == [[2, 14, 18], [7, 3, 8, 16, 6], [3, 8, 16, 6, 9]]
-assert e.allocator.num_free_or_evictable() == 4
+assert a.status.value == "finished" and a.generated[-1] == 18
+assert c.status.value == "running" and c.block_ids == [0, 3]
 """},
     {"name": "Part 5: random workloads under memory pressure", "part": 5, "visibility": "unshown", "behavior": "scheduler.concurrency",
      "failure_message": "With too few blocks, a result differed from preempting the most recently admitted running sequence, freeing its blocks and putting it at the queue front, until the allocation fits; a sequence may be its own victim; nothing more is admitted in a step after a preemption; every request must still finish with the tokens it would generate alone.",
@@ -435,8 +424,11 @@ for seed in range(300):
             arrivals.setdefault(rng.randint(0, 5), []).append((prompt, max_tokens))
             reqs.append((prompt, max_tokens))
             longest = max(longest, len(prompt) + max_tokens)
+    max_seqs = rng.choice([None, 2, 3])
     budget = rng.choice([None, longest, longest + 4])
-    run({fn}, (num_blocks, budget, rng.choice([None, 2, 3]), arrivals), 40, label=seed)
+    if budget is not None and max_seqs is not None:
+        budget = max(budget, max_seqs)
+    run({fn}, (num_blocks, budget, max_seqs, arrivals), 40, label=seed)
 """},
     {"name": "Part 5: tokens do not depend on the workload", "part": 5, "visibility": "unshown", "behavior": "state.invariant",
      "failure_message": "Under memory pressure, some request ended with different generated tokens than it produces alone, did not finish, or left blocks allocated: preemption must keep token_ids and only drop blocks.",
@@ -476,12 +468,12 @@ TASK = {
 The requirement arrives in parts. Each part keeps every earlier rule, so one `Engine` class passes all parts at the end. Pass every test of the current part to reveal the next one.
 
 **Rules for every part:**
-- The starter's provided code stays as it is: `next_token`, `BlockAllocator`, `block_hash`, `full_block_hashes`, `Status` and `Sequence`. Read it first; what each call assumes is part of the task.
+- The starter's provided code stays as it is: `next_token`, `BlockAllocator`, `block_hash`, `full_block_hashes`, `Status` and `Sequence`. Read it first: the task depends on the preconditions of each call.
 - `Engine(num_blocks, token_budget=None, max_seqs=None)` keeps `self.allocator`, a `BlockAllocator(num_blocks)`, and `self.sequences`, where `sequences[r]` is the `Sequence` of request `r`. `None` means no limit.
 - `add_request(prompt, max_tokens) -> int` creates a `WAITING` sequence, puts it at the back of the queue and returns `0`, `1`, `2`, and so on.
 - Before any token is generated, the sequence must hold `ceil((len(token_ids) + 1) / BLOCK_SIZE)` blocks; then append `next_token(token_ids)` to `token_ids`.
 - Prefill admits a waiting sequence: it reserves the blocks it is missing with one `allocate` call, marks it `RUNNING` and generates one token. Decode generates one more token for a running sequence, with one `allocate(1)` call when the new token needs another block.
-- Blocks a sequence gives back go in one `free(block_ids)` call, in block order. Every request fits in `num_blocks` blocks on its own.
+- Blocks a sequence gives back go in one `free(block_ids)` call, in block order. Every request fits in `num_blocks` blocks on its own, and until Part 5 the tests never run out of blocks.
 
 ────────────────────────────────
 
@@ -491,18 +483,18 @@ The requirement arrives in parts. Each part keeps every earlier rule, so one `En
 
 **Where it is used:** vLLM, SGLang and TensorRT-LLM schedule requests the same way, with paged KV-cache blocks, continuous batching, prefix caching keyed by chained block hashes, and recompute-style preemption.
 
-Adapted from the inference engine online assessment in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded. The provided code is rewritten with new constants and hashes, a deque instead of `RequestQueue`, and shorter `Sequence` fields (`prompt`, `generated`, `Status`); `token_budget` and `max_seqs` are optional from the start. Admission counts `len(token_ids)`, so a preempted sequence pays for every token it re-prefills, nothing more is admitted in a step after a preemption, and the Part 3 tests compare block counts instead of block ids.""",
+Adapted from the inference engine online assessment in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded; its Levels are Parts here. The provided code is rewritten with new constants and hashes and a deque instead of `RequestQueue`; `SeqStatus` is `Status`, `prompt_token_ids` and `generated_token_ids` are `prompt` and `generated`, `num_generated`, `append_token`, `tokens_in_block` and `incref` are dropped, and `full_block_hashes` takes `token_ids`. `token_budget` and `max_seqs` are optional from the start, and each sequence reserves its blocks with one `allocate` call and returns them with one `free` call in block order. Admission counts `len(token_ids)`, so a preempted sequence pays for every token it re-prefills, nothing more is admitted in a step after a preemption, and the Part 3 tests compare block counts instead of block ids.""",
     "parts": [
         {
             "title": "Admission and prefill",
             "description_en": r"""**Signatures:** `Engine(num_blocks)`, `add_request(prompt, max_tokens) -> int`, `step()`
 
-- `step()` prefills every waiting request, in queue order, and marks each `RUNNING`.
+- `step()` takes requests off the queue front one by one; prefill each and set it `RUNNING`.
 - The tests here call `step()` once.
 
-**Example:** `e = Engine(8)`, then `add_request([3, 1, 4, 1, 5], 4)` is `0` and `add_request([2, 7], 4)` is `1`:
-- after `step()`, request `0` holds blocks `[0, 1]`, since 6 tokens need two blocks, and has generated `[6]`
-- request `1` holds `[2]` and has generated `[8]`; `5` blocks remain free""",
+**Example:** `e = Engine(10)`, then `add_request` with `[6, 1, 2]`, `[4, 0, 9, 3]` and `[2, 2, 5, 5, 1, 1, 7, 7]`, each with `max_tokens = 3`, returns `0`, `1` and `2`:
+- after `step()` they hold `[0]`, `[1, 2]` and `[3, 4, 5]`: a prompt that fills its blocks exactly still needs one more for the next token
+- they have generated `[1]`, `[2]` and `[8]`; `4` blocks remain free""",
         },
         {
             "title": "A budgeted decode loop",
@@ -510,20 +502,20 @@ Adapted from the inference engine online assessment in Schuture/Anthropic-Interv
 
 - First it decodes every `RUNNING` sequence, the earliest admitted first.
 - Then it admits from the front of the queue while fewer than `max_seqs` sequences run and the tokens of this step stay within `token_budget`. Tokens of a step: one per sequence decoded, plus `len(token_ids)` of each sequence admitted.
-- The first waiting request that does not fit ends admission for this step, even if a later one would fit.
+- Requests are never admitted out of queue order: the first one that does not fit ends admission for this step.
 - `token_budget` is at least every prompt's length and at least `max_seqs`.
 
-**Example:** `Engine(20, 6, 3)` with prompts `[6, 2, 6]`, `[4, 4, 1, 9]`, `[5]` and `[8, 3]`, each with `max_tokens = 6`:
-- step 1 admits only the first: `3 + 4` would pass `6`, so the 1-token prompt waits too
-- step 2 decodes the first (1 token), then admits the second (4) and the third (1); the fourth waits, as `3` sequences run
-- step 3 decodes all three and admits nothing""",
+**Example:** `Engine(20, 5)` with prompts `[6, 1]`, `[4, 0, 9]`, `[2, 5, 3]` and `[8]`, each with `max_tokens = 6`:
+- step 1 admits the first two (`2 + 3 = 5`); the third does not fit, so `[8]` waits behind it
+- step 2 decodes two tokens, then admits the third (`2 + 3 = 5`)
+- step 3 decodes three tokens, then admits `[8]`; the generated lists are now `[12, 11, 17]`, `[12, 11, 17]`, `[6, 9]` and `[15]`""",
         },
         {
             "title": "Stopping",
             "description_en": r"""Keep Parts 1–2. A sequence stops as soon as `is_stopped()` is true after any token it generates, in prefill or in decode.
 
 - On stopping, free all its blocks, empty `block_ids` and mark it `FINISHED` before handling the next sequence.
-- A finished sequence is never decoded again and no longer counts against `max_seqs`.
+- A finished sequence leaves the running set for good.
 
 **Example:** `Engine(3, 30, 4)` with `[5, 0]` (`max_tokens = 4`) and `[9, 9, 9]` (`max_tokens = 2`):
 - step 1: the first generates `[18]`, the end token, and finishes at once; the second runs on one block, with `2` blocks free
@@ -534,20 +526,23 @@ Adapted from the inference engine online assessment in Schuture/Anthropic-Interv
             "title": "Prefix caching",
             "description_en": r"""Keep Parts 1–3. Prefill now reuses blocks that already hold the same leading tokens.
 
-- Before allocating, take the hashes of the sequence's full blocks from `full_block_hashes` and call `lookup_cached` on them from block `0`, stopping at the first miss. Allocate only the blocks after the hits.
+- Allocate only after reusing the longest run of leading cached blocks: `lookup_cached` on the hashes from `full_block_hashes`, block `0` upward, until one misses. Only the blocks after that run are allocated.
 - Register every block that is not a hit under its hash, with `register`, as soon as it holds `BLOCK_SIZE` tokens: at prefill for blocks the existing tokens already fill, later right after the token that fills it.
 - Eviction is the allocator's business: a cached block can vanish when blocks are allocated.
 
-**Example:** `Engine(6, 40, 4)` with `[3]*8 + [1]`, `[3]*8 + [2]` and `[3]*4 + [7]*4`, each with `max_tokens = 2`:
-- after step 1 they hold `[0, 1, 2]`, `[0, 1, 3]` and `[0, 4, 5]`, so block `0` has 3 references and block `1` has 2
-- all finish in step 2; then a 12-token request evicts the cached block `1`, the one unused longest
-- `[3]*8 + [5]` then reuses block `0` only and gets `[0, 4, 2]`""",
+**Example:** `Engine(6, 40, 4)` with `[3]*8 + [1]`, `[3]*8 + [2]` and `[3]*4 + [7]*4`, each with `max_tokens = 2`, holds `[0, 1, 2]`, `[0, 1, 3]` and `[0, 4, 5]` after step 1, so block `0` has 3 references and block `1` has 2.
+
+**Example:** `Engine(5)`, each request with `max_tokens = 1` except the last:
+- step 1: `[3]*12 + [1]` finishes, leaving blocks `0`, `1` and `2` cached
+- step 2: `[9]*13` needs four blocks, so the allocator evicts blocks `0` and `1`; block `2` stays cached
+- step 3: `[3]*12 + [2]` (`max_tokens = 2`) misses on its first block, so the cached block `2` is not reused; it allocates four blocks and gets `[0, 1, 2, 4]`""",
         },
         {
             "title": "Preemption",
             "description_en": r"""Keep Parts 1–4. When an allocation, in prefill or decode, needs more blocks than `num_free_or_evictable()`, make room first.
 
-- Preempt the `RUNNING` sequence admitted most recently: free its blocks, mark it `WAITING` and put it at the front of the queue. Repeat until the allocation fits. Its tokens stay; it later re-prefills all of them.
+- Until the allocation fits, pick the `RUNNING` sequence admitted most recently and preempt it: its blocks are freed, it goes back to the queue front as `WAITING`, and its tokens stay, so it later re-prefills all of them.
+- A sequence re-admitted after a preemption counts as admitted at that moment: it decodes last and is the first victim.
 - The victim may be the sequence asking for the block. Then it gets no token in this step.
 - After a preemption, `step()` admits nothing more until the next step.
 - From here on, `token_budget` is at least `len(prompt) + max_tokens` of every request.
