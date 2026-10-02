@@ -1,0 +1,23 @@
+{
+  "title": "Recruiter / HR Screen",
+  "summary": "A walk through your background, motivation and preferred kind of work, a leadership and a conflict story, plus logistics: compensation expectations, start date, other processes, location and visa, references.",
+  "round": "behavioral",
+  "kind": "Behavioral",
+  "difficulty": null,
+  "frequency": "high",
+  "format": "30 min",
+  "topics": [
+    "behavioral",
+    "process",
+    "compensation",
+    "ai-safety"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/behavioral/recruiter-screen",
+  "rubric": [
+    "Background",
+    "Motivation and direction",
+    "Leadership and conflict",
+    "Process and logistics"
+  ],
+  "exercises": []
+}

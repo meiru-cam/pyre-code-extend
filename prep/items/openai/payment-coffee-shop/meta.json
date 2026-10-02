@@ -1,0 +1,24 @@
+{
+  "title": "Payment System / Coffee-Shop Ordering",
+  "summary": "In-store card payments at a coffee chain: the hold-to-capture state machine, idempotency at every step, a double-entry ledger, and a nightly batch that settles and reconciles with the payment processors.",
+  "round": "system-design",
+  "kind": "System design",
+  "difficulty": "Medium",
+  "frequency": "very-high",
+  "format": null,
+  "topics": [
+    "payment",
+    "idempotency",
+    "ledger"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/system-design/payment-coffee-shop",
+  "rubric": [
+    "Requirements and scale",
+    "Data model and API",
+    "Architecture",
+    "Deep dives",
+    "Failure modes and recovery",
+    "Trade-offs and alternatives rejected"
+  ],
+  "exercises": []
+}

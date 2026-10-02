@@ -1,0 +1,24 @@
+{
+  "title": "Multi-Tenant CI/CD",
+  "summary": "Run a workflow DAG on every git push for many tenants: jobs execute at least once but commit their result exactly once, tenants are isolated and fairly scheduled, and the UI shows live status.",
+  "round": "system-design",
+  "kind": "System design",
+  "difficulty": null,
+  "frequency": "low",
+  "format": null,
+  "topics": [
+    "scheduling",
+    "exactly-once",
+    "multi-tenancy"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/system-design/multi-tenant-ci-cd",
+  "rubric": [
+    "Requirements and scale",
+    "Data model and API",
+    "Architecture",
+    "Deep dives",
+    "Failure modes and recovery",
+    "Trade-offs and alternatives rejected"
+  ],
+  "exercises": []
+}

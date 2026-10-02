@@ -1,0 +1,25 @@
+{
+  "title": "GPT-3 Playground (Full-Stack)",
+  "summary": "Architecture for a playground site: take a prompt and sampling parameters, stream the completion back, and save presets, covering both backend data layout and frontend state.",
+  "round": "system-design",
+  "kind": "System design",
+  "difficulty": null,
+  "frequency": "rare",
+  "format": null,
+  "topics": [
+    "fullstack",
+    "frontend",
+    "streaming",
+    "schema-design"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/system-design/gpt3-playground",
+  "rubric": [
+    "Requirements and scale",
+    "Data model and API",
+    "Architecture",
+    "Deep dives",
+    "Failure modes and recovery",
+    "Trade-offs and alternatives rejected"
+  ],
+  "exercises": []
+}

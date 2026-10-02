@@ -1,0 +1,27 @@
+{
+  "title": "Telemetry Pipeline with Schema Evolution",
+  "summary": "A fleet of deployed clients streams telemetry events into a pipeline that buffers, deduplicates, and stores them raw and curated for dashboards, ad hoc queries, and alerting under field-level access control; a schema registry and canonical-name mapping table fold already-deployed old clients' inconsistent telemetry_name variants into one metric without losing history or merging unrelated ones.",
+  "round": "system-design",
+  "kind": "System design",
+  "difficulty": "Hard",
+  "frequency": "low",
+  "format": "55 min",
+  "topics": [
+    "ingestion",
+    "schema-evolution",
+    "stream-processing",
+    "partitioning",
+    "access-control",
+    "pii"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/system-design/telemetry-data-infrastructure",
+  "rubric": [
+    "Requirements and scale",
+    "Data model and API",
+    "Architecture",
+    "Deep dives",
+    "Failure modes and recovery",
+    "Trade-offs and alternatives rejected"
+  ],
+  "exercises": []
+}

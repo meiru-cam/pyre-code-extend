@@ -1,0 +1,25 @@
+{
+  "title": "Search & RAG ML Design (spoken)",
+  "summary": "A spoken ML design round on search: training a text embedding model contrastively (loss, positives and negatives, batch size), combining dense and lexical retrieval, reranking, and offline and online evaluation.",
+  "round": "system-design",
+  "kind": "Spoken ML design",
+  "difficulty": null,
+  "frequency": "low",
+  "format": "60 min",
+  "topics": [
+    "retrieval",
+    "contrastive-learning",
+    "ranking",
+    "evaluation"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/system-design/rag-search-ml-design",
+  "rubric": [
+    "(a) Training the embedding model",
+    "(b) Retrieval flow",
+    "(c) Ranking",
+    "(d) Evaluation and iteration",
+    "Failure modes and recovery",
+    "Trade-offs and alternatives rejected"
+  ],
+  "exercises": []
+}

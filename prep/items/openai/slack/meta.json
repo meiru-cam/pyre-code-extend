@@ -1,0 +1,25 @@
+{
+  "title": "Slack-style Messaging",
+  "summary": "Direct messages and channels delivered to every connected device of each user, with notifications, deletes, per-channel ordering and reconnect gap-fill, workspace isolation, and a separate delivery mode for very large channels.",
+  "round": "system-design",
+  "kind": "System design",
+  "difficulty": null,
+  "frequency": "low",
+  "format": "60 min",
+  "topics": [
+    "messaging",
+    "pubsub",
+    "multi-device",
+    "multi-tenancy"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/system-design/slack",
+  "rubric": [
+    "Requirements and scale",
+    "Data model and API",
+    "Architecture",
+    "Deep dives",
+    "Failure modes and recovery",
+    "Trade-offs and alternatives rejected"
+  ],
+  "exercises": []
+}

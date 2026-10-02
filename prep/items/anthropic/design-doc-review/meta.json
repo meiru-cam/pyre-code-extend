@@ -1,0 +1,27 @@
+{
+  "title": "Design Doc Review: A Batched Inference Service",
+  "summary": "Review a flawed design document for the batching and load-balancing layer in front of a GPU model-serving pool at 10,000 requests/second peak: rank the risks, correct a capacity estimate that silently assumes every batch is full, and fix the dispatch policy the document proposes for a shared 8-GPU pool serving a large and a small model.",
+  "round": "system-design",
+  "kind": "Design review",
+  "difficulty": "Hard",
+  "frequency": "high",
+  "format": "55 min",
+  "topics": [
+    "design-review",
+    "batching",
+    "load-balancing",
+    "capacity-planning",
+    "gpu-scheduling"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/system-design/design-doc-review",
+  "rubric": [
+    "The review, ranked",
+    "Corrected capacity estimate",
+    "Missing sections",
+    "The shared 8-GPU pool",
+    "Calibration",
+    "Failure modes and recovery",
+    "Trade-offs and alternatives rejected"
+  ],
+  "exercises": []
+}

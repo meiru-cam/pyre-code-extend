@@ -1,0 +1,25 @@
+{
+  "title": "AI Chatbot Front End",
+  "summary": "A ChatGPT-style chat site with the weight on the front end: streamed rendering, conversation state kept only in browser memory, login and credential handling, and error handling with retry.",
+  "round": "system-design",
+  "kind": "System design",
+  "difficulty": null,
+  "frequency": "low",
+  "format": "60 min",
+  "topics": [
+    "frontend",
+    "streaming",
+    "client-state",
+    "auth"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/system-design/ai-chatbot-frontend",
+  "rubric": [
+    "Requirements and scale",
+    "Data model and API",
+    "Architecture",
+    "Deep dives",
+    "Failure modes and recovery",
+    "Trade-offs and alternatives rejected"
+  ],
+  "exercises": []
+}

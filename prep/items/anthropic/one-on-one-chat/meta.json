@@ -1,0 +1,26 @@
+{
+  "title": "One-to-One Chat System",
+  "summary": "Direct messaging between exactly two users, online or offline: WebSocket delivery with at-least-once semantics and client-side deduplication, a durable per-recipient offline queue drained on reconnect, presence from heartbeats and a TTL key, and the Kafka-vs-Redis trade-off for the delivery bus behind a database that stays the source of truth.",
+  "round": "system-design",
+  "kind": "System design",
+  "difficulty": "Medium",
+  "frequency": "high",
+  "format": "55 min",
+  "topics": [
+    "websocket",
+    "presence",
+    "offline-delivery",
+    "message-ordering",
+    "kafka-vs-redis"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/system-design/one-on-one-chat",
+  "rubric": [
+    "Requirements and scale",
+    "Data model and API",
+    "Architecture",
+    "Deep dives",
+    "Failure modes and recovery",
+    "Trade-offs and alternatives rejected"
+  ],
+  "exercises": []
+}

@@ -1,0 +1,26 @@
+{
+  "title": "Device Fleet Monitoring and Command Dispatch",
+  "summary": "'A demand-response platform pushes power-reduction commands to millions of grid-connected devices over an unreliable public network and tracks each device''s delivery/accept/reject/execute state, while owners can refuse or revoke and late telemetry must be able to correct reports already published.'",
+  "round": "system-design",
+  "kind": "System design",
+  "difficulty": null,
+  "frequency": "medium",
+  "format": null,
+  "topics": [
+    "iot",
+    "messaging",
+    "idempotency",
+    "reconciliation",
+    "telemetry"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/system-design/device-fleet-monitoring",
+  "rubric": [
+    "Requirements and scale",
+    "Data model and API",
+    "Architecture",
+    "Deep dives",
+    "Failure modes and recovery",
+    "Trade-offs and alternatives rejected"
+  ],
+  "exercises": []
+}
