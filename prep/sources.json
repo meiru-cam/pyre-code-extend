@@ -322,5 +322,13 @@
       "cluster_stats"
     ],
     "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/oa-in-memory-database",
+    "exercises": [
+      "record_store"
+    ],
+    "round": "coding"
   }
 ]

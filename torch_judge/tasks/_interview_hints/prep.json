@@ -248,5 +248,14 @@
     "How do you choose splitters for a sample sort, and what happens when one value dominates?": "If every rank sends a few evenly spaced samples, what do the sorted samples say about where to cut? What happens if half the data is one value?",
     "Where would barriers or a fixed message order matter to avoid deadlock?": "Two ranks each wait in recv for the other before sending. What happens, and what ordering of sends and receives avoids it?",
     "How would these protocols change with collectives such as all-reduce and all-to-all, or with many more ranks?": "Which of these steps is an all-to-all, and which is a reduce? How does the message count grow with P?"
+  },
+  "record_store": {
+    "Why does a dict of dicts fit this store better than one dict keyed by (key, field) pairs?": "Every call names a key and then a field. If you had to read one field of one record, which lookups would you do, and which layout makes both O(1)?",
+    "Why does every method return a string, and what should get and delete return when nothing is there?": "The caller always gets a string back. What is the string for nothing found, and for a delete that removed nothing?",
+    "What can go wrong if delete removes a field without first checking that it exists?": "If delete skips the existence check, what does it return for a field that was never there, and what happens to a key that was never written?",
+    "How would you keep scan fast if records held millions of fields and scans were frequent?": "Sorting all fields on every scan costs O(f log f). What could you keep sorted between writes, and what would each set then cost?",
+    "Lazy expiry checks a field when it is read; what does that cost in memory, and when would you add an active sweep?": "A field that expired is still sitting in the dict. When is it removed, and how much memory can dead fields take if nobody reads them?",
+    "Why must a backup store time left instead of an absolute expiry, and what breaks if it stores the expiry?": "A field saved at time 5 with expiry 10 is restored at time 50. With an absolute expiry, is it alive at 50? With time left, when does it expire?",
+    "How would you make backups cheaper than a full copy each time?": "Most fields do not change between two backups. Could a backup share the unchanged parts with the previous one instead of copying them?"
   }
 }

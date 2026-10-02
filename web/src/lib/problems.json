@@ -24223,6 +24223,199 @@
           "hint": "Which of these steps is an all-to-all, and which is a reduce? How does the message count grow with P?"
         }
       ]
+    },
+    {
+      "id": "record_store",
+      "title": "Record Store With TTL and Backups",
+      "titleZh": "Record Store With TTL and Backups",
+      "difficulty": "Medium",
+      "functionName": "RecordStore",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Build `RecordStore`, an in-memory store of records. Each record has a key and holds named fields with string values.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior, so one `RecordStore` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- Keys, field names and values are non-empty strings. Field names and values never contain `(`, `)` or `,`.\n- Every method returns a string. A method with nothing to report returns `\"\"`.\n- A record with no fields left behaves exactly like a key that was never written.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** it is a timed online assessment that rewards a data layout which survives new requirements. Each later part adds one requirement, and an early shortcut such as storing absolute expiry times in a backup breaks a later part.\n\n**Where it is used:** Redis hashes with per-field expiry, caches with time-to-live, and snapshot and restore in key-value stores.\n\nAdapted from the in-memory database online assessment in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, on one class.",
+      "descriptionZh": "Build `RecordStore`, an in-memory store of records. Each record has a key and holds named fields with string values.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior, so one `RecordStore` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- Keys, field names and values are non-empty strings. Field names and values never contain `(`, `)` or `,`.\n- Every method returns a string. A method with nothing to report returns `\"\"`.\n- A record with no fields left behaves exactly like a key that was never written.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** it is a timed online assessment that rewards a data layout which survives new requirements. Each later part adds one requirement, and an early shortcut such as storing absolute expiry times in a backup breaks a later part.\n\n**Where it is used:** Redis hashes with per-field expiry, caches with time-to-live, and snapshot and restore in key-value stores.\n\nAdapted from the in-memory database online assessment in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, on one class.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Part 1: the worked example",
+          "code": "\nstore = {fn}()\nassert store.set(\"lamp-2\", \"color\", \"amber\") == \"\"\nassert store.set(\"lamp-2\", \"watts\", \"40\") == \"\"\nassert store.get(\"lamp-2\", \"color\") == \"amber\"\nassert store.get(\"lamp-2\", \"lumens\") == \"\"\nassert store.get(\"lamp-5\", \"color\") == \"\"\nassert store.delete(\"lamp-2\", \"watts\") == \"true\"\nassert store.delete(\"lamp-2\", \"watts\") == \"false\"\nassert store.set(\"lamp-2\", \"color\", \"teal\") == \"\"\nassert store.get(\"lamp-2\", \"color\") == \"teal\"\n",
+          "behavior": "state.invariant",
+          "part": 1
+        },
+        {
+          "name": "Part 1: missing keys and fields",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "get must return the empty string, not None, for a missing key or field; delete returns the string \"false\" when the key or field is missing and \"true\" only when it removed something.",
+          "hiddenCode": "\nstore = {fn}()\nassert store.get(\"none\", \"f\") == \"\"\nassert store.delete(\"none\", \"f\") == \"false\"\nstore.set(\"a\", \"f\", \"1\")\nassert store.delete(\"a\", \"g\") == \"false\"\nassert store.delete(\"a\", \"f\") == \"true\"\nassert store.get(\"a\", \"f\") == \"\"\nstore.set(\"a\", \"f\", \"2\")\nassert store.get(\"a\", \"f\") == \"2\"\nstore.set(\"b\", \"f\", \"3\")\nassert store.get(\"a\", \"f\") == \"2\", \"records with different keys are separate\"\n",
+          "part": 1
+        },
+        {
+          "name": "Part 1: random calls",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "On a random sequence of set, get and delete calls, a return value differed from a plain dictionary model.",
+          "hiddenCode": "\nimport random\n\nclass Model:\n    def __init__(self):\n        self.data, self.clock, self.saved = {}, 0, {}\n    def now(self, ts):\n        if ts is None:\n            ts, self.clock = self.clock, self.clock + 1\n        else:\n            self.clock = ts\n        return ts\n    def live(self, key, t):\n        return {f: v for f, (v, end) in self.data.get(key, {}).items() if end is None or t < end}\n    def show(self, live, prefix):\n        return \", \".join(name + \"(\" + live[name] + \")\" for name in sorted(live) if name.startswith(prefix))\n    def call(self, op, ts, *args):\n        t = self.now(ts)\n        if op == \"set\":\n            key, field, value = args\n            self.data.setdefault(key, {})[field] = (value, None)\n            return \"\"\n        if op == \"set_ttl\":\n            key, field, value, ttl = args\n            self.data.setdefault(key, {})[field] = (value, t + ttl)\n            return \"\"\n        if op == \"get\":\n            return self.live(args[0], t).get(args[1], \"\")\n        if op == \"delete\":\n            key, field = args\n            if field in self.live(key, t):\n                del self.data[key][field]\n                return \"true\"\n            return \"false\"\n        if op == \"scan\":\n            return self.show(self.live(args[0], t), \"\")\n        if op == \"prefix\":\n            return self.show(self.live(args[0], t), args[1])\n        if op == \"backup\":\n            self.saved[t] = {k: {f: (v, None if end is None else end - t) for f, (v, end) in fs.items() if end is None or t < end}\n                             for k, fs in self.data.items()}\n            return \"\"\n        if op == \"restore\":\n            best = max(b for b in self.saved if b <= args[0])\n            self.data = {k: {f: (v, None if left is None else t + left) for f, (v, left) in fs.items()}\n                         for k, fs in self.saved[best].items()}\n            return \"\"\n        raise ValueError(op)\n\nPLAIN = {\"set\": \"set\", \"get\": \"get\", \"delete\": \"delete\", \"scan\": \"scan\", \"prefix\": \"scan_by_prefix\"}\nTIMED = {\"set\": \"set_at\", \"set_ttl\": \"set_at_with_ttl\", \"get\": \"get_at\", \"delete\": \"delete_at\", \"scan\": \"scan_at\",\n         \"prefix\": \"scan_by_prefix_at\", \"backup\": \"backup\", \"restore\": \"restore\"}\n\ndef random_calls(rng, n, timed, saves):\n    keys, fields, values = [\"k1\", \"k2\", \"K\"], [\"ab\", \"a\", \"b\", \"B\", \"abc\", \"x\"], [\"1\", \"v\", \"zz\", \"q q\"]\n    model, out = Model(), []\n    for _ in range(n):\n        ops = [\"set\", \"get\", \"delete\", \"scan\", \"prefix\"] + ([\"set_ttl\", \"set_ttl\"] if timed else [])\n        if saves:\n            ops += [\"backup\"] + ([\"restore\"] if model.saved else [])\n        op = rng.choice(ops)\n        plain = op in PLAIN and (not timed or rng.random() < 0.3)\n        ts = None if plain else model.clock + rng.choice([0, 0, 1, 1, 2, 5])\n        key, field = rng.choice(keys), rng.choice(fields)\n        args = {\"set\": (key, field, rng.choice(values)), \"set_ttl\": (key, field, rng.choice(values), rng.randint(1, 6)),\n                \"get\": (key, field), \"delete\": (key, field), \"scan\": (key,), \"prefix\": (key, rng.choice([\"\", \"a\", \"ab\", \"B\", \"y\"])),\n                \"backup\": (), \"restore\": ()}[op]\n        if op == \"restore\":\n            args = (rng.randint(min(model.saved), ts),)\n        expected = model.call(op, ts, *args)\n        out.append((op, ts, args, expected))\n    return out\n\ndef replay(store, calls, label):\n    for i, (op, ts, args, expected) in enumerate(calls):\n        if ts is None:\n            got = getattr(store, PLAIN[op])(*args)\n        else:\n            got = getattr(store, TIMED[op])(ts, *args)\n        assert got == expected, (label, i, op, ts, args, got, expected)\n\nfor seed in range(150):\n    rng = random.Random(seed)\n    calls = [c for c in random_calls(rng, 60, False, False) if c[0] in (\"set\", \"get\", \"delete\")]\n    replay({fn}(), calls, seed)\n",
+          "part": 1
+        },
+        {
+          "name": "Part 2: the worked example",
+          "code": "\nstore = {fn}()\nstore.set(\"lamp-2\", \"watts\", \"9\")\nstore.set(\"lamp-2\", \"bulb\", \"led\")\nstore.set(\"lamp-2\", \"base\", \"e27\")\nassert store.scan_by_prefix(\"lamp-2\", \"b\") == \"base(e27), bulb(led)\"\nassert store.scan(\"lamp-2\") == \"base(e27), bulb(led), watts(9)\"\nassert store.scan_by_prefix(\"lamp-2\", \"x\") == \"\"\nassert store.scan(\"lamp-5\") == \"\"\n",
+          "behavior": "state.invariant",
+          "part": 2
+        },
+        {
+          "name": "Part 2: ordering, prefixes and emptied records",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "scan sorts by field name with Python's default order (uppercase before lowercase), joins items with \", \", and a prefix must match the start of the name, not anywhere in it; a record whose fields were all deleted scans as \"\".",
+          "hiddenCode": "\nstore = {fn}()\nfor field, value in [(\"beta\", \"2\"), (\"Alpha\", \"1\"), (\"ab\", \"3\"), (\"xab\", \"4\"), (\"a\", \"5\")]:\n    store.set(\"r\", field, value)\nassert store.scan(\"r\") == \"Alpha(1), a(5), ab(3), beta(2), xab(4)\"\nassert store.scan_by_prefix(\"r\", \"ab\") == \"ab(3)\"\nassert store.scan_by_prefix(\"r\", \"a\") == \"a(5), ab(3)\"\nassert store.scan_by_prefix(\"r\", \"\") == store.scan(\"r\")\nfor field in [\"beta\", \"Alpha\", \"ab\", \"xab\", \"a\"]:\n    store.delete(\"r\", field)\nassert store.scan(\"r\") == \"\" and store.scan_by_prefix(\"r\", \"\") == \"\"\n",
+          "part": 2
+        },
+        {
+          "name": "Part 2: random calls",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "On a random sequence of calls including scan and scan_by_prefix, a return value differed from a plain dictionary model.",
+          "hiddenCode": "\nimport random\n\nclass Model:\n    def __init__(self):\n        self.data, self.clock, self.saved = {}, 0, {}\n    def now(self, ts):\n        if ts is None:\n            ts, self.clock = self.clock, self.clock + 1\n        else:\n            self.clock = ts\n        return ts\n    def live(self, key, t):\n        return {f: v for f, (v, end) in self.data.get(key, {}).items() if end is None or t < end}\n    def show(self, live, prefix):\n        return \", \".join(name + \"(\" + live[name] + \")\" for name in sorted(live) if name.startswith(prefix))\n    def call(self, op, ts, *args):\n        t = self.now(ts)\n        if op == \"set\":\n            key, field, value = args\n            self.data.setdefault(key, {})[field] = (value, None)\n            return \"\"\n        if op == \"set_ttl\":\n            key, field, value, ttl = args\n            self.data.setdefault(key, {})[field] = (value, t + ttl)\n            return \"\"\n        if op == \"get\":\n            return self.live(args[0], t).get(args[1], \"\")\n        if op == \"delete\":\n            key, field = args\n            if field in self.live(key, t):\n                del self.data[key][field]\n                return \"true\"\n            return \"false\"\n        if op == \"scan\":\n            return self.show(self.live(args[0], t), \"\")\n        if op == \"prefix\":\n            return self.show(self.live(args[0], t), args[1])\n        if op == \"backup\":\n            self.saved[t] = {k: {f: (v, None if end is None else end - t) for f, (v, end) in fs.items() if end is None or t < end}\n                             for k, fs in self.data.items()}\n            return \"\"\n        if op == \"restore\":\n            best = max(b for b in self.saved if b <= args[0])\n            self.data = {k: {f: (v, None if left is None else t + left) for f, (v, left) in fs.items()}\n                         for k, fs in self.saved[best].items()}\n            return \"\"\n        raise ValueError(op)\n\nPLAIN = {\"set\": \"set\", \"get\": \"get\", \"delete\": \"delete\", \"scan\": \"scan\", \"prefix\": \"scan_by_prefix\"}\nTIMED = {\"set\": \"set_at\", \"set_ttl\": \"set_at_with_ttl\", \"get\": \"get_at\", \"delete\": \"delete_at\", \"scan\": \"scan_at\",\n         \"prefix\": \"scan_by_prefix_at\", \"backup\": \"backup\", \"restore\": \"restore\"}\n\ndef random_calls(rng, n, timed, saves):\n    keys, fields, values = [\"k1\", \"k2\", \"K\"], [\"ab\", \"a\", \"b\", \"B\", \"abc\", \"x\"], [\"1\", \"v\", \"zz\", \"q q\"]\n    model, out = Model(), []\n    for _ in range(n):\n        ops = [\"set\", \"get\", \"delete\", \"scan\", \"prefix\"] + ([\"set_ttl\", \"set_ttl\"] if timed else [])\n        if saves:\n            ops += [\"backup\"] + ([\"restore\"] if model.saved else [])\n        op = rng.choice(ops)\n        plain = op in PLAIN and (not timed or rng.random() < 0.3)\n        ts = None if plain else model.clock + rng.choice([0, 0, 1, 1, 2, 5])\n        key, field = rng.choice(keys), rng.choice(fields)\n        args = {\"set\": (key, field, rng.choice(values)), \"set_ttl\": (key, field, rng.choice(values), rng.randint(1, 6)),\n                \"get\": (key, field), \"delete\": (key, field), \"scan\": (key,), \"prefix\": (key, rng.choice([\"\", \"a\", \"ab\", \"B\", \"y\"])),\n                \"backup\": (), \"restore\": ()}[op]\n        if op == \"restore\":\n            args = (rng.randint(min(model.saved), ts),)\n        expected = model.call(op, ts, *args)\n        out.append((op, ts, args, expected))\n    return out\n\ndef replay(store, calls, label):\n    for i, (op, ts, args, expected) in enumerate(calls):\n        if ts is None:\n            got = getattr(store, PLAIN[op])(*args)\n        else:\n            got = getattr(store, TIMED[op])(ts, *args)\n        assert got == expected, (label, i, op, ts, args, got, expected)\n\nfor seed in range(150):\n    rng = random.Random(seed)\n    replay({fn}(), random_calls(rng, 60, False, False), seed)\n",
+          "part": 2
+        },
+        {
+          "name": "Part 3: the worked example",
+          "code": "\nstore = {fn}()\nassert store.set_at_with_ttl(3, \"lamp-2\", \"mode\", \"dim\", 4) == \"\"\nassert store.set_at_with_ttl(5, \"lamp-2\", \"mode\", \"bright\", 3) == \"\"\nassert store.set_at(6, \"lamp-2\", \"room\", \"den\") == \"\"\nassert store.scan_at(7, \"lamp-2\") == \"mode(bright), room(den)\"\nassert store.scan_at(8, \"lamp-2\") == \"room(den)\"\nassert store.delete_at(8, \"lamp-2\", \"mode\") == \"false\"\nstore.set_at_with_ttl(9, \"lamp-2\", \"mode\", \"off\", 2)\nstore.set_at(10, \"lamp-2\", \"mode\", \"auto\")\nassert store.scan_at(11, \"lamp-2\") == \"mode(auto), room(den)\"\nassert store.get(\"lamp-2\", \"mode\") == \"auto\"\n",
+          "behavior": "state.invariant",
+          "part": 3
+        },
+        {
+          "name": "Part 3: window edges and the shared clock",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "A field set with ttl at time t exists at t + ttl - 1 and is gone at t + ttl; rewriting it with a ttl restarts the window from the new time; plain calls run at the clock and move it on by one, and _at calls set the clock.",
+          "hiddenCode": "\nstore = {fn}()\nstore.set_at_with_ttl(4, \"k\", \"f\", \"v\", 3)\nassert store.get_at(6, \"k\", \"f\") == \"v\"\nassert store.get_at(7, \"k\", \"f\") == \"\"\nassert store.scan_by_prefix_at(7, \"k\", \"\") == \"\"\nstore.set_at_with_ttl(10, \"k\", \"f\", \"v\", 4)\nstore.set_at_with_ttl(12, \"k\", \"f\", \"w\", 1)\nassert store.get_at(12, \"k\", \"f\") == \"w\"\nassert store.get_at(13, \"k\", \"f\") == \"\", \"the second ttl replaces the window, it does not extend it\"\nstore.set_at_with_ttl(20, \"k\", \"g\", \"1\", 2)\nassert store.get(\"k\", \"g\") == \"1\", \"a plain call right after an _at call runs at that same time\"\nassert store.get(\"k\", \"g\") == \"1\"\nassert store.get(\"k\", \"g\") == \"\", \"two plain calls later the clock is at 22\"\nstore.set_at_with_ttl(30, \"k\", \"h\", \"1\", 5)\nstore.set(\"k\", \"h\", \"2\")\nassert store.get_at(100, \"k\", \"h\") == \"2\", \"a plain set makes the field permanent\"\nstore.set(\"k\", \"p\", \"x\")\nstore.set_at_with_ttl(200, \"k\", \"p\", \"y\", 1)\nassert store.delete_at(201, \"k\", \"p\") == \"false\"\nassert store.get_at(201, \"k\", \"p\") == \"\"\n",
+          "part": 3
+        },
+        {
+          "name": "Part 3: random timed calls",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "On a random mix of plain and timed calls with expiring fields, a return value differed from a model that runs plain calls at the clock and drops a field at timestamp + ttl.",
+          "hiddenCode": "\nimport random\n\nclass Model:\n    def __init__(self):\n        self.data, self.clock, self.saved = {}, 0, {}\n    def now(self, ts):\n        if ts is None:\n            ts, self.clock = self.clock, self.clock + 1\n        else:\n            self.clock = ts\n        return ts\n    def live(self, key, t):\n        return {f: v for f, (v, end) in self.data.get(key, {}).items() if end is None or t < end}\n    def show(self, live, prefix):\n        return \", \".join(name + \"(\" + live[name] + \")\" for name in sorted(live) if name.startswith(prefix))\n    def call(self, op, ts, *args):\n        t = self.now(ts)\n        if op == \"set\":\n            key, field, value = args\n            self.data.setdefault(key, {})[field] = (value, None)\n            return \"\"\n        if op == \"set_ttl\":\n            key, field, value, ttl = args\n            self.data.setdefault(key, {})[field] = (value, t + ttl)\n            return \"\"\n        if op == \"get\":\n            return self.live(args[0], t).get(args[1], \"\")\n        if op == \"delete\":\n            key, field = args\n            if field in self.live(key, t):\n                del self.data[key][field]\n                return \"true\"\n            return \"false\"\n        if op == \"scan\":\n            return self.show(self.live(args[0], t), \"\")\n        if op == \"prefix\":\n            return self.show(self.live(args[0], t), args[1])\n        if op == \"backup\":\n            self.saved[t] = {k: {f: (v, None if end is None else end - t) for f, (v, end) in fs.items() if end is None or t < end}\n                             for k, fs in self.data.items()}\n            return \"\"\n        if op == \"restore\":\n            best = max(b for b in self.saved if b <= args[0])\n            self.data = {k: {f: (v, None if left is None else t + left) for f, (v, left) in fs.items()}\n                         for k, fs in self.saved[best].items()}\n            return \"\"\n        raise ValueError(op)\n\nPLAIN = {\"set\": \"set\", \"get\": \"get\", \"delete\": \"delete\", \"scan\": \"scan\", \"prefix\": \"scan_by_prefix\"}\nTIMED = {\"set\": \"set_at\", \"set_ttl\": \"set_at_with_ttl\", \"get\": \"get_at\", \"delete\": \"delete_at\", \"scan\": \"scan_at\",\n         \"prefix\": \"scan_by_prefix_at\", \"backup\": \"backup\", \"restore\": \"restore\"}\n\ndef random_calls(rng, n, timed, saves):\n    keys, fields, values = [\"k1\", \"k2\", \"K\"], [\"ab\", \"a\", \"b\", \"B\", \"abc\", \"x\"], [\"1\", \"v\", \"zz\", \"q q\"]\n    model, out = Model(), []\n    for _ in range(n):\n        ops = [\"set\", \"get\", \"delete\", \"scan\", \"prefix\"] + ([\"set_ttl\", \"set_ttl\"] if timed else [])\n        if saves:\n            ops += [\"backup\"] + ([\"restore\"] if model.saved else [])\n        op = rng.choice(ops)\n        plain = op in PLAIN and (not timed or rng.random() < 0.3)\n        ts = None if plain else model.clock + rng.choice([0, 0, 1, 1, 2, 5])\n        key, field = rng.choice(keys), rng.choice(fields)\n        args = {\"set\": (key, field, rng.choice(values)), \"set_ttl\": (key, field, rng.choice(values), rng.randint(1, 6)),\n                \"get\": (key, field), \"delete\": (key, field), \"scan\": (key,), \"prefix\": (key, rng.choice([\"\", \"a\", \"ab\", \"B\", \"y\"])),\n                \"backup\": (), \"restore\": ()}[op]\n        if op == \"restore\":\n            args = (rng.randint(min(model.saved), ts),)\n        expected = model.call(op, ts, *args)\n        out.append((op, ts, args, expected))\n    return out\n\ndef replay(store, calls, label):\n    for i, (op, ts, args, expected) in enumerate(calls):\n        if ts is None:\n            got = getattr(store, PLAIN[op])(*args)\n        else:\n            got = getattr(store, TIMED[op])(ts, *args)\n        assert got == expected, (label, i, op, ts, args, got, expected)\n\nfor seed in range(200):\n    rng = random.Random(seed)\n    replay({fn}(), random_calls(rng, 80, True, False), seed)\n",
+          "part": 3
+        },
+        {
+          "name": "Part 4: the worked example",
+          "code": "\nstore = {fn}()\nstore.set_at_with_ttl(2, \"lamp-2\", \"mode\", \"dim\", 8)\nstore.set_at(2, \"lamp-2\", \"room\", \"den\")\nassert store.backup(5) == \"\"\nstore.set_at(6, \"lamp-2\", \"room\", \"hall\")\nassert store.delete_at(7, \"lamp-2\", \"mode\") == \"true\"\nassert store.restore(50, 5) == \"\"\nassert store.get_at(50, \"lamp-2\", \"room\") == \"den\"\nassert store.get_at(54, \"lamp-2\", \"mode\") == \"dim\"\nassert store.get_at(55, \"lamp-2\", \"mode\") == \"\"\n",
+          "behavior": "checkpoint.recovery",
+          "part": 4
+        },
+        {
+          "name": "Part 4: choosing and reusing backups",
+          "visibility": "unshown",
+          "behavior": "checkpoint.recovery",
+          "failureMessage": "restore must pick the latest backup at or before timestamp_to_restore, keep every backup for later restores, replace the whole current state, and leave the backup unchanged by writes made after it is taken or restored.",
+          "hiddenCode": "\nstore = {fn}()\nstore.set_at(1, \"a\", \"f\", \"one\")\nstore.backup(2)\nstore.set_at(3, \"a\", \"f\", \"two\")\nstore.set_at(3, \"b\", \"g\", \"new\")\nstore.backup(4)\nstore.set_at(5, \"a\", \"f\", \"three\")\nstore.restore(6, 3)\nassert store.get_at(6, \"a\", \"f\") == \"one\" and store.scan_at(6, \"b\") == \"\", \"the latest backup at or before 3 is the one from 2\"\nstore.set_at(7, \"a\", \"f\", \"dirty\")\nstore.set_at(7, \"a\", \"x\", \"extra\")\nstore.restore(8, 2)\nassert store.scan_at(8, \"a\") == \"f(one)\", \"writes after a restore must not leak into the backup\"\nstore.restore(9, 100)\nassert store.get_at(9, \"a\", \"f\") == \"two\" and store.get_at(9, \"b\", \"g\") == \"new\", \"a later restore can still reach the backup from 4\"\nstore.set_at(10, \"c\", \"h\", \"first\")\nstore.backup(10)\nstore.set_at(10, \"c\", \"h\", \"second\")\nstore.backup(10)\nstore.set_at(11, \"c\", \"h\", \"third\")\nstore.restore(12, 10)\nassert store.get_at(12, \"c\", \"h\") == \"second\", \"a second backup at the same time replaces the first\"\n",
+          "part": 4
+        },
+        {
+          "name": "Part 4: time left resumes at restore",
+          "visibility": "unshown",
+          "behavior": "checkpoint.recovery",
+          "failureMessage": "A backup must skip fields already expired at its time and save time left, not an absolute expiry, so a restored field expires at restore time plus the time it had left.",
+          "hiddenCode": "\nstore = {fn}()\nstore.set_at_with_ttl(0, \"k\", \"gone\", \"1\", 3)\nstore.set_at_with_ttl(0, \"k\", \"left\", \"2\", 10)\nstore.set_at(0, \"k\", \"keep\", \"3\")\nstore.backup(3)\nstore.restore(1000, 3)\nassert store.scan_at(1000, \"k\") == \"keep(3), left(2)\"\nassert store.get_at(1006, \"k\", \"left\") == \"2\"\nassert store.get_at(1007, \"k\", \"left\") == \"\"\nstore.restore(2000, 3)\nassert store.get_at(2006, \"k\", \"left\") == \"2\", \"restoring the same backup twice gives the same state\"\nassert store.get_at(5000, \"k\", \"keep\") == \"3\"\n",
+          "part": 4
+        },
+        {
+          "name": "Part 4: random calls with backups",
+          "visibility": "unshown",
+          "behavior": "checkpoint.recovery",
+          "failureMessage": "On a random mix of timed calls, backups and restores, a return value differed from a model that saves time left and restarts each countdown at the restore time.",
+          "hiddenCode": "\nimport random\n\nclass Model:\n    def __init__(self):\n        self.data, self.clock, self.saved = {}, 0, {}\n    def now(self, ts):\n        if ts is None:\n            ts, self.clock = self.clock, self.clock + 1\n        else:\n            self.clock = ts\n        return ts\n    def live(self, key, t):\n        return {f: v for f, (v, end) in self.data.get(key, {}).items() if end is None or t < end}\n    def show(self, live, prefix):\n        return \", \".join(name + \"(\" + live[name] + \")\" for name in sorted(live) if name.startswith(prefix))\n    def call(self, op, ts, *args):\n        t = self.now(ts)\n        if op == \"set\":\n            key, field, value = args\n            self.data.setdefault(key, {})[field] = (value, None)\n            return \"\"\n        if op == \"set_ttl\":\n            key, field, value, ttl = args\n            self.data.setdefault(key, {})[field] = (value, t + ttl)\n            return \"\"\n        if op == \"get\":\n            return self.live(args[0], t).get(args[1], \"\")\n        if op == \"delete\":\n            key, field = args\n            if field in self.live(key, t):\n                del self.data[key][field]\n                return \"true\"\n            return \"false\"\n        if op == \"scan\":\n            return self.show(self.live(args[0], t), \"\")\n        if op == \"prefix\":\n            return self.show(self.live(args[0], t), args[1])\n        if op == \"backup\":\n            self.saved[t] = {k: {f: (v, None if end is None else end - t) for f, (v, end) in fs.items() if end is None or t < end}\n                             for k, fs in self.data.items()}\n            return \"\"\n        if op == \"restore\":\n            best = max(b for b in self.saved if b <= args[0])\n            self.data = {k: {f: (v, None if left is None else t + left) for f, (v, left) in fs.items()}\n                         for k, fs in self.saved[best].items()}\n            return \"\"\n        raise ValueError(op)\n\nPLAIN = {\"set\": \"set\", \"get\": \"get\", \"delete\": \"delete\", \"scan\": \"scan\", \"prefix\": \"scan_by_prefix\"}\nTIMED = {\"set\": \"set_at\", \"set_ttl\": \"set_at_with_ttl\", \"get\": \"get_at\", \"delete\": \"delete_at\", \"scan\": \"scan_at\",\n         \"prefix\": \"scan_by_prefix_at\", \"backup\": \"backup\", \"restore\": \"restore\"}\n\ndef random_calls(rng, n, timed, saves):\n    keys, fields, values = [\"k1\", \"k2\", \"K\"], [\"ab\", \"a\", \"b\", \"B\", \"abc\", \"x\"], [\"1\", \"v\", \"zz\", \"q q\"]\n    model, out = Model(), []\n    for _ in range(n):\n        ops = [\"set\", \"get\", \"delete\", \"scan\", \"prefix\"] + ([\"set_ttl\", \"set_ttl\"] if timed else [])\n        if saves:\n            ops += [\"backup\"] + ([\"restore\"] if model.saved else [])\n        op = rng.choice(ops)\n        plain = op in PLAIN and (not timed or rng.random() < 0.3)\n        ts = None if plain else model.clock + rng.choice([0, 0, 1, 1, 2, 5])\n        key, field = rng.choice(keys), rng.choice(fields)\n        args = {\"set\": (key, field, rng.choice(values)), \"set_ttl\": (key, field, rng.choice(values), rng.randint(1, 6)),\n                \"get\": (key, field), \"delete\": (key, field), \"scan\": (key,), \"prefix\": (key, rng.choice([\"\", \"a\", \"ab\", \"B\", \"y\"])),\n                \"backup\": (), \"restore\": ()}[op]\n        if op == \"restore\":\n            args = (rng.randint(min(model.saved), ts),)\n        expected = model.call(op, ts, *args)\n        out.append((op, ts, args, expected))\n    return out\n\ndef replay(store, calls, label):\n    for i, (op, ts, args, expected) in enumerate(calls):\n        if ts is None:\n            got = getattr(store, PLAIN[op])(*args)\n        else:\n            got = getattr(store, TIMED[op])(ts, *args)\n        assert got == expected, (label, i, op, ts, args, got, expected)\n\nfor seed in range(200):\n    rng = random.Random(seed)\n    replay({fn}(), random_calls(rng, 80, True, True), seed)\n",
+          "part": 4
+        }
+      ],
+      "parts": [
+        {
+          "title": "Set, get and delete fields",
+          "descriptionEn": "**Signatures:**\n- `RecordStore().set(key, field, value) -> str` stores `value` in that field of that record, replacing any old value, and returns `\"\"`.\n- `get(key, field) -> str` returns the stored value, or `\"\"` if the key or the field does not exist.\n- `delete(key, field) -> str` removes the field and returns `\"true\"`, or returns `\"false\"` if there was nothing to remove.\n\n**Example:**\n- `set(\"lamp-2\", \"color\", \"amber\")` and `set(\"lamp-2\", \"watts\", \"40\")` both return `\"\"`\n- `get(\"lamp-2\", \"color\")` is `\"amber\"`; `get(\"lamp-2\", \"lumens\")` and `get(\"lamp-5\", \"color\")` are `\"\"`\n- `delete(\"lamp-2\", \"watts\")` is `\"true\"`, then the same call again is `\"false\"`\n- `set(\"lamp-2\", \"color\", \"teal\")` replaces the value, so `get(\"lamp-2\", \"color\")` is `\"teal\"`"
+        },
+        {
+          "title": "Scan a record",
+          "descriptionEn": "Keep Part 1 and add two read methods.\n\n**Signatures:**\n- `scan(key) -> str` lists every field of the record as `\"name(value)\"` items joined by `\", \"`, sorted by field name with Python's default string order. A missing or empty record gives `\"\"`.\n- `scan_by_prefix(key, prefix) -> str` does the same for the fields whose name starts with `prefix`. An empty `prefix` matches every field.\n\n**Example:** after `set(\"lamp-2\", \"watts\", \"9\")`, `set(\"lamp-2\", \"bulb\", \"led\")` and `set(\"lamp-2\", \"base\", \"e27\")`:\n- `scan_by_prefix(\"lamp-2\", \"b\")` is `\"base(e27), bulb(led)\"`\n- `scan(\"lamp-2\")` is `\"base(e27), bulb(led), watts(9)\"`\n- `scan_by_prefix(\"lamp-2\", \"x\")` and `scan(\"lamp-5\")` are `\"\"`"
+        },
+        {
+          "title": "Timestamps and expiring fields",
+          "descriptionEn": "Keep Parts 1–2. Every call now happens at an integer time.\n\n**The clock:**\n- The store keeps a clock that starts at `0`.\n- Each of the five methods from Parts 1–2 runs at the current clock value, then adds `1` to the clock.\n- Each method below takes a `timestamp` first. It sets the clock to `timestamp` and runs at that time. A `timestamp` is never smaller than the clock.\n- Both kinds of call read and write the same fields.\n\n**Signatures:**\n- `set_at(timestamp, key, field, value)`, `get_at(timestamp, key, field)`, `delete_at(timestamp, key, field)`, `scan_at(timestamp, key)` and `scan_by_prefix_at(timestamp, key, prefix)` behave like the methods without `_at`, at `timestamp`.\n- `set_at_with_ttl(timestamp, key, field, value, ttl) -> str` stores a field that exists at times `t` with `timestamp <= t < timestamp + ttl`. `ttl` is a positive integer.\n- An expired field counts as absent everywhere. `delete_at` returns `\"false\"` for it.\n- Writing a field again starts over. `set_at_with_ttl` gives a new window counted from its own `timestamp`. A write without a ttl, plain or `_at`, makes the field permanent.\n\n**Example:**\n- `set_at_with_ttl(3, \"lamp-2\", \"mode\", \"dim\", 4)`: `mode` exists from 3 to 6\n- `set_at_with_ttl(5, \"lamp-2\", \"mode\", \"bright\", 3)`: the window is now 5 to 7\n- `set_at(6, \"lamp-2\", \"room\", \"den\")`, then `scan_at(7, \"lamp-2\")` is `\"mode(bright), room(den)\"`\n- `scan_at(8, \"lamp-2\")` is `\"room(den)\"`, and `delete_at(8, \"lamp-2\", \"mode\")` is `\"false\"`\n- `set_at_with_ttl(9, \"lamp-2\", \"mode\", \"off\", 2)`, then `set_at(10, \"lamp-2\", \"mode\", \"auto\")`: at 11, `scan_at` is `\"mode(auto), room(den)\"`\n- a plain `get(\"lamp-2\", \"mode\")` now runs at 11 and returns `\"auto\"`; the clock becomes 12"
+        },
+        {
+          "title": "Backup and restore",
+          "descriptionEn": "Keep Parts 1–3 and add two methods. Both set the clock like the other `_at` methods.\n\n**Signatures:**\n- `backup(timestamp) -> str` saves a copy of every field that exists at `timestamp`. An expiring field is saved with its time left, `expiry - timestamp`. A second backup at the same `timestamp` replaces the first. Returns `\"\"`.\n- `restore(timestamp, timestamp_to_restore) -> str` picks the backup with the largest time that is `<= timestamp_to_restore`. One always exists. Every current field is replaced by that backup's fields, and a field saved with time left `d` now expires at `timestamp + d`. Returns `\"\"`.\n- Later writes never change a saved backup, and a restore deletes no backup. Restoring the same backup twice gives the same state both times.\n\n**Example:**\n- `set_at_with_ttl(2, \"lamp-2\", \"mode\", \"dim\", 8)` exists from 2 to 9; `set_at(2, \"lamp-2\", \"room\", \"den\")` is permanent\n- `backup(5)` saves `room` and `mode` with 5 ticks left\n- `set_at(6, \"lamp-2\", \"room\", \"hall\")`, then `delete_at(7, \"lamp-2\", \"mode\")` is `\"true\"`\n- `restore(50, 5)`: `get_at(50, \"lamp-2\", \"room\")` is `\"den\"`\n- `get_at(54, \"lamp-2\", \"mode\")` is `\"dim\"` and `get_at(55, \"lamp-2\", \"mode\")` is `\"\"`, because `50 + 5 = 55`"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which two-level structure lets you reach one field of one record in O(1)? What should get return for a key that was never written, and what should delete return when the field is already gone?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Keep a dict from key to a dict from field to value. set writes self.data.setdefault(key, {})[field] = value. get chains .get(key, {}).get(field, \"\"). delete checks membership first, deletes and returns \"true\", otherwise \"false\". Every method returns a string."
+        }
+      ],
+      "modelConnections": [
+        "Feature stores and KV caches for inference keep per-key fields with a time-to-live so stale entries drop out without a sweep.",
+        "Checkpoints of a training job save remaining budgets, such as steps left in a warmup, rather than wall-clock deadlines, for the same reason backups here save time left."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "A dict of dicts gives O(1) set, get and delete on one field.",
+          "Checking expiry when a field is read needs no background sweep.",
+          "Saving time left makes a restored field behave as if the gap between backup and restore never happened."
+        ],
+        "cons": [
+          "Lazy expiry keeps dead fields in memory until something reads or overwrites them.",
+          "A scan sorts every live field of the record, so it costs O(f log f) on each call.",
+          "Every backup is a full copy, so memory grows with the number of backups times the store size."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why does a dict of dicts fit this store better than one dict keyed by (key, field) pairs?",
+          "hint": "Every call names a key and then a field. If you had to read one field of one record, which lookups would you do, and which layout makes both O(1)?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why does every method return a string, and what should get and delete return when nothing is there?",
+          "hint": "The caller always gets a string back. What is the string for nothing found, and for a delete that removed nothing?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What can go wrong if delete removes a field without first checking that it exists?",
+          "hint": "If delete skips the existence check, what does it return for a field that was never there, and what happens to a key that was never written?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How would you keep scan fast if records held millions of fields and scans were frequent?",
+          "hint": "Sorting all fields on every scan costs O(f log f). What could you keep sorted between writes, and what would each set then cost?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Lazy expiry checks a field when it is read; what does that cost in memory, and when would you add an active sweep?",
+          "hint": "A field that expired is still sitting in the dict. When is it removed, and how much memory can dead fields take if nobody reads them?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why must a backup store time left instead of an absolute expiry, and what breaks if it stores the expiry?",
+          "hint": "A field saved at time 5 with expiry 10 is restored at time 50. With an absolute expiry, is it alive at 50? With time left, when does it expire?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How would you make backups cheaper than a full copy each time?",
+          "hint": "Most fields do not change between two backups. Could a backup share the unchanged parts with the previous one instead of copying them?"
+        }
+      ]
     }
   ]
 }

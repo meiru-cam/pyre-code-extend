@@ -205,5 +205,6 @@
   "prefix_scan": "import torch\n\n\nclass PrefixScan:\n\n    def prefix_products(self, W):\n        pass",
   "nearest_neighbor": "import numpy as np\n\n\nclass NearestNeighbor:\n\n    def predict(self, X_train, y_train, X_query):\n        pass",
   "softmax_entropy": "import math\n\nimport numpy as np\n\n\nclass EntropyMeter:\n\n    def entropy(self, logits):\n        pass",
-  "cluster_stats": "from collections import Counter\n\nP = 10\n\n\nclass ClusterStats:\n\n    def global_mode(self, rank, shard, send, recv, barrier):\n        pass"
+  "cluster_stats": "from collections import Counter\n\nP = 10\n\n\nclass ClusterStats:\n\n    def global_mode(self, rank, shard, send, recv, barrier):\n        pass",
+  "record_store": "class RecordStore:\n\n    def __init__(self):\n        pass\n\n    def set(self, key, field, value):\n        pass\n\n    def get(self, key, field):\n        pass\n\n    def delete(self, key, field):\n        pass"
 }

@@ -1,0 +1,20 @@
+{
+  "title": "Online Assessment: In-Memory Database",
+  "summary": "A four-level, gated online assessment: an in-memory store of (key, field) -> value records, extended level by level with sorted scans, per-field TTL expiry, and a backup/restore mechanism whose TTLs resume counting down from the moment of the restore.",
+  "round": "coding",
+  "kind": "Online assessment · 4 levels",
+  "difficulty": "Medium",
+  "frequency": "medium",
+  "format": "4 levels / 90 min",
+  "topics": [
+    "oop-design",
+    "hash-table",
+    "ttl",
+    "snapshotting"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/coding/oa-in-memory-database",
+  "rubric": [],
+  "exercises": [
+    "record_store"
+  ]
+}
