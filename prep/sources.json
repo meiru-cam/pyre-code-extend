@@ -450,5 +450,37 @@
       "mode_lock"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/resumable-iterator",
+    "exercises": [
+      "resumable_iterator"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/rate-limiter-debug",
+    "exercises": [
+      "rate_limiter"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/oa-inference-engine",
+    "exercises": [
+      "inference_engine"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/sharded-matmul-backprop",
+    "exercises": [
+      "sharded_linear"
+    ],
+    "round": "coding"
   }
 ]
