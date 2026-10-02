@@ -374,5 +374,14 @@
     "Why can counting best paths reuse the score table, and why must you only add counts from moves that reach the best score?": "A move that does not reach the best score can still have many paths behind it. Why must those be left out of the sum?",
     "What extra state do the bonuses need, and how much larger does the table become?": "A rise bonus needs the value two cells back. What do you add to the state, and how many values can it take?",
     "How would you cut memory if only the score were needed, and why does that no longer work for rebuilding the path?": "For the score alone, which rows of the table do you still need when filling row i? What does rebuilding the path need that you threw away?"
+  },
+  "delayed_search": {
+    "When you choose the next guess, which answers do you have, and how does that change plain binary search?": "When you choose your fifth guess, whose answers have come back? Which guess's answer is still on its way?",
+    "What can a spare call send so that it brings back the previous answer without breaking any rule?": "After a few answers you know the secret is in [lo, hi]. Which values outside that range can you send, and what does each tell you?",
+    "Why does alternating a midpoint probe with a spare call stay within 2 * ceil(log2(n)) + 1 calls?": "Pair each midpoint with one spare call that fetches its answer. How many pairs do you need to shrink n candidates to one?",
+    "Why do two guesses per call reach a third of the range, and what limits going to more guesses per call?": "Two guesses split [lo, hi] into three pieces. How many real rounds do you need for n, and how does that compare with halving?",
+    "When many games share one channel, why does the round count depend only on the largest game?": "Ten games each need 30 halvings. If they all guess in the same round, how many rounds does the slowest one cost?",
+    "Could some calls in the single-game case carry a new probe instead of a spare, and what would that gain?": "While one guess's answer is in flight, could your next call already carry a useful probe? What would it have to assume?",
+    "If calls could overlap in flight, how would the problem change?": "If several calls could be in flight at once, which part of the delay problem would remain?"
   }
 }

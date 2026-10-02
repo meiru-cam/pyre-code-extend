@@ -1,0 +1,19 @@
+{
+  "title": "Binary Search with Delayed Answers",
+  "summary": "'A guessing-number interface whose answer to call i only arrives on call i+1: find one secret with as few calls as possible (single guesses, then batches of two that cut the interval to a third), then pipeline many independent secrets through the same one-round lag so the total number of rounds barely grows with the number of games.'",
+  "round": "coding",
+  "kind": "Coding",
+  "difficulty": "Medium",
+  "frequency": "rare",
+  "format": "3 parts",
+  "topics": [
+    "binary-search",
+    "interaction",
+    "algorithm-design"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/coding/guess-number-delayed",
+  "rubric": [],
+  "exercises": [
+    "delayed_search"
+  ]
+}

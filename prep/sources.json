@@ -434,5 +434,13 @@
       "jump_grid"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/guess-number-delayed",
+    "exercises": [
+      "delayed_search"
+    ],
+    "round": "coding"
   }
 ]
