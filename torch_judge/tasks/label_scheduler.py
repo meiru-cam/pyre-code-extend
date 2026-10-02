@@ -4,7 +4,7 @@ from ._interview import interview
 
 # A checker written straight from the statement: it replays a schedule prefix by prefix.
 _HELPERS = r"""
-import random, time
+import random
 
 def contract(t, m, h, k):
     if t <= 0 or m <= 0 or h <= 0 or k > t:
@@ -66,7 +66,7 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 - There are `t` tasks, `m` models and `h` humans, numbered from `0`. An assignment is a tuple `(task, model, human)`: that human rates that model's output on that task.
 - A schedule is a `list` of assignments in the order they are handed out. A prefix is its first `p` assignments, for any `p`.
 - Coverage: every human appears in at least `k` assignments. Uniqueness: no two assignments share both `task` and `human`.
-- Every builder returns `None` when `t`, `m` or `h` is `0` or less, whatever `k` is. Otherwise it returns `[]` when `k == 0`, and `None` when `k > t`.
+- `k` is an `int` of `0` or more. Every builder returns `None` when `t`, `m` or `h` is `0` or less, whatever `k` is. Otherwise it returns `[]` when `k == 0`, and `None` when `k > t`.
 - Otherwise it returns a schedule of exactly `h * k` assignments with coverage and uniqueness. That is the fewest possible.
 
 ────────────────────────────────

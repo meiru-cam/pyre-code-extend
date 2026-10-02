@@ -57,11 +57,13 @@ def star(n, host="http://wide.io"):
     return f"{host}/", {f"{host}/": [f"{host}/p{i}" for i in range(n)]}
 
 EXAMPLE = {
-    "http://docs.io/home": ["http://docs.io/guide#intro", "http://api.docs.io/v1", "https://docs.io:8443/home", "http://docs.io/home"],
-    "http://docs.io/guide": ["http://docs.io/broken", "http://docs.io/home#top"],
-    "https://docs.io:8443/home": [],
+    "http://wiki.local/start": ["http://wiki.local/a", "http://wiki.local:8080/b"],
+    "http://wiki.local/a": ["http://media.wiki.local/x.png", "http://wiki.local/c#refs", "https://wiki.local/a"],
+    "http://wiki.local:8080/b": ["http://wiki.local/a"],
+    "https://wiki.local/a": [],
 }
-EXAMPLE_RESULT = ["http://docs.io/broken", "http://docs.io/guide", "http://docs.io/home", "https://docs.io:8443/home"]
+EXAMPLE_FAIL = {"http://wiki.local/c"}
+EXAMPLE_RESULT = ["http://wiki.local/a", "http://wiki.local/c", "http://wiki.local/start", "http://wiki.local:8080/b", "https://wiki.local/a"]
 """
 
 TASK = {
@@ -96,11 +98,11 @@ Adapted from the concurrent web crawler question in Schuture/Anthropic-Interview
 
 - Follow the rules above. Any visiting order works, since the result is sorted.
 
-**Example**, start URL `http://docs.io/home`:
-- `http://docs.io/home` links to `http://docs.io/guide#intro`, `http://api.docs.io/v1`, `https://docs.io:8443/home` and itself
-- `http://docs.io/guide` links to `http://docs.io/broken` and `http://docs.io/home#top`
-- `https://docs.io:8443/home` has no links, and `get_urls("http://docs.io/broken")` raises
-- the result is `["http://docs.io/broken", "http://docs.io/guide", "http://docs.io/home", "https://docs.io:8443/home"]`: the subdomain `api.docs.io` is skipped, the port does not change the host, and the failed page is still listed""",
+**Example**, start URL `http://wiki.local/start`:
+- `start` links to `http://wiki.local/a` and `http://wiki.local:8080/b`; `:8080/b` links back to `http://wiki.local/a`
+- `http://wiki.local/a` links to `http://media.wiki.local/x.png`, `http://wiki.local/c#refs` and `https://wiki.local/a`
+- `https://wiki.local/a` has no links, and `get_urls("http://wiki.local/c")` raises
+- the result is `["http://wiki.local/a", "http://wiki.local/c", "http://wiki.local/start", "http://wiki.local:8080/b", "https://wiki.local/a"]`: `/a` is fetched once though two pages link to it, `media.wiki.local` is another host, and the failed page is still listed""",
         },
         {
             "title": "A thread pool",
@@ -112,7 +114,7 @@ Adapted from the concurrent web crawler question in Schuture/Anthropic-Interview
 - At no moment are more than `max_workers` calls to `get_urls` running.
 - Calls must actually overlap: with many slow pages, the crawl takes about `1 / max_workers` of the one-at-a-time time, not all of it.
 
-**Example**, the same graph with `max_workers=2`: the same four URLs, and `get_urls` is called four times in total.""",
+**Example**, the same graph with `max_workers=3`: the same five URLs, with exactly five calls to `get_urls`, and never more than three at once.""",
         },
         {
             "title": "Bounded asyncio",
@@ -124,7 +126,7 @@ Adapted from the concurrent web crawler question in Schuture/Anthropic-Interview
 - At no moment are more than `concurrency` calls to `get_urls` running, however many pages are waiting.
 - `get_urls` is an ordinary blocking function. While it runs, the event loop must stay free to run other tasks.
 
-**Example**, a start page linking to ten pages with `concurrency=2`: at most two of the ten calls ever run together.""",
+**Example**, a start page linking to nine pages with `concurrency=3`: all ten URLs come back, and at most three calls are ever running together.""",
         },
     ],
     "hints": [
@@ -149,8 +151,8 @@ Adapted from the concurrent web crawler question in Schuture/Anthropic-Interview
     },
     "tests": [
         {"name": "Part 1: the worked example", "part": 1, "behavior": "state.invariant", "code": _HELPERS + r"""
-p = Parser(EXAMPLE, fail={"http://docs.io/broken"})
-assert {fn}().crawl("http://docs.io/home", p) == EXAMPLE_RESULT
+p = Parser(EXAMPLE, fail=EXAMPLE_FAIL)
+assert {fn}().crawl("http://wiki.local/start", p) == EXAMPLE_RESULT
 assert all(n == 1 for n in p.calls.values()) and sorted(p.calls) == EXAMPLE_RESULT, p.calls
 """},
         {"name": "Part 1: random link graphs", "part": 1, "visibility": "unshown", "behavior": "state.invariant",
@@ -170,9 +172,9 @@ p = Parser({}, fail={"http://solo.io/x"})
 assert c.crawl("http://solo.io/x", p) == ["http://solo.io/x"], "a failing start page is still crawled"
 """},
         {"name": "Part 2: the worked example", "part": 2, "behavior": "scheduler.concurrency", "code": _HELPERS + r"""
-p = Parser(EXAMPLE, fail={"http://docs.io/broken"})
-assert {fn}().crawl_concurrent("http://docs.io/home", p, max_workers=2) == EXAMPLE_RESULT
-assert sum(p.calls.values()) == 4 and p.peak <= 2
+p = Parser(EXAMPLE, fail=EXAMPLE_FAIL)
+assert {fn}().crawl_concurrent("http://wiki.local/start", p, max_workers=3) == EXAMPLE_RESULT
+assert sum(p.calls.values()) == 5 and p.peak <= 3
 """},
         {"name": "Part 2: exactly once under contention", "part": 2, "visibility": "unshown", "behavior": "scheduler.concurrency",
          "failure_message": "With many threads finding the same links at once, a URL was fetched twice, missed, or more than max_workers calls ran together; decide what is new in one place or under a lock.",
@@ -197,24 +199,24 @@ finally:
     sys.setswitchinterval(old)
 """},
         {"name": "Part 2: calls overlap", "part": 2, "visibility": "unshown", "behavior": "performance.complexity",
-         "failure_message": "Forty pages that each take 50 ms were not fetched in parallel; submit every new page to the pool instead of waiting for each one.",
+         "failure_message": "Forty pages that each take 100 ms were not fetched in parallel; submit every new page to the pool instead of waiting for each one.",
          "code": _HELPERS + r"""
 start, graph = star(40)
-p = Parser(graph, delay=0.05)
+p = Parser(graph, delay=0.1)
 t0 = time.perf_counter()
 got = {fn}().crawl_concurrent(start, p, max_workers=8)
 elapsed = time.perf_counter() - t0
 assert len(got) == 41 and p.peak <= 8
-assert elapsed < 1.0, f"took {elapsed:.2f}s; one page at a time takes about 2s"
+assert elapsed < 2.0, f"took {elapsed:.2f}s; one page at a time takes about 4s"
 assert p.peak >= 2, "no two calls ever ran together"
 """},
         {"name": "Part 3: the worked example", "part": 3, "behavior": "scheduler.concurrency", "code": _HELPERS + r"""
-p = Parser(EXAMPLE, fail={"http://docs.io/broken"})
-assert asyncio.run({fn}().crawl_async("http://docs.io/home", p, concurrency=2)) == EXAMPLE_RESULT
-assert sum(p.calls.values()) == 4 and p.peak <= 2
-start, graph = star(10)
+p = Parser(EXAMPLE, fail=EXAMPLE_FAIL)
+assert asyncio.run({fn}().crawl_async("http://wiki.local/start", p, concurrency=2)) == EXAMPLE_RESULT
+assert sum(p.calls.values()) == 5 and p.peak <= 2
+start, graph = star(9)
 p = Parser(graph, delay=0.02)
-assert len(asyncio.run({fn}().crawl_async(start, p, concurrency=2))) == 11 and p.peak <= 2
+assert len(asyncio.run({fn}().crawl_async(start, p, concurrency=3))) == 10 and p.peak <= 3
 """},
         {"name": "Part 3: bounded, exact and non-blocking", "part": 3, "visibility": "unshown", "behavior": "scheduler.concurrency",
          "failure_message": "crawl_async fetched a URL twice, ran more than `concurrency` calls together, did not overlap calls, or blocked the event loop while get_urls ran; run get_urls in a thread and bound it with a semaphore.",
@@ -246,11 +248,11 @@ async def with_heartbeat(parser, start, limit):
     return result, elapsed, max(gaps) if gaps else elapsed
 
 start, graph = star(12)
-p = Parser(graph, delay=0.3)
+p = Parser(graph, delay=0.5)
 result, elapsed, worst_gap = asyncio.run(with_heartbeat(p, start, 6))
 assert len(result) == 13 and p.peak <= 6
-assert elapsed < 2.4, f"took {elapsed:.2f}s; one page at a time takes about 3.9s"
-assert worst_gap < 0.2, f"the event loop was blocked for {worst_gap * 1000:.0f} ms while get_urls ran"
+assert elapsed < 3.5, f"took {elapsed:.2f}s; one page at a time takes about 6.5s"
+assert worst_gap < 0.3, f"the event loop was blocked for {worst_gap * 1000:.0f} ms while get_urls ran"
 """},
     ],
     "solution": r'''# Adapted from Schuture/Anthropic-Interview-Notes (code under the MIT License).

@@ -46,6 +46,13 @@ def model_reliability(ann, k):
         out.append(sum(hits) / len(hits) if hits else 0.0)
     return out
 
+def flags_match(got, r):
+    # a score within rounding of mean - std may go either way
+    mean = sum(r) / len(r)
+    cut = mean - math.sqrt(sum((x - mean) ** 2 for x in r) / len(r))
+    want = model_flag(r)
+    return all(bool(g) == w for g, w, x in zip(got, want, r) if abs(x - cut) > 1e-9)
+
 def model_flag(r):
     mean = sum(r) / len(r)
     std = math.sqrt(sum((x - mean) ** 2 for x in r) / len(r))
@@ -70,7 +77,7 @@ def same_labels(got, want, scores=None):
                 continue  # a float tie: either order of summation may win
         assert g == w, f"sample {i}: expected class {w}, got {g}"
 
-EXAMPLE = np.array([[0, 0, 0, 1], [1, 1, -1, 0], [0, -1, 0, 1], [1, 1, 1, 0], [-1, -1, 1, 0], [0, 0, -1, 1], [1, 0, 1, 1]])
+EXAMPLE = np.array([[-1, -1, 2, -1, 2], [1, -1, -1, -1, 1], [-1, -1, 1, 1, 1], [2, -1, -1, 2, -1], [2, -1, 1, -1, 2], [-1, 2, 2, -1, 0]])
 """
 
 TASK = {
@@ -104,12 +111,13 @@ Adapted from the noisy annotators question in Schuture/OpenAI-Interview-Notes (C
 
 - `aggregate` follows the rules above.
 - `reliability` returns one score per annotator. For annotator `j`, take the samples `j` labeled where the other annotators, with `j`'s column removed and equal weights, give a label. The score is the fraction of those samples where `j` agrees with that label, or `0.0` if there are none.
-- `flag(r)` returns one `bool` per annotator: `True` when its score is below the mean of all scores minus their standard deviation. Use the population standard deviation, as `np.std` does by default.
+- `flag(r)` returns one `bool` per annotator: `True` when its score is below the mean of all scores minus their standard deviation. Use the population standard deviation, as `np.std` does by default. A score within rounding of that cutoff may go either way.
 
-**Example**, `n_classes = 2`, four annotators, seven samples (rows), `-1` meaning not labeled:
-- `[[0, 0, 0, 1], [1, 1, -1, 0], [0, -1, 0, 1], [1, 1, 1, 0], [-1, -1, 1, 0], [0, 0, -1, 1], [1, 0, 1, 1]]`
-- `aggregate` gives labels `[0, 1, 0, 1, 0, 0, 1]`, every sample labeled; sample `4` is a 1-to-1 tie, so class `0` wins
-- `reliability` is about `[0.83, 0.6, 0.8, 0.14]`, and `flag` marks only annotator `3`""",
+**Example**, `n_classes = 3`, five annotators (columns), six samples (rows), `-1` meaning not labeled:
+- `[[-1, -1, 2, -1, 2], [1, -1, -1, -1, 1], [-1, -1, 1, 1, 1], [2, -1, -1, 2, -1], [2, -1, 1, -1, 2], [-1, 2, 2, -1, 0]]`
+- `aggregate` gives labels `[2, 1, 1, 2, 2, 2]`, every sample labeled
+- `reliability` is about `[0.67, 0.0, 0.5, 1.0, 0.6]`: annotator `1` labeled one sample and disagreed with the others there
+- `flag` marks only annotator `1`""",
         },
         {
             "title": "Filter and train",
@@ -122,7 +130,7 @@ Adapted from the noisy annotators question in Schuture/OpenAI-Interview-Notes (C
 - It returns the fraction of test rows predicted correctly.
 
 **Example**, same matrix:
-- `filtered_labels` drops annotator `3`, and sample `4` changes from `0` to `1`
+- `filtered_labels` drops annotator `1`; sample `5` is then a 1-to-1 tie between classes `2` and `0`, so it changes from `2` to `0`
 - with `X_train = [[0], [1], [4], [5]]`, labels `[0, 0, 1, 1]`, all labeled, `X_test = [[2], [3], [10]]` and `y_test = [0, 1, 0]`, the centroids are `0.5` and `4.5`, and the accuracy is `2 / 3`""",
         },
         {
@@ -135,8 +143,8 @@ Adapted from the noisy annotators question in Schuture/OpenAI-Interview-Notes (C
 - `weighted_labels` computes `reliability` of the full matrix, turns it into weights, and returns `aggregate` with those weights.
 
 **Example**, same matrix:
-- the weights are about `[1.61, 0.41, 1.39, 0.0]`
-- `weighted_labels` gives `[0, 1, 0, 1, 1, 0, 1]`, every sample labeled: sample `4` is now `1` without removing annotator `3`'s column""",
+- the weights are about `[1.39, 0.0, 0.69, 5.29, 1.10]`; annotator `3`'s score of `1.0` is clipped to `0.99` first
+- `weighted_labels` gives `[2, 1, 1, 2, 2, 0]`, every sample labeled: on sample `5`, annotator `4`'s weight beats annotator `2`'s, without removing any column""",
         },
     ],
     "hints": [
@@ -162,11 +170,11 @@ Adapted from the noisy annotators question in Schuture/OpenAI-Interview-Notes (C
     "tests": [
         {"name": "Part 1: the worked example", "part": 1, "behavior": "contract.signature", "code": _HELPERS + r"""
 c = {fn}()
-labels, has = c.aggregate(EXAMPLE, 2)
-assert list(np.asarray(labels)) == [0, 1, 0, 1, 0, 0, 1] and all(np.asarray(has))
-r = np.asarray(c.reliability(EXAMPLE, 2), dtype=float)
-assert np.allclose(r, [5 / 6, 0.6, 0.8, 1 / 7]), r
-assert list(np.asarray(c.flag(r))) == [False, False, False, True]
+labels, has = c.aggregate(EXAMPLE, 3)
+assert list(np.asarray(labels)) == [2, 1, 1, 2, 2, 2] and all(np.asarray(has))
+r = np.asarray(c.reliability(EXAMPLE, 3), dtype=float)
+assert np.allclose(r, [2 / 3, 0.0, 0.5, 1.0, 0.6]), r
+assert list(np.asarray(c.flag(r))) == [False, True, False, False, False]
 """},
         {"name": "Part 1: random votes", "part": 1, "visibility": "unshown", "behavior": "numerics.stability",
          "failure_message": "On random vote matrices, a label, has_label, reliability score or flag differed from the rules; ties go to the smaller class, and an annotator is compared with the others only.",
@@ -178,14 +186,13 @@ for trial in range(120):
     ann = rng.integers(-1, k, (n, a))
     copy = ann.copy()
     w = None if trial % 2 else rng.choice([0.0, 0.5, 1.0, 2.0], a)
-    same_labels(c.aggregate(ann, k, w), model_aggregate(ann, k, w), model_scores(ann, k, w))
+    same_labels(c.aggregate(ann, k, w), model_aggregate(ann, k, w))  # these weights sum exactly, so ties are real
     r = np.asarray(c.reliability(ann, k), dtype=float)
     assert r.shape == (a,) and np.allclose(r, model_reliability(ann, k)), (r, model_reliability(ann, k))
-    assert list(np.asarray(c.flag(r), dtype=bool)) == model_flag(list(r))
+    assert flags_match(list(np.asarray(c.flag(r), dtype=bool)), list(r))
     assert (ann == copy).all(), "the annotations array was changed"
 assert list(np.asarray(c.aggregate(np.array([[-1, -1]]), 3)[1])) == [False]
 assert np.allclose(c.reliability(np.array([[0, -1], [-1, 1]]), 2), [0.0, 0.0]), "no counted sample gives 0.0"
-assert list(np.asarray(c.flag(np.array([0.5, 0.5, 0.5])), dtype=bool)) == [False, False, False]
 """},
         {"name": "Part 1: planted bad annotators", "part": 1, "visibility": "unshown", "behavior": "numerics.stability",
          "failure_message": "On data with one guessing and one always-class-0 annotator, the reliability scores or flags differed from the rules.",
@@ -195,12 +202,12 @@ for seed in range(3):
     _, _, _, ann, k = make_data(seed)
     r = np.asarray(c.reliability(ann, k), dtype=float)
     assert np.allclose(r, model_reliability(ann, k)), seed
-    assert list(np.asarray(c.flag(r), dtype=bool)) == model_flag(list(r)), seed
+    assert flags_match(list(np.asarray(c.flag(r), dtype=bool)), list(r)), seed
 """},
         {"name": "Part 2: the worked example", "part": 2, "behavior": "state.invariant", "code": _HELPERS + r"""
 c = {fn}()
-labels, has = c.filtered_labels(EXAMPLE, 2)
-assert list(np.asarray(labels)) == [0, 1, 0, 1, 1, 0, 1] and all(np.asarray(has))
+labels, has = c.filtered_labels(EXAMPLE, 3)
+assert list(np.asarray(labels)) == [2, 1, 1, 2, 2, 0] and all(np.asarray(has))
 acc = c.centroid_accuracy(np.array([[0.0], [1.0], [4.0], [5.0]]), np.array([0, 0, 1, 1]), np.array([True] * 4),
                           np.array([[2.0], [3.0], [10.0]]), np.array([0, 1, 0]), 2)
 assert abs(acc - 2 / 3) < 1e-12, acc
@@ -226,10 +233,10 @@ assert acc == 1.0, "an unlabeled row must not create a centroid, so class 2 is n
 """},
         {"name": "Part 3: the worked example", "part": 3, "behavior": "numerics.stability", "code": _HELPERS + r"""
 c = {fn}()
-w = np.asarray(c.reliability_weights(np.asarray(c.reliability(EXAMPLE, 2)), 2), dtype=float)
-assert np.allclose(w, [math.log(5), math.log(1.5), math.log(4), 0.0]), w
-labels, has = c.weighted_labels(EXAMPLE, 2)
-assert list(np.asarray(labels)) == [0, 1, 0, 1, 1, 0, 1] and all(np.asarray(has))
+w = np.asarray(c.reliability_weights(np.asarray(c.reliability(EXAMPLE, 3)), 3), dtype=float)
+assert np.allclose(w, [math.log(4), 0.0, math.log(2), math.log(198), math.log(3)]), w
+labels, has = c.weighted_labels(EXAMPLE, 3)
+assert list(np.asarray(labels)) == [2, 1, 1, 2, 2, 0] and all(np.asarray(has))
 """},
         {"name": "Part 3: weights and weighted votes", "part": 3, "visibility": "unshown", "behavior": "numerics.stability",
          "failure_message": "reliability_weights did not clip to [0.01, 0.99], apply log(r * (K - 1) / (1 - r)) and floor at 0, or weighted_labels did not vote with those weights.",
@@ -309,7 +316,7 @@ class AnnotationCleaner:
             "Why use the pool's mean and standard deviation for flagging instead of a fixed threshold?",
         ],
         deep_dive=[
-            "What does each method cost for n samples and A annotators, and where does the leave-one-out step add work?",
+            "What do aggregate and reliability cost for n samples and A annotators, and where does the leave-one-out step add work?",
         ],
         tradeoffs=[
             "What do you lose when you drop a flagged annotator's whole column?",

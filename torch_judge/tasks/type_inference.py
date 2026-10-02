@@ -79,7 +79,7 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 - A type is either a name (`str`) or a tuple of zero or more types (`list`), nested to any depth.
 - The primitive names are `int`, `float`, `str`, `bool` and `char`. A generic is `T` followed by one or more digits, such as `T1` or `T12`.
 - A function type is a list of parameter types and one return type.
-- Never change a type you are given.
+- Never change a type you are given, and return new lists from every call: no two results share a list.
 
 ────────────────────────────────
 
@@ -114,7 +114,7 @@ Adapted from the type inference question in Schuture/OpenAI-Interview-Notes (CC 
 - `args` holds one concrete type per parameter: a type with no generics in it.
 - Match each parameter with its argument. Where the parameter is a generic, that generic is bound to the whole argument at that position, even a tuple. Where both are tuples of the same length, match element by element. Otherwise they must be equal.
 - Every occurrence of one generic in one call must bind to equal types.
-- Return `ret` with every generic replaced by its binding. Every generic in `ret` appears in some parameter. The result shares no `list` with the inputs.
+- Return `ret` with every generic replaced by its binding. Every generic in `ret` appears in some parameter. The result shares no `list` with the inputs, and no two parts of it share a `list`.
 - Errors, as exception classes you define with these names: `ArityError` when `len(args) != len(params)`; `TypeMismatchError` when two types must be equal and are not; `GenericConflictError` when a generic would bind to two different types.
 - Arity is checked first. Then parameters are matched from left to right, each one depth first from left to right, and the first problem found is raised.
 

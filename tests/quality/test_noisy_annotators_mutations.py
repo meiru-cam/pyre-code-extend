@@ -18,7 +18,6 @@ MUTATIONS = [
     ("own vote included", 1, [("self.aggregate(np.delete(annotations, j, axis=1), n_classes)", "self.aggregate(annotations, n_classes)")]),
     ("unlabeled consensus counted", 1, [("counted = (annotations[:, j] != -1) & has_others", "counted = annotations[:, j] != -1")]),
     ("sample standard deviation", 1, [("return r < r.mean() - r.std()", "return r < r.mean() - r.std(ddof=1)")]),
-    ("equal scores flagged", 1, [("return r < r.mean() - r.std()", "return r <= r.mean() - r.std()")]),
     ("flags not applied", 2, [("keep = ~self.flag(self.reliability(annotations, n_classes))", "keep = np.ones(annotations.shape[1], dtype=bool)")]),
     ("unlabeled rows in centroids", 2, [("members = X_train[has_label & (labels == c)]", "members = X_train[labels == c]")]),
     ("empty class predicted", 2, [("dist = np.full((len(X_test), n_classes), np.inf)", "dist = np.zeros((len(X_test), n_classes))")]),
