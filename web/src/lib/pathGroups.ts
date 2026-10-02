@@ -44,3 +44,28 @@ export function saveLastPath(pathId: string): void {
     // Remembering the last path is a convenience; storage may be unavailable.
   }
 }
+
+export type GroupProgress = { solved: number; total: number };
+
+/**
+ * Solved and total exercise counts overall and per group, counting an exercise once
+ * even when several paths list it.
+ */
+export function uniqueProgress(
+  paths: Pick<LearningPath, 'group' | 'problems'>[],
+  isSolved: (exerciseId: string) => boolean,
+): { overall: GroupProgress; groups: Partial<Record<PathGroup, GroupProgress>> } {
+  const count = (ids: Set<string>): GroupProgress => ({
+    solved: [...ids].filter(isSolved).length,
+    total: ids.size,
+  });
+  const byGroup = new Map<PathGroup, Set<string>>();
+  for (const path of paths) {
+    const ids = byGroup.get(path.group) ?? new Set<string>();
+    path.problems.forEach((id) => ids.add(id));
+    byGroup.set(path.group, ids);
+  }
+  const groups: Partial<Record<PathGroup, GroupProgress>> = {};
+  for (const [group, ids] of byGroup) groups[group] = count(ids);
+  return { overall: count(new Set(paths.flatMap((p) => p.problems))), groups };
+}

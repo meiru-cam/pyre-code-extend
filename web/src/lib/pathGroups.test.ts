@@ -3,7 +3,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import pathsData from '@/lib/paths.json';
-import { PATH_GROUPS, groupPaths, loadLastPath, pickContinuePath, saveLastPath } from '@/lib/pathGroups';
+import { PATH_GROUPS, groupPaths, loadLastPath, pickContinuePath, saveLastPath, uniqueProgress } from '@/lib/pathGroups';
 import type { LearningPath } from '@/lib/types';
 
 const paths = pathsData.paths as LearningPath[];
@@ -26,6 +26,21 @@ describe('path groups', () => {
       { id: 'a', group: 'foundations' as const },
     ]);
     expect(grouped.map((entry) => entry.group)).toEqual(['foundations', 'agents']);
+  });
+});
+
+describe('unique progress', () => {
+  it('counts an exercise once even when several paths list it', () => {
+    const progress = uniqueProgress(
+      [
+        { group: 'foundations', problems: ['a', 'b'] },
+        { group: 'foundations', problems: ['b', 'c'] },
+        { group: 'agents', problems: ['c', 'd'] },
+      ],
+      (id) => id === 'b' || id === 'c',
+    );
+    expect(progress.overall).toEqual({ solved: 2, total: 4 });
+    expect(progress.groups).toEqual({ foundations: { solved: 2, total: 3 }, agents: { solved: 1, total: 2 } });
   });
 });
 

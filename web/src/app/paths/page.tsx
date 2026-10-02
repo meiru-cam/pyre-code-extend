@@ -6,11 +6,17 @@ import { ArrowRight, Check } from 'lucide-react';
 import { TopNav } from '@/components/layout/TopNav';
 import { Footer } from '@/components/layout/Footer';
 import { useLocale } from '@/context/LocaleContext';
-import { groupPaths, loadLastPath, pickContinuePath } from '@/lib/pathGroups';
+import { groupPaths, loadLastPath, pickContinuePath, type GroupProgress } from '@/lib/pathGroups';
 import type { TranslationKey } from '@/lib/i18n';
 import type { LearningPath, PathGroup } from '@/lib/types';
 
 type PathWithProgress = LearningPath & { solved: number; total: number };
+
+type PathsResponse = {
+  paths: PathWithProgress[];
+  overall: GroupProgress;
+  groups: Partial<Record<PathGroup, GroupProgress>>;
+};
 
 const GROUP_LABEL: Record<PathGroup, TranslationKey> = {
   foundations: 'pathGroupFoundations',
@@ -20,40 +26,39 @@ const GROUP_LABEL: Record<PathGroup, TranslationKey> = {
   agents: 'pathGroupAgents',
 };
 
-function percent(path: PathWithProgress) {
-  return path.total > 0 ? Math.round((path.solved / path.total) * 100) : 0;
+function percent({ solved, total }: GroupProgress) {
+  return total > 0 ? Math.round((solved / total) * 100) : 0;
 }
 
-function ProgressBar({ pct }: { pct: number }) {
+function ProgressBar({ progress, thick = false }: { progress: GroupProgress; thick?: boolean }) {
   return (
-    <div className="h-[3px] rounded-pill relative w-full" style={{ background: 'var(--line)' }}>
-      <div className="absolute inset-y-0 left-0 rounded-pill" style={{ width: `${pct}%`, background: 'var(--accent)' }} />
+    <div
+      className={`${thick ? 'h-[6px]' : 'h-[3px]'} rounded-pill relative w-full`}
+      style={{ background: 'var(--line)' }}
+    >
+      <div
+        className="absolute inset-y-0 left-0 rounded-pill"
+        style={{ width: `${percent(progress)}%`, background: 'var(--accent)' }}
+      />
     </div>
   );
 }
 
 export default function PathsPage() {
   const { locale, t } = useLocale();
-  const [paths, setPaths] = useState<PathWithProgress[]>([]);
+  const [data, setData] = useState<PathsResponse | null>(null);
   const [lastPathId, setLastPathId] = useState<string | null>(null);
 
   useEffect(() => {
     setLastPathId(loadLastPath());
     fetch('/api/paths')
       .then((r) => r.json())
-      .then((d) => setPaths(d.paths ?? []));
+      .then((d) => setData(d));
   }, []);
 
-  // Sections render only once the paths arrive, so a #group-… link opened directly needs this nudge.
-  useEffect(() => {
-    if (paths.length > 0 && window.location.hash) {
-      document.getElementById(window.location.hash.slice(1))?.scrollIntoView();
-    }
-  }, [paths.length]);
-
+  const paths = data?.paths ?? [];
   const titleOf = (path: LearningPath) => (locale === 'zh' ? path.titleZh : path.titleEn);
   const continuePath = pickContinuePath(paths, lastPathId);
-  const grouped = groupPaths(paths);
 
   return (
     <div className="min-h-screen bg-bg">
@@ -67,96 +72,77 @@ export default function PathsPage() {
           <p className="text-base text-text-2 leading-relaxed max-w-[58ch]">{t('pathsSubtitle')}</p>
         </div>
 
-        {continuePath && (
-          <Link
-            href={`/paths/${continuePath.id}`}
-            className="flex items-center gap-4 rounded-[12px] px-5 py-4 mb-6 group"
-            style={{ background: 'var(--accent-wash)', border: '1px solid var(--accent)' }}
+        {data?.overall && (
+          <div
+            className="flex items-center gap-6 max-[640px]:flex-col max-[640px]:items-stretch max-[640px]:gap-4 rounded-[12px] px-5 py-4 mb-6"
+            style={{ border: '1px solid var(--line)', background: 'var(--bg-elev)' }}
           >
-            <span className="mono text-[11px] tracking-[0.14em] uppercase text-accent flex-shrink-0">{t('pathContinue')}</span>
-            <span className="font-semibold truncate flex-1 min-w-0">{titleOf(continuePath)}</span>
-            <span className="mono text-xs text-text-2 tabular-nums flex-shrink-0">
-              {continuePath.solved}/{continuePath.total}
-            </span>
-            <ArrowRight className="w-4 h-4 text-accent flex-shrink-0 transition-transform duration-150 group-hover:translate-x-[3px]" />
-          </Link>
-        )}
-
-        {grouped.length > 0 && (
-          <nav
-            aria-label={t('pathGroupsNav')}
-            className="grid grid-cols-5 max-[900px]:grid-cols-2 gap-3 mb-10"
-          >
-            {grouped.map(({ group, paths: members }) => (
-              <div
-                key={group}
-                className="rounded-[12px] px-4 py-3.5 min-w-0"
-                style={{ border: '1px solid var(--line)', background: 'var(--bg-elev)' }}
-              >
-                <a
-                  href={`#group-${group}`}
-                  className="flex items-baseline justify-between gap-2 mb-2.5 hover:text-accent transition-colors"
-                >
-                  <span className="text-sm font-semibold leading-snug">{t(GROUP_LABEL[group])}</span>
-                  <span className="mono text-[11px] text-text-3 flex-shrink-0">{members.length}</span>
-                </a>
-                <ul className="flex flex-col gap-1.5">
-                  {members.map((path) => (
-                    <li key={path.id} className="min-w-0">
-                      <Link
-                        href={`/paths/${path.id}`}
-                        className="block text-xs leading-snug text-text-2 hover:text-accent transition-colors"
-                      >
-                        {titleOf(path)}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-baseline justify-between mb-2">
+                <span className="text-sm font-semibold">{t('pathOverall')}</span>
+                <span className="mono text-xs text-text-2 tabular-nums">
+                  {t('pathOverallCount', data.overall)} · {percent(data.overall)}%
+                </span>
               </div>
-            ))}
-          </nav>
+              <ProgressBar progress={data.overall} thick />
+            </div>
+            {continuePath && (
+              <Link
+                href={`/paths/${continuePath.id}`}
+                className="flex items-center gap-3 rounded-[10px] px-4 py-2.5 flex-shrink-0 min-w-0 max-w-[360px] max-[640px]:max-w-none group"
+                style={{ background: 'var(--accent-wash)', border: '1px solid var(--accent)' }}
+              >
+                <span className="mono text-[11px] tracking-[0.14em] uppercase text-accent flex-shrink-0">
+                  {t('pathContinue')}
+                </span>
+                <span className="text-sm font-semibold truncate min-w-0">{titleOf(continuePath)}</span>
+                <ArrowRight className="w-4 h-4 text-accent flex-shrink-0 transition-transform duration-150 group-hover:translate-x-[3px]" />
+              </Link>
+            )}
+          </div>
         )}
 
-        <div className="flex flex-col gap-9">
-          {grouped.map(({ group, paths: members }) => (
-            <section key={group} id={`group-${group}`} className="scroll-mt-20">
-              <h2 className="text-sm font-semibold tracking-[-0.01em] mb-2.5 px-1">{t(GROUP_LABEL[group])}</h2>
-              <ul
-                className="rounded-[12px] overflow-hidden"
+        <div className="grid grid-cols-3 max-[900px]:grid-cols-2 max-[600px]:grid-cols-1 gap-4">
+          {groupPaths(paths).map(({ group, paths: members }) => {
+            const progress = data?.groups?.[group];
+            return (
+              <section
+                key={group}
+                className="rounded-[12px] px-5 pt-4 pb-3 min-w-0"
                 style={{ border: '1px solid var(--line)', background: 'var(--bg-elev)' }}
               >
-                {members.map((path, idx) => {
-                  const pct = percent(path);
-                  const done = path.total > 0 && path.solved === path.total;
-                  return (
-                    <li key={path.id} style={idx > 0 ? { borderTop: '1px solid var(--line)' } : undefined}>
-                      <Link
-                        href={`/paths/${path.id}`}
-                        className="grid grid-cols-[minmax(0,1fr)_140px_auto] max-[640px]:grid-cols-[minmax(0,1fr)_auto] items-center gap-5 max-[640px]:gap-3 px-5 max-[640px]:px-4 py-3.5 group transition-colors duration-150 hover:bg-[color-mix(in_oklab,var(--accent)_4%,var(--bg-elev))]"
-                      >
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            {done && <Check className="w-4 h-4 text-easy flex-shrink-0" />}
-                            <span className="font-medium truncate">{titleOf(path)}</span>
-                          </div>
-                          <p className="text-[13px] text-text-3 truncate mt-0.5">
-                            {locale === 'zh' ? path.descriptionZh : path.descriptionEn}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2.5 max-[640px]:hidden">
-                          <ProgressBar pct={pct} />
-                        </div>
-                        <div className="flex items-center gap-2 mono text-xs text-text-2 tabular-nums">
-                          <span className="min-w-[5ch] text-right">{path.solved}/{path.total}</span>
-                          <ArrowRight className="w-4 h-4 text-text-3 transition-[color,transform] duration-150 group-hover:text-accent group-hover:translate-x-[3px]" />
-                        </div>
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-          ))}
+                <div className="flex items-baseline justify-between gap-2 mb-2">
+                  <h2 className="text-[15px] font-semibold leading-snug">{t(GROUP_LABEL[group])}</h2>
+                  {progress && (
+                    <span className="mono text-xs text-text-3 tabular-nums flex-shrink-0">
+                      {progress.solved}/{progress.total}
+                    </span>
+                  )}
+                </div>
+                {progress && <ProgressBar progress={progress} />}
+                <ul className="mt-3 -mx-2">
+                  {members.map((path) => {
+                    const done = path.total > 0 && path.solved === path.total;
+                    return (
+                      <li key={path.id}>
+                        <Link
+                          href={`/paths/${path.id}`}
+                          title={locale === 'zh' ? path.descriptionZh : path.descriptionEn}
+                          className="flex items-center gap-2 rounded-[8px] px-2 py-1.5 text-[13px] text-text-2 transition-colors duration-150 hover:text-accent hover:bg-[color-mix(in_oklab,var(--accent)_5%,transparent)]"
+                        >
+                          <span className="flex-1 min-w-0 leading-snug">{titleOf(path)}</span>
+                          {done && <Check className="w-3.5 h-3.5 text-easy flex-shrink-0" />}
+                          <span className="mono text-[11px] text-text-3 tabular-nums flex-shrink-0">
+                            {path.solved}/{path.total}
+                          </span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            );
+          })}
         </div>
       </main>
       <Footer />
