@@ -437,5 +437,14 @@
     "How do you make sure each image is loaded once while several pipelines and workers use it?": "Where does the load call sit relative to the pipeline loop, and which unit of work does each worker receive: an image, or an image-pipeline pair?",
     "How do you find the prefixes that pipelines share, and why does the key order inside a step not matter?": "Build a tree per image: each node is one step, children are the next steps. How do you turn a step dict into a key so {'radius': 1, 'type': 'blur'} and {'type': 'blur', 'radius': 1} match?",
     "Why does a depth-first walk of the prefix tree keep fewer results alive than computing it level by level?": "Level by level, every node on a level holds its result until the next level is done. Depth first, which results are alive at once? Compare that with the longest pipeline's length."
+  },
+  "tool_use_agent": {
+    "Why must the assistant turn holding the tool_use blocks go back before the tool_result turn, and what does the model see if it is missing?": "Picture the model on its second call: it sees a tool_result answering some id. Where in the transcript would it find the request with that id, and what if that turn was never sent?",
+    "Why must tool_use_id copy the block's id rather than the tool's name?": "One response asks for the same tool twice with different inputs. If both results carry the tool's name, how can the model tell which price belongs to which request?",
+    "How do you find all four bugs in the starter, and which test exposes each one?": "List what the starter does on a response with two tool_use blocks, and on a second response that asks for another tool. Which test input shows each bug with one assertion?",
+    "Why hand a tool failure back to the model as an error result instead of raising, and when should the loop stop instead?": "Some failures are the model's to handle: a wrong date it can correct or report. Which failures should end the loop instead, such as a broken client, and how do you tell them apart?",
+    "How do you choose max_calls, and what should the user see when the agent gives up?": "Each model call costs latency and tokens. What is the most rounds a good answer needs here, and what should the caller do with 'gave up after N calls'?",
+    "What does a batch tool save, and what is lost when one lookup in the batch fails?": "A batch saves one model call per extra lookup. If the third lookup of five fails, what does the model learn from the error, and what would partial results need in the schema?",
+    "When is it safe to run one turn's tool calls in parallel, and why must the results still go back in block order?": "Two calls in one turn read prices; two others write files. What could go wrong running the writes at once, and how does the model match results if they come back in finish order?"
   }
 }

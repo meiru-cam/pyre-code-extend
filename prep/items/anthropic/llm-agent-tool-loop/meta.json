@@ -1,0 +1,21 @@
+{
+  "title": "Building an Agent Loop with Tool Use",
+  "summary": "Fix a buggy single-tool-call agent built on a Messages-API-style client, generalize it into a loop that answers questions needing several dependent lookups with a turn limit and error handling, then cut the number of model calls a fixed question set needs by parallelizing and batching tool calls.",
+  "round": "coding",
+  "kind": "Coding · LLM agents, tool use",
+  "difficulty": "Medium",
+  "frequency": "high",
+  "format": "3 parts / 55 min",
+  "topics": [
+    "tool-use",
+    "agent-loop",
+    "llm-api",
+    "debugging",
+    "prompt-engineering"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/coding/llm-agent-tool-loop",
+  "rubric": [],
+  "exercises": [
+    "tool_use_agent"
+  ]
+}

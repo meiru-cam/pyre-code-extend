@@ -590,5 +590,13 @@
       "image_pipeline"
     ],
     "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/llm-agent-tool-loop",
+    "exercises": [
+      "tool_use_agent"
+    ],
+    "round": "coding"
   }
 ]

@@ -1547,6 +1547,15 @@
       }
     ]
   },
+  "tool_use_agent": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "# Adapted from Schuture/Anthropic-Interview-Notes (code under the MIT License).\nfrom concurrent.futures import ThreadPoolExecutor\n\n\nclass ToolAgent:\n    def __init__(self, client, functions):\n        self.client = client  # client.create(system=..., messages=..., tools=...) -> response\n        self.functions = functions  # tool name -> Python function taking the tool input as keywords\n\n    def run_tool(self, name, tool_input):\n        \"\"\"(text, is_error); a failing tool becomes an error result instead of an exception.\"\"\"\n        if name not in self.functions:\n            return f\"unknown tool: {name}\", True\n        try:\n            return str(self.functions[name](**tool_input)), False\n        except Exception as e:\n            return str(e), True\n\n    def run(self, question, tools, system, max_calls=8):\n        messages = [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": question}]}]\n        for calls in range(1, max_calls + 1):\n            response = self.client.create(system=system, messages=messages, tools=tools)\n            if response.stop_reason == \"end_turn\":\n                return response.content[0][\"text\"]\n            if calls == max_calls:\n                break  # no call left to read the results, so the tools are not run\n            messages.append({\"role\": \"assistant\", \"content\": response.content})  # the model's own turn first\n            messages.append({\"role\": \"user\", \"content\": self._results(\n                [b for b in response.content if b[\"type\"] == \"tool_use\"])})\n        return f\"gave up after {max_calls} calls\"\n\n    def _results(self, uses):\n        \"\"\"One tool_result per tool_use, in block order; the calls of one turn run at once.\"\"\"\n        with ThreadPoolExecutor(max_workers=max(1, len(uses))) as pool:\n            outcomes = list(pool.map(lambda b: self.run_tool(b[\"name\"], b[\"input\"]), uses))\n        return [{\"type\": \"tool_result\", \"tool_use_id\": b[\"id\"], \"content\": text, \"is_error\": is_error}\n                for b, (text, is_error) in zip(uses, outcomes)]\n\n    @staticmethod\n    def batch_tool(tool, function):\n        \"\"\"A tool spec and function that make many calls of `tool` in one request.\"\"\"\n        spec = {\n            \"name\": tool[\"name\"] + \"_batch\",\n            \"description\": f\"Make several {tool['name']} calls at once. \" + tool[\"description\"],\n            \"input_schema\": {\n                \"type\": \"object\",\n                \"properties\": {\"calls\": {\"type\": \"array\", \"items\": tool[\"input_schema\"]}},\n                \"required\": [\"calls\"],\n            },\n        }\n\n        def run_batch(calls):\n            # in order; the first failure propagates and nothing is returned for the rest\n            return [function(**call) for call in calls]\n\n        return spec, run_batch",
+        "role": "solution"
+      }
+    ]
+  },
   "topk_sampling": {
     "cells": [
       {
