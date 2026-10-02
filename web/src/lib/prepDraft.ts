@@ -45,21 +45,3 @@ export function savePrepDraft(itemId: string, draft: PrepDraft) {
     // A draft is best-effort when storage is unavailable or full.
   }
 }
-
-/** Plain text for pasting into an outside model to get feedback against the rubric. */
-export function formatPrepForFeedback(
-  item: { title: string; prompt: string; rubric: string[] },
-  answer: string,
-): string {
-  return [
-    `Interview question: ${item.title}`,
-    '',
-    item.prompt,
-    '',
-    'Give feedback on my answer against these points, one by one, and say what an interviewer would push on next:',
-    ...item.rubric.map((point) => `- ${point}`),
-    '',
-    'My answer:',
-    answer.trim(),
-  ].join('\n');
-}

@@ -3,7 +3,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
-  formatPrepForFeedback,
   hasPrepDraftContent,
   loadPrepDraft,
   savePrepDraft,
@@ -32,17 +31,5 @@ describe('prep local drafts', () => {
     expect(hasPrepDraftContent({ answer: ' \n', covered: ['Architecture'] })).toBe(false);
     expect(hasPrepDraftContent({ answer: 'Queue per tenant', covered: [] })).toBe(true);
     expect(hasPrepDraftContent(null)).toBe(false);
-  });
-});
-
-describe('feedback text', () => {
-  it('lists the question, every rubric point and the trimmed answer', () => {
-    const text = formatPrepForFeedback(
-      { title: 'Webhook delivery', prompt: 'Design it.', rubric: ['Architecture', 'Deep dives'] },
-      '  At-least-once with idempotency keys.\n',
-    );
-    expect(text).toContain('Interview question: Webhook delivery');
-    expect(text).toContain('- Architecture\n- Deep dives');
-    expect(text.endsWith('My answer:\nAt-least-once with idempotency keys.')).toBe(true);
   });
 });
