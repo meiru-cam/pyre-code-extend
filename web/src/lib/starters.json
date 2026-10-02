@@ -218,5 +218,6 @@
   "timesheet": "class Timesheet:\n\n    def add_worker(self, worker_id, position, hourly_rate):\n        pass\n\n    def clock_in(self, worker_id, timestamp):\n        pass\n\n    def clock_out(self, worker_id, timestamp):\n        pass",
   "tool_scheduler": "class CycleError(Exception):\n    pass\n\n\nclass ToolScheduler:\n\n    def run_one(self, calls, capacity):\n        pass",
   "change_directory": "def change_directory(cwd, destination):\n    pass",
-  "job_queue": "class UnknownTaskError(Exception):\n    pass\n\n\nclass InvalidReservationError(Exception):\n    pass\n\n\nclass JobQueue:\n    def __init__(self):\n        pass\n\n    def submit(self, task_id, payload):\n        pass\n\n    def reserve(self, worker_id):\n        pass\n\n    def complete(self, task_id, token):\n        pass\n\n    def fail(self, task_id, token):\n        pass"
+  "job_queue": "class UnknownTaskError(Exception):\n    pass\n\n\nclass InvalidReservationError(Exception):\n    pass\n\n\nclass JobQueue:\n    def __init__(self):\n        pass\n\n    def submit(self, task_id, payload):\n        pass\n\n    def reserve(self, worker_id):\n        pass\n\n    def complete(self, task_id, token):\n        pass\n\n    def fail(self, task_id, token):\n        pass",
+  "jump_grid": "class JumpGrid:\n    def __init__(self, board):\n        pass\n\n    def max_score(self, p, k):\n        pass"
 }

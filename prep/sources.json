@@ -426,5 +426,13 @@
       "job_queue"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/grid-path-limited-jumps",
+    "exercises": [
+      "jump_grid"
+    ],
+    "round": "coding"
   }
 ]

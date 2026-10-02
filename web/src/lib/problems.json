@@ -26534,6 +26534,175 @@
           "hint": "Two processes share the queue. What must happen atomically when one reserves a task, and where would the tokens and deadlines live?"
         }
       ]
+    },
+    {
+      "id": "jump_grid",
+      "title": "Grid Path with Limited Jumps",
+      "titleZh": "Grid Path with Limited Jumps",
+      "difficulty": "Hard",
+      "functionName": "JumpGrid",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Build `JumpGrid`, which finds the best-scoring path down a grid where a few moves may skip a row: its score, the path itself, how many best paths there are, and the score with bonuses.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior and adds one method, so one `JumpGrid` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- `JumpGrid(board)` takes `N` rows of `M` integers, with `1 <= N, M <= 60` and every value between `-10**9` and `10**9`. Never change `board`.\n- A path starts at `(0, p)` and ends the first time it reaches row `N - 1`. With `N = 1` it is just the start cell.\n- From `(i, j)`, a step goes to `(i + 1, j - 1)`, `(i + 1, j)` or `(i + 1, j + 1)`, if that column exists. A jump goes to `(i + 2, j)`, if that row exists. At most `k` jumps are allowed in one path, with `0 <= k <= N`.\n- A path's score is the sum of the values of the cells it visits, start and end included.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** it is a grid dynamic program with one extra dimension, the jumps left. Each later part adds one requirement: rebuilding a path, counting optimal paths, then a score that depends on the cells visited just before.\n\n**Where it is used:** beam and lattice searches in decoding, sequence alignment with limited gaps, seam carving for image resizing, and any planner that must count or rank equally good plans.\n\nAdapted from the grid path question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, as methods of one class that holds the board. The size limit is 60 instead of 200, so a plain Python table is fast enough.",
+      "descriptionZh": "Build `JumpGrid`, which finds the best-scoring path down a grid where a few moves may skip a row: its score, the path itself, how many best paths there are, and the score with bonuses.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior and adds one method, so one `JumpGrid` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- `JumpGrid(board)` takes `N` rows of `M` integers, with `1 <= N, M <= 60` and every value between `-10**9` and `10**9`. Never change `board`.\n- A path starts at `(0, p)` and ends the first time it reaches row `N - 1`. With `N = 1` it is just the start cell.\n- From `(i, j)`, a step goes to `(i + 1, j - 1)`, `(i + 1, j)` or `(i + 1, j + 1)`, if that column exists. A jump goes to `(i + 2, j)`, if that row exists. At most `k` jumps are allowed in one path, with `0 <= k <= N`.\n- A path's score is the sum of the values of the cells it visits, start and end included.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** it is a grid dynamic program with one extra dimension, the jumps left. Each later part adds one requirement: rebuilding a path, counting optimal paths, then a score that depends on the cells visited just before.\n\n**Where it is used:** beam and lattice searches in decoding, sequence alignment with limited gaps, seam carving for image resizing, and any planner that must count or rank equally good plans.\n\nAdapted from the grid path question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, as methods of one class that holds the board. The size limit is 60 instead of 200, so a plain Python table is fast enough.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Part 1: the worked example",
+          "code": "\ng = {fn}([[-2, 4, 5], [-5, -5, -5], [-5, 4, 0], [-1, -4, 3]])\nassert g.max_score(1, 1) == 11\nassert g.max_score(1, 0) == 6\n",
+          "behavior": "contract.signature",
+          "part": 1
+        },
+        {
+          "name": "Part 1: edges of the grid and the budget",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "One row means the path is the start cell; one column allows only straight steps; a jump from the second-to-last row is illegal; k = 0 means steps only; k larger than useful changes nothing; sums of values up to 10**9 stay exact; the board is never changed.",
+          "hiddenCode": "\nimport random, time\n\ndef all_paths(board, p, k):\n    n, m = len(board), len(board[0])\n    out = []\n    def walk(i, j, left, cells):\n        if i == n - 1:\n            out.append(list(cells)); return\n        for c in (j - 1, j, j + 1):\n            if 0 <= c < m and i + 1 < n:\n                walk(i + 1, c, left, cells + [(i + 1, c)])\n        if left and i + 2 < n:\n            walk(i + 2, j, left - 1, cells + [(i + 2, j)])\n    walk(0, p, k, [(0, p)])\n    return out\n\ndef scored(board, path, x=0, y=0):\n    v = [board[i][j] for i, j in path]\n    s = sum(v)\n    s += sum(x for t in range(1, len(v)) if v[t - 1] == v[t])\n    s += sum(y for t in range(2, len(v)) if v[t - 2] < v[t - 1] < v[t])\n    return s\n\ndef brute(board, p, k, x=0, y=0):\n    paths = all_paths(board, p, k)\n    base = [scored(board, q) for q in paths]\n    top = max(base)\n    best = [q for q, s in zip(paths, base) if s == top]\n    return top, min(best), len(best), max(scored(board, q, x, y) for q in paths)\n\ndef random_board(rng, n, m, low=-3, high=3):\n    return [[rng.randint(low, high) for _ in range(m)] for _ in range(n)]\n\ndef zero_paths(n, m, p, k):\n    # How many paths an all-zero board has: every one of them scores 0.\n    memo = {}\n    def go(i, j, left):\n        if i == n - 1:\n            return 1\n        key = (i, j, left)\n        if key not in memo:\n            total = sum(go(i + 1, c, left) for c in (j - 1, j, j + 1) if 0 <= c < m)\n            if left and i + 2 < n:\n                total += go(i + 2, j, left - 1)\n            memo[key] = total\n        return memo[key]\n    return go(0, p, k)\n\ndef big_board(seed, n=60, m=60):\n    rng = random.Random(seed)\n    return [[rng.randint(-10**9, 10**9) for _ in range(m)] for _ in range(n)]\n\nassert {fn}([[7, -2]]).max_score(1, 3) == -2\nassert {fn}([[1], [-5], [2], [-9], [4]]).max_score(0, 0) == -7\nassert {fn}([[1], [-5], [2], [-9], [4]]).max_score(0, 2) == 7\nassert {fn}([[1], [-5], [2], [-9], [4]]).max_score(0, 1) == 2, \"step to the 2, then jump over the -9\"\nassert {fn}([[0, 0], [9, 9]]).max_score(0, 5) == 9, \"a jump past the last row is not allowed\"\nassert {fn}([[0], [-1], [0]]).max_score(0, 1) == 0 and {fn}([[0], [-1], [0]]).max_score(0, 0) == -1\nboard = [[10**9] * 3 for _ in range(5)]\nassert {fn}(board).max_score(2, 0) == 5 * 10**9\nboard = [[-2, 4, 5], [-5, -5, -5], [-5, 4, 0], [-1, -4, 3]]\nbefore = [row[:] for row in board]\n{fn}(board).max_score(0, 2)\nassert board == before, \"the board must not change\"\n",
+          "part": 1
+        },
+        {
+          "name": "Part 1: random small boards",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "On random small boards, max_score differed from trying every path.",
+          "hiddenCode": "\nimport random, time\n\ndef all_paths(board, p, k):\n    n, m = len(board), len(board[0])\n    out = []\n    def walk(i, j, left, cells):\n        if i == n - 1:\n            out.append(list(cells)); return\n        for c in (j - 1, j, j + 1):\n            if 0 <= c < m and i + 1 < n:\n                walk(i + 1, c, left, cells + [(i + 1, c)])\n        if left and i + 2 < n:\n            walk(i + 2, j, left - 1, cells + [(i + 2, j)])\n    walk(0, p, k, [(0, p)])\n    return out\n\ndef scored(board, path, x=0, y=0):\n    v = [board[i][j] for i, j in path]\n    s = sum(v)\n    s += sum(x for t in range(1, len(v)) if v[t - 1] == v[t])\n    s += sum(y for t in range(2, len(v)) if v[t - 2] < v[t - 1] < v[t])\n    return s\n\ndef brute(board, p, k, x=0, y=0):\n    paths = all_paths(board, p, k)\n    base = [scored(board, q) for q in paths]\n    top = max(base)\n    best = [q for q, s in zip(paths, base) if s == top]\n    return top, min(best), len(best), max(scored(board, q, x, y) for q in paths)\n\ndef random_board(rng, n, m, low=-3, high=3):\n    return [[rng.randint(low, high) for _ in range(m)] for _ in range(n)]\n\ndef zero_paths(n, m, p, k):\n    # How many paths an all-zero board has: every one of them scores 0.\n    memo = {}\n    def go(i, j, left):\n        if i == n - 1:\n            return 1\n        key = (i, j, left)\n        if key not in memo:\n            total = sum(go(i + 1, c, left) for c in (j - 1, j, j + 1) if 0 <= c < m)\n            if left and i + 2 < n:\n                total += go(i + 2, j, left - 1)\n            memo[key] = total\n        return memo[key]\n    return go(0, p, k)\n\ndef big_board(seed, n=60, m=60):\n    rng = random.Random(seed)\n    return [[rng.randint(-10**9, 10**9) for _ in range(m)] for _ in range(n)]\n\nrng = random.Random(31)\nfor trial in range(400):\n    n, m = rng.randint(1, 6), rng.randint(1, 4)\n    board = random_board(rng, n, m)\n    p, k = rng.randrange(m), rng.randint(0, 3)\n    assert {fn}(board).max_score(p, k) == brute(board, p, k)[0], (board, p, k)\n",
+          "part": 1
+        },
+        {
+          "name": "Part 1: a 60 by 60 board",
+          "visibility": "unshown",
+          "behavior": "performance.complexity",
+          "failureMessage": "A 60 by 60 board with k = 60 took too long: the number of paths is astronomically large, so reuse the best score from each (row, column, jumps left) instead of trying paths.",
+          "hiddenCode": "\nimport random, time\n\ndef all_paths(board, p, k):\n    n, m = len(board), len(board[0])\n    out = []\n    def walk(i, j, left, cells):\n        if i == n - 1:\n            out.append(list(cells)); return\n        for c in (j - 1, j, j + 1):\n            if 0 <= c < m and i + 1 < n:\n                walk(i + 1, c, left, cells + [(i + 1, c)])\n        if left and i + 2 < n:\n            walk(i + 2, j, left - 1, cells + [(i + 2, j)])\n    walk(0, p, k, [(0, p)])\n    return out\n\ndef scored(board, path, x=0, y=0):\n    v = [board[i][j] for i, j in path]\n    s = sum(v)\n    s += sum(x for t in range(1, len(v)) if v[t - 1] == v[t])\n    s += sum(y for t in range(2, len(v)) if v[t - 2] < v[t - 1] < v[t])\n    return s\n\ndef brute(board, p, k, x=0, y=0):\n    paths = all_paths(board, p, k)\n    base = [scored(board, q) for q in paths]\n    top = max(base)\n    best = [q for q, s in zip(paths, base) if s == top]\n    return top, min(best), len(best), max(scored(board, q, x, y) for q in paths)\n\ndef random_board(rng, n, m, low=-3, high=3):\n    return [[rng.randint(low, high) for _ in range(m)] for _ in range(n)]\n\ndef zero_paths(n, m, p, k):\n    # How many paths an all-zero board has: every one of them scores 0.\n    memo = {}\n    def go(i, j, left):\n        if i == n - 1:\n            return 1\n        key = (i, j, left)\n        if key not in memo:\n            total = sum(go(i + 1, c, left) for c in (j - 1, j, j + 1) if 0 <= c < m)\n            if left and i + 2 < n:\n                total += go(i + 2, j, left - 1)\n            memo[key] = total\n        return memo[key]\n    return go(0, p, k)\n\ndef big_board(seed, n=60, m=60):\n    rng = random.Random(seed)\n    return [[rng.randint(-10**9, 10**9) for _ in range(m)] for _ in range(n)]\n\nboard = big_board(1)\ng = {fn}(board)\nstart = time.perf_counter()\nfirst = g.max_score(7, 60)\nelapsed = time.perf_counter() - start\nassert first >= g.max_score(7, 0) and g.max_score(7, 60) == first\nassert elapsed < 4.0, f\"{elapsed:.2f}s for one 60 x 60 board\"\n",
+          "part": 1
+        },
+        {
+          "name": "Part 2: the worked example",
+          "code": "\ng = {fn}([[-4, -2, 5], [5, 4, -5], [4, 4, 1], [-5, -2, -5]])\nassert g.max_score(1, 1) == 5\nassert g.optimal_path(1, 1) == [(0, 1), (1, 0), (2, 0), (3, 1)]\nassert g.optimal_path(1, 0) == [(0, 1), (1, 0), (2, 0), (3, 1)]\n",
+          "behavior": "metrics.ties",
+          "part": 2
+        },
+        {
+          "name": "Part 2: random small boards",
+          "visibility": "unshown",
+          "behavior": "metrics.ties",
+          "failureMessage": "On random small boards with many ties, optimal_path must return the smallest cell list, as a list of (row, column) tuples, among the paths with the best score.",
+          "hiddenCode": "\nimport random, time\n\ndef all_paths(board, p, k):\n    n, m = len(board), len(board[0])\n    out = []\n    def walk(i, j, left, cells):\n        if i == n - 1:\n            out.append(list(cells)); return\n        for c in (j - 1, j, j + 1):\n            if 0 <= c < m and i + 1 < n:\n                walk(i + 1, c, left, cells + [(i + 1, c)])\n        if left and i + 2 < n:\n            walk(i + 2, j, left - 1, cells + [(i + 2, j)])\n    walk(0, p, k, [(0, p)])\n    return out\n\ndef scored(board, path, x=0, y=0):\n    v = [board[i][j] for i, j in path]\n    s = sum(v)\n    s += sum(x for t in range(1, len(v)) if v[t - 1] == v[t])\n    s += sum(y for t in range(2, len(v)) if v[t - 2] < v[t - 1] < v[t])\n    return s\n\ndef brute(board, p, k, x=0, y=0):\n    paths = all_paths(board, p, k)\n    base = [scored(board, q) for q in paths]\n    top = max(base)\n    best = [q for q, s in zip(paths, base) if s == top]\n    return top, min(best), len(best), max(scored(board, q, x, y) for q in paths)\n\ndef random_board(rng, n, m, low=-3, high=3):\n    return [[rng.randint(low, high) for _ in range(m)] for _ in range(n)]\n\ndef zero_paths(n, m, p, k):\n    # How many paths an all-zero board has: every one of them scores 0.\n    memo = {}\n    def go(i, j, left):\n        if i == n - 1:\n            return 1\n        key = (i, j, left)\n        if key not in memo:\n            total = sum(go(i + 1, c, left) for c in (j - 1, j, j + 1) if 0 <= c < m)\n            if left and i + 2 < n:\n                total += go(i + 2, j, left - 1)\n            memo[key] = total\n        return memo[key]\n    return go(0, p, k)\n\ndef big_board(seed, n=60, m=60):\n    rng = random.Random(seed)\n    return [[rng.randint(-10**9, 10**9) for _ in range(m)] for _ in range(n)]\n\nrng = random.Random(32)\nfor trial in range(400):\n    n, m = rng.randint(1, 6), rng.randint(1, 4)\n    board = random_board(rng, n, m, -1, 1)\n    p, k = rng.randrange(m), rng.randint(0, 3)\n    got = {fn}(board).optimal_path(p, k)\n    assert got == brute(board, p, k)[1], (board, p, k, got)\n    assert all(type(cell) is tuple for cell in got)\nboard = big_board(2)\nstart = time.perf_counter()\npath = {fn}(board).optimal_path(3, 60)\nelapsed = time.perf_counter() - start\nassert path[0] == (0, 3) and path[-1][0] == 59 and sum(board[i][j] for i, j in path) == {fn}(board).max_score(3, 60)\nassert elapsed < 4.0, f\"{elapsed:.2f}s for one 60 x 60 path\"\n",
+          "part": 2
+        },
+        {
+          "name": "Part 3: the worked example",
+          "code": "\ng = {fn}([[-3, -1], [0, -2], [-1, 4], [0, 0]])\nassert g.max_score(1, 2) == 3\nassert g.count_optimal_paths(1, 2) == 4\nassert g.count_optimal_paths(1, 0) == 2\n",
+          "behavior": "metrics.ties",
+          "part": 3
+        },
+        {
+          "name": "Part 3: counts, the modulus and size",
+          "visibility": "unshown",
+          "behavior": "metrics.ties",
+          "failureMessage": "Counts must match every path that reaches the best score on random boards, a jump and the two steps it skips count as different paths, the count is taken modulo 10**9 + 7, and a 60 by 60 board must count in a few seconds.",
+          "hiddenCode": "\nimport random, time\n\ndef all_paths(board, p, k):\n    n, m = len(board), len(board[0])\n    out = []\n    def walk(i, j, left, cells):\n        if i == n - 1:\n            out.append(list(cells)); return\n        for c in (j - 1, j, j + 1):\n            if 0 <= c < m and i + 1 < n:\n                walk(i + 1, c, left, cells + [(i + 1, c)])\n        if left and i + 2 < n:\n            walk(i + 2, j, left - 1, cells + [(i + 2, j)])\n    walk(0, p, k, [(0, p)])\n    return out\n\ndef scored(board, path, x=0, y=0):\n    v = [board[i][j] for i, j in path]\n    s = sum(v)\n    s += sum(x for t in range(1, len(v)) if v[t - 1] == v[t])\n    s += sum(y for t in range(2, len(v)) if v[t - 2] < v[t - 1] < v[t])\n    return s\n\ndef brute(board, p, k, x=0, y=0):\n    paths = all_paths(board, p, k)\n    base = [scored(board, q) for q in paths]\n    top = max(base)\n    best = [q for q, s in zip(paths, base) if s == top]\n    return top, min(best), len(best), max(scored(board, q, x, y) for q in paths)\n\ndef random_board(rng, n, m, low=-3, high=3):\n    return [[rng.randint(low, high) for _ in range(m)] for _ in range(n)]\n\ndef zero_paths(n, m, p, k):\n    # How many paths an all-zero board has: every one of them scores 0.\n    memo = {}\n    def go(i, j, left):\n        if i == n - 1:\n            return 1\n        key = (i, j, left)\n        if key not in memo:\n            total = sum(go(i + 1, c, left) for c in (j - 1, j, j + 1) if 0 <= c < m)\n            if left and i + 2 < n:\n                total += go(i + 2, j, left - 1)\n            memo[key] = total\n        return memo[key]\n    return go(0, p, k)\n\ndef big_board(seed, n=60, m=60):\n    rng = random.Random(seed)\n    return [[rng.randint(-10**9, 10**9) for _ in range(m)] for _ in range(n)]\n\nrng = random.Random(33)\nfor trial in range(400):\n    n, m = rng.randint(1, 6), rng.randint(1, 4)\n    board = random_board(rng, n, m, -1, 1)\n    p, k = rng.randrange(m), rng.randint(0, 3)\n    assert {fn}(board).count_optimal_paths(p, k) == brute(board, p, k)[2], (board, p, k)\nassert {fn}([[0], [0], [0]]).count_optimal_paths(0, 1) == 2\nfor n, m, k in [(30, 4, 5), (60, 60, 60)]:\n    start = time.perf_counter()\n    got = {fn}([[0] * m for _ in range(n)]).count_optimal_paths(0, k)\n    elapsed = time.perf_counter() - start\n    assert got == zero_paths(n, m, 0, k) % (10**9 + 7), (n, m, k, got)\nassert elapsed < 4.0, f\"{elapsed:.2f}s to count a 60 x 60 board\"\n",
+          "part": 3
+        },
+        {
+          "name": "Part 4: the worked example",
+          "code": "\ng = {fn}([[-2, -3, 6], [-2, -4, 4], [-1, 3, 2], [0, 6, 2]])\nassert g.max_score(1, 1) == 10\nassert g.max_score_with_bonuses(1, 1, 2, 5) == 14\nassert g.max_score_with_bonuses(1, 1, 0, 0) == 10\n",
+          "behavior": "contract.signature",
+          "part": 4
+        },
+        {
+          "name": "Part 4: bonuses across jumps and ties",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "Bonuses look at the values in visiting order, so a jump's two ends count as neighbours; equal neighbours add x; three strictly rising values in a row add y, with no y for the first two cells; the result must match trying every path, and a 60 by 60 board must finish in a few seconds.",
+          "hiddenCode": "\nimport random, time\n\ndef all_paths(board, p, k):\n    n, m = len(board), len(board[0])\n    out = []\n    def walk(i, j, left, cells):\n        if i == n - 1:\n            out.append(list(cells)); return\n        for c in (j - 1, j, j + 1):\n            if 0 <= c < m and i + 1 < n:\n                walk(i + 1, c, left, cells + [(i + 1, c)])\n        if left and i + 2 < n:\n            walk(i + 2, j, left - 1, cells + [(i + 2, j)])\n    walk(0, p, k, [(0, p)])\n    return out\n\ndef scored(board, path, x=0, y=0):\n    v = [board[i][j] for i, j in path]\n    s = sum(v)\n    s += sum(x for t in range(1, len(v)) if v[t - 1] == v[t])\n    s += sum(y for t in range(2, len(v)) if v[t - 2] < v[t - 1] < v[t])\n    return s\n\ndef brute(board, p, k, x=0, y=0):\n    paths = all_paths(board, p, k)\n    base = [scored(board, q) for q in paths]\n    top = max(base)\n    best = [q for q, s in zip(paths, base) if s == top]\n    return top, min(best), len(best), max(scored(board, q, x, y) for q in paths)\n\ndef random_board(rng, n, m, low=-3, high=3):\n    return [[rng.randint(low, high) for _ in range(m)] for _ in range(n)]\n\ndef zero_paths(n, m, p, k):\n    # How many paths an all-zero board has: every one of them scores 0.\n    memo = {}\n    def go(i, j, left):\n        if i == n - 1:\n            return 1\n        key = (i, j, left)\n        if key not in memo:\n            total = sum(go(i + 1, c, left) for c in (j - 1, j, j + 1) if 0 <= c < m)\n            if left and i + 2 < n:\n                total += go(i + 2, j, left - 1)\n            memo[key] = total\n        return memo[key]\n    return go(0, p, k)\n\ndef big_board(seed, n=60, m=60):\n    rng = random.Random(seed)\n    return [[rng.randint(-10**9, 10**9) for _ in range(m)] for _ in range(n)]\n\nassert {fn}([[1], [9], [1]]).max_score_with_bonuses(0, 1, 10, 0) == 12, \"the jump makes 1 and 1 neighbours\"\nassert {fn}([[1], [2], [3]]).max_score_with_bonuses(0, 0, 0, 7) == 13\nassert {fn}([[1], [2], [2]]).max_score_with_bonuses(0, 0, 0, 7) == 5 + 0, \"y needs strict rises\"\nassert {fn}([[1], [2], [2]]).max_score_with_bonuses(0, 0, 4, 7) == 9\nrng = random.Random(34)\nfor trial in range(400):\n    n, m = rng.randint(1, 6), rng.randint(1, 4)\n    board = random_board(rng, n, m)\n    p, k = rng.randrange(m), rng.randint(0, 3)\n    x, y = rng.randint(0, 5), rng.randint(0, 5)\n    assert {fn}(board).max_score_with_bonuses(p, k, x, y) == brute(board, p, k, x, y)[3], (board, p, k, x, y)\nboard = big_board(4)\nstart = time.perf_counter()\ngot = {fn}(board).max_score_with_bonuses(9, 60, 10**9, 10**9)\nelapsed = time.perf_counter() - start\nassert got >= {fn}(board).max_score(9, 60)\nassert elapsed < 4.0, f\"{elapsed:.2f}s with bonuses on a 60 x 60 board\"\n",
+          "part": 4
+        }
+      ],
+      "parts": [
+        {
+          "title": "Best score",
+          "descriptionEn": "**Signature:** `JumpGrid(board).max_score(p, k) -> int`\n\n- Return the largest score over all paths from `(0, p)` with at most `k` jumps. `0 <= p < M`.\n- A 60 by 60 board with `k = 60` must finish in a few seconds.\n\n**Example:** `board = [[-2, 4, 5], [-5, -5, -5], [-5, 4, 0], [-1, -4, 3]]` and `p = 1`:\n- `max_score(1, 1)` is `11`: the path jumps from `(0, 1)` over the row of `-5`s to `(2, 1)`, then steps to `(3, 2)`, for `4 + 4 + 3`\n- `max_score(1, 0)` is `6`: without a jump the path must take a `-5`"
+        },
+        {
+          "title": "One best path",
+          "descriptionEn": "Keep Part 1 and add a method.\n\n**Signature:** `optimal_path(p, k) -> list[tuple[int, int]]`\n\n- Return the cells of a path with the best score, from `(0, p)` to the last row, as `(row, column)` tuples.\n- When several paths tie, return the smallest list in Python's list order: compare the first cells, then the second ones, and so on.\n\n**Example:** `board = [[-4, -2, 5], [5, 4, -5], [4, 4, 1], [-5, -2, -5]]`, `p = 1`, `k = 1`:\n- the best score is `5`, reached by `[(0, 1), (1, 0), (2, 0), (3, 1)]` and `[(0, 1), (1, 0), (2, 1), (3, 1)]`\n- they first differ at the third cell, where `(2, 0) < (2, 1)`, so `optimal_path(1, 1)` is the first"
+        },
+        {
+          "title": "Counting best paths",
+          "descriptionEn": "Keep Parts 1–2 and add a method.\n\n**Signature:** `count_optimal_paths(p, k) -> int`\n\n- Return how many different paths reach the best score, modulo `10**9 + 7`. Two paths differ if their cell lists differ, so a jump over `(i + 1, j)` and the two steps through it are different paths.\n- A 60 by 60 board must finish in a few seconds, even when every path ties.\n\n**Example:** `board = [[-3, -1], [0, -2], [-1, 4], [0, 0]]` and `p = 1`:\n- with `k = 2` the best score is `3`. The path either steps through `(1, 0)` or jumps to `(2, 1)`, then ends at `(3, 0)` or `(3, 1)`, so `count_optimal_paths(1, 2)` is `4`\n- with `k = 0` only the stepping paths remain: `count_optimal_paths(1, 0)` is `2`"
+        },
+        {
+          "title": "Bonuses",
+          "descriptionEn": "Keep Parts 1–3 and add a method.\n\n**Signature:** `max_score_with_bonuses(p, k, x, y) -> int`, with `0 <= x, y <= 10**9`\n\n- Write `v0, v1, ..., vL` for the values in the order the path visits them. A jump's two ends are neighbours in this list, like a step's.\n- Add `x` for every `t >= 1` with `v(t-1) == vt`, and `y` for every `t >= 2` with `v(t-2) < v(t-1) < vt`.\n- Return the largest score plus bonuses over all paths. The best path here may differ from Part 1's.\n\n**Example:** `board = [[-2, -3, 6], [-2, -4, 4], [-1, 3, 2], [0, 6, 2]]`, `p = 1`, `k = 1`:\n- `max_score(1, 1)` is `10`, from the values `-3, 4, 3, 6`, which earn no bonus\n- `max_score_with_bonuses(1, 1, 2, 5)` is `14`: the values `-3, -2, 3, 6` sum to `4` and rise strictly twice, adding `2 * 5`"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Once a path reaches (i, j) with b jumps left, does the best way to finish depend on how it got there? How many such (i, j, b) situations are there, and in what order can you fill in their best finishes?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Let best[i][j][b] be the largest score from (i, j) to the last row with b jumps left, counting board[i][j]. On the last row it is board[i][j]. Above it, add board[i][j] to the largest best over the legal steps (same b) and the jump (b - 1, if b > 0 and row i + 2 exists). Fill rows from the bottom up and return best[0][p][k]: O(N * M * k) time."
+        }
+      ],
+      "modelConnections": [
+        "Beam search and lattice decoding keep the best score per state and step, and alignment models add a limited number of skip moves, the same table with a budget dimension.",
+        "Counting the best paths modulo a prime is how decoders and parsers report ambiguity without enumerating every derivation."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Reusing the best finish per (row, column, jumps left) turns an exponential search into O(N * M * k).",
+          "The same table answers the score, rebuilds a path greedily and drives the count.",
+          "Adding the previous value to the state handles bonuses without changing the overall method."
+        ],
+        "cons": [
+          "The table has N * M * (k + 1) entries, so memory grows with the jump budget.",
+          "Bonuses that depend on more history need a larger state for each extra cell remembered.",
+          "Exact integer scores are needed to find ties; with floating-point scores, ties and counts become unreliable."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why does the best way to finish from (i, j) depend only on i, j and the jumps left, and not on how the path got there?",
+          "hint": "Two paths reach (i, j) with the same jumps left. Can the cells they visited before change what is best from here on?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why must a jump be refused from the second-to-last row, and what would the path look like if it were allowed?",
+          "hint": "From the second-to-last row, where would a jump land? What does the rule 'if that row exists' leave you with?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "In what order must the table be filled so that every value it reads is already known, and what are the time and memory costs?",
+          "hint": "best[i][j][b] reads rows i + 1 and i + 2. Which direction must i run so those are already filled? Count the cells times the jump budgets."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How do you rebuild the lexicographically smallest best path from the table without storing every path?",
+          "hint": "Walk from the start and at each cell take the first move whose table value gives the best total. Why does checking moves in (row, column) order give the smallest list?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why can counting best paths reuse the score table, and why must you only add counts from moves that reach the best score?",
+          "hint": "A move that does not reach the best score can still have many paths behind it. Why must those be left out of the sum?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What extra state do the bonuses need, and how much larger does the table become?",
+          "hint": "A rise bonus needs the value two cells back. What do you add to the state, and how many values can it take?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How would you cut memory if only the score were needed, and why does that no longer work for rebuilding the path?",
+          "hint": "For the score alone, which rows of the table do you still need when filling row i? What does rebuilding the path need that you threw away?"
+        }
+      ]
     }
   ]
 }

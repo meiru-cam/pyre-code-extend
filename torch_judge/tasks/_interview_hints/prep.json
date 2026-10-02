@@ -365,5 +365,14 @@
     "How do you keep reclaiming cheap with many open leases when completed reservations stay in the heap?": "Completed reservations leave entries in a heap of deadlines. How can you tell a stale entry from a live lease when you pop it?",
     "Should max_attempts count reservations or retries after the first, and why does that choice matter to users?": "If max_attempts is 1, how many reservations does a task get? Does the first try count as a retry?",
     "What would you change to run this queue across several processes or machines?": "Two processes share the queue. What must happen atomically when one reserves a task, and where would the tokens and deadlines live?"
+  },
+  "jump_grid": {
+    "Why does the best way to finish from (i, j) depend only on i, j and the jumps left, and not on how the path got there?": "Two paths reach (i, j) with the same jumps left. Can the cells they visited before change what is best from here on?",
+    "Why must a jump be refused from the second-to-last row, and what would the path look like if it were allowed?": "From the second-to-last row, where would a jump land? What does the rule 'if that row exists' leave you with?",
+    "In what order must the table be filled so that every value it reads is already known, and what are the time and memory costs?": "best[i][j][b] reads rows i + 1 and i + 2. Which direction must i run so those are already filled? Count the cells times the jump budgets.",
+    "How do you rebuild the lexicographically smallest best path from the table without storing every path?": "Walk from the start and at each cell take the first move whose table value gives the best total. Why does checking moves in (row, column) order give the smallest list?",
+    "Why can counting best paths reuse the score table, and why must you only add counts from moves that reach the best score?": "A move that does not reach the best score can still have many paths behind it. Why must those be left out of the sum?",
+    "What extra state do the bonuses need, and how much larger does the table become?": "A rise bonus needs the value two cells back. What do you add to the state, and how many values can it take?",
+    "How would you cut memory if only the score were needed, and why does that no longer work for rebuilding the path?": "For the score alone, which rows of the table do you still need when filling row i? What does rebuilding the path need that you threw away?"
   }
 }
