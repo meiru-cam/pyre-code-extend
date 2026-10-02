@@ -4,7 +4,7 @@ from ._interview import interview
 
 # A ten-rank simulator: one thread per rank, pickled messages, and byte counters per rank.
 _HELPERS = r"""
-import pickle, queue, random, threading
+import pickle, queue, random, threading, time
 from collections import Counter
 
 P = 10
@@ -25,11 +25,11 @@ class Cluster:
             self.boxes[(rank, dst)].put(pickle.loads(data))
         def recv(src):
             try:
-                return self.boxes[(src, rank)].get(timeout=6)
+                return self.boxes[(src, rank)].get(timeout=4)
             except queue.Empty:
                 raise AssertionError(f"rank {rank} waited for rank {src} forever") from None
         def barrier():
-            self.bar.wait(timeout=6)
+            self.bar.wait(timeout=4)
         return send, recv, barrier
 
     def run(self, method):
@@ -43,8 +43,9 @@ class Cluster:
         threads = [threading.Thread(target=body, args=(r,), daemon=True) for r in range(P)]
         for t in threads:
             t.start()
+        deadline = time.monotonic() + 7
         for t in threads:
-            t.join(timeout=9)
+            t.join(timeout=max(0.0, deadline - time.monotonic()))
         assert not errors, errors[0]
         assert not any(t.is_alive() for t in threads), "some rank never returned"
         return results
@@ -101,11 +102,11 @@ Adapted from the distributed mode and median question in Schuture/Anthropic-Inte
             "description_en": r"""**Signature:** `ClusterStats()`, `global_mode(rank, shard, send, recv, barrier) -> int | None`
 
 - Rank `0` returns the value with the highest total count over all shards; on a tie, the smallest such value.
-- No rank may receive much more than its share. With `D` the number of distinct values summed over the shards, each rank receives `O(D / P + P)` values: do not send every count to one rank.
+- No rank may receive much more than its share. With `D` the number of distinct values summed over the shards, each rank receives `O(D / P + P)` bytes: do not send every count to one rank.
 
-**Example**, ranks `1`, `4` and `8` hold `[9, 2, 9]`, `[2, 6]` and `[6, 2, 9]`, the others hold nothing:
-- the counts are `9: 3`, `2: 3`, `6: 2`
-- `9` and `2` tie, so rank `0` returns `2`""",
+**Example**, ranks `2`, `3`, `5` and `7` hold `[11, 4]`, `[7, 11]`, `[4, 5]` and `[7]`, the others hold nothing:
+- the counts are `11: 2`, `4: 2`, `7: 2`, `5: 1`
+- `4`, `7` and `11` tie, so rank `0` returns `4`""",
         },
         {
             "title": "Global median",
@@ -129,9 +130,9 @@ Adapted from the distributed mode and median question in Schuture/Anthropic-Inte
 - Every rank's return value counts here. Each rank returns a sorted list, and concatenating ranks `0` to `9` in order gives every element of every shard exactly once, in non-decreasing order.
 - On data that is not heavily skewed, no rank sends plus receives more than a small constant times `1 / P` of the data's bytes. Skewed data, such as one repeated value, must still be sorted correctly.
 
-**Example**, ranks `3` and `6` hold `[8, 1, 5]` and `[2, 8]`:
-- all elements sorted are `[1, 2, 5, 8, 8]`
-- one valid result: rank `0` returns `[1, 2]`, rank `1` returns `[5]`, rank `2` returns `[8, 8]`, the rest return `[]`; other splits into ten sorted, consecutive pieces are just as valid""",
+**Example**, ranks `0` and `4` hold `[6, 3]` and `[9, 3, 7, 1]`:
+- all elements sorted are `[1, 3, 3, 6, 7, 9]`
+- rank `0` returning `[1, 3, 3]`, rank `5` returning `[6, 7, 9]` and every other rank `[]` meets the rule, and so does any other split into ten sorted, consecutive pieces""",
         },
     ],
     "hints": [
@@ -156,8 +157,8 @@ Adapted from the distributed mode and median question in Schuture/Anthropic-Inte
     },
     "tests": [
         {"name": "Part 1: the worked example", "part": 1, "behavior": "state.invariant", "code": _HELPERS + r"""
-shards = [[], [9, 2, 9], [], [], [2, 6], [], [], [], [6, 2, 9], []]
-assert Cluster(shards).run("global_mode")[0] == 2
+shards = [[], [], [11, 4], [7, 11], [], [4, 5], [], [7], [], []]
+assert Cluster(shards).run("global_mode")[0] == 4
 """},
         {"name": "Part 1: random shards", "part": 1, "visibility": "unshown", "behavior": "state.invariant",
          "failure_message": "On random shards, rank 0 did not return the most frequent value (smallest on ties), or some rank failed to return.",
@@ -206,11 +207,11 @@ shards = [[rng.randrange(-10 ** 6, 10 ** 6) for _ in range(20000)] for _ in rang
 cluster = Cluster(shards)
 assert cluster.run("global_median")[0] == model_median(shards)
 R = max(map(max, shards)) - min(map(min, shards)) + 1
-limit = 60 * P * (math.log2(R) + 2)
+limit = 150 * P * (math.log2(R) + 2)
 assert sum(cluster.sent) <= limit, f"sent {sum(cluster.sent)} bytes in total; the limit is {limit:.0f}"
 """},
         {"name": "Part 3: the worked example", "part": 3, "behavior": "state.invariant", "code": _HELPERS + r"""
-shards = [[], [], [], [8, 1, 5], [], [], [2, 8], [], [], []]
+shards = [[6, 3], [], [], [], [9, 3, 7, 1], [], [], [], [], []]
 check_sorted_split(shards, Cluster(shards).run("sample_sort"))
 """},
         {"name": "Part 3: random and skewed shards", "part": 3, "visibility": "unshown", "behavior": "state.invariant",

@@ -16,7 +16,7 @@ def clear_rows(d, gap=1e-6):
 
 X_EX = np.array([[1.0, 1.0], [3.0, 1.0], [1.0, 4.0], [4.0, 4.0], [0.0, 2.0]])
 Y_EX = np.array([1, 2, 0, 2, 1])
-Q_EX = np.array([[2.0, 1.0], [2.0, 3.0], [4.0, 2.0], [0.0, 0.0]])
+Q_EX = np.array([[3.0, 3.0], [4.0, 0.0], [2.5, 4.0], [0.0, 3.0]])
 """
 
 TASK = {
@@ -41,20 +41,20 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Where it is used:** retrieval over embeddings, nearest-neighbour baselines and k-NN language models all compute these distances in bulk, and the identity behind Part 2 is why dot-product search can stand in for distance search.
 
-Adapted from the NumPy 1-NN and affine layer question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, on one class. The ban on Python loops is checked by speed and memory on large inputs.""",
+Adapted from the NumPy 1-NN and affine layer question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, on one class. The ban on Python loops is checked only by speed and memory on large inputs, and the source's rule that `X_query` may appear only in the logits expression is dropped.""",
     "parts": [
         {
             "title": "Whole-array 1-NN",
             "description_en": r"""**Signature:** `NearestNeighbor()`, `predict(X_train, y_train, X_query) -> np.ndarray`
 
 - Return the `m` predicted labels.
-- Use whole-array operations, no Python loop over points, queries or coordinates. With `n = m = 2000` and `d = 50` it must finish in about a second.
+- Use whole-array operations rather than Python loops over points, queries or coordinates. The tests check speed and memory, not the code: with `n = m = 2000` and `d = 50` it must finish in about a second.
 - Never build an array of shape `(m, n, d)`: memory beyond the inputs stays `O((n + m) * d + n * m)`. Expand the squared distance into norms and a dot product instead.
 
 **Example**, `n = 5`, `d = 2`, `m = 4`:
 - `X_train = [[1, 1], [3, 1], [1, 4], [4, 4], [0, 2]]`, `y_train = [1, 2, 0, 2, 1]`
-- `X_query = [[2, 1], [2, 3], [4, 2], [0, 0]]`
-- the result is `[1, 0, 2, 1]`: query `[2, 1]` is at distance `1` from both point `0` and point `1`, and point `0` wins the tie""",
+- `X_query = [[3, 3], [4, 0], [2.5, 4], [0, 3]]`
+- the result is `[2, 2, 0, 1]`: query `[2.5, 4]` is at distance `2.25` from both point `2` and point `3`, and point `2` wins the tie, so its label is `0`, not `2`""",
         },
         {
             "title": "The same rule as a layer",
@@ -67,7 +67,7 @@ Adapted from the NumPy 1-NN and affine layer question in Schuture/OpenAI-Intervi
 - The softmax must stay finite for large logits: coordinates may reach `1000` in size.
 - `labels` must equal `predict`'s output.
 
-**Example**, same data: `probs` has shape `(4, 5)`, and `labels` is `[1, 0, 2, 1]` again.""",
+**Example**, same data: `probs` has shape `(4, 5)`, and `labels` is `[2, 2, 0, 1]` again.""",
         },
     ],
     "hints": [
@@ -93,7 +93,7 @@ Adapted from the NumPy 1-NN and affine layer question in Schuture/OpenAI-Intervi
     "tests": [
         {"name": "Part 1: the worked example", "part": 1, "behavior": "contract.signature", "code": _HELPERS + r"""
 got = np.asarray({fn}().predict(X_EX, Y_EX, Q_EX))
-assert list(got) == [1, 0, 2, 1], got
+assert list(got) == [2, 2, 0, 1], got
 """},
         {"name": "Part 1: random sets and ties", "part": 1, "visibility": "unshown", "behavior": "edge.empty_or_boundary",
          "failure_message": "A predicted label differed from the nearest training point by squared distance, with ties going to the smallest index, or an input array was changed.",
@@ -142,7 +142,7 @@ assert np.asarray(W).shape == (2, 5) and np.asarray(b).shape == (5,)
 probs, labels = c.predict_affine(X_EX, Y_EX, Q_EX)
 probs = np.asarray(probs)
 assert probs.shape == (4, 5) and np.allclose(probs.sum(axis=1), 1.0)
-assert list(np.asarray(labels)) == [1, 0, 2, 1]
+assert list(np.asarray(labels)) == [2, 2, 0, 1]
 """},
         {"name": "Part 2: the layer matches 1-NN", "part": 2, "visibility": "unshown", "behavior": "numerics.stability",
          "failure_message": "The affine layer's argmax was not the nearest point (ties to the smallest index), the softmax rows did not sum to 1 or overflowed for large coordinates, or labels differed from predict.",

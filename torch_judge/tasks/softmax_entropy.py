@@ -44,6 +44,8 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 - `logits` is a 1-D float array with at least one entry. Every entry is finite and at most `1e300` in size. NumPy is available as `np`.
 - With `p = softmax(logits)`, return the entropy `H = -sum(p_i * log(p_i))` with the natural log, as a `float`. It is never negative.
 - Results must match the exact value to about `1e-9` relative error.
+- Never change `logits`.
+- The examples write arrays as Python lists for brevity; the tests pass NumPy float arrays.
 
 ────────────────────────────────
 
@@ -84,7 +86,7 @@ Adapted from the streaming softmax entropy question in Schuture/OpenAI-Interview
 
 - Same result as `entropy`.
 - Read `logits` in consecutive slices of `block_size` entries; the last slice may be shorter. You may read the array more than once.
-- Keep only a fixed number of scalars between slices. Never build an array whose size grows with `len(logits)`, such as all the probabilities.
+- Keep only a fixed number of scalars between slices. Never build an array whose size grows with `len(logits)`, such as all the probabilities. A full copy counts too: `logits.astype(...)` copies everything, so convert each slice instead.
 
 **Example:** `entropy_blockwise([0.0, 1.0, -3.0, 2.5, 1.5, -0.5, 4.0], 3)` reads `[0.0, 1.0, -3.0]`, `[2.5, 1.5, -0.5]` and `[4.0]`, and returns about `0.9171`.""",
         },

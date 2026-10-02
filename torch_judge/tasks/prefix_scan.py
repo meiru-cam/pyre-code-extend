@@ -113,7 +113,7 @@ Adapted from the autograd and Hillis-Steele scan question in Schuture/OpenAI-Int
 - Start with `x = W`. Run rounds with stride `s = 1, 2, 4, …` while `s < N`. In a round, every `x[i]` with `i >= s` becomes `x[i - s] @ x[i]`, using the values from before the round; the others stay.
 - Each round is one batched matrix product. The whole call makes at most `ceil(log2(N))` calls to `@`, `torch.matmul`, `torch.bmm`, `torch.mm` or `torch.einsum`.
 
-**Example**, `N = 4`: after stride `1`, `x` is `W0`, `W0 W1`, `W1 W2`, `W2 W3`; after stride `2`, it is `P[0]` to `P[3]`, in two rounds.""",
+**Example**, `N = 6`: the strides are `1`, `2` and `4`, so three rounds, which is `ceil(log2(6))`. After stride `2`, `x[5]` holds `W2 W3 W4 W5`. The stride `4` round multiplies it by the old `x[1] = W0 W1`, giving `P[5]`.""",
         },
         {
             "title": "Hillis-Steele backward",
