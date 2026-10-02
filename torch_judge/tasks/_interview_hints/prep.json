@@ -284,5 +284,14 @@
     "Why check command ownership at registration rather than when a message arrives?": "Two bots both claim /vote. Detected at registration, who sees the error? Detected when a message arrives, which bot should answer?",
     "What does an event bus buy over PollBot calling CheerBot directly, and what does it cost in traceability?": "PollBot calling CheerBot directly needs a reference to it. With a bus, what does PollBot know about who reacts, and how would you trace a line back to its source?",
     "Should publish return lines to the publisher, or should handlers write to the log themselves?": "If handlers wrote to the log themselves, how would the cheer line end up right after the vote line, and who would own the log?"
+  },
+  "cloud_storage": {
+    "What is the whole state of a file here, and which data structure holds it?": "Name, size, and later an owner. What lookup does every method start with, and which structure answers it in O(1)?",
+    "Why must a failed call change nothing, and how do you make sure copy_file never leaves a half-made file?": "If copy_file writes the destination before it finds the source is missing, what has the caller been told, and what is now stored?",
+    "Which checks must copy_file make, and in which order, before it creates the destination?": "List the ways a copy can fail. If every check runs before the first write, can any of them leave something behind?",
+    "Would you keep a running used total per user or recompute it from the files, and what does each cost?": "A running total must change on every create and delete. How many places in your code touch files, and what happens if one forgets?",
+    "How would you make find_files fast for millions of files with frequent prefix searches?": "Every match shares the prefix. Which structure lets you jump straight to the names that start with it instead of scanning all of them?",
+    "Why does decompress_file compare the current size, not the doubled size, against the remaining capacity?": "The file grows from s to 2s. How many new bytes does that need, and is that the same number as the doubled size?",
+    "What can go wrong when restore matches files by name only, and how would you avoid it?": "A file is compressed, then a new file with the old name appears. What would a name-only restore overwrite, and whose file is it?"
   }
 }

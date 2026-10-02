@@ -354,5 +354,13 @@
       "chat_room"
     ],
     "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/oa-cloud-storage",
+    "exercises": [
+      "cloud_storage"
+    ],
+    "round": "coding"
   }
 ]
