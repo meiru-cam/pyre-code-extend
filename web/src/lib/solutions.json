@@ -1443,6 +1443,15 @@
       }
     ]
   },
+  "task_board": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "# Adapted from Schuture/Anthropic-Interview-Notes (code under the MIT License).\nimport bisect\n\n\nclass _Task:\n    def __init__(self, seq, user, created, ttl, title, priority):\n        self.seq = seq\n        self.user = user\n        self.created = created\n        self.ttl = ttl\n        self.times = [created]  # when each version was written, never decreasing\n        self.versions = [(title, priority)]\n        self.finished = None  # timestamp of the finish call, if any\n\n    def active(self, at):\n        if at < self.created:\n            return False\n        if self.finished is not None and self.finished <= at:\n            return False\n        return self.ttl is None or at < self.created + self.ttl\n\n    def version(self, at):\n        return self.versions[bisect.bisect_right(self.times, at) - 1]  # the last write at or before at\n\n\nclass TaskBoard:\n    def __init__(self):\n        self._tasks = {}\n        self._by_user = {}  # user -> task ids in creation order\n        self._count = 0\n\n    def _live(self, timestamp, user, task_id):\n        task = self._tasks.get(task_id)\n        if task is None or task.user != user or not task.active(timestamp):\n            return None\n        return task\n\n    def _row(self, task_id, task, at):\n        title, priority = task.version(at)\n        return (task_id, title, priority, task.created)\n\n    def add(self, timestamp, user, title, priority, ttl=None):\n        self._count += 1\n        task_id = f\"t{self._count}\"\n        self._tasks[task_id] = _Task(self._count, user, timestamp, ttl, title, priority)\n        self._by_user.setdefault(user, []).append(task_id)\n        return task_id\n\n    def edit(self, timestamp, user, task_id, title, priority):\n        task = self._live(timestamp, user, task_id)\n        if task is None:\n            return False\n        task.times.append(timestamp)\n        task.versions.append((title, priority))\n        return True\n\n    def finish(self, timestamp, user, task_id):\n        task = self._live(timestamp, user, task_id)\n        if task is None:\n            return False\n        task.finished = timestamp\n        return True\n\n    def get(self, timestamp, user, task_id):\n        task = self._live(timestamp, user, task_id)\n        return None if task is None else self._row(task_id, task, timestamp)\n\n    def list_tasks(self, at_timestamp, user, min_priority=None):\n        rows = []\n        for task_id in self._by_user.get(user, []):  # creation order, so a stable sort keeps ties in it\n            task = self._tasks[task_id]\n            if task.active(at_timestamp):\n                row = self._row(task_id, task, at_timestamp)\n                if min_priority is None or row[2] >= min_priority:\n                    rows.append(row)\n        rows.sort(key=lambda row: -row[2])\n        return rows",
+        "role": "solution"
+      }
+    ]
+  },
   "text_editor": {
     "cells": [
       {

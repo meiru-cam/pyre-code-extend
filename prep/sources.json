@@ -386,5 +386,13 @@
       "config_store"
     ],
     "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/oa-task-manager",
+    "exercises": [
+      "task_board"
+    ],
+    "round": "coding"
   }
 ]

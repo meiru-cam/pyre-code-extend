@@ -320,5 +320,14 @@
     "Why can a whole-string reference keep the referenced type while an embedded one cannot?": "Replacing the whole string can hand back any object. Splicing into a longer string needs text: what text would a list or None become?",
     "Why is a bool rejected for an int field, given that bool subclasses int in Python?": "isinstance(True, int) is True. If a schema asks for a layer count and gets True, what would the run actually use?",
     "Besides the config and its hash, what must a run record to be reproducible weeks later on other hardware?": "Two runs with the same config hash still differ. Which inputs live outside the config, such as code, data and libraries?"
+  },
+  "task_board": {
+    "Why does one id counter shared by every user keep ids unique when titles and users repeat?": "Two users each add their first task. With a counter per user, what ids would they get, and which lookup would then need the user as well as the id?",
+    "Why should get, edit and finish treat a finished task, another user's task and an unknown id the same way?": "If get returned a different value for 'someone else's task' than for 'no such task', what could a caller learn about other users?",
+    "What must edit check before it writes anything, and how do you keep that check in one place?": "List the three reasons edit can fail. If each method tests them on its own, what happens the day one method forgets one?",
+    "How would you keep list_tasks fast for a user with many tasks whose priorities change often?": "Each list call sorts the user's tasks. How large can that get, and which structure would stay ordered while priorities change?",
+    "Why check expiry when a method is called instead of deleting expired tasks in the background?": "A task expires at created_at + ttl. If nothing deletes it, which comparison at call time gives the same answer a background job would?",
+    "How do you answer a list for a past timestamp without replaying every call since the start?": "An edit at 5 and a question about 3. If every task keeps its versions with their times, which search finds the one in force at 3?",
+    "Compare a version list per task with a full snapshot after every call: what does each cost in memory and per question?": "A snapshot after every call copies the whole board. How many copies is that after 20,000 edits, and what does a version list store instead?"
   }
 }
