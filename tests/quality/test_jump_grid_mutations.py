@@ -24,6 +24,8 @@ MUTATIONS = [
     ("equal bonus never paid", 4, [("bonus = (x if here == nxt else 0)", "bonus = (0 if here == nxt else 0)")]),
     ("rise bonus on non-strict rise", 4, [("before < here < nxt", "before <= here < nxt")]),
     ("rise bonus ignores the earlier value", 4, [("before is not None and before < here < nxt", "here < nxt")]),
+    ("count ignores the jump budget", 3, [("sum(count[r][c][left] for r, c, left in self._moves(i, j, b)", "sum(count[r][c][left] for r, c, left in self._moves(i, j, k)")]),
+    ("jump ends not neighbours", 4, [("bonus = (x if here == nxt else 0)", "bonus = (x if here == nxt and r == i + 1 else 0)")]),
 ]
 
 

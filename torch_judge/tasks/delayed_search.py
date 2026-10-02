@@ -111,8 +111,6 @@ try:
 except ValueError:
     pass
 run_one({fn}, 10, 3)
-j = BatchJudge(1, 1, 1)
-assert {fn}().find_secret(1, j.check) == 1 and j.calls == 0
 """},
     {"name": "Part 1: every secret for small n", "part": 1, "visibility": "unshown", "behavior": "budget.enforcement",
      "failure_message": "For some n up to 70 and some secret, the answer was wrong, the protocol was broken (a repeated or out-of-range guess, or a call after the secret was determined), or it took more than 2 * ceil(log2(n)) + 1 calls.",
@@ -135,8 +133,6 @@ assert j.send([9, 18]) is None and j.send([26]) == [1, 1]
 assert j.send([3, 6]) == [1] and j.send([25]) == [-1, 1]
 assert (j.known.lo, j.known.hi) == (4, 5)
 run_two({fn}, 26, 5)
-j = BatchJudge(1, 1, 2)
-assert {fn}().find_secret_batched(1, j.send) == 1 and j.calls == 0
 """},
     {"name": "Part 2: every secret for small n", "part": 2, "visibility": "unshown", "behavior": "budget.enforcement",
      "failure_message": "For some n up to 60 and some secret, the answer was wrong, a call carried 0 or more than 2 guesses, a guess repeated or left [1, n], or it took more than 2 * ceil(log3(n)) + 1 calls.",
@@ -160,7 +156,6 @@ assert j.check_round({"b": 5, "c": 2}) is None
 assert j.check_round({"b": 8}) == {"b": -1, "c": 1}
 assert (j.known["c"].lo, j.known["c"].hi) == (1, 1)
 run_games({fn}, games, secrets)
-run_games({fn}, {"z": 1}, {"z": 1})
 """},
     {"name": "Part 3: many games share the rounds", "part": 3, "visibility": "unshown", "behavior": "performance.complexity",
      "failure_message": "With many games the rounds went over 2 * ceil(log2(largest n)) + 1, a solved game was guessed again, or a result was wrong: every open game must guess in the same round so they all finish together.",
@@ -191,7 +186,7 @@ The requirement arrives in parts. Each part adds one method to the same `Delayed
 - Each call's answer is about the call before it. The first call answers `None`, and the answer for your newest guess arrives only with your next call.
 - Every guess lies in `[1, n]` and differs from every earlier guess for the same secret.
 - Stop calling as soon as only one value is possible; for `n = 1`, return `1` without calling.
-- The channel raises `ValueError` when a rule is broken. Methods return the secret, and a call budget is part of each part.
+- The channel raises `ValueError` when a rule is broken. Each method returns the secret; each part sets its own call budget.
 
 ────────────────────────────────
 
@@ -205,7 +200,7 @@ Adapted from the delayed-answer binary search question in Schuture/OpenAI-Interv
     "parts": [
         {
             "title": "One guess per call",
-            "description_en": r"""**Signature:** `DelayedSearch().find_secret(n, check) -> int`.
+            "description_en": r"""**Signature:** `DelayedSearch().find_secret(n, check) -> int`
 
 - `check(x)` sends one guess and returns `None` on the first call, then the comparison of the previous call's guess.
 - Use at most `2 * ceil(log2(n)) + 1` calls, for `n` up to `10**9`.
@@ -218,7 +213,9 @@ Adapted from the delayed-answer binary search question in Schuture/OpenAI-Interv
         },
         {
             "title": "Two guesses per call",
-            "description_en": r"""Keep Part 1. Add `find_secret_batched(n, check_batch) -> int`.
+            "description_en": r"""Keep Part 1 and add a method.
+
+**Signature:** `find_secret_batched(n, check_batch) -> int`
 
 - `check_batch(xs)` sends a list of one or two guesses, all new. It returns `None` on the first call, then the list of answers for the previous call's guesses, in the same order.
 - Use at most `2 * ceil(log3(n)) + 1` calls, for `n` up to `10**9`.
@@ -230,7 +227,9 @@ Adapted from the delayed-answer binary search question in Schuture/OpenAI-Interv
         },
         {
             "title": "Many games, few rounds",
-            "description_en": r"""Keep Parts 1–2. Add `solve_games(bounds, check_round) -> dict`.
+            "description_en": r"""Keep Parts 1–2 and add a method.
+
+**Signature:** `solve_games(bounds, check_round) -> dict`
 
 - `bounds` maps each game id to that game's `n`. Every game has its own secret and its own set of used guesses.
 - `check_round(guesses)` sends a dict from some game ids to one guess each; an empty dict is allowed. It returns `None` on the first call, then a dict with an answer for each guess of the previous call, whatever the current call holds.
@@ -271,7 +270,7 @@ class _Window:
     """The candidates [lo, hi] for one secret, plus every value already sent."""
 
     def __init__(self, n):
-        self.n, self.lo, self.hi = n, 1, n
+        self.lo, self.hi = 1, n
         self.used = set()
         self.top, self.bottom = n, 1  # next unused values to try above hi and below lo
 

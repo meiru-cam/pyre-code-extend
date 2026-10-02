@@ -14,6 +14,12 @@ class Clock:
     def advance(self, dt):
         self.t += dt
 
+class UnknownTaskError(Exception):
+    pass
+
+class InvalidReservationError(Exception):
+    pass
+
 class Model:
     def __init__(self, clock=None, lease=None, max_attempts=None):
         self.clock, self.lease, self.max = clock, lease, max_attempts
@@ -62,9 +68,9 @@ class Model:
         self.reclaim()
         t = self.tasks.get(tid)
         if t is None:
-            raise KeyError("UnknownTaskError")
+            raise UnknownTaskError(tid)
         if t["state"] != "reserved" or t["token"] != token:
-            raise KeyError("InvalidReservationError")
+            raise InvalidReservationError(tid)
 
     def complete(self, tid, token):
         self.held(tid, token)
@@ -82,7 +88,7 @@ class Model:
         self.reclaim()
         t = self.tasks.get(tid)
         if t is None:
-            raise KeyError("UnknownTaskError")
+            raise UnknownTaskError(tid)
         if t["state"] != "dead":
             raise ValueError(tid)
         self.dead.remove(tid)
@@ -92,8 +98,6 @@ class Model:
 def outcome(call):
     try:
         return ("ok", call())
-    except KeyError as e:
-        return ("raise", e.args[0])
     except Exception as e:
         return ("raise", type(e).__name__)
 
@@ -431,7 +435,7 @@ Adapted from the fault-tolerant work queue question in Schuture/OpenAI-Interview
 
 - Each task counts its reservations. When a reservation ends by `fail` or by expiry and the count has reached `max_attempts`, the task becomes `dead` instead of ready.
 - `dead_letters() -> list[str]` returns a new list of the dead tasks' ids, in the order they died.
-- `requeue_dead(task_id)` puts a dead task at the back of the ready tasks with its count back at `0`. It raises `UnknownTaskError` for an unknown id and `ValueError` for a task that is not dead.
+- `requeue_dead(task_id)` puts a dead task at the back of the ready tasks with its count back at `0`, and returns `None`. It raises `UnknownTaskError` for an unknown id and `ValueError` for a task that is not dead.
 - Both new methods also start by taking back expired reservations.
 
 **Example:** with `lease_duration = 6` and `max_attempts = 3`, submit `j1` and `j2` at time `0`:

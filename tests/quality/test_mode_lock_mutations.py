@@ -24,6 +24,7 @@ MUTATIONS = [
     ("neighbours never merge", 3, [("        if 0 < i < len(self._queue) and self._queue[i - 1].mode == self._queue[i].mode:", "        if False:")]),
     ("merge wakes nobody", 3, [("            del self._queue[i]\n        self._cond.notify_all()", "            del self._queue[i]")]),
     ("granted returns None", 3, [("            self._holders += 1\n            return True", "            self._holders += 1\n            return None")]),
+    ("timed-out call still counted", 3, [("        batch = batch.root()\n        batch.waiting -= 1\n        if granted:\n            batch.active += 1", "        batch = batch.root()\n        if granted:\n            batch.waiting -= 1\n            batch.active += 1")]),
 ]
 
 

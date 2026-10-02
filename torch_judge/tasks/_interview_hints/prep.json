@@ -370,7 +370,7 @@
     "Why does the best way to finish from (i, j) depend only on i, j and the jumps left, and not on how the path got there?": "Two paths reach (i, j) with the same jumps left. Can the cells they visited before change what is best from here on?",
     "Why must a jump be refused from the second-to-last row, and what would the path look like if it were allowed?": "From the second-to-last row, where would a jump land? What does the rule 'if that row exists' leave you with?",
     "In what order must the table be filled so that every value it reads is already known, and what are the time and memory costs?": "best[i][j][b] reads rows i + 1 and i + 2. Which direction must i run so those are already filled? Count the cells times the jump budgets.",
-    "How do you rebuild the lexicographically smallest best path from the table without storing every path?": "Walk from the start and at each cell take the first move whose table value gives the best total. Why does checking moves in (row, column) order give the smallest list?",
+    "How do you rebuild the lexicographically smallest best path from the table without storing every path?": "Several moves from a cell can reach the best total. Which one keeps the list smallest, and in what order would you try them to find it first?",
     "Why can counting best paths reuse the score table, and why must you only add counts from moves that reach the best score?": "A move that does not reach the best score can still have many paths behind it. Why must those be left out of the sum?",
     "What extra state do the bonuses need, and how much larger does the table become?": "A rise bonus needs the value two cells back. What do you add to the state, and how many values can it take?",
     "How would you cut memory if only the score were needed, and why does that no longer work for rebuilding the path?": "For the score alone, which rows of the table do you still need when filling row i? What does rebuilding the path need that you threw away?"
@@ -385,7 +385,7 @@
     "If calls could overlap in flight, how would the problem change?": "If several calls could be in flight at once, which part of the delay problem would remain?"
   },
   "mode_lock": {
-    "Why must a woken waiter check the mode again in a loop instead of assuming it may now hold?": "Three waiters wake after a release, one for each of two modes. The first one in takes the lock. What must the others check before they continue?",
+    "Why must a woken waiter check the mode again in a loop instead of assuming it may now hold?": "Three waiters wake after a release: two want mode A, one wants mode B. The first one in takes the lock. What must the others check before they continue?",
     "Why does the last release call notify_all instead of notify?": "The last holder releases and four waiters of the next mode are blocked. With notify, how many of them wake, and who wakes the rest?",
     "How do you keep waiting_count exact, including calls that are granted without ever blocking?": "A call can be granted at once without ever blocking. Where do you add to and subtract from the waiting count so nobody outside sees the change?",
     "How can the unfair lock starve a mode, and why does joining only the last batch prevent it?": "Holders of mode A keep arriving before the last one leaves. When does a waiter for mode B get its turn, and what rule would stop new A calls?",

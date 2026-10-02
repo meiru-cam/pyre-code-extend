@@ -21,6 +21,7 @@ MUTATIONS = [
     ("games one at a time", 3, [("{g: (w.lo + w.hi) // 2 for g, w in windows.items() if not w.solved()}", "dict([(g, (w.lo + w.hi) // 2) for g, w in windows.items() if not w.solved()][:1])")]),
     ("solved games guessed", 3, [("{g: (w.lo + w.hi) // 2 for g, w in windows.items() if not w.solved()}", "{g: (w.lo + w.hi) // 2 for g, w in windows.items()}")]),
     ("no empty round", 3, [("guesses = {} if sent else {g:", "guesses = {g:")]),
+    ("batch answers paired in reverse", 2, [("for x, answer in zip(sent, answers):", "for x, answer in zip(reversed(sent), answers):")]),
 ]
 
 

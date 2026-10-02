@@ -313,10 +313,15 @@ class JumpGrid:
                         best[i][j][b] = board[i][j] + max(best[r][c][left] for r, c, left in self._moves(i, j, b))
         return best
 
+    def _cap(self, k):
+        return min(k, (self._n - 1) // 2)  # no path can use more jumps than this
+
     def max_score(self, p, k):
+        k = self._cap(k)
         return self._table(k)[0][p][k]
 
     def optimal_path(self, p, k):
+        k = self._cap(k)
         best = self._table(k)
         i, j, b = 0, p, k
         path = [(0, p)]
@@ -328,6 +333,7 @@ class JumpGrid:
         return path
 
     def count_optimal_paths(self, p, k):
+        k = self._cap(k)
         best = self._table(k)
         n, m = self._n, self._m
         count = [[[1] * (k + 1) for _ in range(m)] for _ in range(n)]
@@ -340,6 +346,7 @@ class JumpGrid:
         return count[0][p][k]
 
     def max_score_with_bonuses(self, p, k, x, y):
+        k = self._cap(k)
         board, last = self._board, self._n - 1
 
         @lru_cache(maxsize=None)
