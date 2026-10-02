@@ -185,5 +185,14 @@
     "Why does always picking a model with the smallest count keep the counts within 1 of each other?": "Suppose every counter is L or L + 1 and you add 1 to one with value L. What values can the counters have afterwards?",
     "Can the greedy rule that balances tasks first also guarantee balance by human, and how would you find out?": "Run the greedy rule on tiny inputs and check every prefix with your checker. If a human's two picks are both forced, can any tie-break save it?",
     "How would you schedule if raters arrive one at a time instead of in fixed rounds?": "If raters show up one by one, what running counts would you keep, and what would you pick for the next rater who arrives?"
+  },
+  "type_inference": {
+    "How do you tell a name from a tuple in this representation, and which case recurses?": "Ask isinstance(t, str) first. Which branch returns at once, and which one has to print its elements by calling the same function again?",
+    "Why must parsing check that the whole string was consumed?": "After parsing a valid type from \"[int]x\", there is text left over. What should parse_type do about it, and how does it know?",
+    "How does a parser that returns the next index handle nested tuples and report the first bad position?": "Let a helper parse one type starting at index i and return the type plus the index just after it. What does it do when it sees '[', and when it sees ']' straight away?",
+    "Why must the check for a generic look at the parameter itself rather than at generics inside it?": "A parameter like [T1,int] contains a generic but is not one. If you treat it as a generic, what does T1 get bound to, and what goes wrong?",
+    "Why keep matching and substitution as two passes instead of one?": "If substitution runs while bindings are still being filled in, what happens to a generic that is bound later in the parameter list?",
+    "Why must the returned type share no list with the inputs?": "If the result contains the same list object as an argument, what happens to the argument when the caller appends to the result?",
+    "What changes if arguments may contain generics too, and why is an occurs check needed?": "If both sides may contain generics, what goes wrong when you bind T1 to [T1,int], and what check stops it?"
   }
 }

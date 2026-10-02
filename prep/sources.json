@@ -266,5 +266,13 @@
       "label_scheduler"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/type-inference",
+    "exercises": [
+      "type_inference"
+    ],
+    "round": "coding"
   }
 ]

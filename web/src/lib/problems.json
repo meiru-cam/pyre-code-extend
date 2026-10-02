@@ -23206,6 +23206,139 @@
           "hint": "If raters show up one by one, what running counts would you keep, and what would you pick for the next rater who arrives?"
         }
       ]
+    },
+    {
+      "id": "type_inference",
+      "title": "Generic Type Inference",
+      "titleZh": "Generic Type Inference",
+      "difficulty": "Medium",
+      "functionName": "TypeChecker",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Build `TypeChecker`, which prints and parses function types and works out what a generic function returns for given arguments.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior, so one `TypeChecker` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- A type is either a name (`str`) or a tuple of zero or more types (`list`), nested to any depth.\n- The primitive names are `int`, `float`, `str`, `bool` and `char`. A generic is `T` followed by one or more digits, such as `T1` or `T12`.\n- A function type is a list of parameter types and one return type.\n- Never change a type you are given.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** printing a type is a warm-up; the work is matching a pattern against a value with consistent bindings, and each later part adds one requirement.\n\n**Where it is used:** compilers and type checkers such as mypy infer the type of a generic call this way, and the same matching drives pattern matching and template engines.\n\nAdapted from the type inference question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, on one class. Types are plain strings and lists instead of node objects, and Part 1 adds parsing, the inverse of printing.",
+      "descriptionZh": "Build `TypeChecker`, which prints and parses function types and works out what a generic function returns for given arguments.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior, so one `TypeChecker` class passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- A type is either a name (`str`) or a tuple of zero or more types (`list`), nested to any depth.\n- The primitive names are `int`, `float`, `str`, `bool` and `char`. A generic is `T` followed by one or more digits, such as `T1` or `T12`.\n- A function type is a list of parameter types and one return type.\n- Never change a type you are given.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why this shows up in interviews:** printing a type is a warm-up; the work is matching a pattern against a value with consistent bindings, and each later part adds one requirement.\n\n**Where it is used:** compilers and type checkers such as mypy infer the type of a generic call this way, and the same matching drives pattern matching and template engines.\n\nAdapted from the type inference question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, on one class. Types are plain strings and lists instead of node objects, and Part 1 adds parsing, the inverse of printing.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Part 1: the worked example",
+          "code": "\nimport random\n\nPRIMS = [\"int\", \"float\", \"str\", \"bool\", \"char\"]\n\ndef rand_type(rng, depth=0, names=PRIMS):\n    if depth >= 3 or rng.random() < 0.55:\n        return rng.choice(names)\n    return [rand_type(rng, depth + 1, names) for _ in range(rng.randint(0, 3))]\n\ndef fmt(t):\n    return t if isinstance(t, str) else \"[\" + \",\".join(fmt(c) for c in t) + \"]\"\n\ndef generalise(rng, t, gens):\n    # Replaces random subtrees of a concrete type by generics, reusing a name for an equal subtree.\n    if rng.random() < 0.3:\n        key = fmt(t)\n        if key not in gens:\n            gens[key] = f\"T{len(gens) + 1}\"\n        return gens[key]\n    if isinstance(t, list):\n        return [generalise(rng, c, gens) for c in t]\n    return t\n\ndef model_return(params, ret, args):\n    if len(params) != len(args):\n        return \"ArityError\"\n    bound = {}\n    def bind(e, a):\n        if isinstance(e, str) and e not in PRIMS:\n            if e in bound and bound[e] != a:\n                raise LookupError(\"GenericConflictError\")\n            bound.setdefault(e, a)\n        elif isinstance(e, list) and isinstance(a, list) and len(e) == len(a):\n            for x, y in zip(e, a):\n                bind(x, y)\n        elif e != a:\n            raise LookupError(\"TypeMismatchError\")\n    try:\n        for e, a in zip(params, args):\n            bind(e, a)\n    except LookupError as err:\n        return err.args[0]\n    def sub(t):\n        if isinstance(t, list):\n            return [sub(c) for c in t]\n        return t if t in PRIMS else bound[t]\n    return sub(ret)\n\ndef outcome(checker, params, ret, args):\n    try:\n        return checker.return_type(params, ret, args)\n    except Exception as e:\n        return type(e).__name__\n\ndef raises_value_error(f, text):\n    try:\n        f(text)\n    except ValueError:\n        return True\n    return False\n\nc = {fn}()\nassert c.format_function([\"int\", [\"T2\", []], \"T1\"], [\"T1\", \"str\"]) == \"(int,[T2,[]],T1) -> [T1,str]\"\nassert c.parse_function(\"(int,[T2,[]],T1) -> [T1,str]\") == ([\"int\", [\"T2\", []], \"T1\"], [\"T1\", \"str\"])\nfor bad in [\"[int,]\", \"[int, str]\", \"string\"]:\n    assert raises_value_error(c.parse_type, bad), bad\n",
+          "behavior": "contract.signature",
+          "part": 1
+        },
+        {
+          "name": "Part 1: round trips and malformed text",
+          "visibility": "unshown",
+          "behavior": "protocol.validation",
+          "failureMessage": "A random type or function did not print as stated or did not parse back to the same value, or malformed text did not raise ValueError.",
+          "hiddenCode": "\nimport random\n\nPRIMS = [\"int\", \"float\", \"str\", \"bool\", \"char\"]\n\ndef rand_type(rng, depth=0, names=PRIMS):\n    if depth >= 3 or rng.random() < 0.55:\n        return rng.choice(names)\n    return [rand_type(rng, depth + 1, names) for _ in range(rng.randint(0, 3))]\n\ndef fmt(t):\n    return t if isinstance(t, str) else \"[\" + \",\".join(fmt(c) for c in t) + \"]\"\n\ndef generalise(rng, t, gens):\n    # Replaces random subtrees of a concrete type by generics, reusing a name for an equal subtree.\n    if rng.random() < 0.3:\n        key = fmt(t)\n        if key not in gens:\n            gens[key] = f\"T{len(gens) + 1}\"\n        return gens[key]\n    if isinstance(t, list):\n        return [generalise(rng, c, gens) for c in t]\n    return t\n\ndef model_return(params, ret, args):\n    if len(params) != len(args):\n        return \"ArityError\"\n    bound = {}\n    def bind(e, a):\n        if isinstance(e, str) and e not in PRIMS:\n            if e in bound and bound[e] != a:\n                raise LookupError(\"GenericConflictError\")\n            bound.setdefault(e, a)\n        elif isinstance(e, list) and isinstance(a, list) and len(e) == len(a):\n            for x, y in zip(e, a):\n                bind(x, y)\n        elif e != a:\n            raise LookupError(\"TypeMismatchError\")\n    try:\n        for e, a in zip(params, args):\n            bind(e, a)\n    except LookupError as err:\n        return err.args[0]\n    def sub(t):\n        if isinstance(t, list):\n            return [sub(c) for c in t]\n        return t if t in PRIMS else bound[t]\n    return sub(ret)\n\ndef outcome(checker, params, ret, args):\n    try:\n        return checker.return_type(params, ret, args)\n    except Exception as e:\n        return type(e).__name__\n\ndef raises_value_error(f, text):\n    try:\n        f(text)\n    except ValueError:\n        return True\n    return False\n\nc = {fn}()\nrng = random.Random(1)\nnames = PRIMS + [\"T1\", \"T2\", \"T37\"]\nfor _ in range(400):\n    t = rand_type(rng, names=names)\n    assert c.format_type(t) == fmt(t), t\n    assert c.parse_type(fmt(t)) == t, fmt(t)\n    params = [rand_type(rng, names=names) for _ in range(rng.randint(0, 3))]\n    text = \"(\" + \",\".join(fmt(p) for p in params) + \") -> \" + fmt(t)\n    assert c.format_function(params, t) == text, text\n    got = c.parse_function(text)\n    assert tuple(got) == (params, t) and isinstance(got[0], list), text\nassert c.format_type([]) == \"[]\" and c.parse_type(\"[[]]\") == [[]]\nassert c.format_function([], \"int\") == \"() -> int\" and c.parse_function(\"() -> int\") == ([], \"int\")\nfor bad in [\"\", \"[\", \"]\", \"[int\", \"int]\", \"[,]\", \"[int,,str]\", \"Int\", \"T\", \"Tx\", \"intx\", \" int\", \"int \", \"[int] \", \"[[int]\"]:\n    assert raises_value_error(c.parse_type, bad), f\"parse_type({bad!r}) should raise ValueError\"\nfor bad in [\"(int)->int\", \"(int) ->int\", \"(int,) -> int\", \"int -> int\", \"(int) -> \", \"(int -> int\", \"(int) -> int,str\", \"() ->  int\"]:\n    assert raises_value_error(c.parse_function, bad), f\"parse_function({bad!r}) should raise ValueError\"\n",
+          "part": 1
+        },
+        {
+          "name": "Part 1: inputs are not changed",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "Printing changed the type it was given, or two parses of the same text returned the same list object.",
+          "hiddenCode": "\nimport random\n\nPRIMS = [\"int\", \"float\", \"str\", \"bool\", \"char\"]\n\ndef rand_type(rng, depth=0, names=PRIMS):\n    if depth >= 3 or rng.random() < 0.55:\n        return rng.choice(names)\n    return [rand_type(rng, depth + 1, names) for _ in range(rng.randint(0, 3))]\n\ndef fmt(t):\n    return t if isinstance(t, str) else \"[\" + \",\".join(fmt(c) for c in t) + \"]\"\n\ndef generalise(rng, t, gens):\n    # Replaces random subtrees of a concrete type by generics, reusing a name for an equal subtree.\n    if rng.random() < 0.3:\n        key = fmt(t)\n        if key not in gens:\n            gens[key] = f\"T{len(gens) + 1}\"\n        return gens[key]\n    if isinstance(t, list):\n        return [generalise(rng, c, gens) for c in t]\n    return t\n\ndef model_return(params, ret, args):\n    if len(params) != len(args):\n        return \"ArityError\"\n    bound = {}\n    def bind(e, a):\n        if isinstance(e, str) and e not in PRIMS:\n            if e in bound and bound[e] != a:\n                raise LookupError(\"GenericConflictError\")\n            bound.setdefault(e, a)\n        elif isinstance(e, list) and isinstance(a, list) and len(e) == len(a):\n            for x, y in zip(e, a):\n                bind(x, y)\n        elif e != a:\n            raise LookupError(\"TypeMismatchError\")\n    try:\n        for e, a in zip(params, args):\n            bind(e, a)\n    except LookupError as err:\n        return err.args[0]\n    def sub(t):\n        if isinstance(t, list):\n            return [sub(c) for c in t]\n        return t if t in PRIMS else bound[t]\n    return sub(ret)\n\ndef outcome(checker, params, ret, args):\n    try:\n        return checker.return_type(params, ret, args)\n    except Exception as e:\n        return type(e).__name__\n\ndef raises_value_error(f, text):\n    try:\n        f(text)\n    except ValueError:\n        return True\n    return False\n\nc = {fn}()\nt = [[\"T1\", []], \"int\", [\"bool\", [\"char\"]]]\nc.format_type(t)\nc.format_function([t, t], t)\nassert t == [[\"T1\", []], \"int\", [\"bool\", [\"char\"]]]\na, b = c.parse_type(\"[[int]]\"), c.parse_type(\"[[int]]\")\na[0].append(\"str\")\nassert b == [[\"int\"]], \"each parse must build new lists\"\n",
+          "part": 1
+        },
+        {
+          "name": "Part 2: the worked example",
+          "code": "\nimport random\n\nPRIMS = [\"int\", \"float\", \"str\", \"bool\", \"char\"]\n\ndef rand_type(rng, depth=0, names=PRIMS):\n    if depth >= 3 or rng.random() < 0.55:\n        return rng.choice(names)\n    return [rand_type(rng, depth + 1, names) for _ in range(rng.randint(0, 3))]\n\ndef fmt(t):\n    return t if isinstance(t, str) else \"[\" + \",\".join(fmt(c) for c in t) + \"]\"\n\ndef generalise(rng, t, gens):\n    # Replaces random subtrees of a concrete type by generics, reusing a name for an equal subtree.\n    if rng.random() < 0.3:\n        key = fmt(t)\n        if key not in gens:\n            gens[key] = f\"T{len(gens) + 1}\"\n        return gens[key]\n    if isinstance(t, list):\n        return [generalise(rng, c, gens) for c in t]\n    return t\n\ndef model_return(params, ret, args):\n    if len(params) != len(args):\n        return \"ArityError\"\n    bound = {}\n    def bind(e, a):\n        if isinstance(e, str) and e not in PRIMS:\n            if e in bound and bound[e] != a:\n                raise LookupError(\"GenericConflictError\")\n            bound.setdefault(e, a)\n        elif isinstance(e, list) and isinstance(a, list) and len(e) == len(a):\n            for x, y in zip(e, a):\n                bind(x, y)\n        elif e != a:\n            raise LookupError(\"TypeMismatchError\")\n    try:\n        for e, a in zip(params, args):\n            bind(e, a)\n    except LookupError as err:\n        return err.args[0]\n    def sub(t):\n        if isinstance(t, list):\n            return [sub(c) for c in t]\n        return t if t in PRIMS else bound[t]\n    return sub(ret)\n\ndef outcome(checker, params, ret, args):\n    try:\n        return checker.return_type(params, ret, args)\n    except Exception as e:\n        return type(e).__name__\n\ndef raises_value_error(f, text):\n    try:\n        f(text)\n    except ValueError:\n        return True\n    return False\n\nc = {fn}()\nassert c.return_type([\"T1\", [\"int\", \"T2\"]], [\"T2\", \"T1\"], [\"str\", [\"int\", \"bool\"]]) == [\"bool\", \"str\"]\nassert c.return_type([\"T1\"], [\"T1\", \"T1\"], [[]]) == [[], []]\nassert outcome(c, [\"T1\"], \"T1\", [\"int\", \"int\"]) == \"ArityError\"\nassert outcome(c, [\"int\", \"T1\"], \"T1\", [\"float\", \"str\"]) == \"TypeMismatchError\"\nassert outcome(c, [\"T1\", [\"T1\"]], \"T1\", [\"int\", [\"str\"]]) == \"GenericConflictError\"\n",
+          "behavior": "contract.signature",
+          "part": 2
+        },
+        {
+          "name": "Part 2: random calls and error order",
+          "visibility": "unshown",
+          "behavior": "protocol.validation",
+          "failureMessage": "On a random generic function and call, the result or the error raised differed from the rules: arity first, then parameters left to right, depth first, and a generic may bind to a whole tuple.",
+          "hiddenCode": "\nimport random\n\nPRIMS = [\"int\", \"float\", \"str\", \"bool\", \"char\"]\n\ndef rand_type(rng, depth=0, names=PRIMS):\n    if depth >= 3 or rng.random() < 0.55:\n        return rng.choice(names)\n    return [rand_type(rng, depth + 1, names) for _ in range(rng.randint(0, 3))]\n\ndef fmt(t):\n    return t if isinstance(t, str) else \"[\" + \",\".join(fmt(c) for c in t) + \"]\"\n\ndef generalise(rng, t, gens):\n    # Replaces random subtrees of a concrete type by generics, reusing a name for an equal subtree.\n    if rng.random() < 0.3:\n        key = fmt(t)\n        if key not in gens:\n            gens[key] = f\"T{len(gens) + 1}\"\n        return gens[key]\n    if isinstance(t, list):\n        return [generalise(rng, c, gens) for c in t]\n    return t\n\ndef model_return(params, ret, args):\n    if len(params) != len(args):\n        return \"ArityError\"\n    bound = {}\n    def bind(e, a):\n        if isinstance(e, str) and e not in PRIMS:\n            if e in bound and bound[e] != a:\n                raise LookupError(\"GenericConflictError\")\n            bound.setdefault(e, a)\n        elif isinstance(e, list) and isinstance(a, list) and len(e) == len(a):\n            for x, y in zip(e, a):\n                bind(x, y)\n        elif e != a:\n            raise LookupError(\"TypeMismatchError\")\n    try:\n        for e, a in zip(params, args):\n            bind(e, a)\n    except LookupError as err:\n        return err.args[0]\n    def sub(t):\n        if isinstance(t, list):\n            return [sub(c) for c in t]\n        return t if t in PRIMS else bound[t]\n    return sub(ret)\n\ndef outcome(checker, params, ret, args):\n    try:\n        return checker.return_type(params, ret, args)\n    except Exception as e:\n        return type(e).__name__\n\ndef raises_value_error(f, text):\n    try:\n        f(text)\n    except ValueError:\n        return True\n    return False\n\nc = {fn}()\nrng = random.Random(2)\nfor trial in range(1500):\n    args = [rand_type(rng) for _ in range(rng.randint(0, 4))]\n    gens = {}\n    params = [generalise(rng, a, gens) for a in args]\n    names = sorted(set(gens.values())) or [\"int\"]\n    ret = rand_type(rng, names=names + [\"bool\"])\n    call = [list(a) if isinstance(a, list) else a for a in args]\n    roll = rng.random()\n    if roll < 0.15 and call:\n        call.pop()\n    elif roll < 0.6 and call:\n        i = rng.randrange(len(call))\n        call[i] = rand_type(rng)\n    assert outcome(c, params, ret, call) == model_return(params, ret, call), (params, ret, call)\nassert outcome(c, [\"T1\", \"int\"], \"T1\", [[\"str\"], \"float\"]) == \"TypeMismatchError\"\nassert outcome(c, [\"T1\", [\"T1\", \"int\"]], \"T1\", [\"str\", [\"bool\", \"float\"]]) == \"GenericConflictError\", \"the conflict comes first, depth first\"\nassert outcome(c, [[\"int\", \"T1\"]], \"T1\", [[\"int\", \"str\", \"bool\"]]) == \"TypeMismatchError\", \"tuples of different length\"\nassert outcome(c, [[\"T1\"]], \"T1\", [\"int\"]) == \"TypeMismatchError\"\nassert c.return_type([\"T5\", \"T5\"], [\"T5\", \"char\"], [[\"int\", []], [\"int\", []]]) == [[\"int\", []], \"char\"]\nassert c.return_type([], [\"float\"], []) == [\"float\"]\n",
+          "part": 2
+        },
+        {
+          "name": "Part 2: the result shares nothing",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "The returned type shared a list with the parameters, return type or arguments, or the call changed them.",
+          "hiddenCode": "\nimport random\n\nPRIMS = [\"int\", \"float\", \"str\", \"bool\", \"char\"]\n\ndef rand_type(rng, depth=0, names=PRIMS):\n    if depth >= 3 or rng.random() < 0.55:\n        return rng.choice(names)\n    return [rand_type(rng, depth + 1, names) for _ in range(rng.randint(0, 3))]\n\ndef fmt(t):\n    return t if isinstance(t, str) else \"[\" + \",\".join(fmt(c) for c in t) + \"]\"\n\ndef generalise(rng, t, gens):\n    # Replaces random subtrees of a concrete type by generics, reusing a name for an equal subtree.\n    if rng.random() < 0.3:\n        key = fmt(t)\n        if key not in gens:\n            gens[key] = f\"T{len(gens) + 1}\"\n        return gens[key]\n    if isinstance(t, list):\n        return [generalise(rng, c, gens) for c in t]\n    return t\n\ndef model_return(params, ret, args):\n    if len(params) != len(args):\n        return \"ArityError\"\n    bound = {}\n    def bind(e, a):\n        if isinstance(e, str) and e not in PRIMS:\n            if e in bound and bound[e] != a:\n                raise LookupError(\"GenericConflictError\")\n            bound.setdefault(e, a)\n        elif isinstance(e, list) and isinstance(a, list) and len(e) == len(a):\n            for x, y in zip(e, a):\n                bind(x, y)\n        elif e != a:\n            raise LookupError(\"TypeMismatchError\")\n    try:\n        for e, a in zip(params, args):\n            bind(e, a)\n    except LookupError as err:\n        return err.args[0]\n    def sub(t):\n        if isinstance(t, list):\n            return [sub(c) for c in t]\n        return t if t in PRIMS else bound[t]\n    return sub(ret)\n\ndef outcome(checker, params, ret, args):\n    try:\n        return checker.return_type(params, ret, args)\n    except Exception as e:\n        return type(e).__name__\n\ndef raises_value_error(f, text):\n    try:\n        f(text)\n    except ValueError:\n        return True\n    return False\n\nc = {fn}()\nparams, ret, args = [\"T1\", [\"bool\"]], [\"T1\", \"T1\", [\"bool\"]], [[\"int\", [\"str\"]], [\"bool\"]]\nout = c.return_type(params, ret, args)\nassert out == [[\"int\", [\"str\"]], [\"int\", [\"str\"]], [\"bool\"]]\nout[0][1].append(\"char\")\nout[2].append(\"float\")\nassert out[1] == [\"int\", [\"str\"]], \"two uses of one generic must be separate lists\"\nassert params == [\"T1\", [\"bool\"]] and ret == [\"T1\", \"T1\", [\"bool\"]] and args == [[\"int\", [\"str\"]], [\"bool\"]]\nassert c.return_type(params, ret, args) == [[\"int\", [\"str\"]], [\"int\", [\"str\"]], [\"bool\"]], \"the same call must give the same answer again\"\n",
+          "part": 2
+        }
+      ],
+      "parts": [
+        {
+          "title": "Print and parse",
+          "descriptionEn": "**Signature:** `TypeChecker()`, `format_type(t) -> str`, `format_function(params, ret) -> str`, `parse_type(text)`, `parse_function(text) -> tuple[list, type]`\n\n- `format_type` prints a name as itself and a tuple as `[` + its elements separated by `,` with no spaces + `]`. The empty tuple is `[]`.\n- `format_function` prints `(` + the parameters, printed the same way + `) -> ` + the return type. There is exactly one space on each side of `->`.\n- `parse_type` and `parse_function` are the exact inverses: they accept exactly the strings the format methods produce. Any other text raises `ValueError`, including extra spaces, a missing bracket, an empty element or an unknown name.\n- `parse_function` returns `(params, ret)`, with `params` a `list`.\n\n**Example:**\n- `format_function([\"int\", [\"T2\", []], \"T1\"], [\"T1\", \"str\"])` is `\"(int,[T2,[]],T1) -> [T1,str]\"`\n- `parse_function` of that string gives back `([\"int\", [\"T2\", []], \"T1\"], [\"T1\", \"str\"])`\n- `parse_type(\"[int,]\")`, `parse_type(\"[int, str]\")` and `parse_type(\"string\")` raise `ValueError`"
+        },
+        {
+          "title": "Return-type inference",
+          "descriptionEn": "Keep Part 1 and add inference.\n\n**Signature:** `return_type(params, ret, args)`\n\n- `args` holds one concrete type per parameter: a type with no generics in it.\n- Match each parameter with its argument. Where the parameter is a generic, that generic is bound to the whole argument at that position, even a tuple. Where both are tuples of the same length, match element by element. Otherwise they must be equal.\n- Every occurrence of one generic in one call must bind to equal types.\n- Return `ret` with every generic replaced by its binding. Every generic in `ret` appears in some parameter. The result shares no `list` with the inputs.\n- Errors, as exception classes you define with these names: `ArityError` when `len(args) != len(params)`; `TypeMismatchError` when two types must be equal and are not; `GenericConflictError` when a generic would bind to two different types.\n- Arity is checked first. Then parameters are matched from left to right, each one depth first from left to right, and the first problem found is raised.\n\n**Example**, written with the Part 1 strings:\n- `(T1,[int,T2]) -> [T2,T1]` called with `str`, `[int,bool]` returns `[bool,str]`\n- `(T1) -> [T1,T1]` called with `[]` returns `[[],[]]`\n- `(T1) -> T1` called with `int`, `int` raises `ArityError`\n- `(int,T1) -> T1` called with `float`, `str` raises `TypeMismatchError`\n- `(T1,[T1]) -> T1` called with `int`, `[str]` raises `GenericConflictError`"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "A type is either a str or a list. Which of the two cases calls itself? When parsing, after reading one type, what single character tells you whether the tuple goes on or ends, and what should you do with anything else?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "format_type: return t for a str, else '[' + ','.join(format each element) + ']'. For parsing, write _parse(text, i) that returns (type, next index): on '[' read types separated by ',' until ']', handling '[]' first; otherwise match a primitive or T followed by digits. parse_type must also check that the whole string was used."
+        }
+      ],
+      "modelConnections": [
+        "Tensor libraries type-check shapes and dtypes of generic operations, and tools such as jaxtyping bind a named dimension once per call and check every later use.",
+        "Tool-calling models fill typed parameters; a schema with generics must bind each placeholder to one consistent type across arguments."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Separating matching from substitution keeps an unbound or partly bound generic from leaking into the result.",
+          "A recursive parser that returns the next index makes every malformed string fail at a precise position.",
+          "Checking whether the parameter itself is a generic, before comparing, lets a generic bind to a whole tuple."
+        ],
+        "cons": [
+          "One-way matching only works when the arguments are concrete; generics on both sides need full unification.",
+          "Comparing types by recursion costs time proportional to their size on every conflict check.",
+          "Exact error order is a contract callers can come to depend on, which makes later changes harder."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "How do you tell a name from a tuple in this representation, and which case recurses?",
+          "hint": "Ask isinstance(t, str) first. Which branch returns at once, and which one has to print its elements by calling the same function again?"
+        },
+        {
+          "stage": "concept",
+          "question": "Why must parsing check that the whole string was consumed?",
+          "hint": "After parsing a valid type from \"[int]x\", there is text left over. What should parse_type do about it, and how does it know?"
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How does a parser that returns the next index handle nested tuples and report the first bad position?",
+          "hint": "Let a helper parse one type starting at index i and return the type plus the index just after it. What does it do when it sees '[', and when it sees ']' straight away?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why must the check for a generic look at the parameter itself rather than at generics inside it?",
+          "hint": "A parameter like [T1,int] contains a generic but is not one. If you treat it as a generic, what does T1 get bound to, and what goes wrong?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why keep matching and substitution as two passes instead of one?",
+          "hint": "If substitution runs while bindings are still being filled in, what happens to a generic that is bound later in the parameter list?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why must the returned type share no list with the inputs?",
+          "hint": "If the result contains the same list object as an argument, what happens to the argument when the caller appends to the result?"
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "What changes if arguments may contain generics too, and why is an occurs check needed?",
+          "hint": "If both sides may contain generics, what goes wrong when you bind T1 to [T1,int], and what check stops it?"
+        }
+      ]
     }
   ]
 }
