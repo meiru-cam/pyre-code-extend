@@ -290,5 +290,37 @@
       "web_crawler"
     ],
     "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/autograd-hillis-steele",
+    "exercises": [
+      "prefix_scan"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/numpy-1nn-affine",
+    "exercises": [
+      "nearest_neighbor"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "openai",
+    "item": "coding/streaming-entropy",
+    "exercises": [
+      "softmax_entropy"
+    ],
+    "round": "coding"
+  },
+  {
+    "company": "anthropic",
+    "item": "coding/distributed-mode-median",
+    "exercises": [
+      "cluster_stats"
+    ],
+    "round": "coding"
   }
 ]

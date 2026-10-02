@@ -201,5 +201,9 @@
   "label_scheduler": "class LabelScheduler:\n\n    def basic_schedule(self, t, m, h, k):\n        pass",
   "type_inference": "class TypeChecker:\n\n    def format_type(self, t):\n        pass\n\n    def format_function(self, params, ret):\n        pass\n\n    def parse_type(self, text):\n        pass\n\n    def parse_function(self, text):\n        pass",
   "noisy_annotators": "import numpy as np\n\n\nclass AnnotationCleaner:\n\n    def aggregate(self, annotations, n_classes, weights=None):\n        pass\n\n    def reliability(self, annotations, n_classes):\n        pass\n\n    def flag(self, r):\n        pass",
-  "web_crawler": "from urllib.parse import urlparse\n\n\nclass WebCrawler:\n\n    def crawl(self, start_url, html_parser):\n        pass"
+  "web_crawler": "from urllib.parse import urlparse\n\n\nclass WebCrawler:\n\n    def crawl(self, start_url, html_parser):\n        pass",
+  "prefix_scan": "import torch\n\n\nclass PrefixScan:\n\n    def prefix_products(self, W):\n        pass",
+  "nearest_neighbor": "import numpy as np\n\n\nclass NearestNeighbor:\n\n    def predict(self, X_train, y_train, X_query):\n        pass",
+  "softmax_entropy": "import math\n\nimport numpy as np\n\n\nclass EntropyMeter:\n\n    def entropy(self, logits):\n        pass",
+  "cluster_stats": "from collections import Counter\n\nP = 10\n\n\nclass ClusterStats:\n\n    def global_mode(self, rank, shard, send, recv, barrier):\n        pass"
 }

@@ -1,0 +1,21 @@
+{
+  "title": "Distributed Mode, Median and Sort",
+  "summary": "Ten ranks each hold a shard of a large integer dataset and can only talk through send/recv/barrier. Compute the global mode with a hash-partitioned shuffle, the global median with a distributed binary search over the value range, and a full distributed sort, minimizing bytes moved across the network rather than bytes read locally.",
+  "round": "coding",
+  "kind": "Coding · distributed systems, message passing",
+  "difficulty": "Medium",
+  "frequency": "medium",
+  "format": "3 parts / 55 min",
+  "topics": [
+    "distributed-systems",
+    "message-passing",
+    "bandwidth",
+    "hashing",
+    "sorting"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/coding/distributed-mode-median",
+  "rubric": [],
+  "exercises": [
+    "cluster_stats"
+  ]
+}

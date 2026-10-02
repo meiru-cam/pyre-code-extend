@@ -1034,6 +1034,15 @@
       }
     ]
   },
+  "nearest_neighbor": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "# Adapted from Schuture/OpenAI-Interview-Notes (code under the MIT License).\nimport numpy as np\n\n\nclass NearestNeighbor:\n    def _sq_dists(self, X_train, X_query):\n        # |q - x|^2 = |q|^2 - 2 q.x + |x|^2: (m, 1) + (m, n) + (1, n), never an (m, n, d) array\n        q2 = (X_query ** 2).sum(axis=1)[:, None]\n        x2 = (X_train ** 2).sum(axis=1)[None, :]\n        return q2 - 2.0 * X_query @ X_train.T + x2\n\n    def predict(self, X_train, y_train, X_query):\n        X_train, X_query = np.asarray(X_train, dtype=float), np.asarray(X_query, dtype=float)\n        nearest = np.argmin(self._sq_dists(X_train, X_query), axis=1)  # first minimum: smallest index wins\n        return np.asarray(y_train)[nearest]\n\n    def affine_layer(self, X_train):\n        # -|q - x_i|^2 = 2 x_i.q - |x_i|^2 - |q|^2, and -|q|^2 is the same for every i\n        X_train = np.asarray(X_train, dtype=float)\n        return 2.0 * X_train.T, -(X_train ** 2).sum(axis=1)\n\n    def predict_affine(self, X_train, y_train, X_query):\n        W, b = self.affine_layer(X_train)\n        logits = np.asarray(X_query, dtype=float) @ W + b\n        z = np.exp(logits - logits.max(axis=1, keepdims=True))  # shifting by the row max avoids overflow\n        probs = z / z.sum(axis=1, keepdims=True)\n        return probs, np.asarray(y_train)[np.argmax(probs, axis=1)]",
+        "role": "solution"
+      }
+    ]
+  },
   "noisy_annotators": {
     "cells": [
       {
@@ -1330,6 +1339,15 @@
       }
     ]
   },
+  "softmax_entropy": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "# Adapted from Schuture/OpenAI-Interview-Notes (code under the MIT License).\nimport math\n\nimport numpy as np\n\n\nclass EntropyMeter:\n    def entropy(self, logits):\n        x = np.asarray(logits, dtype=float)\n        shifted = x - x.max()  # the largest term becomes exp(0) = 1, so nothing overflows\n        log_z = math.log(np.exp(shifted).sum())\n        log_p = shifted - log_z  # log p_i without ever dividing tiny numbers\n        return float(max(0.0, -(np.exp(log_p) * log_p).sum()))\n\n    def _update(self, state, block):\n        \"\"\"Folds one block into (m, s, v): s = sum exp(x - m), v = sum exp(x - m) * (x - m).\"\"\"\n        block = np.asarray(block, dtype=float)\n        if block.size == 0:\n            return state\n        m, s, v = state\n        new_m = max(m, float(block.max()))\n        if s:  # rescale the old sums to the new maximum\n            scale, delta = math.exp(m - new_m), m - new_m\n            s, v = s * scale, (v + delta * s) * scale\n        shifted = block - new_m\n        e = np.exp(shifted)\n        return new_m, s + float(e.sum()), v + float((e * shifted).sum())\n\n    @staticmethod\n    def _finish(state):\n        _, s, v = state\n        return max(0.0, math.log(s) - v / s)  # H = log Z - E[x - m]\n\n    def entropy_blockwise(self, logits, block_size=2):\n        x = np.asarray(logits, dtype=float)\n        state = (-math.inf, 0.0, 0.0)\n        for start in range(0, len(x), block_size):\n            state = self._update(state, x[start:start + block_size])  # a view, not a copy\n        return self._finish(state)\n\n    def entropy_online(self, blocks):\n        state = (-math.inf, 0.0, 0.0)\n        for block in blocks:\n            state = self._update(state, block)\n        return self._finish(state)",
+        "role": "solution"
+      }
+    ]
+  },
   "spreadsheet": {
     "cells": [
       {
@@ -1559,6 +1577,15 @@
       {
         "type": "code",
         "source": "import torch\nimport torch.nn.functional as F\nfrom torch.utils.checkpoint import checkpoint\n\ndef chunked_cross_entropy(hidden, weight, targets, chunk_size, ignore_index=-100):\n    if chunk_size < 1:\n        raise ValueError(\"chunk_size must be positive\")\n    if hidden.ndim != 2 or weight.ndim != 2 or hidden.shape[1] != weight.shape[1] or targets.shape != hidden.shape[:1]:\n        raise ValueError(\"expected hidden (N, D), weight (V, D) and targets (N,)\")\n    valid = int((targets != ignore_index).sum())\n    if valid == 0:\n        raise ValueError(\"no target to score\")\n\n    def chunk_loss(h, w, t):\n        return F.cross_entropy(h @ w.T, t, ignore_index=ignore_index, reduction=\"sum\")\n\n    total = hidden.new_zeros(())\n    for start in range(0, hidden.shape[0], chunk_size):\n        end = start + chunk_size\n        total = total + checkpoint(chunk_loss, hidden[start:end], weight, targets[start:end], use_reentrant=False)\n    return total / valid",
+        "role": "solution"
+      }
+    ]
+  },
+  "cluster_stats": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "# Adapted from Schuture/Anthropic-Interview-Notes (code under the MIT License).\nfrom bisect import bisect_right\nfrom collections import Counter\n\nP = 10\n\n\nclass ClusterStats:\n    def global_mode(self, rank, shard, send, recv, barrier):\n        # each value has an owner rank, so its counts meet in one place and no rank gets everything\n        buckets = [{} for _ in range(P)]\n        for value, count in Counter(shard).items():\n            buckets[value % P][value] = count\n        for dst in range(P):\n            send(dst, buckets[dst])\n        totals = Counter()\n        for src in range(P):\n            totals.update(recv(src))\n        best = min(totals.items(), key=lambda kv: (-kv[1], kv[0])) if totals else None\n        send(0, best)  # one candidate per owner\n        if rank != 0:\n            return None\n        candidates = [c for c in (recv(src) for src in range(P)) if c is not None]\n        return min(candidates, key=lambda kv: (-kv[1], kv[0]))[0]\n\n    def global_median(self, rank, shard, send, recv, barrier):\n        local = sorted(shard)\n        # rank 0 learns N and the value range, then binary-searches the value with counts only\n        send(0, (len(local), local[0] if local else None, local[-1] if local else None))\n        if rank == 0:\n            stats = [recv(src) for src in range(P)]\n            n = sum(s[0] for s in stats)\n            lo = min(s[1] for s in stats if s[0])\n            hi = max(s[2] for s in stats if s[0])\n            k = (n - 1) // 2\n            while lo < hi:  # smallest v with at least k + 1 elements <= v\n                mid = (lo + hi) // 2\n                for dst in range(1, P):\n                    send(dst, mid)\n                below = bisect_right(local, mid) + sum(recv(src) for src in range(1, P))\n                if below >= k + 1:\n                    hi = mid\n                else:\n                    lo = mid + 1\n            for dst in range(1, P):\n                send(dst, None)  # done\n            return lo\n        while True:\n            mid = recv(0)\n            if mid is None:\n                break\n            send(0, bisect_right(local, mid))\n        return None\n\n    def sample_sort(self, rank, shard, send, recv, barrier):\n        local = sorted(shard)\n        # P - 1 evenly spaced samples per rank pick P - 1 splitters on rank 0\n        samples = [local[(i * len(local)) // P] for i in range(1, P)] if local else []\n        send(0, samples)\n        if rank == 0:\n            pool = sorted(x for src in range(P) for x in recv(src))\n            splitters = [pool[(i * len(pool)) // P] for i in range(1, P)] if pool else []\n            for dst in range(P):\n                send(dst, splitters)\n        splitters = recv(0)\n        start = 0\n        for dst in range(P):\n            end = bisect_right(local, splitters[dst]) if dst < len(splitters) else len(local)\n            send(dst, local[start:end])\n            start = end\n        out = []\n        for src in range(P):\n            out.extend(recv(src))\n        return sorted(out)",
         "role": "solution"
       }
     ]
@@ -2045,6 +2072,15 @@
       {
         "type": "code",
         "source": "import torch\n\n\ndef ppo_clipped_policy_loss(\n    logprobs, old_logprobs, advantages, mask, clip_eps=0.2, dual_clip=None\n):\n    shapes = (logprobs.shape, old_logprobs.shape, advantages.shape, mask.shape)\n    if len(set(shapes)) != 1:\n        raise ValueError(f\"all tensors must share a shape, got {shapes}\")\n    if clip_eps <= 0:\n        raise ValueError(f\"clip_eps must be positive, got {clip_eps}\")\n    if dual_clip is not None and dual_clip <= 1.0:\n        raise ValueError(f\"dual_clip must be greater than 1.0, got {dual_clip}\")\n\n    keep = mask.to(logprobs.dtype)\n    denominator = keep.sum()\n    if denominator == 0:\n        return torch.zeros((), dtype=logprobs.dtype, device=logprobs.device)\n\n    ratio = torch.exp(logprobs - old_logprobs)\n    unclipped = ratio * advantages\n    clipped = ratio.clamp(1.0 - clip_eps, 1.0 + clip_eps) * advantages\n    per_token = -torch.min(unclipped, clipped)\n\n    if dual_clip is not None:\n        bounded = torch.min(per_token, -dual_clip * advantages)\n        per_token = torch.where(advantages < 0, bounded, per_token)\n\n    return (per_token * keep).sum() / denominator",
+        "role": "solution"
+      }
+    ]
+  },
+  "prefix_scan": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "# Adapted from Schuture/OpenAI-Interview-Notes (code under the MIT License).\nimport torch\n\n\nclass PrefixScan:\n    def prefix_products(self, W):\n        out = [W[0]]\n        for i in range(1, W.shape[0]):\n            out.append(out[-1] @ W[i])  # new tensors only, so autograd keeps every input it saved\n        return torch.stack(out)\n\n    def backward(self, W, P, G):\n        dW = []\n        carry = torch.zeros_like(W[0])  # dL/dP[i]: from the loss and from P[i + 1] = P[i] @ W[i + 1]\n        for i in reversed(range(W.shape[0])):\n            carry = carry + G[i]\n            dW.append(carry if i == 0 else P[i - 1].transpose(-1, -2) @ carry)\n            carry = carry @ W[i].transpose(-1, -2)\n        return torch.stack(dW[::-1])\n\n    def _rounds(self, W):\n        \"\"\"Runs the scan; returns P and the input of every round, for the backward pass.\"\"\"\n        X, inputs, stride = W, [], 1\n        while stride < W.shape[0]:\n            inputs.append((stride, X))\n            # one batched product per round; lower indices stay on the left\n            X = torch.cat([X[:stride], X[:-stride] @ X[stride:]])\n            stride *= 2\n        return X, inputs\n\n    def scan_forward(self, W):\n        return self._rounds(W)[0]\n\n    def scan_backward(self, W, G):\n        H = G\n        for stride, X in reversed(self._rounds(W)[1]):\n            # Y[j] = X[j] for j < stride, else X[j - stride] @ X[j]; X[j] may be used in both roles\n            right = X[:-stride].transpose(-1, -2) @ H[stride:]  # X[j] as the right factor of Y[j]\n            left = H[stride:] @ X[stride:].transpose(-1, -2)    # X[j] as the left factor of Y[j + stride]\n            dX = torch.cat([H[:stride], right]) + torch.cat([left, torch.zeros_like(H[:stride])])\n            H = dX\n        return H",
         "role": "solution"
       }
     ]

@@ -212,5 +212,41 @@
     "How do you bound in-flight calls in asyncio without limiting how many tasks you create?": "A semaphore counts permits. Where do you acquire it so that tasks can exist freely but only a few calls run?",
     "Why must a blocking call run in a thread when you use asyncio, and what breaks if it does not?": "If a coroutine calls a blocking function directly, what can the event loop do while it waits? Which helper runs it in a thread?",
     "What else would you normalise or respect in a production crawler, such as robots.txt or per-host rate limits?": "Besides the fragment, which differences in a URL point to the same page, and what would a polite crawler limit per host?"
+  },
+  "prefix_scan": {
+    "Why does writing P[i] = P[i - 1] @ W[i] into a preallocated tensor break backward()?": "To compute the gradient of Y = A @ B later, autograd needs A and B. If the memory that held A is overwritten after the product, what does autograd see when backward runs?",
+    "Which tensors does autograd save for a matrix product, and why those?": "Write Y = A @ B entry by entry. Which inputs appear in dY/dA and in dY/dB, and so which ones must be kept?",
+    "What does the forward loop cost in products and in sequential steps for N matrices of size D?": "Count the products in the forward loop and how many must wait for the one before. What does that make the cost and the number of sequential steps?",
+    "Why is the gradient flowing into P[i] a sum of two terms, and what are they?": "P[i] is used by the loss and also as the left factor of P[i + 1]. Add the two contributions; how does the second one depend on the gradient flowing into P[i + 1]?",
+    "Why does the Hillis-Steele scan need associativity but not commutativity, and where does order matter?": "Draw x after each round for N = 4. Which pairs are multiplied, and what goes wrong if you swap the two factors?",
+    "When is the scan faster than the loop, given that it does more total work?": "The scan does about N log N products and the loop N - 1. When does doing more total work still finish sooner?",
+    "How would you cut the scan's memory, for example by recomputing rounds or using a Blelloch scan?": "Each round keeps its input for the backward pass. How could you avoid storing them all, and what would it cost in extra products?"
+  },
+  "nearest_neighbor": {
+    "Why does |q - x|^2 = |q|^2 - 2 q.x + |x|^2 let you avoid an (m, n, d) array?": "Broadcasting Q[:, None, :] - X[None, :, :] builds every difference at once. How big is that for 2000 x 2000 x 50 floats, and which expansion avoids it?",
+    "What are the shapes of each intermediate array in the vectorised version?": "Write the shape after each step: the norms of Q, the norms of X, the product Q @ X.T, and their sum. Which ones need a new axis to broadcast?",
+    "Why does np.argmin give the right tie-break, and when could the expanded form break a tie the exact distance would not?": "np.argmin returns the first minimum. When two training points are equally close in exact arithmetic, what can rounding in q2 - 2 q.x + x2 do to that tie?",
+    "Why can the |q|^2 term be dropped when building the layer, and what W and b remain?": "In -|q - x_i|^2 = 2 x_i.q - |x_i|^2 - |q|^2, which term is the same for every i? What does that leave as W and b?",
+    "Why must the softmax subtract each row's maximum before exponentiating?": "Try np.exp(1000.0). What changes if you subtract each row's largest logit first, and why does the softmax stay the same?",
+    "How would you serve nearest-neighbour search over millions of points?": "Comparing a query with every stored point costs O(n d). What do approximate indexes give up to answer faster?",
+    "What does softmax over negative distances say about confidence, and how would a temperature change it?": "Logits here are negative squared distances, often far apart. What does that do to the softmax, and what would dividing by a temperature change?"
+  },
+  "softmax_entropy": {
+    "Why is the entropy of a softmax never negative, and what values does it take for one logit and for N equal logits?": "Each p_i is in (0, 1], so what sign does p_i log p_i have? Try one logit, then N equal logits, before writing any code.",
+    "Which intermediate arrays does the direct formula create, and in what order?": "List the arrays the formula needs: exponentials, their sum, probabilities, logs. Which depend on the sum, and so must wait for it?",
+    "What does the direct computation cost in time and memory for N logits?": "Count how many length-N arrays exist at once in your version. What does that cost in memory for a 100k-token vocabulary?",
+    "Why does subtracting the maximum logit leave the softmax unchanged, and what does it fix?": "Multiply the top and bottom of the softmax by exp(-m). What happens to p, and what is the largest exponent left?",
+    "Why compute log p in the centred form instead of taking the log of the probability?": "If exp(x_i - m) underflows to 0, what is log(p_i) when computed from p_i, and what is it in the centred form?",
+    "Which running scalars give the entropy in one pass, and how do you update them when the maximum grows?": "Keep m, S = sum exp(x - m) and V = sum exp(x - m)(x - m). When m grows by d, how do S and V change, and what is H from them?",
+    "How would you compute per-row entropies for a batch of sequences over a 100k-token vocabulary on a GPU?": "On a GPU, how would you reduce each row of a (batch, vocab) array to its entropy without a second full-size array?"
+  },
+  "cluster_stats": {
+    "Why does sending every count to rank 0 break the per-rank traffic bound?": "Suppose every rank sends its whole count table to rank 0. Add up what rank 0 receives when there are a million distinct values.",
+    "How does giving each value an owner rank keep the result correct and the traffic spread?": "If value v always goes to rank v % P, which rank sees every count of v? Can that rank then know v's total exactly?",
+    "How many messages and bytes does your mode protocol send in total, and how much does the busiest rank receive?": "Count messages: every rank sends one dict to every rank, then one candidate to rank 0. How many messages is that, and how many values does the busiest rank get?",
+    "How do you find the median by exchanging counts only, and how many rounds does it take?": "Rank 0 proposes a value; each rank replies how many of its elements are at most that value. How does the total tell you which half holds the median?",
+    "How do you choose splitters for a sample sort, and what happens when one value dominates?": "If every rank sends a few evenly spaced samples, what do the sorted samples say about where to cut? What happens if half the data is one value?",
+    "Where would barriers or a fixed message order matter to avoid deadlock?": "Two ranks each wait in recv for the other before sending. What happens, and what ordering of sends and receives avoids it?",
+    "How would these protocols change with collectives such as all-reduce and all-to-all, or with many more ranks?": "Which of these steps is an all-to-all, and which is a reduce? How does the message count grow with P?"
   }
 }

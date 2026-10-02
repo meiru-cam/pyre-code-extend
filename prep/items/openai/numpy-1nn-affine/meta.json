@@ -1,0 +1,20 @@
+{
+  "title": "NumPy 1-NN as an Affine Layer",
+  "summary": "Write 1-nearest-neighbour classification in NumPy without Python loops, then show that the same computation is a single affine layer followed by argmax or softmax.",
+  "round": "coding",
+  "kind": "Coding with derivation · NumPy",
+  "difficulty": "Medium",
+  "frequency": "high",
+  "format": "2 parts / 60 min",
+  "topics": [
+    "numpy",
+    "vectorization",
+    "broadcasting",
+    "linear-algebra"
+  ],
+  "source": "https://github.com/Schuture/OpenAI-Interview-Notes/tree/main/coding/numpy-1nn-affine",
+  "rubric": [],
+  "exercises": [
+    "nearest_neighbor"
+  ]
+}
