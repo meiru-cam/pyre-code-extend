@@ -1,0 +1,21 @@
+{
+  "title": "Take-Home: Optimising a Kernel on a Simulated Vector Machine",
+  "summary": "A from-scratch simulated vector processor — scalar and vector registers, packed instruction bundles, a load latency — comes with a naive kernel to speed up. The job is to pack, hoist, vectorise, unroll and software-pipeline it, checking each step's cycle count against a lower bound derived from the machine's own per-unit throughput.",
+  "round": "take-home",
+  "kind": "Take-home · performance optimisation",
+  "difficulty": "Hard",
+  "frequency": "low",
+  "format": "2 hours",
+  "topics": [
+    "vectorization",
+    "loop-unrolling",
+    "instruction-scheduling",
+    "software-pipelining",
+    "simulation"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/take-home/performance-kernel-optimization",
+  "rubric": [],
+  "exercises": [
+    "vector_kernel"
+  ]
+}
