@@ -1,4 +1,4 @@
-"""Schedule a kernel for a simulated in-order vector machine: pack bundles, vectorize with a scalar tail, then keep the load unit busy every cycle."""
+"""Schedule a kernel for a simulated in-order vector machine: pack bundles, vectorize with a scalar tail, then keep the load and vector units busy every cycle."""
 
 from ._interview import interview
 
@@ -40,8 +40,8 @@ def _operand_regs(instr):
 
 class VectorMachine:
     '''An in-order vector processor. A program is a list of bundles; a bundle is a list of
-    instructions issued in the same cycle, at most UNIT_WIDTH[unit] per unit. See the machine
-    description above for the read/write and stall rules.'''
+    instructions issued in the same cycle, at most UNIT_WIDTH[unit] per unit. See the rules in the
+    task description for the read/write and stall rules.'''
 
     def __init__(self, mem):
         self.s = [0] * NUM_SREG
@@ -163,7 +163,7 @@ cycles = check({fn}, 256, 1, "example")
 assert cycles <= 360, f"{cycles} cycles at n = 256; at most 360 allowed"
 """},
     {"name": "Part 2: vectorized sizes and tails", "part": 2, "visibility": "unshown", "behavior": "performance.complexity",
-     "failure_message": "The program wrote a wrong z for an n that is not a multiple of 8, or took more than 1.25n + 40 cycles at n = 128, 256 or 512.",
+     "failure_message": "For some n from 1 to 512, including sizes that are not a multiple of 8, the program wrote a wrong z, changed its inputs, broke a bundle rule or read outside memory, or it took more than 1.25n + 40 cycles at n = 128, 256 or 512.",
      "code": _MODEL + r"""
 for n in (1, 7, 8, 9, 15, 16, 17, 63, 100, 129, 263):
     check({fn}, n, 200 + n, "tail")
@@ -172,8 +172,8 @@ for n in (128, 256, 512):
     assert cycles <= 1.25 * n + 40, (n, cycles, 1.25 * n + 40)
 """},
     {"name": "Part 3: the worked example", "part": 3, "behavior": "performance.complexity", "code": _MODEL + r"""
-cycles = check({fn}, 1024, 2, "example")
-assert cycles <= 280, f"{cycles} cycles at n = 1024; at most 280 allowed"
+cycles = check({fn}, 2048, 2, "example")
+assert cycles <= 536, f"{cycles} cycles at n = 2048; at most 536 allowed"
 """},
     {"name": "Part 3: near the load bound", "part": 3, "visibility": "unshown", "behavior": "performance.complexity",
      "failure_message": "At some n from 512 to 2053 the program took more than 2 * (n // 8) + 8 * (n % 8) + 24 cycles, or wrote a wrong z.",
@@ -195,11 +195,11 @@ TASK = {
 The requirement arrives in parts. Each part keeps every earlier behavior, so one `build_kernel` passes all parts at the end. Pass every test of the current part to reveal the next one.
 
 **Rules for every part:**
-- Memory is a list of floats: `x` at `0..n-1`, `y` at `n..2n-1`, `a` at `2n`, `b` at `2n+1`, and `z` must be written to `2n+2..3n+1`. `x`, `y`, `a` and `b` must stay unchanged.
-- A program is a list of bundles, each a list of instruction tuples such as `("vload", 2, 0)`. A bundle issues in one cycle and holds at most 2 scalar, 1 vector, 1 load and 1 store instruction.
+- Memory is a list of floats: `x` at `0..n-1`, `y` at `n..2n-1`, `a` at `2n`, `b` at `2n+1`, and `z` must be written to `2n+2..3n+1`. `x`, `y`, `a` and `b` must stay unchanged. Memory has exactly `3n + 2` entries, `z` starts as zeros, and an address outside memory raises `IndexError`.
+- A program is a list of bundles, each a list of instruction tuples such as `("vload", 2, 0)`. A bundle issues in one cycle and holds at most 2 scalar, 1 vector, 1 load and 1 store instruction. Operand order and meaning are in `_operand_regs` and `VectorMachine._eval`; for example `("vmadd", d, p, q, r)` sets `v[d] = v[p] * v[q] + v[r]`.
 - Instructions in a bundle read registers as they were before the bundle, and two of them may not write the same register. There are 8 scalar registers, and 8 vector registers of 8 lanes each.
 - Loads become readable 4 cycles after they issue, and every other result 1 cycle after. A bundle whose inputs are not ready waits. `VectorMachine.run` returns the cycle count.
-- `z` must equal `a * x[i] + b * y[i]` for every `n >= 0`, including sizes that are not a multiple of 8. The program may depend on `n` only.
+- `z[i]` must match `a * x[i] + b * y[i]` within a relative or absolute error of `1e-12` for every `n >= 0`, including sizes that are not a multiple of 8. The program may depend on `n` only.
 
 ────────────────────────────────
 
@@ -209,14 +209,14 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Where it is used:** compilers and kernel authors for accelerators do exactly this by hand or by scheduler: bundle independent instructions, vectorize, unroll, and software-pipeline until one unit is busy every cycle.
 
-Adapted from the kernel optimisation take-home in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded. The simulator is kept, with `vrsum` and the other unused opcodes still available. The kernel is new: an element-wise `a * x + b * y` written back to memory replaces the source's reduction to one scalar. The speedup score becomes three cycle limits, and the written report on bottlenecks is left out; the interview questions ask for it instead.""",
+Adapted from the kernel optimisation take-home in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded. The simulator is kept, with `vrsum` and the other unused opcodes still available. The kernel is new: an element-wise `a * x + b * y` written back to memory replaces the source's reduction to one scalar. The speedup score becomes three cycle limits, and the written report on bottlenecks is left out; the interview questions ask for it instead. Dropping the reduction also drops its accumulator and final-sum step, and the source's time limit and tool rules do not apply.""",
     "parts": [
         {
             "title": "Correct and packed",
             "description_en": r"""**Signature:** `build_kernel(n) -> list[list[tuple]]`
 
 - The program is correct for every `n`, and takes at most `8n + 20` cycles for `n` from `0` to `40`.
-- Load `a` and `b` once, and put independent instructions in the same bundle.
+- Tip: loading `a` and `b` once and putting independent instructions in the same bundle is enough.
 
 **Example:**
 - with `x = [1, 2, 3]`, `y = [4, 5, 6]`, `a = 2` and `b = -1`, the program writes `z = [-2, -1, 0]`
@@ -227,17 +227,17 @@ Adapted from the kernel optimisation take-home in Schuture/Anthropic-Interview-N
             "description_en": r"""Keep Part 1. Use the vector unit: `vload`, `vmul`, `vmadd`, `vbcast` and `vstore` handle 8 elements at once.
 
 - At `n = 128`, `256` and `512`, take at most `1.25n + 40` cycles.
-- Sizes that are not a multiple of 8 stay correct, so the last `n % 8` elements need scalar code.
+- Sizes that are not a multiple of 8 stay correct, so the last `n % 8` elements need separate handling, for example scalar code.
 
 **Example:** at `n = 256` the program takes at most `360` cycles; a scalar program cannot, since it loads one value per cycle.""",
         },
         {
             "title": "Near the load bound",
-            "description_en": r"""Keep Parts 1–2. Each 8 elements need two vector loads, and the machine issues one load per cycle, so the load unit bounds the program at about `n / 4` cycles.
+            "description_en": r"""Keep Parts 1–2. Each 8 elements need two vector loads and two vector instructions (`vmul`, `vmadd`), and the machine issues one of each per cycle, so the load and vector units bound the program at about `n / 4` cycles.
 
 - Take at most `2 * (n // 8) + 8 * (n % 8) + 24` cycles for `n` from `512` to `2053`.
 
-**Example:** at `n = 1024` the program takes at most `280` cycles, against a bound of `256`.""",
+**Example:** at `n = 2048` the program takes at most `536` cycles, against a bound of `512`.""",
         },
     ],
     "hints": [
@@ -252,7 +252,7 @@ Adapted from the kernel optimisation take-home in Schuture/Anthropic-Interview-N
         "pros": [
             "Bundling and hoisting constants is cheap and safe, and removes most of the baseline's wasted cycles.",
             "Vector instructions do 8 elements per load, which changes the bound by a factor of 8.",
-            "Rotating registers across several chunks lets later loads issue while earlier results wait, approaching the load bound.",
+            "Rotating registers across several chunks lets later loads issue while earlier results wait, approaching the load and vector bound.",
         ],
         "cons": [
             "Hand-scheduled straight-line code grows with n; a real kernel would loop and pay for it in instruction memory.",
@@ -351,7 +351,7 @@ def build_kernel(n):
         ],
         tradeoffs=[
             "How do you handle n that is not a multiple of 8, and what does the tail cost?",
-            "Why does the load unit bound the vector program at about n / 4 cycles, and how close can you get?",
+            "Why do the load and vector units bound the vector program at about n / 4 cycles, and how close can you get?",
             "How many chunks must be in flight to hide a 4-cycle load latency, and what limits it on this machine?",
             "Would you write the schedule by hand or write a small scheduler, and what would you check to trust it?",
         ],

@@ -18,9 +18,9 @@
     "Setup: the model class, the data generator with a known ground truth, the test error, and how n varies at a fixed model size",
     "Curve: enough values of n on both sides of the interpolation threshold, and enough repeats that the peak is not noise",
     "Explanation: why the error peaks near the threshold for this model class, and why it falls on both sides",
-    "Remedy: one change that removes or shrinks the peak without moving the rest of the curve, shown on the same experiment",
-    "Write-up: a notebook and at most eight slides covering question, setup, result, explanation, remedy and its limits",
-    "Defence: whether the explanation survives another data distribution or model class, and what you would try next"
+    "Fix: a single change aimed at the peak, rerun on the identical experiment, with evidence the curve away from the peak barely moves",
+    "Deliverables: runnable code with its numbers, plus a short slide deck that a reviewer can follow without you, ending in what the fix cannot do",
+    "Questioning: which assumption your explanation leans on, what would break under different data or a different model, and the next experiment"
   ],
   "exercises": []
 }

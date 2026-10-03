@@ -15,10 +15,10 @@
   ],
   "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/take-home/ml-take-home",
   "rubric": [
-    "Data and model: how the noisy labels are made, the one-hidden-layer classifier, and what is held clean",
-    "Grid: noise rate against training-set size and hidden width, with repeats and error bars",
-    "Early stopping: how much of the noise damage a small clean validation set recovers, and where it does not",
-    "Interpretation: which conclusions the data supports and which it does not",
+    "Data and model: how the noisy labels are made, the one-hidden-layer classifier, what is held clean, and the optimizer, learning rate and epochs you chose and why",
+    "Grid: noise rate against training-set size and hidden width, with repeats and error bars, reported as tables, and how noise damage changes with n and with width",
+    "Early stopping: how much of the noise damage a small clean validation set recovers, where it does not, and whether it costs anything at zero noise",
+    "Interpretation: which conclusions the data supports, which it does not, and how large a gap must be before you trust a comparison",
     "Limits and next steps: what you would change with more time, and why",
     "Presentation: the result first, in ten minutes, with the plots that carry it"
   ],
