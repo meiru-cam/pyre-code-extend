@@ -186,8 +186,14 @@ def rubric_for(round_: str, problem: str, reference: str) -> list[str]:
     return heads
 
 
+def item_rubric(round_: str, problem: str, reference: str, override: list[str] | None = None) -> list[str]:
+    # A source may write its own checklist, for items whose headings are only "Part 1", "Part 2", ...
+    return list(override) if override else rubric_for(round_, problem, reference)
+
+
 def import_item(
     checkout: Path, company: str, rel: str, exercises: list[str], round_override: str | None = None,
+    rubric_override: list[str] | None = None,
 ) -> Path:
     source_dir = checkout / rel
     category, slug = rel.split("/")
@@ -215,7 +221,7 @@ def import_item(
         "format": meta.get("format") or None,
         "topics": meta.get("topics", []),
         "source": f"{SOURCE_REPOS[company]}/tree/main/{rel}",
-        "rubric": rubric_for(round_, problem, reference),
+        "rubric": item_rubric(round_, problem, reference, rubric_override),
         "exercises": exercises,
     }
     target = ITEMS_DIR / company / slug
@@ -236,6 +242,7 @@ def main(argv: list[str] | None = None) -> None:
         checkout = getattr(args, source["company"])
         target = import_item(
             checkout, source["company"], source["item"], source.get("exercises", []), source.get("round"),
+            source.get("rubric"),
         )
         print(f"Wrote {target.relative_to(ROOT)}", file=sys.stderr)
 

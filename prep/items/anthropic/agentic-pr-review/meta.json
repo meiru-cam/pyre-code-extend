@@ -1,0 +1,21 @@
+{
+  "title": "Reviewing and Improving Pull Requests with an AI Coding Assistant",
+  "summary": "Review four open pull requests against a small Python job-queue library — the problem each solves, the specific problems in its diff, missing tests, and whether it can be merged — then choose one, improve it, add tests, and rewrite its description.",
+  "round": "coding",
+  "kind": "Code review · AI-assisted, Python",
+  "difficulty": "Medium",
+  "frequency": "medium",
+  "format": "4 PRs / 55 min",
+  "topics": [
+    "code-review",
+    "pull-requests",
+    "race-condition",
+    "deserialization",
+    "testing"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/coding/agentic-pr-review",
+  "rubric": [],
+  "exercises": [
+    "queue_pr_review"
+  ]
+}

@@ -11,7 +11,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent))
 
 from export_prep import OUTPUT, PrepError, build_prep_catalog
-from import_prep_notes import rubric_for, to_site_markdown
+from import_prep_notes import item_rubric, rubric_for, to_site_markdown
 
 
 def _write_item(root: Path, company: str, slug: str, meta: dict, prompt: str = "Design it.") -> None:
@@ -90,6 +90,13 @@ def test_design_rubric_always_asks_for_failure_modes_and_tradeoffs():
     assert rubric_for("system-design", "", "### Architecture\n### Follow-ups\n") == [
         "Architecture", "Failure modes and recovery", "Trade-offs and alternatives rejected",
     ]
+
+
+def test_source_rubric_replaces_part_headings():
+    reference = "### Part 1\n### Part 2\n"
+    assert item_rubric("coding", "", reference) == []
+    assert item_rubric("coding", "", reference, ["Tail bound", "Restarts"]) == ["Tail bound", "Restarts"]
+    assert item_rubric("system-design", "", reference, None)[:2] == ["Part 1", "Part 2"]
 
 
 def test_site_markdown_survives_short_table_rows():
