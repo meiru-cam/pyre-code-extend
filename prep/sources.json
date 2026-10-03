@@ -654,5 +654,37 @@
       "Part 3: two consistent estimators with proofs, the Fisher information, each asymptotic variance, which one is efficient, and the efficiency gap",
       "Part 4: the quantity a simulation should measure for each conclusion, the predicted value, and an error measure that behaves when the mean squared error does not"
     ]
+  },
+  {
+    "company": "anthropic",
+    "item": "take-home/performance-kernel-optimization",
+    "exercises": [
+      "vector_kernel"
+    ],
+    "round": "take-home"
+  },
+  {
+    "company": "anthropic",
+    "item": "take-home/interp-double-descent",
+    "rubric": [
+      "Setup: the model class, the data generator with a known ground truth, the test error, and how n varies at a fixed model size",
+      "Curve: enough values of n on both sides of the interpolation threshold, and enough repeats that the peak is not noise",
+      "Explanation: why the error peaks near the threshold for this model class, and why it falls on both sides",
+      "Fix: a single change aimed at the peak, rerun on the identical experiment, with evidence the curve away from the peak barely moves",
+      "Deliverables: runnable code with its numbers, plus a short slide deck that a reviewer can follow without you, ending in what the fix cannot do",
+      "Questioning: which assumption your explanation leans on, what would break under different data or a different model, and the next experiment"
+    ]
+  },
+  {
+    "company": "anthropic",
+    "item": "take-home/ml-take-home",
+    "rubric": [
+      "Data and model: how the noisy labels are made, the one-hidden-layer classifier, what is held clean, and the optimizer, learning rate and epochs you chose and why",
+      "Grid: noise rate against training-set size and hidden width, with repeats and error bars, reported as tables, and how noise damage changes with n and with width",
+      "Early stopping: how much of the noise damage a small clean validation set recovers, where it does not, and whether it costs anything at zero noise",
+      "Interpretation: which conclusions the data supports, which it does not, and how large a gap must be before you trust a comparison",
+      "Limits and next steps: what you would change with more time, and why",
+      "Presentation: the result first, in ten minutes, with the plots that carry it"
+    ]
   }
 ]

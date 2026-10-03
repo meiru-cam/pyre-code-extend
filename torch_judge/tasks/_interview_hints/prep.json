@@ -482,5 +482,14 @@
     "Computing p @ M for every pair before masking needs N*A*C memory. How do you avoid it?": "The all-pairs product holds N*A*C numbers, mostly for missing labels. How could you index only the observed (i, a) pairs and pick the one column each needs?",
     "How do you prove the vectorized loss matches the loop, gradients included?": "Run the loop and your version on the same small random inputs in float64. Which outputs and which gradients would you compare, and what about rows with no label at all?",
     "What would you check before trusting a learned confusion matrix, given that p and M can trade off against each other?": "If p is uniform and M absorbs all the signal, the loss can be equally low. What check on held-out data or on the diagonals would catch that?"
+  },
+  "vector_kernel": {
+    "Why does the starter take far more cycles per element than it has instructions, and which waits cause it?": "Trace the starter's first element cycle by cycle: after each sload, how many cycles pass before the mul can issue, and what else could the machine have issued meanwhile?",
+    "Which instructions can share a bundle, and why can an instruction write a register another one in the same bundle reads?": "Two instructions in one bundle: one writes s3, the other reads s3. Which value does the reader see, and why does that let a pointer increment share a bundle with the load that uses the pointer?",
+    "Which unit limits a well-packed scalar program, and how many cycles per element does that imply?": "With constants hoisted and bundles packed, count loads per element. If the load unit takes one per cycle, what is the best a scalar program can do for n elements?",
+    "How do you handle n that is not a multiple of 8, and what does the tail cost?": "Eight elements per vector, but n = 1029 leaves 5 over. What runs for those 5, what does each cost, and could a wider read past the end be safe here?",
+    "Why do the load and vector units bound the vector program at about n / 4 cycles, and how close can you get?": "Each 8 elements need 2 vector loads and 2 vector instructions, and each unit issues 1 per cycle. What does that give for n = 1024, and where do the remaining cycles go?",
+    "How many chunks must be in flight to hide a 4-cycle load latency, and what limits it on this machine?": "A load result is readable 4 cycles later and each chunk issues 2 loads. How many chunks must have loads outstanding at once, and how many vector registers does each chunk hold?",
+    "Would you write the schedule by hand or write a small scheduler, and what would you check to trust it?": "A greedy scheduler places each instruction at the earliest legal cycle. Which constraints must it track per register, and how would you test it against the simulator?"
   }
 }
