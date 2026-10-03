@@ -1,0 +1,26 @@
+{
+  "title": "Take-Home: Sample-Wise Double Descent",
+  "summary": "A linear model's test error, plotted against the number of training samples n at a fixed model size, rises to a peak near the interpolation threshold and falls again on both sides. Reproduce the curve, explain the peak from the design matrix's singular values, and remove it with ridge.",
+  "round": "take-home",
+  "kind": "Take-home · experiment and write-up",
+  "difficulty": "Hard",
+  "frequency": "rare",
+  "format": "4 hours",
+  "topics": [
+    "double-descent",
+    "linear-regression",
+    "bias-variance",
+    "ridge-regression",
+    "random-matrix-theory"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/take-home/interp-double-descent",
+  "rubric": [
+    "Setup: the model class, the data generator with a known ground truth, the test error, and how n varies at a fixed model size",
+    "Curve: enough values of n on both sides of the interpolation threshold, and enough repeats that the peak is not noise",
+    "Explanation: why the error peaks near the threshold for this model class, and why it falls on both sides",
+    "Remedy: one change that removes or shrinks the peak without moving the rest of the curve, shown on the same experiment",
+    "Write-up: a notebook and at most eight slides covering question, setup, result, explanation, remedy and its limits",
+    "Defence: whether the explanation survives another data distribution or model class, and what you would try next"
+  ],
+  "exercises": []
+}

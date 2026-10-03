@@ -1,0 +1,26 @@
+{
+  "title": "Take-Home: A Four-Hour Exploratory ML Study",
+  "summary": "A self-contained 4-hour take-home: implement a small classifier, then run a grid over symmetric label noise, training-set size, and hidden-layer width on synthetic data to see whether early stopping against a clean validation set recovers the accuracy the noise destroys.",
+  "round": "take-home",
+  "kind": "Take-home · experiment and presentation",
+  "difficulty": "Hard",
+  "frequency": "low",
+  "format": "4 hours + 40 min review",
+  "topics": [
+    "label-noise",
+    "model-capacity",
+    "early-stopping",
+    "generalization",
+    "numpy"
+  ],
+  "source": "https://github.com/Schuture/Anthropic-Interview-Notes/tree/main/take-home/ml-take-home",
+  "rubric": [
+    "Data and model: how the noisy labels are made, the one-hidden-layer classifier, and what is held clean",
+    "Grid: noise rate against training-set size and hidden width, with repeats and error bars",
+    "Early stopping: how much of the noise damage a small clean validation set recovers, and where it does not",
+    "Interpretation: which conclusions the data supports and which it does not",
+    "Limits and next steps: what you would change with more time, and why",
+    "Presentation: the result first, in ten minutes, with the plots that carry it"
+  ],
+  "exercises": []
+}
