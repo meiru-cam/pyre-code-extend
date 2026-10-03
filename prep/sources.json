@@ -636,11 +636,11 @@
     "item": "coding/restart-strategy-math",
     "round": "coding",
     "rubric": [
-      "Part 1: the tightest bound on P(T > 5) that the mean alone gives, and a distribution that reaches it",
+      "Part 1: the tightest bound on P(T > 5) that the mean alone gives, and whether a distribution reaches it",
       "Part 2: the guarantee of two 5-minute attempts against one 10-minute attempt",
       "Part 3: the guarantee of N + 1 equal attempts for every N, with the distribution that makes it tight",
       "Part 4: the number of equal attempts with the largest guarantee, and that guarantee",
-      "Part 5: a known distribution under which every schedule succeeds equally often, and why",
+      "Part 5: whether a known distribution makes every schedule equally successful, and why",
       "Part 6: unequal timeouts: the best two-attempt schedule, what m attempts can reach, and how a known distribution changes the choice"
     ]
   },
@@ -651,7 +651,7 @@
     "rubric": [
       "Part 1: F and f for the landing point, the standardized variable and its family, the median, quartiles and tail decay",
       "Part 2: whether E[X] exists, the exact law of the sample mean for every n, and the step of the square-root-of-n argument that fails",
-      "Part 3: two consistent estimators with proofs, the Fisher information, each asymptotic variance, and which one is efficient",
+      "Part 3: two consistent estimators with proofs, the Fisher information, each asymptotic variance, which one is efficient, and the efficiency gap",
       "Part 4: the quantity a simulation should measure for each conclusion, the predicted value, and an error measure that behaves when the mean squared error does not"
     ]
   }

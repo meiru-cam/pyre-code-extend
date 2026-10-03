@@ -16,7 +16,7 @@
   "rubric": [
     "Part 1: F and f for the landing point, the standardized variable and its family, the median, quartiles and tail decay",
     "Part 2: whether E[X] exists, the exact law of the sample mean for every n, and the step of the square-root-of-n argument that fails",
-    "Part 3: two consistent estimators with proofs, the Fisher information, each asymptotic variance, and which one is efficient",
+    "Part 3: two consistent estimators with proofs, the Fisher information, each asymptotic variance, which one is efficient, and the efficiency gap",
     "Part 4: the quantity a simulation should measure for each conclusion, the predicted value, and an error measure that behaves when the mean squared error does not"
   ],
   "exercises": []

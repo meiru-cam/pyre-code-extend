@@ -91,12 +91,12 @@ def tmp_path(name):
 TESTS = [
     {"name": "Part 1: the worked example", "part": 1, "behavior": "effects.idempotency", "code": _MODEL + r"""
 q = {fn}()
-q.submit("seed", {})
-raises_value_error(lambda: q.submit_many([("j1", {}, 1), ("j2", {}, 4), ("seed", {}, 9)]))
+q.submit("base", {})
+raises_value_error(lambda: q.submit_many([("k1", {}, 2), ("k3", {}, 0), ("k3", {}, 5)]))
 assert q.counts()["pending"] == 1, ("a rejected batch must add nothing", q.counts())
-jobs = q.submit_many([("j1", {}, 1), ("j2", {}, 4)])
-assert [j.id for j in jobs] == ["j1", "j2"], [j.id for j in jobs]
-assert q.pop_ready().id == "j2"
+jobs = q.submit_many([("k1", {}, 2), ("k3", {}, 0)])
+assert [j.id for j in jobs] == ["k1", "k3"], [j.id for j in jobs]
+assert q.counts()["pending"] == 3, q.counts()
 """},
     {"name": "Part 1: batches, duplicates and the queue's own rules", "part": 1, "visibility": "unshown", "behavior": "state.invariant",
      "failure_message": "Against a model queue, submit_many added part of a batch that held a duplicate (against the queue or inside the batch), failed on a generator, took the lock more than once per batch, or the queue's pop order, retries or counts changed.",
@@ -185,14 +185,18 @@ for round_ in range(3):
 """},
     {"name": "Part 3: the worked example", "part": 3, "behavior": "security.injection", "code": _MODEL + r"""
 q = {fn}()
-q.submit("a", {"rows": [1, 2]}, 2)
-q.submit("b", "text", 5)
+q.submit("w1", {"retries": [3]}, 6)
+q.submit("w2", "text", 1)
+first = q.pop_ready()
 q.pop_ready()
+q.fail(first.id)
 path = tmp_path("queue.json")
 q.save(path)
 back = {fn}.load(path)
-assert back.get("b").status == "running" and back.get("a").payload == {"rows": [1, 2]}, back.get("a").payload
-assert back.pop_ready().id == "a"
+w1 = back.get("w1")
+assert (w1.status, w1.attempts, w1.payload) == ("pending", 1, {"retries": [3]}), (w1.status, w1.attempts, w1.payload)
+assert back.get("w2").status == "running"
+assert back.pop_ready().id == "w1"
 class Trap:
     def __reduce__(self):
         return (exec, ("import sys; sys._pq_trap_ran = True",))
@@ -258,7 +262,7 @@ for seed in range(30):
 q = {fn}()
 q.submit("t1", {}).metadata["tenant"] = "acme"
 assert q.submit("t2", {}).metadata == {}, "every job needs its own metadata dict"
-raises_value_error(lambda: {fn}(policy="round_robin"))
+raises_value_error(lambda: {fn}(policy="fair_share"))
 """},
     {"name": "Part 4: metadata, persistence and policies", "part": 4, "visibility": "unshown", "behavior": "state.invariant",
      "failure_message": "Metadata was shared between jobs, not copied from submit's argument, lost in a save and load, or not defaulted to {} for rows saved without it; an unknown policy name did not raise ValueError; or a policy instance was not used, or not called while the queue's lock is held.",
@@ -323,7 +327,7 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Where it is used:** job queues like this one feed training, evaluation and data pipelines. Partial batches, duplicate jobs and a persistence format that can run code are the incidents a careful review prevents.
 
-Adapted from the agentic pull request review question in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded. The four pull requests come merged into the starter instead of shown as diffs, and the written review, the choice of one pull request and the rewritten description are left out; each part grades the fixed behavior instead. The richer payloads that the pickle change wanted are declined rather than supported. `submit` gains a `metadata` argument, and a policy name that is not registered raises `ValueError`.""",
+Adapted from the agentic pull request review question in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded. The four pull requests come merged into the starter instead of shown as diffs, and the written review, the choice of one pull request and the rewritten description are left out; each part grades the fixed behavior instead. The richer payloads that the pickle change wanted are declined rather than supported. The fixed `save` leaves the file unchanged when it raises, `load` rejects rows with unknown or missing fields or an unknown status, and `metadata` is saved and loaded. `submit` gains a `metadata` argument, and a policy name that is not registered raises `ValueError`.""",
     "parts": [
         {
             "title": "Batch submit",
@@ -331,11 +335,11 @@ Adapted from the agentic pull request review question in Schuture/Anthropic-Inte
 
 - `items` is any iterable of `(job_id, payload, priority)` triples. Either every job is added, in order, and the created jobs are returned in order, or none is.
 - An id already in the queue, or repeated inside the batch, raises `ValueError` and adds nothing.
-- `submit_many` takes `self._lock` exactly once per call.
+- `submit_many` takes `self._lock` exactly once per call. Its jobs use `submit`'s defaults.
 
-**Example:** after `submit("seed", {})`:
-- `submit_many([("j1", {}, 1), ("j2", {}, 4), ("seed", {}, 9)])` raises `ValueError`, and only `seed` is pending
-- `submit_many([("j1", {}, 1), ("j2", {}, 4)])` returns jobs `j1` and `j2`, and `pop_ready()` then returns `j2`""",
+**Example:** after `submit("base", {})`:
+- `submit_many([("k1", {}, 2), ("k3", {}, 0), ("k3", {}, 5)])` raises `ValueError`, and only `base` is pending
+- `submit_many([("k1", {}, 2), ("k3", {}, 0)])` returns jobs `k1` and `k3`, and three jobs are pending""",
         },
         {
             "title": "The duplicate check",
@@ -355,8 +359,8 @@ Adapted from the agentic pull request review question in Schuture/Anthropic-Inte
 - `JobQueue.load(path)` reads it back as data only; nothing in the file may run. Loading restores every job's fields, and exactly the pending jobs are poppable again.
 - A file that is not a JSON list of job rows raises `ValueError`. A row must have exactly the fields `id`, `payload`, `priority`, `status`, `attempts` and `max_attempts`, with a known status.
 
-**Example:** jobs `a` (payload `{"rows": [1, 2]}`, priority 2) and `b` (priority 5), with `b` popped, are saved and loaded:
-- `b` is `"running"`, `a` keeps its payload, and `pop_ready()` returns `a`
+**Example:** jobs `w1` (priority 6, payload `{"retries": [3]}`) and `w2` (priority 1) are both popped, then `w1` fails once; the queue is saved and loaded:
+- `w1` is pending with `attempts` 1 and keeps its payload, `w2` is `"running"`, and `pop_ready()` returns `w1`
 - loading a pickle file built to run a function raises `ValueError`, and the function never runs""",
         },
         {
@@ -370,7 +374,7 @@ Adapted from the agentic pull request review question in Schuture/Anthropic-Inte
 
 **Example:**
 - setting `metadata["tenant"]` on one job leaves the next job's `metadata` equal to `{}`
-- `JobQueue(policy="round_robin")` raises `ValueError`""",
+- `JobQueue(policy="fair_share")` raises `ValueError`""",
         },
     ],
     "hints": [

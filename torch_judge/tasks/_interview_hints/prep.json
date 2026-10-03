@@ -475,7 +475,7 @@
     "Which of the four pull requests would you approve after changes, and which would you send back for a redesign?": "For each pull request, is the problem in the idea or in the code? Which ones need a few lines changed, and which need the author to rethink the approach?"
   },
   "crowd_code_reading": {
-    "Trace the data from X to the optimizer step: where do Y and the true labels enter, if at all?": "Follow one step: X goes through net, softmax gives p, the crowd layer gives M, and the loss mixes them with Y. Does the true class appear anywhere on that path, or only in logging?",
+    "Which tensors does the optimizer update, and which inputs never reach the loss?": "Follow one step: X goes through net, softmax gives p, the crowd layer gives M, and the loss mixes them with Y. Does the true class appear anywhere on that path, or only in logging?",
     "What are the shapes of net(X), p and M, and of the two operands of p[i] @ M[a]?": "net(X) has one row per sample and one column per class. What are p[i] and M[a] for one pair, and what shape is their product?",
     "The forward pass of net does far more multiply-adds than the loss loop, yet the loop takes longer. Why?": "Count multiply-adds for net on N rows and for the loss over P pairs. Then count how many Python-level operations the loss runs. Which number decides the wall-clock time?",
     "Why is mean diagonal reliability a reasonable estimate without true labels, and when does it mislead?": "An annotator that always reports the true class has an identity matrix; one that guesses has equal rows. Which entries of M separate the two, and what does averaging them hide?",

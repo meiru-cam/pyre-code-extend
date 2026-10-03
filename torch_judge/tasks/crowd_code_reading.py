@@ -81,7 +81,7 @@ want = -(math.log(0.69 + 1e-8) + math.log(0.66 + 1e-8) + math.log(0.48 + 1e-8))
 assert got.dim() == 0 and abs(got.item() - want) < 1e-9, (got, want)
 """},
     {"name": "Part 3: values, gradients and speed", "part": 3, "visibility": "unshown", "behavior": "gradient.flow",
-     "failure_message": "nll_vectorized differed from the double loop in value or in its gradients with respect to p and M, was not a 0-dim tensor (0 when nothing is observed), or took more than 2 seconds on 200000 samples and 10 annotators, which a Python loop over pairs cannot meet.",
+     "failure_message": "nll_vectorized differed from the double loop in value or in its gradients with respect to p and M, was not a 0-dim tensor (0 when nothing is observed), or took more than 0.5 seconds on 20000 samples and 10 annotators, which a Python loop over pairs cannot meet.",
      "code": _MODEL + r"""
 nll_vectorized = learner({fn}, "nll_vectorized")
 g = torch.Generator().manual_seed(1)
@@ -98,11 +98,11 @@ for trial in range(20):
 p, M, Y = rand_inputs(g, 3, 2, 3)
 Y[:] = -1
 assert nll_vectorized(p, M, Y).item() == 0.0
-p, M, Y = rand_inputs(g, 200000, 10, 4)
+p, M, Y = rand_inputs(g, 20000, 10, 4)
 start = time.perf_counter()
 nll_vectorized(p.detach(), M.detach(), Y)
 took = time.perf_counter() - start
-assert took < 2.0, f"took {took:.2f}s"
+assert took < 0.5, f"took {took:.2f}s"
 """},
 ]
 
@@ -129,7 +129,7 @@ The requirement arrives in parts. Each part keeps every earlier function, so one
 
 **Where it is used:** labels from crowds or from several model graders disagree, and confusion-matrix layers learn how far to trust each source. Removing Python loops from a loss like this one is everyday work in training code.
 
-Adapted from the PyTorch code-reading question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded. The written answers about shapes and complexity become `op_counts`, and `reliability` takes the confusion matrices instead of being attached to the crowd layer. The script itself, its data generator and the bonus operator questions are left out; the vectorized loss is graded on random inputs and on speed.""",
+Adapted from the PyTorch code-reading question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded. The written answers about shapes and complexity become `op_counts`, and `reliability` takes the confusion matrices instead of being attached to the crowd layer. The script itself, its data generator and the bonus operator questions are left out; the vectorized loss is graded on random inputs, on its gradients and on speed. The speed limit rules out a loop over samples, not the source's ban on a loop over annotators.""",
     "parts": [
         {
             "title": "Reading the costs",
@@ -137,13 +137,13 @@ Adapted from the PyTorch code-reading question in Schuture/OpenAI-Interview-Note
 
 Return exact counts for one training step, ignoring biases and the softmax:
 - `net_macs`: multiply-adds in the forward pass of `net` on all `N` samples.
-- `net_outputs`: elements in the outputs of the two linear layers, which backward keeps.
+- `net_outputs`: forward output elements of the two linear layers.
 - `nll_macs`: multiply-adds the double loop spends on `p[i] @ M[a]`, over the `P` observed pairs.
 - `loop_iterations`: times the inner loop body starts, missing labels included.
 - `dense_elements`: elements of `p[i] @ M[a]` computed for every `(i, a)` pair at once, before masking.
 
 **Example:** `op_counts(600, 12, 3, 7, 32, 1500)` returns:
-- `net_macs` `249600` and `net_outputs` `21000`
+- `net_macs` `288000` and `net_outputs` `21000`
 - `nll_macs` `13500`, `loop_iterations` `4200` and `dense_elements` `12600`""",
         },
         {
@@ -162,7 +162,7 @@ Return exact counts for one training step, ignoring biases and the softmax:
             "description_en": r"""Keep Parts 1–2. Add `nll_vectorized(p, M, Y)`.
 
 - Return the double loop's value as a 0-dim tensor, with the same gradients with respect to `p` and `M`, up to floating-point error. With no observed label it returns `0`.
-- Use no Python loop over samples or over observed pairs: on `200000` samples and `10` annotators it must finish within `2` seconds.
+- Use no Python loop over samples or over observed pairs: on `20000` samples and `10` annotators it must finish within `0.5` seconds.
 
 **Example:** `p = [[0.7, 0.3], [0.2, 0.8]]`, `M[0] = [[0.9, 0.1], [0.2, 0.8]]`, `M[1] = [[0.6, 0.4], [0.5, 0.5]]` and `Y = [[0, -1], [1, 1]]`:
 - the observed pairs give probabilities `0.69`, `0.66` and `0.48`
@@ -223,7 +223,7 @@ def nll_vectorized(p, M, Y):
 ''',
     "interview_questions": interview(
         concept=[
-            "Trace the data from X to the optimizer step: where do Y and the true labels enter, if at all?",
+            "Which tensors does the optimizer update, and which inputs never reach the loss?",
             "What are the shapes of net(X), p and M, and of the two operands of p[i] @ M[a]?",
         ],
         deep_dive=[
