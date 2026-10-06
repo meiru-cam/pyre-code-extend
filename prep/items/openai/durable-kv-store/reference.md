@@ -6,7 +6,7 @@ A delimiter-based format such as `key + ":" + value + "\n"` is ambiguous the mom
 
 ```python
 def _encode_str(s):
-    raw = s.encode("utf-8", "surrogatepass")  # a str may hold a lone surrogate such as "\ud800"
+    raw = s.encode("utf-8", "surrogatepass")  # a str may hold a lone surrogate such as chr(0xD800)
     return len(raw).to_bytes(8, "big") + raw  # NOTE: the length counts BYTES; len(s) would count code points
 
 
@@ -183,7 +183,7 @@ import random
 
 # --- Part 1: round-trip with adversarial strings ---
 WEIRD = ["", "a", "a:b", "a,b", "a=b", "key\nwith\nnewlines", "\x00null\x00byte", "\x00" * 12,
-         "emoji \U0001F600 \U0001F4A9", "long" * 5000, "mixed 中文 and English", ":,=\n\x00", "\ud800"]
+         "emoji \U0001F600 \U0001F4A9", "long" * 5000, "mixed 中文 and English", ":,=\n\x00", chr(0xD800)]
 
 rng = random.Random(0)
 for _ in range(300):
