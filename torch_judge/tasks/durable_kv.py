@@ -56,7 +56,7 @@ class CrashingFileSystem(FileSystem):
         super().delete(name)
 
 WEIRD = ["", "a", "a:b", "a,b", "a=b", "key\nwith\nnewlines", "\x00null\x00byte", "\x00" * 12, "\\", '"q"',
-         "emoji \U0001F600 \U0001F4A9", "long" * 3000, "mixed 中文 and English", ":,=\n\x00", "\ud800", "x\udfff"]
+         "emoji \U0001F600 \U0001F4A9", "long" * 3000, "mixed 中文 and English", ":,=\n\x00", chr(0xD800), "x" + chr(0xDFFF)]
 SMALL = [w for w in WEIRD if len(w) < 50]
 
 def reopen(fs, **kwargs):
@@ -83,7 +83,7 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 - A new process is modelled by a new `KVStore` on the same `fs`, followed by `load()`.
 
 **Rules for every part:**
-- Keys and values are any `str`: empty, containing `:`, `,`, `=`, newlines or `\x00`, emoji, even a lone surrogate such as `"\ud800"`. All of them round-trip unchanged.
+- Keys and values are any `str`: empty, containing `:`, `,`, `=`, newlines or `\x00`, emoji, even a lone surrogate such as `chr(0xD800)`. All of them round-trip unchanged.
 - Design the byte format yourself. Do not use `json`, `pickle`, `marshal`, `shelve`, `eval` or `ast.literal_eval`. `str.encode`, `bytes.decode`, `int.to_bytes`, `int.from_bytes` and `zlib` are allowed.
 
 ────────────────────────────────
@@ -631,7 +631,7 @@ PUT, DELETE = 1, 0
 
 
 def _encode_str(s):
-    raw = s.encode("utf-8", "surrogatepass")  # a str may hold a lone surrogate such as "\ud800"
+    raw = s.encode("utf-8", "surrogatepass")  # a str may hold a lone surrogate such as chr(0xD800)
     return len(raw).to_bytes(8, "big") + raw  # the length counts bytes, not characters
 
 
