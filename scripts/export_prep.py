@@ -16,6 +16,7 @@ OUTPUT = ROOT / "web" / "src" / "lib" / "prep.json"
 sys.path.insert(0, str(ROOT))
 
 from torch_judge.tasks import TASKS
+from web_json import dump_web_json
 
 ROUNDS = ("ml-coding", "coding", "system-design", "behavioral", "take-home")
 RUBRIC_ROUNDS = frozenset({"system-design", "behavioral"})
@@ -102,7 +103,7 @@ def build_prep_catalog(
 
 def main() -> None:
     data = build_prep_catalog()
-    OUTPUT.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    OUTPUT.write_text(dump_web_json(data) + "\n", encoding="utf-8")
     print(
         f"Written {len(data['items'])} prep items and {len(data['links'])} links "
         f"to {OUTPUT.relative_to(ROOT)}"

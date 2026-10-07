@@ -16,6 +16,7 @@ sys.path.insert(0, str(ROOT))
 
 from torch_judge.tasks import TASKS, list_tasks
 from torch_judge.tasks._schema import validate_task
+from web_json import dump_web_json
 
 
 _OPTIONAL_FIELDS = (
@@ -103,7 +104,7 @@ def build_problem_catalog(output_path: Path = OUTPUT) -> dict[str, list[dict[str
 def export_problem_catalog(output_path: Path = OUTPUT) -> dict[str, list[dict[str, Any]]]:
     data = build_problem_catalog(output_path)
     output_path.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+        dump_web_json(data) + "\n",
         encoding="utf-8",
     )
     return data
