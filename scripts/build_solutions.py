@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Build solutions.json from torch_judge task definitions for the frontend."""
 
-import json
 import sys
 from pathlib import Path
 
@@ -11,6 +10,7 @@ OUTPUT = ROOT / "web" / "src" / "lib" / "solutions.json"
 sys.path.insert(0, str(ROOT))
 
 from torch_judge.tasks import TASKS, list_tasks
+from web_json import dump_web_json
 
 
 def build_solution_entry(task: dict) -> dict:
@@ -30,7 +30,7 @@ def main():
             continue
         result[task_id] = build_solution_entry(task)
 
-    OUTPUT.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    OUTPUT.write_text(dump_web_json(result), encoding="utf-8")
     print(f"Written {len(result)} solutions to {OUTPUT.relative_to(ROOT)}")
 
 
