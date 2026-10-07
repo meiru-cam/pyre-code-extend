@@ -25,8 +25,8 @@ def test_rejects_surrogate_escape_text(text):
 
 
 def test_rejects_surrogate_escape_in_a_key():
-    with pytest.raises(WebJsonError):
-        dump_web_json({"\\ud800": 1})
+    with pytest.raises(WebJsonError, match=r"\$\.a key '.*ud800'"):
+        dump_web_json({"a": {"\\ud800": 1}})
 
 
 def test_rejects_lone_surrogate_character():
@@ -34,6 +34,6 @@ def test_rejects_lone_surrogate_character():
         dump_web_json(["x", chr(0xD800)])
 
 
-@pytest.mark.parametrize("text", ["chr(0xD800)", "\\u00e9", "\\ud7ff", "\\ue000", "\\U0001F600", "\\x00"])
+@pytest.mark.parametrize("text", ["chr(0xD800)", "\\u00e9", "\\ud7ff", "\\ue000", "\\U0001F600", "\\x00", "\\u{dc000}", "\\u{d800"])
 def test_accepts_other_escapes(text):
     assert json.loads(dump_web_json({"s": text})) == {"s": text}
