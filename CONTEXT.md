@@ -42,6 +42,9 @@ _Avoid_: Gate, required unlock
 
 **Interview gate**:
 The stage at the start of every exercise where the learner answers the opening and deep-dive interview questions, or records a skip, before hints, the solution, AI help and the editor unlock. It gates help inside an exercise, never access to one.
+
+**Practice mode**:
+A browser-wide toggle that opens every exercise as if the interview gate were passed, without recording a skip. The interview questions stay available, collapsed and optional.
 _Avoid_: Prerequisite lock, quiz
 
 **Interview hint**:

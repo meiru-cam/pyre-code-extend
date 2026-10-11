@@ -19,12 +19,17 @@ interface InterviewPanelProps {
   onChange: (record: InterviewRecord) => void;
   /** False hides the tradeoffs stage, e.g. while a multi-part exercise still has locked parts. */
   showTradeoffs?: boolean;
+  /** Practice mode opens help without answers; the questions stay available, collapsed. */
+  practiceMode?: boolean;
 }
 
 const STAGE_ORDER: readonly InterviewStage[] = ['concept', 'deep_dive', 'tradeoffs'];
 
-export function InterviewPanel({ questions, record, onChange, showTradeoffs = true }: InterviewPanelProps) {
-  const unlocked = isInterviewUnlocked(record);
+export function InterviewPanel({
+  questions, record, onChange, showTradeoffs = true, practiceMode = false,
+}: InterviewPanelProps) {
+  const answered = isInterviewUnlocked(record);
+  const unlocked = answered || practiceMode;
   const missing = missingGatedAnswers(questions, record.answers);
   // Tradeoff questions follow the code, as they would in an interview.
   const stages = unlocked && showTradeoffs ? STAGE_ORDER : GATED_STAGES;
@@ -92,7 +97,7 @@ export function InterviewPanel({ questions, record, onChange, showTradeoffs = tr
   if (unlocked) {
     return (
       <details
-        open
+        open={answered}
         className="rounded-lg p-3.5"
         style={{ border: '1px solid var(--line)', background: 'var(--bg-elev)' }}
       >
@@ -100,7 +105,7 @@ export function InterviewPanel({ questions, record, onChange, showTradeoffs = tr
           <MessageSquareQuote className="h-4 w-4" />
           Interview
           <span className="mono ml-auto text-[10.5px] uppercase tracking-[0.1em] text-text-2">
-            {record.status === 'answered' ? 'Answered' : 'Skipped'}
+            {!answered ? 'Optional · Practice mode' : record.status === 'answered' ? 'Answered' : 'Skipped'}
           </span>
         </summary>
         <p className="mt-2 mb-4 text-[13px] text-text-2">

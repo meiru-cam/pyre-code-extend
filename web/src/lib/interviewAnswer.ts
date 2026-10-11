@@ -138,3 +138,24 @@ export function saveInterviewRecord(
     // Storage is best-effort; the gate stays unlocked for this session regardless.
   }
 }
+
+const PRACTICE_MODE_KEY = 'pyre-practice-mode';
+
+/** Practice mode opens every exercise without the interview gate and records no skip. */
+export function loadPracticeMode(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(PRACTICE_MODE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function savePracticeMode(on: boolean) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(PRACTICE_MODE_KEY, on ? '1' : '0');
+  } catch {
+    // Storage is best-effort; the toggle still applies for this session.
+  }
+}
