@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import * as Tabs from '@radix-ui/react-tabs';
-import { Menu, ChevronLeft, ChevronRight, Sun, Moon } from 'lucide-react';
+import { Menu, ChevronLeft, ChevronRight, Sun, Moon, Zap } from 'lucide-react';
 import { SplitPane, VerticalSplitPane } from '@/components/ui/SplitPane';
 import { ProblemDrawer } from '@/components/layout/ProblemDrawer';
 import { FeedbackModal } from '@/components/workspace/FeedbackModal';
@@ -32,7 +32,9 @@ import {
   interviewQuestionsFor,
   isInterviewUnlocked,
   loadInterviewRecord,
+  loadPracticeMode,
   saveInterviewRecord,
+  savePracticeMode,
   type InterviewRecord,
 } from '@/lib/interviewAnswer';
 import { InterviewLockedNotice } from '@/components/workspace/InterviewPanel';
@@ -79,8 +81,18 @@ function WorkspacePageNew() {
   const [interviewRecord, setInterviewRecord] = useState<InterviewRecord | null>(null);
   // Multi-part exercises reveal one part at a time; 0 means the exercise has no parts.
   const [unlockedPart, setUnlockedPart] = useState(0);
-  const interviewUnlocked = isInterviewUnlocked(interviewRecord);
+  const [practiceMode, setPracticeMode] = useState(false);
+  const interviewUnlocked = practiceMode || isInterviewUnlocked(interviewRecord);
   const codeReadyRef = useRef(false);
+
+  useEffect(() => {
+    setPracticeMode(loadPracticeMode());
+  }, []);
+
+  const togglePracticeMode = () => {
+    savePracticeMode(!practiceMode);
+    setPracticeMode(!practiceMode);
+  };
 
   useEffect(() => {
     codeReadyRef.current = false;
@@ -291,7 +303,7 @@ function WorkspacePageNew() {
           <DescriptionTab
             problem={problem}
             implementationStatus={progress[id]?.status ?? 'todo'}
-            interview={{ record: interviewRecord, onChange: handleInterviewChange }}
+            interview={{ record: interviewRecord, onChange: handleInterviewChange, practiceMode }}
             unlockedPart={shownPart}
           />
         </Tabs.Content>
@@ -430,6 +442,19 @@ function WorkspacePageNew() {
             </button>
           </div>
         )}
+
+        <button
+          onClick={togglePracticeMode}
+          aria-pressed={practiceMode}
+          title={t('practiceModeTitle')}
+          className="h-[30px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] cursor-pointer hover:border-line-strong transition-[color,border-color] duration-150"
+          style={practiceMode
+            ? { border: '1px solid var(--accent-line)', background: 'var(--accent-wash)', color: 'var(--accent)' }
+            : { border: '1px solid var(--line)', background: 'var(--bg-elev)', color: 'var(--text-2)' }}
+        >
+          <Zap className="w-3.5 h-3.5" />
+          {t('practiceMode')}
+        </button>
 
         <button
           onClick={toggleTheme}

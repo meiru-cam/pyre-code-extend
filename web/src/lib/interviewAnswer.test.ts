@@ -8,8 +8,10 @@ import {
   interviewQuestionsFor,
   isInterviewUnlocked,
   loadInterviewRecord,
+  loadPracticeMode,
   missingGatedAnswers,
   saveInterviewRecord,
+  savePracticeMode,
 } from '@/lib/interviewAnswer';
 import type { InterviewQuestion, Problem } from '@/lib/types';
 
@@ -67,6 +69,23 @@ describe('interview answers', () => {
 
   it('ignores malformed storage', () => {
     window.localStorage.setItem('pyre-code-interview-answer:v2:t:1', '{not json');
+    expect(loadInterviewRecord('t', 1, questions)).toBeNull();
+  });
+});
+
+describe('practice mode', () => {
+  beforeEach(() => window.localStorage.clear());
+
+  it('is off until turned on, and remembers the choice', () => {
+    expect(loadPracticeMode()).toBe(false);
+    savePracticeMode(true);
+    expect(loadPracticeMode()).toBe(true);
+    savePracticeMode(false);
+    expect(loadPracticeMode()).toBe(false);
+  });
+
+  it('records no interview skip', () => {
+    savePracticeMode(true);
     expect(loadInterviewRecord('t', 1, questions)).toBeNull();
   });
 });

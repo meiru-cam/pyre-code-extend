@@ -77,6 +77,8 @@ interface DescriptionTabProps {
   interview?: {
     record: InterviewRecord;
     onChange: (record: InterviewRecord) => void;
+    /** Practice mode skips the gate without recording a skip. */
+    practiceMode?: boolean;
   };
   /** Multi-part exercises only: how many parts the learner has unlocked; 0 means no parts. */
   unlockedPart?: number;
@@ -98,7 +100,7 @@ export function DescriptionTab({
   const [requirement, background] = problem.parts ? splitAtDivider(description) : [description, ''];
   const hint = locale === 'zh' && problem.hintZh ? problem.hintZh : problem.hint;
   const hintLevels = getHintLevels(problem);
-  const helpUnlocked = !interview || isInterviewUnlocked(interview.record);
+  const helpUnlocked = !interview || interview.practiceMode || isInterviewUnlocked(interview.record);
 
   return (
     <div className="px-7 py-6 space-y-6">
@@ -151,6 +153,7 @@ export function DescriptionTab({
           questions={interviewQuestionsFor(problem)}
           record={interview.record}
           onChange={interview.onChange}
+          practiceMode={interview.practiceMode}
           // Tradeoff questions may name later parts, so they wait until every part is open.
           showTradeoffs={!problem.parts || shownParts >= problem.parts.length}
         />
