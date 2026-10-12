@@ -105,7 +105,7 @@ TASK = {
 
 **Why full recomputation is enough.** With a causal model the hidden state at `p_bi - 1` only sees positions up to `p_bi - 1`, all of which are already final by pass `i`. Recomputing the whole sequence each pass costs `O(N * T^2)` attention but gives exactly the same logits as the cached version.
 
-**What upstream does instead.** Coconut's `Coconut.forward` computes the prefix before the earliest latent once, then on each pass feeds only the next position and reuses `past_key_values`. The logits of each pass are concatenated along the sequence. This is cheaper but needs every item's latents to be contiguous and to start at the same index, which Coconut's collator guarantees by left-padding.
+**What upstream does instead.** Coconut's `Coconut.forward` computes the prefix before the earliest latent once, then on each pass feeds only the next position and reuses `past_key_values`. The logits of each pass are concatenated along the sequence. This is cheaper but needs every item's latents to be contiguous and to start at the same index, which Coconut's sample builder (contiguous latents) and collator (left-padding that aligns the first latent) guarantee together.
 
 **Why gradients through thoughts matter.** Coconut trains the thoughts end to end: the loss on the answer tokens backpropagates through every fed-back hidden state into the earlier passes. Detaching a thought silently turns the latent chain into a fixed prompt and the model never learns what to put there.""",
     "advisory_prerequisites": ["gpt2_block", "kv_cache", "coconut_stage_sample"],
@@ -134,7 +134,7 @@ TASK = {
                        "takes the last-layer hidden state at token_idx - 1; no in-place writes into embeddings the model has seen.",
             "simplifications": "Divergence: upstream reuses past_key_values and feeds only the new positions, with hidden_states_offset taken from the "
                                "earliest latent in the batch, so it requires contiguous latents that start at the same index in every item and raises "
-                               "IndexError otherwise; a latent at position 0 reads position -1. The exercise recomputes the full sequence on each pass, "
+                               "IndexError otherwise; a latent at position 0 has no previous position to read. The exercise recomputes the full sequence on each pass, "
                                "accepts any latent positions, and raises ValueError for a latent at position 0. The model takes only inputs_embeds "
                                "(no attention_mask or position_ids), returns the last pass's logits instead of concatenating per-pass logits, and "
                                "computes no loss.",

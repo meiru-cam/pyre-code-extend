@@ -351,6 +351,7 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
             "adapted": "Cross-check for the closed-form ramp and the vjp-based correction, with time flipped to noise at 1 (tau = 1 - time, v negated).",
             "simplifications": "Kinetix keeps the ramp slope from the unclamped end, (end - i) / (end - start + 1), when end > total; "
                                "the exercise follows LeRobot and clamps end to total first, so the ramp reaches toward 0 inside the chunk. "
+                               "Kinetix's \"ones\" schedule returns ones over the whole chunk and ignores end; the exercise follows LeRobot and zeroes i >= end. "
                                "The simulated-delay training path and bidirectional decoding are left out.",
         },
         {

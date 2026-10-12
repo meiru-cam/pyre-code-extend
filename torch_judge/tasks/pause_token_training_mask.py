@@ -24,7 +24,7 @@ TASK = {
 
 **Label convention.** Labels are aligned with `input_ids`, as Hugging Face causal-LM labels are: `labels[j]` is the token the model must predict at index `j`, and the model shifts internally so the logits at `j - 1` are scored against `labels[j]`. They are not pre-shifted.
 
-**The rule.** Write `S_ignore = {k : input_ids[k + 1] == pause_id}`, the paper's set of positions whose next token is `<pause>`. In this aligned convention the loss term for position `k` sits at `labels[k + 1]`, so:
+**The rule.** Write `S_ignore = {k : input_ids[k + 1] == pause_id}`, the paper's set of positions whose next token is `<pause>`, re-indexed from 0. In this aligned convention the loss term for position `k` sits at `labels[k + 1]`, so:
 
     labels[j] = -100            if j < answer_start               (prefix and pauses)
     labels[j] = -100            if input_ids[j] == pause_id      (j - 1 is in S_ignore)
@@ -47,7 +47,7 @@ TASK = {
 
 **Why the pause predictions are masked.** The paper's pause-pretraining loss sums cross-entropy over every position except those in `S_ignore`. Asking the model to predict the pauses would teach it to produce a token whose only job is to delay it.
 
-**Where the off-by-one hides.** The paper indexes loss terms by the position that predicts, and HF labels index them by the token predicted. Masking position `k` in the paper's notation means writing -100 at `labels[k + 1]`. Transcribing `S_ignore` directly into aligned labels masks the last pause instead of the token after it, and on a pause in the target it masks the answer token before the pause.
+**Where the off-by-one hides.** `S_ignore` names the position that predicts, and HF labels are indexed by the token predicted. In the 0-based form above, the loss term of position `k` sits at `labels[k + 1]`. Writing -100 at `labels[k]` for each `k` in `S_ignore` instead masks the token before each pause and leaves the last pause trained, and on a pause in the target it masks the answer token before the pause.
 
 **Finetuning versus pretraining.** In pause-finetuning (Algorithm 2) the loss covers only target tokens, so every pause in the prefix block is already masked. The `S_ignore` rule from pretraining (Equation 3) only adds something when a target token is itself the pause id, which is why this exercise states both rules.""",
     "advisory_prerequisites": ["response_token_mask", "cross_entropy"],
@@ -77,7 +77,7 @@ TASK = {
         ],
         "cons": [
             "The paper finds gains mainly when the model is also pause-pretrained; pause-finetuning a standard model gives mixed results.",
-            "M is fixed per task and must match at inference; the paper reports that zero pauses at inference after pause-training hurts.",
+            "M is fixed per task and should roughly match at inference; the paper finds robustness to a range of inference counts, but zero or very few pauses after pause-training hurts.",
             "Each pause costs a full position of attention and memory with no direct supervision on what the pause computes.",
         ],
     },
