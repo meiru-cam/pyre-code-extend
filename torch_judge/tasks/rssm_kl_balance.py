@@ -48,7 +48,7 @@ TASK = {
 
 **The latent sample.** The world model feeds the posterior forward as a one-hot sample with a straight-through gradient, `onehot + probs - stopgrad(probs)`, using the unimixed probabilities. That sampling step is not part of this exercise.
 
-**Upstream differences.** The original JAX code uses `beta_dyn = 1.0`; the PyTorch port (dreamerv3-torch) uses 0.5, as did the first arXiv version of the paper, so both betas are parameters here.
+**Upstream differences.** The current DreamerV3 (paper v2 and the JAX repo) uses `beta_dyn = 1.0`; the first arXiv version of the paper and the PyTorch port (dreamerv3-torch) use 0.5, so both betas are parameters here.
 
 **Contrast with k3_kl_penalty.** That exercise estimates a KL from sampled tokens' log-probabilities. Here both distributions are small categoricals, so the KL is computed exactly.""",
     "advisory_prerequisites": ["softmax", "softmax_entropy", "k3_kl_penalty", "symlog_twohot"],
@@ -371,7 +371,7 @@ def rssm_kl_loss(post_logits, prior_logits, free_nats=1.0, beta_dyn=1.0, beta_re
         ],
         tradeoffs=[
             "Discrete categorical latents with straight-through gradients versus Gaussian latents with the reparameterization trick in a world model?",
-            "The original DreamerV3 uses beta_dyn 1.0 while the PyTorch port uses 0.5. What changes in training when beta_dyn is lowered relative to beta_rep?",
+            "The current DreamerV3 uses beta_dyn 1.0 while the first paper version and the PyTorch port use 0.5. What changes in training when beta_dyn is lowered relative to beta_rep?",
         ],
     ),
 }

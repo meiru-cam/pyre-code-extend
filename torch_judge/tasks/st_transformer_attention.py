@@ -86,7 +86,7 @@ Ordinary attention over the flattened sequence, with the scores at `False` set t
 
 **Background — context only. Everything above this line is the requirement.**
 
-**Why factorize.** For `T = 16` frames of `16 x 16` patches, full attention compares 4096 tokens with 4096 tokens. The spatial layer compares 256 with 256 per frame and the temporal layer 16 with 16 per patch, so the dominant cost grows linearly with the number of frames instead of quadratically. Two layers still let information travel from any patch of an earlier frame to any patch of a later frame: across the frame boundary along the patch's own position, then within the frame.
+**Why factorize.** For `T = 16` frames of `16 x 16` patches, full attention compares 4096 tokens with 4096 tokens. The spatial layer compares 256 with 256 per frame and the temporal layer 16 with 16 per patch, so the dominant cost grows linearly with the number of frames instead of quadratically. Two layers still let information travel from any patch of an earlier frame to any patch of a later frame: first within the earlier frame to the right patch position, then along that position across frames.
 
 **Why the temporal mask is causal.** Genie's latent action model, video tokenizer and dynamics model all use the ST-transformer. The causal temporal mask lets one forward pass over a whole clip produce a prediction for every next frame, the same trick as a decoder-only language model, and lets a frame be generated from the past without seeing the future.
 
