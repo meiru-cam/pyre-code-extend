@@ -51,7 +51,7 @@ TASK = {
 **Upstream differences.** The original JAX code uses `beta_dyn = 1.0`; the PyTorch port (dreamerv3-torch) uses 0.5, as did the first arXiv version of the paper, so both betas are parameters here.
 
 **Contrast with k3_kl_penalty.** That exercise estimates a KL from sampled tokens' log-probabilities. Here both distributions are small categoricals, so the KL is computed exactly.""",
-    "advisory_prerequisites": ["softmax", "softmax_entropy", "k3_kl_penalty"],
+    "advisory_prerequisites": ["softmax", "softmax_entropy", "k3_kl_penalty", "symlog_twohot"],
     "hints": [
         {"level": 1, "kind": "questions", "content": "If you detach the posterior inside the KL, which network still receives a gradient? In what order do you sum over classes, sum over groups and apply the floor, and what changes if you swap the last two? What is the smallest probability any class can have after unimix, and what does that do to log q?"},
         {"level": 2, "kind": "analysis", "content": "Write one helper that turns logits into log-probabilities: mix in probability space when unimix is positive, and use a log-softmax when it is zero. Write a second helper for the KL that sums over the class axis and then the group axis. Call the KL twice with the detach on opposite sides, clamp each result from below at free_nats, then combine with the betas and take the mean. Pitfalls: mixing the logits instead of the probabilities, applying the floor per group, and taking log of a softmax that underflowed to zero."},
