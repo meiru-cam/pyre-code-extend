@@ -5,7 +5,7 @@ from ._interview import interview
 # Helpers shared by the cases. Learner-defined exceptions are matched by class name,
 # since a case can only see the Spreadsheet class itself.
 _HELPERS = r"""
-import random, re, time
+import random, re
 
 def raises_named(name, fn, *args):
     try:
@@ -221,24 +221,33 @@ sheet.set("A1", 10)
 assert (sheet.get("B1"), sheet.get("C1")) == (11, 12)
 """},
         {"name": "Part 2: get does not evaluate", "part": 2, "visibility": "unshown", "behavior": "performance.complexity",
-         "failure_message": "get on the end of a long chain was much slower than on a single cell; recompute in set and let get return the stored value.",
+         "failure_message": "get on the end of a long chain looked up every cell of the chain; recompute in set and let get return the stored value.",
          "code": _HELPERS + r"""
+class Name(str):
+    # A cell name that counts the key comparisons a dict or set makes against it.
+    compared = 0
+    def __eq__(self, other):
+        Name.compared += 1
+        return str.__eq__(self, other)
+    __hash__ = str.__hash__
+
+def compared_during(call):
+    before = Name.compared
+    call()
+    return Name.compared - before
+
+chain = [Name(f"A{i}") for i in range(200)]
 sheet = {fn}()
-sheet.set("A0", 1)
+sheet.set(chain[0], 1)
 for i in range(1, 200):
-    sheet.set(f"A{i}", f"=A{i - 1} + 1")
-sheet.set("B0", 1)
-def timed(name):
-    best = float("inf")
-    for _ in range(3):
-        start = time.perf_counter()
-        for _ in range(3000):
-            sheet.get(name)
-        best = min(best, time.perf_counter() - start)
-    return best
-assert sheet.get("A199") == 200
-ratio = timed("A199") / max(timed("B0"), 1e-9)
-assert ratio < 15, f"get on a 200-deep chain took {ratio:.0f}x as long as on a plain cell"
+    sheet.set(chain[i], f"=A{i - 1} + 1")
+plain = Name("B0")
+sheet.set(plain, 1)
+assert sheet.get(chain[199]) == 200
+deep = compared_during(lambda: sheet.get(Name("A199")))
+flat = compared_during(lambda: sheet.get(Name("B0")))
+# Evaluating the chain finds each of its 200 cells by name; returning a stored value finds one.
+assert deep <= flat + 20, f"get on a 200-deep chain compared {deep} cell names, on a plain cell {flat}"
 """},
         {"name": "Part 2: random sheets with cycles match a reference", "part": 2, "visibility": "unshown", "behavior": "state.invariant",
          "failure_message": "In a random sheet, set accepted or rejected a different formula than the rules give, or a value differed afterwards.",

@@ -51,13 +51,24 @@ assert x.grad[1] in (0., 1.), f'grad at x=0 should be 0 or 1, got {x.grad[1]}'
         {
             "name": "Performance",
             "code": """
-import torch, time
-big = torch.randn(1024, 1024)
-t0 = time.perf_counter()
-for _ in range(100):
-    {fn}(big)
-elapsed = time.perf_counter() - t0
-assert elapsed < 5.0, f'Too slow: {elapsed:.2f}s for 100 iterations'
+import torch
+from torch.overrides import TorchFunctionMode
+
+class CountOps(TorchFunctionMode):
+    # Counts the torch calls relu makes; a vectorized relu needs a handful, a loop one per element.
+    def __init__(self):
+        super().__init__()
+        self.calls = 0
+    def __torch_function__(self, func, types, args=(), kwargs=None):
+        self.calls += 1
+        assert self.calls <= 50, 'Too slow: more than 50 torch calls for one tensor; avoid Python loops over elements'
+        return func(*args, **(kwargs or {}))
+
+big = torch.randn(256, 256)
+with CountOps() as ops:
+    out = {fn}(big)
+assert torch.allclose(out, big.clamp(min=0)), 'Value mismatch on a large tensor'
+assert ops.calls <= 50, f'Too slow: {ops.calls} torch calls for one tensor'
 """,
         },
     ],

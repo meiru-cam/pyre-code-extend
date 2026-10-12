@@ -4,7 +4,7 @@ from ._interview import interview
 
 # A naive model that keeps a log of every call and rebuilds the state for each question, plus a random call generator.
 _MODEL = r"""
-import random, time
+import random
 
 class Model:
     def __init__(self):
@@ -223,21 +223,42 @@ for seed in range(150):
     replay({fn}(), random_calls(random.Random(300 + seed), 70, 4), seed)
 """},
     {"name": "Part 4: past questions on a long history", "part": 4, "visibility": "unshown", "behavior": "performance.complexity",
-     "failure_message": "2,000 past lists over 50 tasks and 100,000 edits took too long: keep each task's versions in time order and binary-search them instead of replaying the history for each question.",
+     "failure_message": "Past lists over 50 tasks and 100,000 edits compared timestamps far too often: keep each task's versions in time order and binary-search them instead of replaying the history for each question.",
      "code": r"""
-import random, time
+import random
+
+class Stamp(int):
+    # A timestamp that counts every comparison made with it while a question is answered.
+    counting, compared, budget = False, 0, 0
+    def _tally(self):
+        if Stamp.counting:
+            Stamp.compared += 1
+            if Stamp.compared > Stamp.budget:
+                Stamp.counting = False
+                raise AssertionError(f"more than {Stamp.budget} timestamp comparisons for {queries} past lists")
+    def __lt__(self, other): self._tally(); return int.__lt__(self, other)
+    def __le__(self, other): self._tally(); return int.__le__(self, other)
+    def __gt__(self, other): self._tally(); return int.__gt__(self, other)
+    def __ge__(self, other): self._tally(); return int.__ge__(self, other)
+    def __eq__(self, other): self._tally(); return int.__eq__(self, other)
+    def __ne__(self, other): self._tally(); return int.__ne__(self, other)
+    __hash__ = int.__hash__
+
 rng = random.Random(4)
 b = {fn}()
 for i in range(50):
-    b.add(0, "u", f"task{i}", 0)
+    b.add(Stamp(0), "u", f"task{i}", 0)
 for ts in range(1, 100001):
-    b.edit(ts, "u", f"t{rng.randint(1, 50)}", "v", rng.randint(0, 9))
-start = time.perf_counter()
-sizes = [len(b.list_tasks(rng.randint(0, 100000), "u", 5)) for _ in range(2000)]
-elapsed = time.perf_counter() - start
+    b.edit(Stamp(ts), "u", f"t{rng.randint(1, 50)}", "v", rng.randint(0, 9))
+# A binary search costs about 17 comparisons per task; replaying ~2,000 versions per task costs 2,000.
+queries = 300
+Stamp.compared, Stamp.budget, Stamp.counting = 0, queries * 50 * 60, True
+try:
+    sizes = [len(b.list_tasks(Stamp(rng.randint(0, 100000)), "u", 5)) for _ in range(queries)]
+finally:
+    Stamp.counting = False
 assert len(b.list_tasks(0, "u")) == 50 and b.list_tasks(0, "u", 1) == []
 assert all(0 <= s <= 50 for s in sizes)
-assert elapsed < 2.0, f"{elapsed:.2f}s for 2,000 past lists"
 """},
 ]
 
@@ -317,7 +338,7 @@ Adapted from the task manager online assessment in Schuture/Anthropic-Interview-
 
 - Answer as if the board had received only the calls with `timestamp <= at_timestamp`, then ask Part 3's `list_tasks` at that time. Every call at `at_timestamp` itself counts.
 - With no such calls for `user`, that is `[]`. Asking about the past changes nothing.
-- A history of 100,000 edits must still answer thousands of past lists in about a second.
+- A history of 100,000 edits must still answer thousands of past lists in about a second, so a past list must not scan or replay each task's whole history.
 
 **Example:** `add(2, "raj", "warmup", 5, ttl=6)`, `add(2, "mia", "audit", 1)`, `add(4, "raj", "eval", 3)`, `finish(6, "raj", "t1")`, then `edit(7, "raj", "t3", "eval v2", 9)`:
 - `list_tasks(1, "raj")` is `[]`, and `list_tasks(5, "raj")` is `[("t1", "warmup", 5, 2), ("t3", "eval", 3, 4)]`
