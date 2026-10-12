@@ -78,7 +78,7 @@ TASK = {
 
 **The off-by-one.** `np.digitize` over `n_bins` edges returns `1..n_bins`, but there are only `n_bins - 1` intervals. OpenVLA subtracts 1 and clips, so a value exactly at `+1` lands in the last interval. Its ids take the last `n_bins` slots of the Llama vocabulary, the least-used BPE tokens, so `bin` counts down from `vocab_size - 1`.
 
-**RT-1.** RT-1 has its own action vocabulary of `n_bins` tokens. It truncates to the left end of each bucket and decodes to that end, so its reconstruction is biased low by up to one bucket, and only the exact maximum reaches the top token.""",
+**RT-1.** RT-1 has its own action vocabulary of `n_bins` tokens. It truncates to the left end of each bucket and decodes to that end, so its reconstruction is biased low by up to one bucket. With no epsilon, the exact maximum reaches the top token there; in this exercise only values clipped from above do.""",
     "advisory_prerequisites": ["int8_quantization"],
     "hints": [
         {"level": 1, "kind": "questions", "content": "How many bin edges and how many bin centers do n_bins edges give? Which bin does a value exactly at +1 fall in, and how does decode keep that index in range? What should a dimension with low == high become?"},

@@ -51,7 +51,7 @@ pass, with ``hidden_states_offset`` counting from the earliest latent in the
 whole batch. It is therefore only correct when every item's latents are
 contiguous and start at the same index (upstream's collator left-pads batches
 to align them). On other batches it raises ``IndexError``. A latent at position
-0 makes it index position ``-1``. The exercise recomputes the full sequence on
+0 has no previous position to read. The exercise recomputes the full sequence on
 every pass, accepts any latent positions, and rejects a latent at position 0.
 
 NOTHING HERE IMPORTS A TASK SOLUTION. This module must stay independent of the
