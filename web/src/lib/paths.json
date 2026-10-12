@@ -308,6 +308,29 @@
       ]
     },
     {
+      "id": "robot-rl-env",
+      "titleEn": "Robot RL Environments",
+      "titleZh": "机器人 RL 环境",
+      "descriptionEn": "What changes when the policy is a VLA and the environment is a robot: the Gymnasium contract, turning model outputs into robot commands, executing action chunks that end mid-chunk, vectorized auto-reset, episode metrics, bootstrapping at truncation, advantages grouped by initial state, and a log-likelihood for flow-matching action heads.",
+      "descriptionZh": "策略换成 VLA、环境换成机器人之后有什么不同：Gymnasium 接口、把模型输出变成机器人指令、执行中途结束的 action chunk、向量化自动 reset、episode 指标、截断时的 bootstrap、按初始状态分组的 advantage，以及 flow-matching 动作头的对数似然。",
+      "icon": "Bot",
+      "problems": [
+        "point_reach_env",
+        "vla_action_adapter",
+        "chunk_step_executor",
+        "vector_autoreset",
+        "episode_metrics_tracker",
+        "truncation_bootstrap_gae",
+        "init_state_group_advantage",
+        "flow_sde_chain_logprob"
+      ],
+      "group": "training",
+      "prerequisites": [
+        "rl-posttraining",
+        "embodied-ai"
+      ]
+    },
+    {
       "id": "alignment-agents",
       "titleEn": "Alignment & Agent Reasoning",
       "titleZh": "对齐与 Agent 推理",
