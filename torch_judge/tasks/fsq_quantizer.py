@@ -81,7 +81,7 @@ Channel 0 (`L = 5`) takes the values -1, -0.5, 0, 0.5, 1. Channel 1 (`L = 4`) ta
 
 **The even-level offset.** Rounding produces values symmetric around 0, so an odd `L` fits naturally: `(L - 1) / 2` steps on each side. An even `L` cannot be symmetric. Subtracting 0.5 moves the range to about `(-L/2, L/2 - 1)`, which rounds to exactly `L` integers. The `atanh` shift moves the input so that `bound(0)` is exactly 0, so a zero latent lands on the centre code.
 
-**Paper versus code.** The JAX listing in the paper's Appendix A.1 writes `(1 - eps)` and `shift = tan(offset / half_l)`. Cosmos-Tokenizer, adapted from lucidrains' vector-quantize-pytorch, uses `(1 + eps)` and `atanh`. For a small `eps` both give exactly `L` rounded values per channel; they differ slightly in the continuous bound, and `tanh(tan(x))` is not exactly `x`, so the paper's `bound(0)` is close to 0 but not equal. This exercise follows Cosmos.
+**Paper versus code.** The JAX listing in the paper's Appendix A.1 writes `(1 - eps)` and `shift = tan(offset / half_l)`. Cosmos-Tokenizer, adapted from lucidrains' vector-quantize-pytorch, uses `(1 + eps)` and `atanh`. For a small `eps` both give exactly `L` rounded values per channel; they differ slightly in the continuous bound, and `tanh(tan(x))` is not exactly `x`, so for even `L` the paper's `bound(0)` is close to 0 but not equal (for odd `L` it is exactly 0). This exercise follows Cosmos.
 
 **Straight-through rounding.** `x + sg(round(x) - x)` equals `round(x)` in the forward pass, and its gradient is 1. The encoder therefore receives the decoder's gradient through the quantizer, scaled only by the slope of the bound.""",
     "advisory_prerequisites": ["vla_action_bins", "rssm_kl_balance", "latent_action_quantizer"],

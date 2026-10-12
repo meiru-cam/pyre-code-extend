@@ -77,8 +77,11 @@ WHAT WAS CHANGED, AND WHY
   * Discretization. Eq. 1 uses B = 201 bins but the paper does not give the bin
     rule. This module places B evenly spaced bin values on [-1, 0] and maps a
     return to the nearest one, clamped.
-  * Threshold population and corrections. The paper does not say whether
-    corrections enter the threshold computation. Here eps_l is computed over
+  * Threshold population and corrections. Appendix F sets the threshold from
+    per-iteration evaluation rollouts in fine-tuning and a random 10k
+    demonstration sample in pre-training; pooling every sample of task l, as
+    here, is a simplification. The paper does not say whether corrections
+    enter the threshold computation. Here eps_l is computed over
     every sample of task l, and corrections are forced positive afterwards.
   * Dropout. Appendix F drops the indicator 30% of the time; here a caller
     supplies a uniform draw u per sample and the indicator is dropped when

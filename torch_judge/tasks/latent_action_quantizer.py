@@ -58,7 +58,7 @@ TASK = {
 
 **Why latent actions.** Most video of people and robots has no action labels. LAPA trains a VQ-VAE on frame pairs: the encoder sees frames `t` and `t + H` and acts as an inverse-dynamics model, the decoder reconstructs frame `t + H` from frame `t` and the quantized code and acts as a world model. The code index becomes a pseudo-action, a VLM is pretrained to predict it from the image and instruction, and a small labelled set later swaps in a real action head.
 
-**The difference.** LAPA's quantizer subtracts the two encoded frames (`d1 = e2 - e1` in its Appendix A) before looking up the codebook, so the code describes the change rather than the scene. UniVLA instead appends learned latent-action queries to DINOv2 patch features and reads the action off a transformer, but quantizes the result with the same nearest-code lookup.
+**The difference.** LAPA's quantizer subtracts the two encoded frames (`d1 = e2 - e1` in its Appendix A) before looking up the codebook, so the code describes the change rather than the scene. UniVLA instead prepends learned latent-action queries to DINOv2 patch features and reads the action off a transformer, but quantizes the result with the same nearest-code lookup.
 
 **Two ways to pass a gradient through argmin.** The straight-through estimator copies the gradient of `z_q` onto `x` unchanged, so the codebook needs its own loss: the codebook term pulls codes toward the encoder outputs and the beta-weighted commitment term keeps the encoder near its codes. UniVLA trains with exactly this loss, with a default beta of 0.25. NSVQ (Vali and Backstrom, 2022), which LAPA adopts to avoid collapse, instead replaces the quantization error with a random direction of the same length. The decoder then sees an input as far from `x` as `q` is (up to eps), and the codebook learns through `||x - q||` with no extra loss term.
 
@@ -76,7 +76,7 @@ TASK = {
     "pro_con_analysis": {
         "pros": [
             "Turns unlabelled human and robot video into action-like supervision for VLA pretraining.",
-            "A small codebook gives the VLM a short discrete action vocabulary that its token head can predict directly.",
+            "A small codebook gives the VLM a short discrete action target that a small classification head (LAPA) or new vocabulary tokens (UniVLA) can predict.",
             "NSVQ trains the codebook without a separate codebook or commitment loss.",
         ],
         "cons": [

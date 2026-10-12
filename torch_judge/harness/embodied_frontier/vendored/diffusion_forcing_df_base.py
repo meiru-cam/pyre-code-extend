@@ -11,7 +11,7 @@ Symbols:    DiffusionForcingBase._generate_noise_levels (df_base.py line 172),
             DiffusionForcingBase.validation_step, noise-level lines (lines 128-151),
             Diffusion.sample_step, level conversion (diffusion.py lines 310-314),
             Diffusion.ddim_sample_step, stabilization and update mask
-            (diffusion.py lines 391-396 and 445-450)
+            (diffusion.py lines 391-396 and 457-462)
 License:    MIT License, Copyright (c) 2024 Boyuan Chen
 
 Upstream:   https://github.com/etched-ai/open-oasis

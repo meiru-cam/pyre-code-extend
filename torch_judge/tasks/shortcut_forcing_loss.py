@@ -74,7 +74,7 @@ TASK = {
 **Conventions.** `tau` is the signal level: `tau = 0` is pure noise and `tau = 1` is clean data. The corrupted input is `z_tilde = (1 - tau) * z0 + tau * z1`. `d` is the step size, and `d_min = 1 / k_max` is the finest one.
 
 **sample_step_and_level:**
-- `k_max` is a positive power of two (1, 2, 4, ...). Otherwise raise `ValueError`.
+- `k_max` is a positive power-of-two `int` (1, 2, 4, ...); a float such as `2.0` or a bool is not accepted. Otherwise raise `ValueError`.
 - For every element of `shape`, draw `K` uniformly from `{1, 2, 4, ..., k_max}` and set `d = 1 / K`.
 - Then draw `tau` uniformly from the grid that steps of size `d` reach from 0: `{0, d, 2d, ..., 1 - d}`. `tau = 1` is never drawn.
 - Draw independently for each element. Use `generator` for all randomness. Return two float32 tensors of shape `shape`.
@@ -116,7 +116,7 @@ TASK = {
 
 **Diffusion forcing.** Every frame of a training sequence gets its own signal level, so each frame is both a denoising task and noisy context for later frames. At inference Dreamer 4 generates frame by frame and corrupts past frames slightly, to `tau_ctx = 0.1`, so the model tolerates small errors in its own generations.
 
-**Shortcut models.** Frans et al. condition the network on the step size `d` as well as the level. The finest step is trained with plain flow matching. Each larger step is trained to match two half steps of the model itself, so a step of size `d` learns to land where two steps of size `d / 2` would. At inference, conditioning on `d = 1 / K` gives `K` sampling steps. The Dreamer 4 paper prints the level grid as `{0, 1/d, ..., 1 - 1/d}`. It means the grid reached by steps of size `d`, `{0, d, ..., 1 - d}`, which is also what the shortcut-models code samples.
+**Shortcut models.** Frans et al. condition the network on the step size `d` as well as the level. The finest step is trained with plain flow matching (in their code; the paper frames it as the d -> 0 limit). Each larger step is trained to match two half steps of the model itself, so a step of size `d` learns to land where two steps of size `d / 2` would. At inference, conditioning on `d = 1 / K` gives `K` sampling steps. The Dreamer 4 paper prints the level grid as `{0, 1/d, ..., 1 - 1/d}`. It means the grid reached by steps of size `d`, `{0, d, ..., 1 - d}`, which is also what the shortcut-models code samples.
 
 **Why x-prediction.** Shortcut models predict velocities. Dreamer 4 reports that velocity prediction trains the network to produce high-frequency outputs, which can cause small errors to accumulate over long frame-by-frame rollouts. Predicting the clean frame instead enabled high-quality rollouts of arbitrary length. The flow term is then a plain x-space error. The bootstrap target is defined in velocity space, so the prediction is converted with `v = (z1_hat - z_tilde) / (1 - tau)`. Since `||z1_hat - z1||^2 = (1 - tau)^2 * ||v_hat - v||^2`, the `(1 - tau)^2` factor brings the bootstrap term into the range of the x-space flow term. It also makes the bootstrap term exactly the x-space distance from `z1_hat` to the clean frame the target velocity implies, `z_tilde + (1 - tau) * target`.
 

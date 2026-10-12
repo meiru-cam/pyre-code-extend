@@ -231,7 +231,7 @@ TASK = {
          'note': 'Empty action embeddings as input and a bidirectional mask in place of the causal one; K * D actions in one pass.'},
         {'kind': 'paper',
          'url': 'https://arxiv.org/abs/2502.19645',
-         'section': 'Appendix B.1 "Parallel Decoding Implementation" and Appendix A (architecture changes 3-5)',
+         'section': 'Appendix A-B1 "Parallel Decoding Implementation" and Appendix A (architecture changes 3-5)',
          'note': 'Empty action embeddings that differ only in their positional encoding; a 4-layer ReLU MLP head for L1 regression.'},
     ],
     "tests": [
