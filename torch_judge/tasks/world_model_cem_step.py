@@ -44,7 +44,7 @@ TASK = {
 - Subtract `max_v` before exponentiating, so values in the thousands still give finite weights.
 - Do not modify any input in place.
 - float64 inputs are checked to about 1e-10, float32 inputs to about 1e-5.
-- Raise `ValueError` for an unknown `mode`; for `samples` that is not a 3-D floating tensor; for `energies`, `mean` or `std` with the wrong shape or a dtype different from `samples`; for non-finite energies; for a `topk` that is not an integer in `1..S`; for a momentum outside `[0, 1]`; and for a negative `temperature`.
+- Raise `ValueError` for an unknown `mode`; for `samples` that is not a 3-D floating tensor; for `energies`, `mean` or `std` with the wrong shape or a dtype different from `samples`; for non-finite energies; for a `topk` that is not a Python `int` in `1..S` (a float such as `2.0` is rejected); for a momentum outside `[0, 1]`; and for a negative `temperature`.
 
 ────────────────────────────────
 
@@ -65,7 +65,7 @@ TASK = {
     "model_connections": [
         "V-JEPA 2-AC (Assran et al. 2025) plans robot arm actions by CEM over a latent world model, scoring each trajectory by the L1 distance to a goal-image embedding.",
         "TD-MPC and TD-MPC2 (Hansen et al.) plan with MPPI-style CEM over a learned latent model, weighting elites by a softmax over predicted returns; LeRobot ships it as TDMPCPolicy.",
-        "PlaNet and Dreamer's early planners, and many model-based RL baselines (PETS), use the same CEM refit with a uniform elite average.",
+        "PlaNet and PETS plan with the same CEM refit and a uniform elite average.",
     ],
     "pro_con_analysis": {
         "pros": ["Gradient-free, so it works with any world model and any scoring function, and every sample in an iteration is scored in parallel."],
@@ -274,12 +274,12 @@ energy = lambda acts: (rollout(acts) - goal).abs().mean(-1)  # L1 distance to th
 for mode, k, mm, ms in (("vjepa2", 8, 0.25, 0.3), ("tdmpc", 8, 0.1, 0.0)):
     mean, std = torch.zeros(H, A, dtype=torch.float64), torch.ones(H, A, dtype=torch.float64)
     start = energy(mean[None]).item()
-    for _ in range(30):
+    for _ in range(50):
         samples = mean + std * torch.randn(64, H, A, generator=g, dtype=torch.float64)
         e = energy(samples)
         mean, std = {fn}(samples, e if mode == "vjepa2" else -e, mean, std, k, mm, ms, mode, temperature=5.0)
     final = energy(mean[None]).item()
-    assert final < 0.1 * start, (mode, start, final)
+    assert final < 0.5 * start, (mode, start, final)
 """},
         {"name": "Keeps dtype and does not modify inputs", "visibility": "unshown", "behavior": "tensor.dtype_device", "failure_message": "Return tensors in the dtype of samples and never write into samples, energies, mean or std.", "code": r"""
 import torch

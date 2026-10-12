@@ -130,7 +130,8 @@ Ordinary attention over the flattened sequence, with the scores at `False` set t
             "adapted": "UNOFFICIAL reimplementation, used as a cross-check of the paper-derived contract: separate spatial (causal=False) and "
                        "temporal (causal=True) attention modules, each with its own projections, applied in that order with a residual after each.",
             "simplifications": "einops rewritten as torch reshapes. Left out: rotary embeddings, the pre-LayerNorm in each attention layer, the "
-                               "Conv3d feed-forward block, cross-attention conditioning and dropout. Projections are explicit (2, D, D) weights; "
+                               "Conv3d feed-forward block and the space_skip/ffn_skip Conv3d skips, cross-attention conditioning, dropout, and the in_channels/out_channels attributes; "
+                               "the spatial module accepts only 5-D input. Projections are explicit (2, D, D) weights; "
                                "upstream silently uses nn.Identity for q/k/v and output when the width equals n_head * d_head. "
                                "Divergence: upstream's default scale is n_head * d_head ** -0.5, which is n_head / sqrt(d_head); "
                                "the exercise uses 1 / sqrt(d_head), as the oracle test pins.",

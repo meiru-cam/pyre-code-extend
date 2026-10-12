@@ -8,7 +8,7 @@ Symbols:    RSSM.loss (lines 120-131), RSSM._dist (line 173),
             outs.Categorical (line 208), outs.OneHot, outs.Agg.kl,
             Agent.loss total (agent.py line 240), loss_scales and
             rssm.free_nats / rssm.unimix (configs.yaml lines 86 and 91)
-License:    MIT License, Copyright (c) 2023 Danijar Hafner
+License:    MIT License, Copyright (c) 2024 Danijar Hafner
 
 Upstream:   https://github.com/NM512/dreamerv3-torch
 Commit:     6ef8646d807cd10ce0c88e10a7e943211e7fc44c

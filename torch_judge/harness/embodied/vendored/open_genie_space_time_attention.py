@@ -53,6 +53,9 @@ patch position) regrouping, and the residual sums in ``SpaceTimeAttention``.
 
 UPSTREAM QUIRKS THE EXERCISE DOES NOT COPY
 ------------------------------------------
+  * The shape unpacking reads ``inp.shape`` where upstream reads ``video.shape``.
+    Upstream's version is wrong only on the conditioning path, which is not
+    vendored, so this changes nothing the oracle test exercises.
   * Default scale: ``default(scale, n_head * d_head ** -0.5)`` parses as
     ``n_head / sqrt(d_head)``, not ``1 / sqrt(d_head)``. Kept verbatim here; the
     oracle test passes ``scale`` explicitly and pins the difference.

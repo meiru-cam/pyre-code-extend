@@ -83,7 +83,7 @@ _PARTS = [
 - Truncate every sample's target list to the shortest target list in the batch, and every context list to the shortest context list, keeping the first (lowest) indices. When `max_keep` is given, the context length is also capped at `max_keep`; the target length is not.
 - Return two `torch.int64` tensors, `ctx_idx` of shape `(B, K_ctx)` and `tgt_idx` of shape `(B, K_tgt)`.
 - Raise `ValueError` when any sample's blocks cover the whole grid (its context would be empty).
-- Raise `ValueError` for an empty batch, a sample with no blocks, a block whose sizes are not at least 1 or that does not fit inside the grid, or a `max_keep` that is not a positive integer.
+- Raise `ValueError` for a `grid` that is not three positive integers, an empty batch, a sample with no blocks, a block whose sizes are not at least 1 or that does not fit inside the grid, or a `max_keep` that is not a positive integer.
 
 **Example:** `make_masks((1, 3, 3), [[(0, 1, 0, 2, 0, 2)], [(0, 1, 1, 1, 0, 3), (0, 1, 0, 2, 2, 1), (0, 1, 2, 1, 0, 1)]])`
 - Sample 0 targets `[0, 1, 3, 4]` and keeps context `[2, 5, 6, 7, 8]`.
