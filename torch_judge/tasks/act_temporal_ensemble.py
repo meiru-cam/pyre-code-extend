@@ -28,6 +28,7 @@ TASK = {
 - Each batch row is ensembled independently.
 - `reset()` forgets all history, so the next `update` behaves like the first one.
 - Do not modify `actions` in place.
+- Build the weights in the dtype of `actions`; float64 inputs are checked to about 1e-10.
 - Raise `ValueError` when `chunk_size` is not an integer `>= 1`, when `actions` is not a 3-D floating tensor with `actions.shape[1] == chunk_size`, or when `B` or `D` changes without a `reset()`.
 
 ────────────────────────────────
@@ -44,7 +45,7 @@ TASK = {
     "advisory_prerequisites": ["embodied_action_stream"],
     "hints": [
         {"level": 1, "kind": "questions", "content": "At call t, which earlier chunks predict step t, and which index inside each chunk holds that prediction? If you know the running average of n predictions and the sum of their weights, what do you need to fold in prediction n? Why is a count per future step enough to recover both weight sums?"},
-        {"level": 2, "kind": "analysis", "content": "Precompute w = exp(-m * arange(K)) and its cumsum S. Store avg (B, K-1, D) and count (K-1,). On update, merge actions[:, :-1] into avg with (avg * S[n-1] + actions * w[n]) / S[n], append actions[:, -1:] with count 1, then return entry 0 and drop it. The first call just copies actions."},
+        {"level": 2, "kind": "analysis", "content": "Precompute the weights and their cumulative sums once. Keep a running average and a count for each of the next K - 1 steps. Each call folds the overlapping part of the new chunk into those averages with the running-average identity from the background, opens a new entry for the chunk's last step, then returns and drops the oldest entry. Watch the off-by-one between a count and the weight index it selects, and the first call, which has no history."},
     ],
     "model_connections": [
         "ACT (Zhao et al. 2023, ALOHA) queries its policy every step and executes the exponentially weighted ensemble of overlapping chunks.",

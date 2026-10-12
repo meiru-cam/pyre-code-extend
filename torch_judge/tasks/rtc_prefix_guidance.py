@@ -307,10 +307,10 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
     [-4, -7/3, -2/3, 1, 1]""",
         },
     ],
-    "advisory_prerequisites": ["flow_matching", "ddim_step"],
+    "advisory_prerequisites": ["flow_matching", "ddim_step", "pi0_flow_matching_chunk", "act_temporal_ensemble"],
     "hints": [
         {"level": 1, "kind": "questions", "content": "Which steps of the new chunk can no longer change, and which should merely lean toward the old chunk? If x_t does not require grad when v_fn runs, what does autograd.grad of x1 return? What happens to (1 - tau) / tau and inv_r2 at tau = 0 and tau = 1?"},
-        {"level": 2, "kind": "analysis", "content": "Part 1: build ones(start), the ramp linspace(1, 0, n + 2)[1:-1] with n = end - start (times expm1(w) / (e - 1) for exp), and zeros(total - end), after clamping end then start. Part 2: inside torch.enable_grad(), x = x_t.detach().clone().requires_grad_(); v = v_fn(x); x1 = x - time * v; err = ((prev_padded - x1) * w).detach(); correction = autograd.grad(x1, x, err)[0]. Compute the weight on tensors and clean infinities and nan with nan_to_num before the clamp."},
+        {"level": 2, "kind": "analysis", "content": "Part 1: clamp end, then start, and concatenate three pieces: the committed ones, a ramp that excludes both of its endpoints, and the zeros. The exp schedule reshapes that same ramp. Part 2: the correction is a vector-Jacobian product, so the velocity must be computed from a copy of x_t that requires grad, with grad enabled even when the caller disabled it. Treat the error as a constant, and compute the guidance weight on tensors so that infinities and nan can be cleaned before the clamp."},
     ],
     "model_connections": [
         "LeRobot's RTCProcessor.denoise_step wraps the pi0, pi0.5 and SmolVLA denoisers with exactly this guidance, using the same four prefix schedules.",

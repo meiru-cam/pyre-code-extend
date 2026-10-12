@@ -28688,6 +28688,987 @@
           "hint": "A greedy scheduler places each instruction at the earliest legal cycle. Which constraints must it track per register, and how would you test it against the simulator?"
         }
       ]
+    },
+    {
+      "id": "act_temporal_ensemble",
+      "title": "ACT Online Temporal Ensembling",
+      "titleZh": "ACT Online Temporal Ensembling",
+      "difficulty": "Medium",
+      "functionName": "TemporalEnsembler",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "A policy that predicts action chunks is queried at every control step. Each query returns the next `chunk_size` actions, so the chunks overlap and several predictions cover the same step. Implement the online temporal ensemble from ACT, which executes their exponentially weighted average.\n\n**Signature:** `TemporalEnsembler(coeff, chunk_size)` with methods `reset()` and `update(actions) -> Tensor`.\n\n**Parameters:**\n- `coeff` — float `m` in the weights `w_i = exp(-m * i)`. It may be zero or negative.\n- `chunk_size` — integer `K >= 1`.\n- `actions` — floating tensor of shape `(B, K, D)`. `actions[b, j]` is the action for the step `j` steps after the current one.\n\n**Returns:** `update` returns a `(B, D)` tensor with the same dtype and device as `actions`: the ensembled action for the current step.\n\n**The weighted average.** Number the calls since construction or the last `reset()` as steps `t = 0, 1, 2, ...`. The chunk from call `s` predicts step `t` when `s <= t <= s + K - 1`. Sort the chunks that predict step `t` from oldest to newest and give the `i`-th one the weight `w_i`, so `w_0` belongs to the oldest. The output at step `t` is\n\n    sum_i w_i * prediction_i  /  sum_i w_i\n\n**Constraints:**\n- Compute the average online: keep one running average and one count per future step, not a history of past chunks.\n- Every prediction counts, including actions that are exactly zero.\n- Each batch row is ensembled independently.\n- `reset()` forgets all history, so the next `update` behaves like the first one.\n- Do not modify `actions` in place.\n- Build the weights in the dtype of `actions`; float64 inputs are checked to about 1e-10.\n- Raise `ValueError` when `chunk_size` is not an integer `>= 1`, when `actions` is not a 3-D floating tensor with `actions.shape[1] == chunk_size`, or when `B` or `D` changes without a `reset()`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why chunks overlap.** ACT predicts `K` future actions at once to shorten the effective horizon and reduce compounding errors. Executing a chunk open-loop for `K` steps makes motion jerky at chunk boundaries, so ACT queries the policy every step instead and averages the overlapping predictions.\n\n**The running average.** If `S_n = w_0 + ... + w_(n-1)` and `avg_n` is the average of the first `n` predictions for a step, then adding prediction `n` gives `avg_(n+1) = (avg_n * S_n + w_n * x_n) / S_(n+1)`. Keeping a count per step is enough to pick `w_n`, `S_n` and `S_(n+1)`. After each call, the entry for the current step is returned and dropped, and the newest chunk's last action starts a new entry with count 1.\n\n**Choosing coeff.** With `m > 0` older predictions weigh more and the output is smoother; with `m < 0` newer predictions weigh more and the policy reacts faster; `m = 0` is a plain mean. ACT uses `m = 0.01`.\n\n**Contrast with chunk scheduling.** The `embodied_action_stream` exercise lets a newer chunk replace an older plan. Temporal ensembling keeps every plan and averages them.",
+      "descriptionZh": "A policy that predicts action chunks is queried at every control step. Each query returns the next `chunk_size` actions, so the chunks overlap and several predictions cover the same step. Implement the online temporal ensemble from ACT, which executes their exponentially weighted average.\n\n**Signature:** `TemporalEnsembler(coeff, chunk_size)` with methods `reset()` and `update(actions) -> Tensor`.\n\n**Parameters:**\n- `coeff` — float `m` in the weights `w_i = exp(-m * i)`. It may be zero or negative.\n- `chunk_size` — integer `K >= 1`.\n- `actions` — floating tensor of shape `(B, K, D)`. `actions[b, j]` is the action for the step `j` steps after the current one.\n\n**Returns:** `update` returns a `(B, D)` tensor with the same dtype and device as `actions`: the ensembled action for the current step.\n\n**The weighted average.** Number the calls since construction or the last `reset()` as steps `t = 0, 1, 2, ...`. The chunk from call `s` predicts step `t` when `s <= t <= s + K - 1`. Sort the chunks that predict step `t` from oldest to newest and give the `i`-th one the weight `w_i`, so `w_0` belongs to the oldest. The output at step `t` is\n\n    sum_i w_i * prediction_i  /  sum_i w_i\n\n**Constraints:**\n- Compute the average online: keep one running average and one count per future step, not a history of past chunks.\n- Every prediction counts, including actions that are exactly zero.\n- Each batch row is ensembled independently.\n- `reset()` forgets all history, so the next `update` behaves like the first one.\n- Do not modify `actions` in place.\n- Build the weights in the dtype of `actions`; float64 inputs are checked to about 1e-10.\n- Raise `ValueError` when `chunk_size` is not an integer `>= 1`, when `actions` is not a 3-D floating tensor with `actions.shape[1] == chunk_size`, or when `B` or `D` changes without a `reset()`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why chunks overlap.** ACT predicts `K` future actions at once to shorten the effective horizon and reduce compounding errors. Executing a chunk open-loop for `K` steps makes motion jerky at chunk boundaries, so ACT queries the policy every step instead and averages the overlapping predictions.\n\n**The running average.** If `S_n = w_0 + ... + w_(n-1)` and `avg_n` is the average of the first `n` predictions for a step, then adding prediction `n` gives `avg_(n+1) = (avg_n * S_n + w_n * x_n) / S_(n+1)`. Keeping a count per step is enough to pick `w_n`, `S_n` and `S_(n+1)`. After each call, the entry for the current step is returned and dropped, and the newest chunk's last action starts a new entry with count 1.\n\n**Choosing coeff.** With `m > 0` older predictions weigh more and the output is smoother; with `m < 0` newer predictions weigh more and the policy reacts faster; `m = 0` is a plain mean. ACT uses `m = 0.01`.\n\n**Contrast with chunk scheduling.** The `embodied_action_stream` exercise lets a newer chunk replace an older plan. Temporal ensembling keeps every plan and averages them.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Uniform weights on overlapping chunks",
+          "code": "\nimport torch\ne = {fn}(0.0, 3)\nc0 = torch.tensor([[[1.0], [2.0], [3.0]]])\nc1 = torch.tensor([[[5.0], [6.0], [7.0]]])\nc2 = torch.tensor([[[9.0], [10.0], [11.0]]])\nout0 = e.update(c0)\nassert out0.shape == (1, 1) and torch.allclose(out0, torch.tensor([[1.0]])), out0\nout1 = e.update(c1)  # step 1 is predicted by c0[1] = 2 and c1[0] = 5\nassert torch.allclose(out1, torch.tensor([[3.5]])), out1\nout2 = e.update(c2)  # step 2: c0[2] = 3, c1[1] = 6, c2[0] = 9\nassert torch.allclose(out2, torch.tensor([[6.0]])), out2\n",
+          "behavior": "metrics.averaging"
+        },
+        {
+          "name": "Exponential weights favour the oldest prediction",
+          "code": "\nimport math, torch\nm = math.log(2.0)  # w_0 = 1, w_1 = 0.5\ne = {fn}(m, 2)\ne.update(torch.tensor([[[0.0, 1.0], [4.0, 2.0]]]))\nout = e.update(torch.tensor([[[10.0, -2.0], [0.0, 0.0]]]))\nwant = torch.tensor([[(1.0 * 4.0 + 0.5 * 10.0) / 1.5, (1.0 * 2.0 + 0.5 * -2.0) / 1.5]])\nassert torch.allclose(out, want), (out, want)\n",
+          "behavior": "metrics.averaging"
+        },
+        {
+          "name": "Online output equals the offline weighted average",
+          "visibility": "unshown",
+          "behavior": "metrics.averaging",
+          "failureMessage": "At every step, weight the predictions for that step by exp(-coeff * i) with i = 0 for the oldest chunk, and divide by the sum of those weights.",
+          "hiddenCode": "\nimport math, torch\ndef offline(chunks, m, K):\n    outs = []\n    for t in range(len(chunks)):\n        num, den = 0.0, 0.0\n        for i, s in enumerate(range(max(0, t - K + 1), t + 1)):\n            w = math.exp(-m * i)\n            num = num + w * chunks[s][:, t - s]\n            den += w\n        outs.append(num / den)\n    return outs\nfor seed, m, K, B, D, T in ((0, 0.01, 4, 2, 3, 13), (1, 0.7, 5, 3, 2, 17), (2, -0.4, 3, 1, 4, 11), (3, 1.3, 2, 2, 1, 9), (4, 0.25, 6, 2, 2, 20)):\n    g = torch.Generator().manual_seed(seed)\n    chunks = [torch.randn(B, K, D, generator=g, dtype=torch.float64) for _ in range(T)]\n    e = {fn}(m, K)\n    for t, (got, want) in enumerate(zip([e.update(c) for c in chunks], offline(chunks, m, K))):\n        assert got.shape == (B, D), got.shape\n        assert torch.allclose(got, want, atol=1e-10, rtol=0), (seed, t, got, want)\n"
+        },
+        {
+          "name": "Weights saturate once chunk_size chunks overlap",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "In steady state each step has exactly chunk_size predictions weighted w_0 (oldest) to w_(K-1) (newest); index weights by the per-step count, not by time.",
+          "hiddenCode": "\nimport math, torch\nm = math.log(3.0)  # w = 1, 1/3, 1/9\ne = {fn}(m, 3)\nfor t in range(12):\n    out = e.update(torch.full((1, 3, 1), float(t), dtype=torch.float64) + torch.tensor([0.0, 100.0, 200.0], dtype=torch.float64).view(1, 3, 1))\n# step 11 is predicted by chunk 9 (offset 2), chunk 10 (offset 1) and chunk 11 (offset 0)\npreds = [9.0 + 200.0, 10.0 + 100.0, 11.0]\nwant = (preds[0] * 1 + preds[1] / 3 + preds[2] / 9) / (1 + 1 / 3 + 1 / 9)\nassert abs(out.item() - want) < 1e-9, (out, want)\n"
+        },
+        {
+          "name": "Negative coeff weights newer predictions more",
+          "visibility": "unshown",
+          "behavior": "metrics.averaging",
+          "failureMessage": "w_i = exp(-coeff * i) with i counting from the oldest prediction, so a negative coeff gives the newest prediction the largest weight.",
+          "hiddenCode": "\nimport math, torch\nm = -math.log(4.0)  # w_0 = 1, w_1 = 4\ne = {fn}(m, 2)\ne.update(torch.tensor([[[0.0], [1.0]]], dtype=torch.float64))\nout = e.update(torch.tensor([[[6.0], [0.0]]], dtype=torch.float64))\nassert abs(out.item() - (1.0 * 1.0 + 4.0 * 6.0) / 5.0) < 1e-12, out\n"
+        },
+        {
+          "name": "Exact-zero actions are real predictions",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "Do not treat zeros as missing predictions; an action of exactly 0 is averaged like any other value.",
+          "hiddenCode": "\nimport torch\ne = {fn}(0.0, 3)\ne.update(torch.tensor([[[1.0, 1.0], [0.0, 2.0], [0.0, 0.0]]]))\nout1 = e.update(torch.tensor([[[4.0, 4.0], [6.0, 0.0], [3.0, 3.0]]]))\nassert torch.allclose(out1, torch.tensor([[2.0, 3.0]])), out1\nout2 = e.update(torch.tensor([[[3.0, 3.0], [1.0, 1.0], [1.0, 1.0]]]))\nassert torch.allclose(out2, torch.tensor([[3.0, 1.0]])), out2\n"
+        },
+        {
+          "name": "Batch rows are ensembled independently",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "Keep a separate running average per batch row; share only the per-step counts.",
+          "hiddenCode": "\nimport torch\ng = torch.Generator().manual_seed(7)\nchunks = [torch.randn(3, 4, 2, generator=g, dtype=torch.float64) for _ in range(9)]\njoint = {fn}(0.3, 4)\nsingles = [{fn}(0.3, 4) for _ in range(3)]\nfor c in chunks:\n    out = joint.update(c)\n    for b in range(3):\n        assert torch.allclose(out[b:b + 1], singles[b].update(c[b:b + 1]), atol=1e-12), b\n"
+        },
+        {
+          "name": "reset forgets all history",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "reset() must clear the running averages and counts, so the next update returns that chunk's first action.",
+          "hiddenCode": "\nimport torch\ng = torch.Generator().manual_seed(11)\ne = {fn}(0.1, 3)\nfor _ in range(5):\n    e.update(torch.randn(2, 3, 2, generator=g, dtype=torch.float64))\ne.reset()\nfresh = {fn}(0.1, 3)\nnew = [torch.randn(2, 3, 2, generator=g, dtype=torch.float64) for _ in range(4)]\nfor c in new:\n    assert torch.allclose(e.update(c), fresh.update(c), atol=1e-12)\ne.reset()\nc = torch.randn(4, 3, 1, generator=g, dtype=torch.float64)\nassert torch.equal(e.update(c), c[:, 0])\n"
+        },
+        {
+          "name": "chunk_size 1 executes each new action",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "With chunk_size 1 no chunks overlap, so every update returns actions[:, 0].",
+          "hiddenCode": "\nimport torch\ng = torch.Generator().manual_seed(3)\ne = {fn}(0.5, 1)\nfor _ in range(4):\n    c = torch.randn(2, 1, 3, generator=g)\n    out = e.update(c)\n    assert out.shape == (2, 3) and torch.equal(out, c[:, 0]), out\n"
+        },
+        {
+          "name": "Keeps dtype and does not mutate the input",
+          "visibility": "unshown",
+          "behavior": "tensor.dtype_device",
+          "failureMessage": "Return the input dtype and never modify the caller's actions tensor in place (clone what you store).",
+          "hiddenCode": "\nimport torch\ng = torch.Generator().manual_seed(5)\ne = {fn}(0.2, 3)\nchunks = [torch.randn(2, 3, 2, generator=g, dtype=torch.float64) for _ in range(5)]\ncopies = [c.clone() for c in chunks]\nfor c in chunks:\n    out = e.update(c)\n    assert out.dtype == torch.float64, out.dtype\nfor c, k in zip(chunks, copies):\n    assert torch.equal(c, k), \"update modified its input\"\n"
+        },
+        {
+          "name": "Rejects bad shapes and arguments",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Raise ValueError for a non-integer or non-positive chunk_size, a wrong actions shape or dtype, or a batch/action-dim change without reset().",
+          "hiddenCode": "\nimport torch\nfor k in (0, -1, 2.5):\n    try:\n        {fn}(0.1, k)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"accepted chunk_size={k}\")\nfor bad in (torch.zeros(3, 2), torch.zeros(1, 4, 2), torch.zeros(1, 2, 2), torch.zeros(1, 3, 2, dtype=torch.long)):\n    try:\n        {fn}(0.1, 3).update(bad)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"accepted actions {tuple(bad.shape)} {bad.dtype}\")\nfor second in (torch.zeros(2, 3, 2), torch.zeros(1, 3, 3)):\n    e = {fn}(0.1, 3)\n    e.update(torch.zeros(1, 3, 2))\n    try:\n        e.update(second)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"accepted shape change to {tuple(second.shape)}\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "At call t, which earlier chunks predict step t, and which index inside each chunk holds that prediction? If you know the running average of n predictions and the sum of their weights, what do you need to fold in prediction n? Why is a count per future step enough to recover both weight sums?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Precompute the weights and their cumulative sums once. Keep a running average and a count for each of the next K - 1 steps. Each call folds the overlapping part of the new chunk into those averages with the running-average identity from the background, opens a new entry for the chunk's last step, then returns and drops the oldest entry. Watch the off-by-one between a count and the weight index it selects, and the first call, which has no history."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "embodied_action_stream"
+      ],
+      "modelConnections": [
+        "ACT (Zhao et al. 2023, ALOHA) queries its policy every step and executes the exponentially weighted ensemble of overlapping chunks.",
+        "LeRobot's ACTPolicy implements the online form as ACTTemporalEnsembler; ACT's original code computes the same average offline from a buffer of every past chunk.",
+        "Later chunked policies (pi0, SmolVLA) execute chunks with asynchronous inference or real-time chunking instead of a per-step ensemble."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Smooth motion with no jumps at chunk boundaries, constant memory per step, and no extra training cost."
+        ],
+        "cons": [
+          "Needs a policy query every step, and averaging predictions from different modes can produce an action that belongs to neither."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What problem does temporal ensembling solve when a policy predicts action chunks?",
+          "hint": "Contrast open-loop chunk execution (jerky switches at chunk boundaries, slow reaction) with querying every step, where several overlapping chunks predict the same step and must be combined."
+        },
+        {
+          "stage": "concept",
+          "question": "In ACT's weights w_i = exp(-m * i), which prediction gets w_0, and what does the sign of m control?",
+          "hint": "Name the ordering of i (oldest to newest), then cover m > 0, m = 0 and m < 0 in terms of smoothness versus how fast new observations take effect. Mention ACT's default m."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Derive the online update that adds one prediction to a running weighted average without storing past chunks.",
+          "hint": "Start from avg_n = sum of w_i x_i over S_n, the sum of the first n weights. Multiply back by S_n, add the new weighted term, divide by S_(n+1). Say what state that needs per step."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why is a per-step count enough state to pick the right weights, and why does it never exceed chunk_size?",
+          "hint": "Relate the count to which w and which prefix sums to use. Then count how many chunks can cover one step given each chunk spans K steps, and when a step leaves the buffer."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "The original ACT code finds populated predictions with actions != 0. What goes wrong, and how does the online form avoid it?",
+          "hint": "Explain why a zero-filled buffer needs a populated test, what happens to a real action with a zero entry, and how explicit counts replace the sentinel value."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Temporal ensembling versus executing each chunk open-loop for K steps: smoothness, reactivity and compute?",
+          "hint": "Compare policy calls per step, how quickly a new observation affects the executed action, boundary jumps, and the risk of averaging two different modes."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Temporal ensembling versus real-time chunking or asynchronous inference for slow, large VLA policies?",
+          "hint": "Consider inference latency longer than a control step: ensembling needs a fresh chunk every step, while async execution and RTC keep acting during inference and keep chunk continuity by guidance instead of averaging."
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/huggingface/lerobot/blob/75cd2ba0ce9ff47686bb2bd7b7f65840606c02ee/src/lerobot/policies/act/modeling_act.py",
+          "commit": "75cd2ba0ce9ff47686bb2bd7b7f65840606c02ee",
+          "path": "src/lerobot/policies/act/modeling_act.py",
+          "symbol": "ACTTemporalEnsembler",
+          "license": "Apache-2.0",
+          "adapted": "Same online update: running weighted average per future step, weights indexed by a per-step count, pop the current step.",
+          "simplifications": "Counts are kept as a 1-D tensor and never clamped, since they cannot exceed chunk_size - 1 before a merge; weights are built in the actions dtype instead of float32; shape and batch changes raise ValueError."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/tonyzhaozh/act/blob/742c753c0d4a5d87076c8f69e5628c79a8cc5488/imitate_episodes.py",
+          "commit": "742c753c0d4a5d87076c8f69e5628c79a8cc5488",
+          "path": "imitate_episodes.py",
+          "symbol": "eval_bc (temporal_agg branch, lines 250-259)",
+          "license": "MIT",
+          "adapted": "The offline definition the online update must match: weight w_i = exp(-k * i) over the predictions for step t, oldest first.",
+          "simplifications": "Divergence: the original finds populated rows with torch.all(actions != 0, axis=1), so a real prediction containing a zero entry is dropped from the average. The exercise counts every prediction, as LeRobot does. The original also keeps a (T, T + K, D) buffer of all chunks; the exercise is online with O(K) state."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2304.13705",
+          "section": "Zhao et al. 2023, Section IV-A Action Chunking and Temporal Ensemble, Figure 4 and Algorithm 2",
+          "note": "Defines w_i = exp(-m * i) with w_0 the weight of the oldest action."
+        }
+      ]
+    },
+    {
+      "id": "fast_dct_action_tokens",
+      "title": "FAST DCT Action Tokens",
+      "titleZh": "FAST DCT Action Tokens",
+      "difficulty": "Medium",
+      "functionName": "fast_encode",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Turn a chunk of continuous robot actions into the integer tokens FAST feeds to BPE, and decode them back.\n\n**Signatures:** define both functions at the top level of your code.\n- `fast_encode(chunk, scale=10.0, min_token=0) -> LongTensor`\n- `fast_decode(tokens, T, D, scale=10.0, min_token=0) -> Tensor`\n\n**Parameters:**\n- `chunk` — float tensor of shape `(T, D)` or `(B, T, D)`: `T` time steps of a `D`-dimensional action. Values are already normalized (FAST maps the 1st and 99th percentiles to -1 and 1 beforehand).\n- `scale` — positive float. Larger keeps more precision and makes more distinct token values.\n- `min_token` — integer subtracted from every rounded coefficient, so the smallest expected coefficient becomes token 0.\n- `tokens` — integer tensor of shape `(T * D,)` or `(B, T * D)`, as returned by `fast_encode`.\n\n**Encode,** for each chunk, in this order:\n- Apply the orthonormal DCT-II along the time axis, separately for every action dimension. With `n` the time index and `k` the frequency index, both in `0 .. T-1`:\n\n        C[k, n] = sqrt(1 / T) * cos(pi * (2n + 1) * k / (2T))   if k == 0\n        C[k, n] = sqrt(2 / T) * cos(pi * (2n + 1) * k / (2T))   otherwise\n        coeff   = C @ chunk          # (T, D): row k holds frequency k of every dimension\n\n- Round `coeff * scale` to the nearest integer with `torch.round`. Exact ties depend on the last bit of the DCT, so no case relies on them.\n- Flatten the `(T, D)` result row-major: all dimensions of frequency 0, then all dimensions of frequency 1, and so on.\n- Subtract `min_token` and clamp at 0.\n\n**Decode** inverts the steps it can: reshape to `(T, D)`, add `min_token`, divide by `scale`, and apply the inverse DCT `C.T @ coeff` along time.\n\n**Returns:**\n- `fast_encode` — `torch.long` tensor of shape `(T * D,)` for a 2-D chunk or `(B, T * D)` for a 3-D chunk.\n- `fast_decode` — `torch.float64` tensor of shape `(T, D)` for 1-D tokens or `(B, T, D)` for 2-D tokens.\n\n**Constraints:**\n- Build the DCT as a matrix in torch. Do not import scipy.\n- Compute the DCT in `float64`, whatever the input dtype.\n- The DCT runs over time, never over the action dimensions.\n- Clamping is lossy: decode does not try to undo it.\n- `T = 1` is valid: the DCT of one step is the step itself.\n- `fast_encode` raises `ValueError` unless `chunk` is 2-D or 3-D.\n- `fast_decode` raises `ValueError` unless `tokens` is 1-D or 2-D with a last dimension of exactly `T * D`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why not one token per action value.** Binning every dimension at every step (RT-2, OpenVLA) gives `T * D` tokens per chunk. At high control rates neighbouring steps are nearly identical, so the next token is easy to guess from the previous one and the training signal per token is tiny. Autoregressive VLAs trained that way struggle on fast, dexterous tasks.\n\n**What the DCT buys.** Smooth action trajectories put almost all their energy into a few low-frequency coefficients. After scaling and rounding, most high-frequency coefficients become 0. Flattening low frequencies first puts the informative coefficients at the front and long runs of zeros at the back, which BPE then merges into a handful of tokens. The orthonormal DCT keeps the round trip exact apart from rounding: each coefficient is off by at most `0.5 / scale`, and because `C` is orthogonal the same error budget carries over to the actions.\n\n**Where BPE comes in.** Upstream turns each integer into a character with `chr` and trains a byte-level BPE tokenizer on those strings (the `bpe` exercise covers that part). `min_token` is the smallest rounded coefficient seen while fitting, so every character is non-negative. openpi maps the resulting BPE ids onto the tail of the PaliGemma vocabulary for pi0-FAST.",
+      "descriptionZh": "Turn a chunk of continuous robot actions into the integer tokens FAST feeds to BPE, and decode them back.\n\n**Signatures:** define both functions at the top level of your code.\n- `fast_encode(chunk, scale=10.0, min_token=0) -> LongTensor`\n- `fast_decode(tokens, T, D, scale=10.0, min_token=0) -> Tensor`\n\n**Parameters:**\n- `chunk` — float tensor of shape `(T, D)` or `(B, T, D)`: `T` time steps of a `D`-dimensional action. Values are already normalized (FAST maps the 1st and 99th percentiles to -1 and 1 beforehand).\n- `scale` — positive float. Larger keeps more precision and makes more distinct token values.\n- `min_token` — integer subtracted from every rounded coefficient, so the smallest expected coefficient becomes token 0.\n- `tokens` — integer tensor of shape `(T * D,)` or `(B, T * D)`, as returned by `fast_encode`.\n\n**Encode,** for each chunk, in this order:\n- Apply the orthonormal DCT-II along the time axis, separately for every action dimension. With `n` the time index and `k` the frequency index, both in `0 .. T-1`:\n\n        C[k, n] = sqrt(1 / T) * cos(pi * (2n + 1) * k / (2T))   if k == 0\n        C[k, n] = sqrt(2 / T) * cos(pi * (2n + 1) * k / (2T))   otherwise\n        coeff   = C @ chunk          # (T, D): row k holds frequency k of every dimension\n\n- Round `coeff * scale` to the nearest integer with `torch.round`. Exact ties depend on the last bit of the DCT, so no case relies on them.\n- Flatten the `(T, D)` result row-major: all dimensions of frequency 0, then all dimensions of frequency 1, and so on.\n- Subtract `min_token` and clamp at 0.\n\n**Decode** inverts the steps it can: reshape to `(T, D)`, add `min_token`, divide by `scale`, and apply the inverse DCT `C.T @ coeff` along time.\n\n**Returns:**\n- `fast_encode` — `torch.long` tensor of shape `(T * D,)` for a 2-D chunk or `(B, T * D)` for a 3-D chunk.\n- `fast_decode` — `torch.float64` tensor of shape `(T, D)` for 1-D tokens or `(B, T, D)` for 2-D tokens.\n\n**Constraints:**\n- Build the DCT as a matrix in torch. Do not import scipy.\n- Compute the DCT in `float64`, whatever the input dtype.\n- The DCT runs over time, never over the action dimensions.\n- Clamping is lossy: decode does not try to undo it.\n- `T = 1` is valid: the DCT of one step is the step itself.\n- `fast_encode` raises `ValueError` unless `chunk` is 2-D or 3-D.\n- `fast_decode` raises `ValueError` unless `tokens` is 1-D or 2-D with a last dimension of exactly `T * D`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why not one token per action value.** Binning every dimension at every step (RT-2, OpenVLA) gives `T * D` tokens per chunk. At high control rates neighbouring steps are nearly identical, so the next token is easy to guess from the previous one and the training signal per token is tiny. Autoregressive VLAs trained that way struggle on fast, dexterous tasks.\n\n**What the DCT buys.** Smooth action trajectories put almost all their energy into a few low-frequency coefficients. After scaling and rounding, most high-frequency coefficients become 0. Flattening low frequencies first puts the informative coefficients at the front and long runs of zeros at the back, which BPE then merges into a handful of tokens. The orthonormal DCT keeps the round trip exact apart from rounding: each coefficient is off by at most `0.5 / scale`, and because `C` is orthogonal the same error budget carries over to the actions.\n\n**Where BPE comes in.** Upstream turns each integer into a character with `chr` and trains a byte-level BPE tokenizer on those strings (the `bpe` exercise covers that part). `min_token` is the smallest rounded coefficient seen while fitting, so every character is non-negative. openpi maps the resulting BPE ids onto the tail of the PaliGemma vocabulary for pi0-FAST.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Hand-computed tokens for a two-step chunk",
+          "code": "\nimport torch\nchunk = torch.tensor([[1.0, 0.0], [3.0, 0.5]], dtype=torch.float64)\n# frequency 0 = sum / sqrt(2), frequency 1 = (x0 - x1) / sqrt(2), then * 10 and round:\n#   dim 0: 28.28 -> 28, -14.14 -> -14      dim 1: 3.54 -> 4, -3.54 -> -4\n# row-major flatten [f0d0, f0d1, f1d0, f1d1] = [28, 4, -14, -4], minus min_token = -20:\nout = {fn}(chunk, scale=10.0, min_token=-20)\nassert out.dtype == torch.long, out.dtype\nassert out.tolist() == [48, 24, 6, 16], out.tolist()\n",
+          "behavior": "state.invariant"
+        },
+        {
+          "name": "Decode recovers the chunk at a fine scale",
+          "code": "\nimport torch\nfast_decode = {fn}.__globals__[\"fast_decode\"]\ng = torch.Generator().manual_seed(0)\nchunk = torch.rand(6, 3, generator=g, dtype=torch.float64) * 2 - 1\ntokens = {fn}(chunk, scale=1000.0, min_token=-5000)\nassert tokens.shape == (18,), tokens.shape\nback = fast_decode(tokens, 6, 3, scale=1000.0, min_token=-5000)\nassert back.shape == (6, 3) and back.dtype == torch.float64, (back.shape, back.dtype)\nassert torch.allclose(back, chunk, atol=2e-3), (back - chunk).abs().max()\n",
+          "behavior": "state.invariant"
+        },
+        {
+          "name": "Matches the DCT-II formula on seeded chunks",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "Use the orthonormal DCT-II along time: row 0 scaled by sqrt(1/T), other rows by sqrt(2/T), then round(coeff * scale) - min_token.",
+          "hiddenCode": "\nimport math, random, torch\ndef expected(x, scale, min_token):\n    T, D = len(x), len(x[0])\n    out = []\n    for k in range(T):\n        a = math.sqrt((1.0 if k == 0 else 2.0) / T)\n        for d in range(D):\n            c = a * sum(x[n][d] * math.cos(math.pi * (2 * n + 1) * k / (2 * T)) for n in range(T))\n            out.append(max(round(c * scale) - min_token, 0))\n    return out\nfor seed, (T, D), scale, min_token in ((1, (5, 3), 10.0, -200), (2, (8, 2), 7.5, -300), (3, (3, 7), 25.0, -400), (4, (16, 4), 10.0, -500)):\n    rng = random.Random(seed)\n    x = [[rng.uniform(-1, 1) for _ in range(D)] for _ in range(T)]\n    out = {fn}(torch.tensor(x, dtype=torch.float64), scale=scale, min_token=min_token)\n    assert out.tolist() == expected(x, scale, min_token), (seed, out.tolist(), expected(x, scale, min_token))\n"
+        },
+        {
+          "name": "Flattens low frequencies first with dimensions interleaved",
+          "visibility": "unshown",
+          "behavior": "tensor.shape",
+          "failureMessage": "Flatten the (T, D) coefficients row-major: frequency 0 of every dimension, then frequency 1, and the DCT must run over time.",
+          "hiddenCode": "\nimport torch\n# dim 0 is constant 1, dim 1 is constant 2, dim 2 is constant 0: only frequency 0 is non-zero.\nchunk = torch.tensor([[1.0, 2.0, 0.0]] * 4, dtype=torch.float64)\nout = {fn}(chunk, scale=10.0, min_token=0)\n# frequency 0 = value * sqrt(T) = value * 2\nassert out.tolist() == [20, 40, 0] + [0] * 9, out.tolist()\n"
+        },
+        {
+          "name": "Batched chunks encode each item independently",
+          "visibility": "unshown",
+          "behavior": "tensor.shape",
+          "failureMessage": "A (B, T, D) chunk returns (B, T * D) tokens, each row equal to encoding that item alone.",
+          "hiddenCode": "\nimport torch\ng = torch.Generator().manual_seed(7)\nchunk = torch.rand(3, 5, 2, generator=g, dtype=torch.float64) * 2 - 1\nout = {fn}(chunk, scale=10.0, min_token=-40)\nassert out.shape == (3, 10) and out.dtype == torch.long, (out.shape, out.dtype)\nfor b in range(3):\n    assert torch.equal(out[b], {fn}(chunk[b], scale=10.0, min_token=-40)), b\n"
+        },
+        {
+          "name": "Coefficients below min_token clamp to zero",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "Subtract min_token from the rounded coefficients, then clamp negative results at 0.",
+          "hiddenCode": "\nimport torch\nchunk = torch.tensor([[-3.0], [-1.0], [0.6], [2.0]], dtype=torch.float64)\n# rounded coefficients * 10: [-7, -37, -3, -3]\nout = {fn}(chunk, scale=10.0, min_token=-5)\nassert out.tolist() == [0, 0, 2, 2], out.tolist()\nout = {fn}(chunk, scale=10.0, min_token=-36)\nassert out.tolist() == [29, 0, 33, 33], out.tolist()\n"
+        },
+        {
+          "name": "Computes the DCT in float64",
+          "visibility": "unshown",
+          "behavior": "tensor.dtype_device",
+          "failureMessage": "Cast the chunk to float64 before the DCT so float32 inputs round the same way as float64 ones.",
+          "hiddenCode": "\nimport torch\n# float64 DCT: frequency 1 = (v - w) / sqrt(2) * 1000 = 196.50002 -> 197.\n# The same arithmetic in float32 lands exactly on 196.5 and rounds to 196.\nchunk = torch.tensor([[0.44110000133514404], [0.1632070094347]], dtype=torch.float32)\nout = {fn}(chunk, scale=1000.0, min_token=0)\nassert out.dtype == torch.long, out.dtype\nassert out.tolist() == [427, 197], out.tolist()\n"
+        },
+        {
+          "name": "Single time step and constant chunks",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "For T = 1 the coefficient is the action itself; a constant chunk has only frequency 0 non-zero, equal to value * sqrt(T).",
+          "hiddenCode": "\nimport torch\nfast_decode = {fn}.__globals__[\"fast_decode\"]\none = torch.tensor([[0.31, -0.74]], dtype=torch.float64)\nout = {fn}(one, scale=10.0, min_token=-10)\nassert out.tolist() == [13, 3], out.tolist()\nback = fast_decode(out, 1, 2, scale=10.0, min_token=-10)\nassert torch.allclose(back, torch.tensor([[0.3, -0.7]], dtype=torch.float64)), back\nconst = torch.full((9, 2), -0.4, dtype=torch.float64)\nout = {fn}(const, scale=10.0, min_token=-20)\nassert out.tolist() == [8, 8] + [20] * 16, out.tolist()\n"
+        },
+        {
+          "name": "Decode inverts with the transposed DCT matrix",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "Decode: reshape to (T, D), add min_token, divide by scale, then apply the inverse DCT C.T @ coeff along time.",
+          "hiddenCode": "\nimport math, random, torch\nfast_decode = {fn}.__globals__[\"fast_decode\"]\nrng = random.Random(11)\nT, D, scale, min_token = 5, 3, 4.0, -30\ntokens = [rng.randint(0, 60) for _ in range(T * D)]\nout = fast_decode(torch.tensor(tokens), T, D, scale=scale, min_token=min_token)\nassert out.shape == (T, D) and out.dtype == torch.float64, (out.shape, out.dtype)\nfor n in range(T):\n    for d in range(D):\n        want = 0.0\n        for k in range(T):\n            a = math.sqrt((1.0 if k == 0 else 2.0) / T)\n            want += a * math.cos(math.pi * (2 * n + 1) * k / (2 * T)) * (tokens[k * D + d] + min_token) / scale\n        assert abs(out[n, d].item() - want) < 1e-9, (n, d, out[n, d].item(), want)\n"
+        },
+        {
+          "name": "Batched round trip stays within the rounding budget",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "decode(encode(x)) must return x up to rounding: each coefficient is off by at most 0.5 / scale.",
+          "hiddenCode": "\nimport torch\nfast_decode = {fn}.__globals__[\"fast_decode\"]\nfor seed, (B, T, D), scale in ((3, (4, 10, 3), 10.0), (5, (2, 7, 5), 50.0)):\n    g = torch.Generator().manual_seed(seed)\n    chunk = torch.rand(B, T, D, generator=g, dtype=torch.float64) * 2 - 1\n    tokens = {fn}(chunk, scale=scale, min_token=-1000)\n    back = fast_decode(tokens, T, D, scale=scale, min_token=-1000)\n    assert back.shape == (B, T, D), back.shape\n    err = ((back - chunk) ** 2).sum(dim=(1, 2)).sqrt()\n    assert (err <= 0.5 / scale * (T * D) ** 0.5 + 1e-9).all(), err\n    assert not torch.allclose(back, chunk, atol=1e-6)\n"
+        },
+        {
+          "name": "Rejects malformed inputs",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "fast_encode needs a 2-D or 3-D chunk; fast_decode needs 1-D or 2-D tokens whose last dimension is T * D.",
+          "hiddenCode": "\nimport torch\nfast_decode = {fn}.__globals__[\"fast_decode\"]\nfor bad in (torch.zeros(4), torch.zeros(1, 2, 3, 4)):\n    try:\n        {fn}(bad)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"fast_encode accepted shape {tuple(bad.shape)}\")\nfor bad, T, D in ((torch.zeros(5, dtype=torch.long), 2, 3), (torch.zeros(2, 7, dtype=torch.long), 2, 3), (torch.zeros(1, 1, 6, dtype=torch.long), 2, 3)):\n    try:\n        fast_decode(bad, T, D)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"fast_decode accepted shape {tuple(bad.shape)} for T={T}, D={D}\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which axis of a (B, T, D) tensor is time, and how do you multiply every batch item by a (T, T) matrix along it? After the DCT, which index should vary fastest when you flatten so that frequency 0 of every dimension comes first?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Build the matrix from an outer product of a frequency index and a time index, in float64, and give row 0 its own scale. A matrix product with the time axis on the right broadcasts over a batch dimension, and a row-major reshape of the (T, D) coefficients already puts frequency 0 first. Decoding reuses the same matrix, because an orthonormal matrix is inverted by its transpose."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "bpe",
+        "vla_action_bins"
+      ],
+      "modelConnections": [
+        "pi0-FAST tokenizes 1-second action chunks with FAST and trains an autoregressive VLA on the BPE ids, matching diffusion pi0 on dexterous tasks while training several times faster.",
+        "openpi's FASTTokenizer wraps the same processor and maps its BPE ids onto the last entries of the PaliGemma vocabulary.",
+        "LeRobot's pi0fast policy loads the physical-intelligence/fast processor from the Hugging Face Hub."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Few tokens per chunk for smooth trajectories, so autoregressive decoding is faster and each token carries more information.",
+          "One scale parameter trades reconstruction error against vocabulary size, and the inverse is closed form."
+        ],
+        "cons": [
+          "Rounding and clamping are lossy; a coefficient below min_token is silently clipped.",
+          "Token count varies with the trajectory after BPE, and a malformed sequence may not reshape back to (T, D) at all."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What problem with per-dimension, per-timestep action binning does FAST solve for autoregressive VLAs?",
+          "hint": "Think about token count (T times D per chunk) and how predictable the next token is at high control rates. Cover what that does to the per-token training signal and to dexterous, high-frequency tasks."
+        },
+        {
+          "stage": "concept",
+          "question": "Why does applying a DCT along time make an action chunk compressible?",
+          "hint": "Smooth signals concentrate energy in low frequencies. Explain what happens to high-frequency coefficients after scale and round, and why many zeros help the BPE stage that follows."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you build the orthonormal DCT-II matrix, and why is its inverse simply the transpose?",
+          "hint": "Describe each entry as a cosine of frequency times a half-shifted time index, and explain why row 0 needs a different scale. Then connect orthonormal rows to what C times C.T must equal."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why flatten the coefficient matrix with all dimensions of frequency 0 first instead of all frequencies of dimension 0 first?",
+          "hint": "Consider what an autoregressive decoder predicts first and what it can stop early on. Cover where the informative coefficients and the long zero runs end up under each order."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Where does information get lost in the FAST encode-decode round trip, and how large can the reconstruction error be?",
+          "hint": "Name the two lossy steps: rounding and the clamp at min_token. Bound the rounding error per coefficient by 0.5/scale and use orthogonality to carry it to the actions."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "How does the choice of scale trade reconstruction accuracy against vocabulary size and token count?",
+          "hint": "Relate scale to the rounding step size, to the range of integer values BPE must cover, and to how many high-frequency coefficients survive as non-zero."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "FAST tokens with an autoregressive VLA versus a flow-matching action expert like pi0: what do you gain and lose?",
+          "hint": "Compare training speed and reuse of the language-model head against inference latency (many sequential tokens), precision limits from quantization, and decode failures on malformed token sequences."
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://huggingface.co/physical-intelligence/fast/blob/ec4d7aa71691cac0b8bed6942be45684db2110f4/processing_action_tokenizer.py",
+          "commit": "ec4d7aa71691cac0b8bed6942be45684db2110f4",
+          "path": "processing_action_tokenizer.py",
+          "symbol": "UniversalActionProcessor.__call__, UniversalActionProcessor.decode",
+          "license": "Apache-2.0",
+          "adapted": "scipy.fft.dct / idct with norm='ortho' along time rewritten as an explicit orthonormal DCT-II matrix in torch; np.around becomes torch.round.",
+          "simplifications": "BPE (chr, bpe_tokenizer, ord) is left out, so encode returns the integer code points and decode takes them. T and D are passed to decode instead of being cached on the processor. Where upstream decode catches a wrong-length token row, prints the error and returns all-zero actions, this exercise raises ValueError. Upstream keeps a float32 chunk in float32 through scipy's DCT; the exercise always computes in float64, so it matches upstream run on the chunk cast to float64. fit(the min_token search and BPE training) is not part of the exercise."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2501.09747",
+          "section": "Pertsch et al. 2025, Section V-A (DCT) and Section V-B, Algorithm 1 FAST Tokenizer",
+          "note": "Normalize, DCT per dimension, scale and round, flatten with low-frequency components of all dimensions first, then BPE."
+        }
+      ]
+    },
+    {
+      "id": "pi0_flow_matching_chunk",
+      "title": "pi0 Flow Matching on Action Chunks",
+      "titleZh": "pi0 Flow Matching on Action Chunks",
+      "difficulty": "Medium",
+      "functionName": "Pi0FlowMatching",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Build the two halves of a pi0-style flow-matching action head for a chunk of `H` future actions: the training inputs, and the Euler sampler that turns noise into a chunk. Both work in either time convention.\n\n**Signature:** `Pi0FlowMatching()` with two methods:\n- `make_inputs(actions, noise, time, convention, prefix_mask=None) -> (x_t, v_target, model_time)`\n- `euler_sample(velocity_fn, noise, num_steps, convention, hard_prefix=None, hard_prefix_mask=None) -> Tensor`\n\n**Conventions.** `convention` is the string `\"noise_at_one\"` or `\"noise_at_zero\"`. Any other value raises `ValueError`.\n- `\"noise_at_one\"` (pi0, openpi): `x_t = t * noise + (1 - t) * actions` and `v_target = noise - actions`. Sampling runs from `t = 1` to `t = 0`.\n- `\"noise_at_zero\"` (the existing `flow_matching` exercise): `x_t = (1 - t) * noise + t * actions` and `v_target = actions - noise`. Sampling runs from `t = 0` to `t = 1`.\n- The clean time is the end that holds the actions: `0.0` for `\"noise_at_one\"`, `1.0` for `\"noise_at_zero\"`.\n\n**make_inputs:**\n- `actions` and `noise` are float tensors of shape `(B, H, D)`. `time` has shape `(B,)`. `prefix_mask` is an optional bool tensor of shape `(B, H)`.\n- Without a prefix mask, `model_time` is `time` itself, shape `(B,)`.\n- With a prefix mask, `model_time` has shape `(B, H)`: the clean time where the mask is true, `time[b]` elsewhere. `x_t` uses this per-position time, so prefix positions equal `actions` exactly.\n- `v_target` is the full velocity everywhere, prefix positions included.\n- Raise `ValueError` when `actions` is not 3-D, when `noise` does not have the shape of `actions`, when `time` is not `(B,)`, or when `prefix_mask` is not `(B, H)`.\n\n**euler_sample:**\n- Start from `x = noise`, shape `(B, H, D)`, and take `num_steps = N` Euler steps `x = x + dt * velocity_fn(x, time)`.\n- `\"noise_at_one\"`: `dt = -1 / N` and step `k` (from 0) uses `t_k = 1 + k * dt`. `\"noise_at_zero\"`: `dt = 1 / N` and `t_k = k * dt`.\n- `time` passed to `velocity_fn` is a tensor of shape `(B,)` filled with `t_k`, with the dtype and device of `noise`.\n- With a hard prefix, `time` has shape `(B, H)` instead: the clean time where `hard_prefix_mask` is true, `t_k` elsewhere. Before each velocity call and after each update, set `x` to `hard_prefix` wherever the mask is true (all `D` values).\n- `hard_prefix` has the shape of `noise`, and `hard_prefix_mask` is a bool tensor of shape `(B, H)`. Pass both or neither.\n- Raise `ValueError` when `num_steps` is not a positive integer, when `noise` is not 3-D, when only one of `hard_prefix` and `hard_prefix_mask` is given, or when their shapes are wrong.\n- Never modify `noise`, `actions` or `hard_prefix` in place.\n\n**Example:**\n\n    fm = Pi0FlowMatching()\n    actions = torch.tensor([[[1.0], [2.0]]]); noise = torch.tensor([[[0.0], [4.0]]])\n    fm.make_inputs(actions, noise, torch.tensor([0.25]), \"noise_at_one\")\n    # x_t = [[[0.75], [2.5]]], v_target = [[[-1.0], [2.0]]], model_time = [0.25]\n    fm.euler_sample(lambda x, t: noise - actions, noise, 4, \"noise_at_one\")\n    # times seen: 1.0, 0.75, 0.5, 0.25; returns actions\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why two conventions.** Both describe the same straight path between noise and data and differ only in the direction of time. The pi0 paper writes `A_tau = tau * A + (1 - tau) * eps` (noise at 0), while openpi and every LeRobot port of it (pi0, pi0.5, SmolVLA) put the noise at `t = 1` and integrate down to 0, the convention common in the diffusion literature. GR00T-style heads keep the noise at 0. A checkpoint is tied to its convention: training with one and sampling with the other makes the network push along the wrong direction.\n\n**Clean-sample identity.** In `\"noise_at_one\"` the clean chunk is `x_t - t * v`; in `\"noise_at_zero\"` it is `x_t + (1 - t) * v`. Euler sampling with the exact straight-line velocity therefore recovers the chunk in any number of steps; pi0 uses 10.\n\n**Prefixes.** Real-time chunking executes the start of a chunk while the rest is still being generated, so the first actions are already committed. Training marks those positions as clean (time at the clean end, so they are never noised), and sampling clamps them to the committed values. Clamping only after a step lets the first velocity call see noise at the committed positions; clamping only before leaves the last update applied to them.\n\n**Training times.** openpi draws `t = Beta(1.5, 1) * 0.999 + 0.001`, which favors noisy times and never hits the clean end exactly. That sampler is outside this exercise; `time` is given.",
+      "descriptionZh": "Build the two halves of a pi0-style flow-matching action head for a chunk of `H` future actions: the training inputs, and the Euler sampler that turns noise into a chunk. Both work in either time convention.\n\n**Signature:** `Pi0FlowMatching()` with two methods:\n- `make_inputs(actions, noise, time, convention, prefix_mask=None) -> (x_t, v_target, model_time)`\n- `euler_sample(velocity_fn, noise, num_steps, convention, hard_prefix=None, hard_prefix_mask=None) -> Tensor`\n\n**Conventions.** `convention` is the string `\"noise_at_one\"` or `\"noise_at_zero\"`. Any other value raises `ValueError`.\n- `\"noise_at_one\"` (pi0, openpi): `x_t = t * noise + (1 - t) * actions` and `v_target = noise - actions`. Sampling runs from `t = 1` to `t = 0`.\n- `\"noise_at_zero\"` (the existing `flow_matching` exercise): `x_t = (1 - t) * noise + t * actions` and `v_target = actions - noise`. Sampling runs from `t = 0` to `t = 1`.\n- The clean time is the end that holds the actions: `0.0` for `\"noise_at_one\"`, `1.0` for `\"noise_at_zero\"`.\n\n**make_inputs:**\n- `actions` and `noise` are float tensors of shape `(B, H, D)`. `time` has shape `(B,)`. `prefix_mask` is an optional bool tensor of shape `(B, H)`.\n- Without a prefix mask, `model_time` is `time` itself, shape `(B,)`.\n- With a prefix mask, `model_time` has shape `(B, H)`: the clean time where the mask is true, `time[b]` elsewhere. `x_t` uses this per-position time, so prefix positions equal `actions` exactly.\n- `v_target` is the full velocity everywhere, prefix positions included.\n- Raise `ValueError` when `actions` is not 3-D, when `noise` does not have the shape of `actions`, when `time` is not `(B,)`, or when `prefix_mask` is not `(B, H)`.\n\n**euler_sample:**\n- Start from `x = noise`, shape `(B, H, D)`, and take `num_steps = N` Euler steps `x = x + dt * velocity_fn(x, time)`.\n- `\"noise_at_one\"`: `dt = -1 / N` and step `k` (from 0) uses `t_k = 1 + k * dt`. `\"noise_at_zero\"`: `dt = 1 / N` and `t_k = k * dt`.\n- `time` passed to `velocity_fn` is a tensor of shape `(B,)` filled with `t_k`, with the dtype and device of `noise`.\n- With a hard prefix, `time` has shape `(B, H)` instead: the clean time where `hard_prefix_mask` is true, `t_k` elsewhere. Before each velocity call and after each update, set `x` to `hard_prefix` wherever the mask is true (all `D` values).\n- `hard_prefix` has the shape of `noise`, and `hard_prefix_mask` is a bool tensor of shape `(B, H)`. Pass both or neither.\n- Raise `ValueError` when `num_steps` is not a positive integer, when `noise` is not 3-D, when only one of `hard_prefix` and `hard_prefix_mask` is given, or when their shapes are wrong.\n- Never modify `noise`, `actions` or `hard_prefix` in place.\n\n**Example:**\n\n    fm = Pi0FlowMatching()\n    actions = torch.tensor([[[1.0], [2.0]]]); noise = torch.tensor([[[0.0], [4.0]]])\n    fm.make_inputs(actions, noise, torch.tensor([0.25]), \"noise_at_one\")\n    # x_t = [[[0.75], [2.5]]], v_target = [[[-1.0], [2.0]]], model_time = [0.25]\n    fm.euler_sample(lambda x, t: noise - actions, noise, 4, \"noise_at_one\")\n    # times seen: 1.0, 0.75, 0.5, 0.25; returns actions\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why two conventions.** Both describe the same straight path between noise and data and differ only in the direction of time. The pi0 paper writes `A_tau = tau * A + (1 - tau) * eps` (noise at 0), while openpi and every LeRobot port of it (pi0, pi0.5, SmolVLA) put the noise at `t = 1` and integrate down to 0, the convention common in the diffusion literature. GR00T-style heads keep the noise at 0. A checkpoint is tied to its convention: training with one and sampling with the other makes the network push along the wrong direction.\n\n**Clean-sample identity.** In `\"noise_at_one\"` the clean chunk is `x_t - t * v`; in `\"noise_at_zero\"` it is `x_t + (1 - t) * v`. Euler sampling with the exact straight-line velocity therefore recovers the chunk in any number of steps; pi0 uses 10.\n\n**Prefixes.** Real-time chunking executes the start of a chunk while the rest is still being generated, so the first actions are already committed. Training marks those positions as clean (time at the clean end, so they are never noised), and sampling clamps them to the committed values. Clamping only after a step lets the first velocity call see noise at the committed positions; clamping only before leaves the last update applied to them.\n\n**Training times.** openpi draws `t = Beta(1.5, 1) * 0.999 + 0.001`, which favors noisy times and never hits the clean end exactly. That sampler is outside this exercise; `time` is given.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Training inputs in both conventions",
+          "code": "\nimport torch\nfm = {fn}()\nactions = torch.tensor([[[1.0], [2.0]]])\nnoise = torch.tensor([[[0.0], [4.0]]])\nx_t, v, mt = fm.make_inputs(actions, noise, torch.tensor([0.25]), \"noise_at_one\")\nassert torch.allclose(x_t, torch.tensor([[[0.75], [2.5]]])), x_t\nassert torch.allclose(v, torch.tensor([[[-1.0], [2.0]]])), v\nassert mt.shape == (1,) and torch.allclose(mt, torch.tensor([0.25])), mt\nx_t, v, mt = fm.make_inputs(actions, noise, torch.tensor([0.25]), \"noise_at_zero\")\nassert torch.allclose(x_t, torch.tensor([[[0.25], [3.5]]])), x_t\nassert torch.allclose(v, torch.tensor([[[1.0], [-2.0]]])), v\n",
+          "behavior": "state.invariant"
+        },
+        {
+          "name": "Euler sampling from t = 1 recovers the chunk",
+          "code": "\nimport torch\nfm = {fn}()\nactions = torch.tensor([[[1.0, -1.0], [2.0, 0.5]]])\nnoise = torch.tensor([[[0.3, 0.2], [-0.4, 1.0]]])\nseen = []\ndef v(x, t):\n    seen.append(t.tolist())\n    return noise - actions\nout = fm.euler_sample(v, noise, 4, \"noise_at_one\")\nassert seen == [[1.0], [0.75], [0.5], [0.25]], seen\nassert out.shape == (1, 2, 2) and torch.allclose(out, actions, atol=1e-6), out\n",
+          "behavior": "state.invariant"
+        },
+        {
+          "name": "A clean prefix gets the clean-end time",
+          "code": "\nimport torch\nfm = {fn}()\nactions = torch.tensor([[[1.0], [2.0]]])\nnoise = torch.tensor([[[0.0], [4.0]]])\nx_t, v, mt = fm.make_inputs(actions, noise, torch.tensor([0.25]), \"noise_at_one\", torch.tensor([[True, False]]))\nassert mt.shape == (1, 2) and torch.allclose(mt, torch.tensor([[0.0, 0.25]])), mt\nassert torch.allclose(x_t, torch.tensor([[[1.0], [2.5]]])), x_t\nassert torch.allclose(v, torch.tensor([[[-1.0], [2.0]]])), v\n",
+          "behavior": "state.invariant"
+        },
+        {
+          "name": "Seeded training inputs match the formulas",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "noise_at_one uses x_t = t*noise + (1-t)*actions and v = noise - actions; noise_at_zero swaps which end holds the noise.",
+          "hiddenCode": "\nimport torch\nfm = {fn}()\nfor seed in (0, 7, 21):\n    g = torch.Generator().manual_seed(seed)\n    a = torch.randn(3, 5, 4, generator=g, dtype=torch.float64)\n    n = torch.randn(3, 5, 4, generator=g, dtype=torch.float64)\n    t = torch.rand(3, generator=g, dtype=torch.float64)\n    tt = t[:, None, None]\n    x, v, mt = fm.make_inputs(a, n, t, \"noise_at_one\")\n    assert torch.allclose(x, tt * n + (1 - tt) * a, atol=1e-12) and torch.allclose(v, n - a, atol=1e-12), seed\n    assert torch.equal(mt, t), seed\n    x, v, mt = fm.make_inputs(a, n, t, \"noise_at_zero\")\n    assert torch.allclose(x, (1 - tt) * n + tt * a, atol=1e-12) and torch.allclose(v, a - n, atol=1e-12), seed\n    assert torch.equal(mt, t), seed\n"
+        },
+        {
+          "name": "Each convention's target points from x_t to the clean chunk",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "Do not mix conventions: x_t - t*v must equal actions for noise_at_one and x_t + (1-t)*v for noise_at_zero.",
+          "hiddenCode": "\nimport torch\nfm = {fn}()\ng = torch.Generator().manual_seed(3)\na = torch.randn(4, 6, 3, generator=g, dtype=torch.float64)\nn = torch.randn(4, 6, 3, generator=g, dtype=torch.float64)\nt = torch.rand(4, generator=g, dtype=torch.float64) * 0.8 + 0.1\ntt = t[:, None, None]\nx1, v1, _ = fm.make_inputs(a, n, t, \"noise_at_one\")\nassert torch.allclose(x1 - tt * v1, a, atol=1e-12), \"noise_at_one target\"\nx0, v0, _ = fm.make_inputs(a, n, 1 - t, \"noise_at_zero\")\nassert torch.allclose(x0 + tt * v0, a, atol=1e-12), \"noise_at_zero target\"\nassert torch.allclose(x0, x1, atol=1e-12) and torch.allclose(v0, -v1, atol=1e-12), \"mirror\"\n"
+        },
+        {
+          "name": "Training prefix positions are clean and keep the full target",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "Prefix positions get the clean-end time (0 for noise_at_one, 1 for noise_at_zero) so x_t equals actions there; v_target is not masked.",
+          "hiddenCode": "\nimport torch\nfm = {fn}()\nfor seed, conv in ((1, \"noise_at_one\"), (2, \"noise_at_zero\"), (5, \"noise_at_one\"), (9, \"noise_at_zero\")):\n    g = torch.Generator().manual_seed(seed)\n    a = torch.randn(3, 6, 2, generator=g, dtype=torch.float64)\n    n = torch.randn(3, 6, 2, generator=g, dtype=torch.float64)\n    t = torch.rand(3, generator=g, dtype=torch.float64) * 0.8 + 0.1\n    mask = torch.rand(3, 6, generator=g) < 0.5\n    mask[0, 0], mask[0, 1] = True, False\n    clean = 0.0 if conv == \"noise_at_one\" else 1.0\n    x, v, mt = fm.make_inputs(a, n, t, conv, mask)\n    assert mt.shape == (3, 6), mt.shape\n    want_t = torch.where(mask, torch.full((3, 6), clean, dtype=torch.float64), t[:, None].expand(3, 6))\n    assert torch.allclose(mt, want_t), (seed, mt)\n    assert torch.allclose(x[mask], a[mask], atol=1e-12), seed\n    ref, _, _ = fm.make_inputs(a, n, t, conv)\n    assert torch.allclose(x[~mask], ref[~mask], atol=1e-12), seed\n    assert torch.allclose(v, (n - a) if conv == \"noise_at_one\" else (a - n), atol=1e-12), seed\n"
+        },
+        {
+          "name": "All-false and all-true training prefix masks",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "An all-false mask still returns a (B, H) model_time equal to time; an all-true mask returns the actions unchanged.",
+          "hiddenCode": "\nimport torch\nfm = {fn}()\ng = torch.Generator().manual_seed(11)\na = torch.randn(2, 4, 3, generator=g, dtype=torch.float64)\nn = torch.randn(2, 4, 3, generator=g, dtype=torch.float64)\nt = torch.tensor([0.3, 0.9], dtype=torch.float64)\nfor conv in (\"noise_at_one\", \"noise_at_zero\"):\n    ref, _, _ = fm.make_inputs(a, n, t, conv)\n    x, _, mt = fm.make_inputs(a, n, t, conv, torch.zeros(2, 4, dtype=torch.bool))\n    assert mt.shape == (2, 4) and torch.allclose(mt, t[:, None].expand(2, 4)), mt\n    assert torch.allclose(x, ref, atol=1e-12), conv\n    x, _, mt = fm.make_inputs(a, n, t, conv, torch.ones(2, 4, dtype=torch.bool))\n    assert torch.allclose(x, a, atol=1e-12), conv\n    assert torch.all(mt == (0.0 if conv == \"noise_at_one\" else 1.0)), mt\n"
+        },
+        {
+          "name": "Sampler times follow each convention's schedule",
+          "visibility": "unshown",
+          "behavior": "events.ordering",
+          "failureMessage": "Step k evaluates the velocity at t = 1 + k*dt with dt = -1/N for noise_at_one, and at t = k/N for noise_at_zero; take exactly N steps.",
+          "hiddenCode": "\nimport torch\n\ndef exact_field(actions, convention, log=None):\n    def v(x, t):\n        if log is not None:\n            log.append(t.clone())\n        tt = t.reshape(t.shape[0], -1, 1)\n        if convention == \"noise_at_one\":\n            return (x - actions) / tt\n        return (actions - x) / (1 - tt)\n    return v\n\nfm = {fn}()\ng = torch.Generator().manual_seed(4)\na = torch.randn(2, 3, 2, generator=g, dtype=torch.float64)\nn = torch.randn(2, 3, 2, generator=g, dtype=torch.float64)\nfor N in (1, 3, 10):\n    for conv in (\"noise_at_one\", \"noise_at_zero\"):\n        log = []\n        fm.euler_sample(exact_field(a, conv, log), n, N, conv)\n        dt = (-1.0 if conv == \"noise_at_one\" else 1.0) / N\n        want = [(1.0 + k * dt) if conv == \"noise_at_one\" else k * dt for k in range(N)]\n        assert len(log) == N, (conv, N, len(log))\n        for k, t in enumerate(log):\n            assert t.shape == (2,), t.shape\n            assert torch.allclose(t, torch.full((2,), want[k], dtype=torch.float64), atol=1e-12), (conv, N, k, t)\n"
+        },
+        {
+          "name": "Exact conditional field recovers the chunk for any step count",
+          "visibility": "unshown",
+          "behavior": "numerics.stability",
+          "failureMessage": "x = x + dt * v with dt = -1/N for noise_at_one and +1/N for noise_at_zero lands exactly on the actions for the exact straight-line field.",
+          "hiddenCode": "\nimport torch\n\ndef exact_field(actions, convention, log=None):\n    def v(x, t):\n        if log is not None:\n            log.append(t.clone())\n        tt = t.reshape(t.shape[0], -1, 1)\n        if convention == \"noise_at_one\":\n            return (x - actions) / tt\n        return (actions - x) / (1 - tt)\n    return v\n\nfm = {fn}()\nfor seed in (0, 6, 13):\n    g = torch.Generator().manual_seed(seed)\n    a = torch.randn(3, 5, 4, generator=g, dtype=torch.float64)\n    n = torch.randn(3, 5, 4, generator=g, dtype=torch.float64)\n    for N in (1, 2, 7, 10):\n        for conv in (\"noise_at_one\", \"noise_at_zero\"):\n            out = fm.euler_sample(exact_field(a, conv), n, N, conv)\n            assert out.shape == a.shape, out.shape\n            assert torch.allclose(out, a, atol=1e-9), (seed, N, conv, (out - a).abs().max())\n            const = (n - a) if conv == \"noise_at_one\" else (a - n)\n            out = fm.euler_sample(lambda x, t: const, n, N, conv)\n            assert torch.allclose(out, a, atol=1e-9), (seed, N, conv, \"constant field\")\n"
+        },
+        {
+          "name": "Hard prefix is clamped before every velocity call",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "Write hard_prefix into x where the mask is true before calling velocity_fn, including the first step.",
+          "hiddenCode": "\nimport torch\n\ndef mixing_field(B, H, D, seed, log):\n    g = torch.Generator().manual_seed(seed)\n    W = torch.randn(H, H, generator=g, dtype=torch.float64) / H\n    bias = torch.randn(1, H, D, generator=g, dtype=torch.float64) * 0.3\n    def v(x, t):\n        log.append((x.clone(), t.clone()))\n        tt = t.reshape(t.shape[0], -1, 1)\n        return torch.einsum(\"hk,bkd->bhd\", W, torch.tanh(x)) * (1 + tt) + bias\n    return v\n\ndef manual_sample(v, noise, n, convention, prefix=None, mask=None):\n    dt = (-1.0 if convention == \"noise_at_one\" else 1.0) / n\n    clean = 0.0 if convention == \"noise_at_one\" else 1.0\n    B, H = noise.shape[:2]\n    x = noise.clone()\n    for k in range(n):\n        t = torch.full((B,), (1.0 + k * dt) if convention == \"noise_at_one\" else k * dt, dtype=noise.dtype)\n        if prefix is not None:\n            x[mask] = prefix[mask]\n            t = t[:, None].expand(B, H).clone()\n            t[mask] = clean\n        x = x + dt * v(x, t)\n        if prefix is not None:\n            x[mask] = prefix[mask]\n    return x\n\nfm = {fn}()\nfor seed, conv in ((2, \"noise_at_one\"), (8, \"noise_at_zero\")):\n    g = torch.Generator().manual_seed(seed)\n    n = torch.randn(2, 5, 3, generator=g, dtype=torch.float64)\n    prefix = torch.randn(2, 5, 3, generator=g, dtype=torch.float64) + 3.0\n    mask = torch.tensor([[True, True, False, False, False], [True, False, False, True, False]])\n    log = []\n    fm.euler_sample(mixing_field(2, 5, 3, seed, log), n, 4, conv, prefix, mask)\n    assert len(log) == 4, len(log)\n    for k, (x, _) in enumerate(log):\n        assert torch.equal(x[mask], prefix[mask]), (conv, k)\n"
+        },
+        {
+          "name": "Hard prefix positions see the clean time",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "With a hard prefix, pass a (B, H) time: the clean-end time (0 for noise_at_one, 1 for noise_at_zero) at masked positions and t_k elsewhere.",
+          "hiddenCode": "\nimport torch\n\ndef mixing_field(B, H, D, seed, log):\n    g = torch.Generator().manual_seed(seed)\n    W = torch.randn(H, H, generator=g, dtype=torch.float64) / H\n    bias = torch.randn(1, H, D, generator=g, dtype=torch.float64) * 0.3\n    def v(x, t):\n        log.append((x.clone(), t.clone()))\n        tt = t.reshape(t.shape[0], -1, 1)\n        return torch.einsum(\"hk,bkd->bhd\", W, torch.tanh(x)) * (1 + tt) + bias\n    return v\n\ndef manual_sample(v, noise, n, convention, prefix=None, mask=None):\n    dt = (-1.0 if convention == \"noise_at_one\" else 1.0) / n\n    clean = 0.0 if convention == \"noise_at_one\" else 1.0\n    B, H = noise.shape[:2]\n    x = noise.clone()\n    for k in range(n):\n        t = torch.full((B,), (1.0 + k * dt) if convention == \"noise_at_one\" else k * dt, dtype=noise.dtype)\n        if prefix is not None:\n            x[mask] = prefix[mask]\n            t = t[:, None].expand(B, H).clone()\n            t[mask] = clean\n        x = x + dt * v(x, t)\n        if prefix is not None:\n            x[mask] = prefix[mask]\n    return x\n\nfm = {fn}()\nfor conv in (\"noise_at_one\", \"noise_at_zero\"):\n    n = torch.randn(2, 4, 2, generator=torch.Generator().manual_seed(1), dtype=torch.float64)\n    mask = torch.tensor([[True, False, False, False], [True, True, False, False]])\n    log = []\n    fm.euler_sample(mixing_field(2, 4, 2, 5, log), n, 5, conv, n.clone(), mask)\n    clean = 0.0 if conv == \"noise_at_one\" else 1.0\n    dt = (-1.0 if conv == \"noise_at_one\" else 1.0) / 5\n    for k, (_, t) in enumerate(log):\n        tk = (1.0 + k * dt) if conv == \"noise_at_one\" else k * dt\n        assert t.shape == (2, 4), t.shape\n        assert torch.all(t[mask] == clean), (conv, k, t)\n        assert torch.allclose(t[~mask], torch.full_like(t[~mask], tk), atol=1e-12), (conv, k, t)\n"
+        },
+        {
+          "name": "Hard prefix sampling matches a step-by-step oracle",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "Clamp the prefix again after the last update so the output equals hard_prefix there, and integrate the other positions with the full Euler loop.",
+          "hiddenCode": "\nimport torch\n\ndef mixing_field(B, H, D, seed, log):\n    g = torch.Generator().manual_seed(seed)\n    W = torch.randn(H, H, generator=g, dtype=torch.float64) / H\n    bias = torch.randn(1, H, D, generator=g, dtype=torch.float64) * 0.3\n    def v(x, t):\n        log.append((x.clone(), t.clone()))\n        tt = t.reshape(t.shape[0], -1, 1)\n        return torch.einsum(\"hk,bkd->bhd\", W, torch.tanh(x)) * (1 + tt) + bias\n    return v\n\ndef manual_sample(v, noise, n, convention, prefix=None, mask=None):\n    dt = (-1.0 if convention == \"noise_at_one\" else 1.0) / n\n    clean = 0.0 if convention == \"noise_at_one\" else 1.0\n    B, H = noise.shape[:2]\n    x = noise.clone()\n    for k in range(n):\n        t = torch.full((B,), (1.0 + k * dt) if convention == \"noise_at_one\" else k * dt, dtype=noise.dtype)\n        if prefix is not None:\n            x[mask] = prefix[mask]\n            t = t[:, None].expand(B, H).clone()\n            t[mask] = clean\n        x = x + dt * v(x, t)\n        if prefix is not None:\n            x[mask] = prefix[mask]\n    return x\n\nfm = {fn}()\nfor seed, conv, N in ((3, \"noise_at_one\", 1), (4, \"noise_at_one\", 6), (10, \"noise_at_zero\", 3), (12, \"noise_at_zero\", 10)):\n    g = torch.Generator().manual_seed(seed)\n    n = torch.randn(3, 6, 2, generator=g, dtype=torch.float64)\n    prefix = torch.randn(3, 6, 2, generator=g, dtype=torch.float64)\n    mask = torch.rand(3, 6, generator=g) < 0.4\n    mask[:, 0] = True\n    out = fm.euler_sample(mixing_field(3, 6, 2, seed, []), n, N, conv, prefix, mask)\n    want = manual_sample(mixing_field(3, 6, 2, seed, []), n, N, conv, prefix, mask)\n    assert torch.equal(out[mask], prefix[mask]), (seed, \"prefix not clamped at the end\")\n    assert torch.allclose(out, want, atol=1e-10), (seed, conv, N, (out - want).abs().max())\n"
+        },
+        {
+          "name": "All-false and all-true hard prefix masks",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "An all-false mask samples exactly as without a prefix; an all-true mask returns hard_prefix.",
+          "hiddenCode": "\nimport torch\n\ndef mixing_field(B, H, D, seed, log):\n    g = torch.Generator().manual_seed(seed)\n    W = torch.randn(H, H, generator=g, dtype=torch.float64) / H\n    bias = torch.randn(1, H, D, generator=g, dtype=torch.float64) * 0.3\n    def v(x, t):\n        log.append((x.clone(), t.clone()))\n        tt = t.reshape(t.shape[0], -1, 1)\n        return torch.einsum(\"hk,bkd->bhd\", W, torch.tanh(x)) * (1 + tt) + bias\n    return v\n\ndef manual_sample(v, noise, n, convention, prefix=None, mask=None):\n    dt = (-1.0 if convention == \"noise_at_one\" else 1.0) / n\n    clean = 0.0 if convention == \"noise_at_one\" else 1.0\n    B, H = noise.shape[:2]\n    x = noise.clone()\n    for k in range(n):\n        t = torch.full((B,), (1.0 + k * dt) if convention == \"noise_at_one\" else k * dt, dtype=noise.dtype)\n        if prefix is not None:\n            x[mask] = prefix[mask]\n            t = t[:, None].expand(B, H).clone()\n            t[mask] = clean\n        x = x + dt * v(x, t)\n        if prefix is not None:\n            x[mask] = prefix[mask]\n    return x\n\nfm = {fn}()\ng = torch.Generator().manual_seed(17)\nn = torch.randn(2, 4, 3, generator=g, dtype=torch.float64)\nprefix = torch.randn(2, 4, 3, generator=g, dtype=torch.float64)\nfor conv in (\"noise_at_one\", \"noise_at_zero\"):\n    plain = fm.euler_sample(mixing_field(2, 4, 3, 1, []), n, 5, conv)\n    none = fm.euler_sample(mixing_field(2, 4, 3, 1, []), n, 5, conv, prefix, torch.zeros(2, 4, dtype=torch.bool))\n    assert torch.allclose(plain, none, atol=1e-12), conv\n    full = fm.euler_sample(mixing_field(2, 4, 3, 1, []), n, 5, conv, prefix, torch.ones(2, 4, dtype=torch.bool))\n    assert torch.equal(full, prefix), conv\n"
+        },
+        {
+          "name": "Inputs are not modified and dtype is kept",
+          "visibility": "unshown",
+          "behavior": "tensor.dtype_device",
+          "failureMessage": "Build new tensors instead of updating noise in place, and give the time tensor noise's dtype.",
+          "hiddenCode": "\nimport torch\n\ndef mixing_field(B, H, D, seed, log):\n    g = torch.Generator().manual_seed(seed)\n    W = torch.randn(H, H, generator=g, dtype=torch.float64) / H\n    bias = torch.randn(1, H, D, generator=g, dtype=torch.float64) * 0.3\n    def v(x, t):\n        log.append((x.clone(), t.clone()))\n        tt = t.reshape(t.shape[0], -1, 1)\n        return torch.einsum(\"hk,bkd->bhd\", W, torch.tanh(x)) * (1 + tt) + bias\n    return v\n\ndef manual_sample(v, noise, n, convention, prefix=None, mask=None):\n    dt = (-1.0 if convention == \"noise_at_one\" else 1.0) / n\n    clean = 0.0 if convention == \"noise_at_one\" else 1.0\n    B, H = noise.shape[:2]\n    x = noise.clone()\n    for k in range(n):\n        t = torch.full((B,), (1.0 + k * dt) if convention == \"noise_at_one\" else k * dt, dtype=noise.dtype)\n        if prefix is not None:\n            x[mask] = prefix[mask]\n            t = t[:, None].expand(B, H).clone()\n            t[mask] = clean\n        x = x + dt * v(x, t)\n        if prefix is not None:\n            x[mask] = prefix[mask]\n    return x\n\nfm = {fn}()\ng = torch.Generator().manual_seed(23)\na = torch.randn(2, 3, 2, generator=g, dtype=torch.float64)\nn = torch.randn(2, 3, 2, generator=g, dtype=torch.float64)\nprefix = torch.randn(2, 3, 2, generator=g, dtype=torch.float64)\nmask = torch.tensor([[True, False, False], [False, False, False]])\nsaved = (a.clone(), n.clone(), prefix.clone())\nx, v, mt = fm.make_inputs(a, n, torch.tensor([0.2, 0.6], dtype=torch.float64), \"noise_at_one\", mask)\nassert x.dtype == torch.float64 and v.dtype == torch.float64 and mt.dtype == torch.float64\nfor conv in (\"noise_at_one\", \"noise_at_zero\"):\n    log = []\n    out = fm.euler_sample(mixing_field(2, 3, 2, 0, log), n, 3, conv)\n    assert out.dtype == torch.float64 and all(t.dtype == torch.float64 for _, t in log), \"dtype\"\n    fm.euler_sample(mixing_field(2, 3, 2, 0, []), n, 3, conv, prefix, mask)\nassert torch.equal(a, saved[0]) and torch.equal(n, saved[1]) and torch.equal(prefix, saved[2]), \"an input was modified\"\n"
+        },
+        {
+          "name": "Rejects bad shapes, conventions and step counts",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Raise ValueError for a time that is not (B,), a mask that is not (B, H), an unknown convention, num_steps < 1, or a prefix without its mask.",
+          "hiddenCode": "\nimport torch\nfm = {fn}()\na = torch.zeros(2, 3, 4); n = torch.ones(2, 3, 4)\nbad_inputs = [\n    lambda: fm.make_inputs(a, n, torch.zeros(2, 1), \"noise_at_one\"),\n    lambda: fm.make_inputs(a, n, torch.zeros(3), \"noise_at_one\"),\n    lambda: fm.make_inputs(a, n, torch.zeros(2), \"noise_at_one\", torch.zeros(2, 4, dtype=torch.bool)),\n    lambda: fm.make_inputs(a, n, torch.zeros(2), \"noise_at_half\"),\n    lambda: fm.make_inputs(a, torch.ones(2, 3, 5), torch.zeros(2), \"noise_at_one\"),\n    lambda: fm.make_inputs(a[0], n[0], torch.zeros(3), \"noise_at_one\"),\n    lambda: fm.euler_sample(lambda x, t: x, n, 0, \"noise_at_one\"),\n    lambda: fm.euler_sample(lambda x, t: x, n, 3, \"forward\"),\n    lambda: fm.euler_sample(lambda x, t: x, n, 3, \"noise_at_one\", hard_prefix=n),\n    lambda: fm.euler_sample(lambda x, t: x, n, 3, \"noise_at_one\", n, torch.zeros(2, 4, dtype=torch.bool)),\n]\nfor i, call in enumerate(bad_inputs):\n    try:\n        call()\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"case {i} was accepted\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which end of the time interval holds the noise in each convention, and so which time is clean? Where must the per-position time replace the per-sample time, and at which two moments in each Euler step does the prefix need to be written back?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Validate shapes first. In make_inputs, expand time to (B, H) with torch.where(prefix_mask, clean_time, time[:, None]) when a mask is given, then interpolate with time[..., None]. In euler_sample, compute dt = -1/N or +1/N and t_k from k, build the time tensor in noise's dtype, clamp with torch.where(mask[:, :, None], hard_prefix, x) before the call and after x = x + dt * v."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "flow_matching",
+        "ddim_step"
+      ],
+      "modelConnections": [
+        "openpi's Pi0.compute_loss and Pi0.sample_actions use noise at t = 1, dt = -1/num_steps and 10 steps by default.",
+        "LeRobot's make_flow_matching_inputs and euler_integrate serve pi0, pi0.5, SmolVLA and EO-1 (noise at one) and GR00T, EVO-1 and WALL-X (noise at zero) from one implementation.",
+        "Real-time chunking (rtc_prefix_guidance) builds on the hard-prefix clamp and adds a guidance term toward the previous chunk."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "A continuous chunk head models multimodal action distributions without discretization error, and a few Euler steps are cheap enough for 50 Hz control.",
+          "Clamping a committed prefix lets sampling continue a chunk that is already executing, with no retraining."
+        ],
+        "cons": [
+          "The convention is implicit in the checkpoint; mixing them silently produces actions that move away from the data.",
+          "Euler integration of a learned, curved field has discretization error that only more steps or a better solver remove."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "In pi0's flow-matching action head, which end of the time interval holds the noise, and how does that change the velocity target compared with the noise-at-zero convention?",
+          "hint": "Name openpi's choice (noise at t = 1, integrate down to 0) and contrast it with the paper and SD3-style noise at 0. Cover the interpolation, the sign of the target, the sign of dt, and why a checkpoint is tied to one convention."
+        },
+        {
+          "stage": "concept",
+          "question": "Why does pi0 generate a whole chunk of future actions with flow matching instead of one discretized action token at a time?",
+          "hint": "Think about control rate, error compounding and multimodality. Cover continuous outputs without binning error, one denoising pass producing H actions for 50 Hz control, and how a generative head represents several valid ways to act."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through one Euler step of pi0 sampling: what time does the network see, what is dt, and why does the exact straight-line field recover the chunk in any number of steps?",
+          "hint": "Start from the noise end and say which way time moves and how far per step. Then use the linear interpolation to relate x_t, t, v and the clean chunk, and ask what a constant velocity means for Euler error."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How does a committed action prefix enter training and sampling, and why must the prefix be clamped both before and after each Euler step?",
+          "hint": "Cover the training side (prefix positions get the clean-end time, so x_t equals the actions there) and the sampling side (write the prefix into x). Explain what the network sees if you skip the clamp before, and what the output holds if you skip it after."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "openpi samples training times as Beta(1.5, 1) * 0.999 + 0.001. Which noise levels does this emphasize, and why keep away from the clean endpoint?",
+          "hint": "Sketch the Beta(1.5, 1) density (rising toward 1) and map it to the noise-at-one convention. Discuss why noisy times are the hard part of the field, and what a sample at exactly t = 0 would teach the network."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Few Euler steps versus many at robot control rates: what do you gain and lose, and when would you reach for a higher-order solver or distillation?",
+          "hint": "Weigh latency per chunk against integration error on a curved learned field. Mention pi0's 10 steps, the cost of each step (a pass through the action expert with a cached prefix), and when Heun, rectified flow or consistency distillation pay off."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Flow-matching action chunks versus discrete action tokens such as FAST: compare training cost, inference latency and handling of multimodal actions.",
+          "hint": "Compare pi0 with pi0-FAST: token cross-entropy trains faster and reuses the LM head, but decoding is autoregressive; flow matching needs several denoising passes yet outputs continuous chunks in parallel. Discuss precision and multimodality on each side."
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/huggingface/lerobot",
+          "commit": "75cd2ba0ce9ff47686bb2bd7b7f65840606c02ee",
+          "path": "src/lerobot/policies/common/flow_matching.py",
+          "symbol": "FlowConvention, make_flow_matching_inputs, euler_integrate",
+          "license": "Apache-2.0",
+          "adapted": "Training-input construction and the uniform-schedule Euler loop with the hard-prefix clamp, both conventions.",
+          "simplifications": "Conventions are strings and an unknown one raises ValueError (upstream: a FlowConvention enum and TypeError); noise must have the shape of actions rather than any broadcastable shape; the sampler passes time in noise's dtype rather than always float32; hard_prefix_mask is (B, H) rather than shaped like noise with the time taken from mask[..., 0]; a mask without a prefix raises instead of being ignored; RTC guidance, time_grid, velocity_scale and step_aware are dropped."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/Physical-Intelligence/openpi",
+          "commit": "215abfb217dbac7d5f1273282331b9b1866c0479",
+          "path": "src/openpi/models/pi0.py",
+          "symbol": "Pi0.compute_loss, Pi0.sample_actions",
+          "license": "Apache-2.0",
+          "adapted": "The noise-at-one interpolation, velocity target and dt = -1/num_steps schedule, transcribed from JAX.",
+          "simplifications": "openpi accumulates time as time + dt inside a while_loop; the exercise computes t_k = 1 + k * dt, which takes the same steps at the same times up to float rounding."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2410.24164",
+          "section": "Black et al. 2024, Section IV (The pi0 Model) and Appendix A-B (Sampling the flow matching timestep)",
+          "note": "Conditional flow-matching loss on action chunks, 10 forward Euler steps, and the Beta time distribution."
+        }
+      ]
+    },
+    {
+      "id": "vla_action_bins",
+      "title": "VLA Action Binning: OpenVLA and RT-1",
+      "titleZh": "VLA Action Binning: OpenVLA and RT-1",
+      "difficulty": "Medium",
+      "functionName": "ActionBinner",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Turn continuous robot actions into discrete tokens and back, the way OpenVLA and RT-1 do, with per-dimension uniform bins.\n\n**Signature:** `ActionBinner(low, high, n_bins, vocab_size, convention=\"openvla\")`\n\n**Parameters:**\n- `low`, `high` — float tensors of shape `(D,)`: the per-dimension 1st and 99th percentiles (q01, q99) of the training actions. `high >= low`.\n- `n_bins` — integer, at least 2.\n- `vocab_size` — integer size of the language model's vocabulary. Used only by `\"openvla\"`.\n- `convention` — `\"openvla\"` or `\"rt1\"`.\n\n**Methods** (actions have shape `(..., D)`; outputs keep the leading shape):\n- `normalize(actions) -> Tensor` — same dtype as `actions`:\n\n        n = clamp(2 * (actions - low) / (high - low + 1e-8) - 1, -1, 1)\n\n  Any dimension with `low == high` is set to `0`.\n- `encode(actions) -> LongTensor` — normalize, then:\n  - `\"openvla\"`: `edges = torch.linspace(-1, 1, n_bins)`. `bin` is the number of edges `<= n` (this is `np.digitize(n, edges)`, a value in `1..n_bins`). The token id is `vocab_size - bin`.\n  - `\"rt1\"`: the token id is `floor((n + 1) / 2 * (n_bins - 1))`, a value in `0..n_bins-1`.\n- `decode(token_ids) -> Tensor` — actions in the original units, dtype of `low`:\n  - `\"openvla\"`: `i = clamp(vocab_size - token_ids - 1, 0, n_bins - 2)`, `n = centers[i]` with `centers = (edges[:-1] + edges[1:]) / 2`, then `action = 0.5 * (n + 1) * (high - low) + low`.\n  - `\"rt1\"`: `action = token_ids / (n_bins - 1) * (high - low) + low`. Do not clamp the ids.\n\n**Constraints:**\n- Use the given `low` and `high`; never compute statistics from the actions you are encoding.\n- Values outside `[low, high]` clip to the end bins.\n- OpenVLA decodes to bin centers, so there are `n_bins - 1` reachable actions per dimension.\n- Raise `ValueError` for an unknown `convention`, `n_bins < 2`, `low` and `high` of different shapes, any `high < low`, or actions whose last dimension is not `D`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why bins.** RT-1, RT-2 and OpenVLA predict actions with the same cross-entropy head they use for text, so each continuous action dimension becomes one token from a fixed set of uniform bins. A 7-DoF action is 7 tokens per control step.\n\n**Why q01/q99.** Normalizing with the dataset min and max lets one outlier stretch the range and waste most bins. OpenVLA maps the 1st to 99th percentile onto `[-1, 1]` and clips the rest. Dimensions that never move (for example an unused gripper axis) are set to 0 instead of dividing by nearly zero.\n\n**The epsilon.** Because of the `+ 1e-8`, an action exactly at `high` normalizes to just below `+1`; only values clipped from above reach `+1` exactly.\n\n**The off-by-one.** `np.digitize` over `n_bins` edges returns `1..n_bins`, but there are only `n_bins - 1` intervals. OpenVLA subtracts 1 and clips, so a value exactly at `+1` lands in the last interval. Its ids take the last `n_bins` slots of the Llama vocabulary, the least-used BPE tokens, so `bin` counts down from `vocab_size - 1`.\n\n**RT-1.** RT-1 has its own action vocabulary of `n_bins` tokens. It truncates to the left end of each bucket and decodes to that end, so its reconstruction is biased low by up to one bucket, and only the exact maximum reaches the top token.",
+      "descriptionZh": "Turn continuous robot actions into discrete tokens and back, the way OpenVLA and RT-1 do, with per-dimension uniform bins.\n\n**Signature:** `ActionBinner(low, high, n_bins, vocab_size, convention=\"openvla\")`\n\n**Parameters:**\n- `low`, `high` — float tensors of shape `(D,)`: the per-dimension 1st and 99th percentiles (q01, q99) of the training actions. `high >= low`.\n- `n_bins` — integer, at least 2.\n- `vocab_size` — integer size of the language model's vocabulary. Used only by `\"openvla\"`.\n- `convention` — `\"openvla\"` or `\"rt1\"`.\n\n**Methods** (actions have shape `(..., D)`; outputs keep the leading shape):\n- `normalize(actions) -> Tensor` — same dtype as `actions`:\n\n        n = clamp(2 * (actions - low) / (high - low + 1e-8) - 1, -1, 1)\n\n  Any dimension with `low == high` is set to `0`.\n- `encode(actions) -> LongTensor` — normalize, then:\n  - `\"openvla\"`: `edges = torch.linspace(-1, 1, n_bins)`. `bin` is the number of edges `<= n` (this is `np.digitize(n, edges)`, a value in `1..n_bins`). The token id is `vocab_size - bin`.\n  - `\"rt1\"`: the token id is `floor((n + 1) / 2 * (n_bins - 1))`, a value in `0..n_bins-1`.\n- `decode(token_ids) -> Tensor` — actions in the original units, dtype of `low`:\n  - `\"openvla\"`: `i = clamp(vocab_size - token_ids - 1, 0, n_bins - 2)`, `n = centers[i]` with `centers = (edges[:-1] + edges[1:]) / 2`, then `action = 0.5 * (n + 1) * (high - low) + low`.\n  - `\"rt1\"`: `action = token_ids / (n_bins - 1) * (high - low) + low`. Do not clamp the ids.\n\n**Constraints:**\n- Use the given `low` and `high`; never compute statistics from the actions you are encoding.\n- Values outside `[low, high]` clip to the end bins.\n- OpenVLA decodes to bin centers, so there are `n_bins - 1` reachable actions per dimension.\n- Raise `ValueError` for an unknown `convention`, `n_bins < 2`, `low` and `high` of different shapes, any `high < low`, or actions whose last dimension is not `D`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why bins.** RT-1, RT-2 and OpenVLA predict actions with the same cross-entropy head they use for text, so each continuous action dimension becomes one token from a fixed set of uniform bins. A 7-DoF action is 7 tokens per control step.\n\n**Why q01/q99.** Normalizing with the dataset min and max lets one outlier stretch the range and waste most bins. OpenVLA maps the 1st to 99th percentile onto `[-1, 1]` and clips the rest. Dimensions that never move (for example an unused gripper axis) are set to 0 instead of dividing by nearly zero.\n\n**The epsilon.** Because of the `+ 1e-8`, an action exactly at `high` normalizes to just below `+1`; only values clipped from above reach `+1` exactly.\n\n**The off-by-one.** `np.digitize` over `n_bins` edges returns `1..n_bins`, but there are only `n_bins - 1` intervals. OpenVLA subtracts 1 and clips, so a value exactly at `+1` lands in the last interval. Its ids take the last `n_bins` slots of the Llama vocabulary, the least-used BPE tokens, so `bin` counts down from `vocab_size - 1`.\n\n**RT-1.** RT-1 has its own action vocabulary of `n_bins` tokens. It truncates to the left end of each bucket and decodes to that end, so its reconstruction is biased low by up to one bucket, and only the exact maximum reaches the top token.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Normalize with q01/q99, clip, and zero a constant dimension",
+          "code": "\nimport torch\nlow = torch.tensor([0.0, -2.0, 0.5], dtype=torch.float64)\nhigh = torch.tensor([1.0, 2.0, 0.5], dtype=torch.float64)\nb = {fn}(low, high, 256, 32000)\nx = torch.tensor([[0.5, 4.0, 0.7], [0.0, -1.0, 9.0]], dtype=torch.float64)\nn = b.normalize(x)\nwant = torch.tensor([[0.0, 1.0, 0.0], [-1.0, -0.5, 0.0]], dtype=torch.float64)\nassert n.shape == (2, 3) and n.dtype == torch.float64, (n.shape, n.dtype)\nassert torch.allclose(n, want, atol=1e-6), n\n",
+          "behavior": "numerics.stability"
+        },
+        {
+          "name": "OpenVLA: tail token ids and decode to bin centers",
+          "code": "\nimport torch\nlow, high = -torch.ones(4, dtype=torch.float64), torch.ones(4, dtype=torch.float64)\nb = {fn}(low, high, 5, 100, convention=\"openvla\")\n# edges [-1, -0.5, 0, 0.5, 1], centers [-0.75, -0.25, 0.25, 0.75]\n# 1.5 is beyond high, so it clips to exactly +1 and digitizes to n_bins = 5\nx = torch.tensor([-1.0, 0.1, -0.6, 1.5], dtype=torch.float64)\nids = b.encode(x)\nassert ids.dtype == torch.long and ids.tolist() == [99, 97, 99, 95], ids\nrec = b.decode(ids)\nassert torch.allclose(rec, torch.tensor([-0.75, 0.25, -0.75, 0.75], dtype=torch.float64)), rec\n",
+          "behavior": "edge.empty_or_boundary"
+        },
+        {
+          "name": "RT-1: floor to a bucket and decode to its left end",
+          "code": "\nimport torch\nlow = torch.tensor([0.0, 0.0], dtype=torch.float64)\nhigh = torch.tensor([10.0, 10.0], dtype=torch.float64)\nb = {fn}(low, high, 11, 32000, convention=\"rt1\")\nids = b.encode(torch.tensor([[3.7, 12.0]], dtype=torch.float64))\nassert ids.dtype == torch.long and ids.tolist() == [[3, 10]], ids\nrec = b.decode(ids)\nassert torch.allclose(rec, torch.tensor([[3.0, 10.0]], dtype=torch.float64)), rec\n",
+          "behavior": "edge.empty_or_boundary"
+        },
+        {
+          "name": "Normalization matches a seeded model",
+          "visibility": "unshown",
+          "behavior": "numerics.stability",
+          "failureMessage": "Map [low, high] onto [-1, 1] with the given statistics, clip, and set dimensions with low == high to 0.",
+          "hiddenCode": "\nimport torch\n\ndef m_norm(x, low, high):\n    n = (2 * (x - low) / (high - low + 1e-8) - 1).clamp(-1, 1)\n    return torch.where(low == high, torch.zeros_like(n), n)\n\ndef m_encode(x, low, high, n_bins, vocab, conv):\n    n = m_norm(x, low, high)\n    if conv == \"openvla\":\n        edges = torch.linspace(-1, 1, n_bins, dtype=n.dtype)\n        idx = (n.unsqueeze(-1) >= edges).sum(-1)\n        return vocab - idx\n    return ((n + 1) / 2 * (n_bins - 1)).floor().long()\n\ndef m_decode(ids, low, high, n_bins, vocab, conv):\n    if conv == \"openvla\":\n        edges = torch.linspace(-1, 1, n_bins, dtype=low.dtype)\n        centers = (edges[:-1] + edges[1:]) / 2\n        n = centers[(vocab - ids - 1).clamp(0, n_bins - 2)]\n        return 0.5 * (n + 1) * (high - low) + low\n    return ids.to(low.dtype) / (n_bins - 1) * (high - low) + low\n\ndef stats(g, D, dtype=torch.float64):\n    low = torch.rand(D, generator=g, dtype=dtype) * 2 - 1.5\n    high = low + torch.rand(D, generator=g, dtype=dtype) * 3 + 0.1\n    return low, high\n\nfor seed in (0, 1, 2, 3, 4):\n    g = torch.Generator().manual_seed(seed)\n    D = 3 + seed\n    low, high = stats(g, D)\n    high[1] = low[1]\n    x = torch.randn(4, 6, D, generator=g, dtype=torch.float64) * 2\n    b = {fn}(low, high, 256, 32000)\n    out = b.normalize(x)\n    assert out.shape == x.shape, (seed, out.shape)\n    assert torch.allclose(out, m_norm(x, low, high), atol=1e-12), seed\n    assert (out[..., 1] == 0).all(), seed\n"
+        },
+        {
+          "name": "Statistics come from low/high, not from the batch",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "Normalize with the q01/q99 passed to the constructor; the batch's own min and max must not matter.",
+          "hiddenCode": "\nimport torch\n\ndef m_norm(x, low, high):\n    n = (2 * (x - low) / (high - low + 1e-8) - 1).clamp(-1, 1)\n    return torch.where(low == high, torch.zeros_like(n), n)\n\ndef m_encode(x, low, high, n_bins, vocab, conv):\n    n = m_norm(x, low, high)\n    if conv == \"openvla\":\n        edges = torch.linspace(-1, 1, n_bins, dtype=n.dtype)\n        idx = (n.unsqueeze(-1) >= edges).sum(-1)\n        return vocab - idx\n    return ((n + 1) / 2 * (n_bins - 1)).floor().long()\n\ndef m_decode(ids, low, high, n_bins, vocab, conv):\n    if conv == \"openvla\":\n        edges = torch.linspace(-1, 1, n_bins, dtype=low.dtype)\n        centers = (edges[:-1] + edges[1:]) / 2\n        n = centers[(vocab - ids - 1).clamp(0, n_bins - 2)]\n        return 0.5 * (n + 1) * (high - low) + low\n    return ids.to(low.dtype) / (n_bins - 1) * (high - low) + low\n\ndef stats(g, D, dtype=torch.float64):\n    low = torch.rand(D, generator=g, dtype=dtype) * 2 - 1.5\n    high = low + torch.rand(D, generator=g, dtype=dtype) * 3 + 0.1\n    return low, high\n\nlow = torch.tensor([-1.0, 0.0], dtype=torch.float64)\nhigh = torch.tensor([1.0, 4.0], dtype=torch.float64)\nb = {fn}(low, high, 256, 32000)\nx = torch.tensor([[0.2, 1.0], [0.4, 2.0]], dtype=torch.float64)\nassert torch.allclose(b.normalize(x), torch.tensor([[0.2, -0.5], [0.4, 0.0]], dtype=torch.float64), atol=1e-6), b.normalize(x)\none = b.normalize(x[:1])\nassert torch.allclose(one, torch.tensor([[0.2, -0.5]], dtype=torch.float64), atol=1e-6), one\n"
+        },
+        {
+          "name": "OpenVLA encode and decode match a seeded model",
+          "visibility": "unshown",
+          "behavior": "numerics.stability",
+          "failureMessage": "Token id is vocab_size - digitize(n, linspace(-1, 1, n_bins)); decode clamps vocab_size - id - 1 to [0, n_bins - 2] and reads the bin centers.",
+          "hiddenCode": "\nimport torch\n\ndef m_norm(x, low, high):\n    n = (2 * (x - low) / (high - low + 1e-8) - 1).clamp(-1, 1)\n    return torch.where(low == high, torch.zeros_like(n), n)\n\ndef m_encode(x, low, high, n_bins, vocab, conv):\n    n = m_norm(x, low, high)\n    if conv == \"openvla\":\n        edges = torch.linspace(-1, 1, n_bins, dtype=n.dtype)\n        idx = (n.unsqueeze(-1) >= edges).sum(-1)\n        return vocab - idx\n    return ((n + 1) / 2 * (n_bins - 1)).floor().long()\n\ndef m_decode(ids, low, high, n_bins, vocab, conv):\n    if conv == \"openvla\":\n        edges = torch.linspace(-1, 1, n_bins, dtype=low.dtype)\n        centers = (edges[:-1] + edges[1:]) / 2\n        n = centers[(vocab - ids - 1).clamp(0, n_bins - 2)]\n        return 0.5 * (n + 1) * (high - low) + low\n    return ids.to(low.dtype) / (n_bins - 1) * (high - low) + low\n\ndef stats(g, D, dtype=torch.float64):\n    low = torch.rand(D, generator=g, dtype=dtype) * 2 - 1.5\n    high = low + torch.rand(D, generator=g, dtype=dtype) * 3 + 0.1\n    return low, high\n\nfor seed, n_bins, vocab in ((0, 256, 32000), (1, 7, 50), (2, 16, 1000), (3, 256, 32064), (4, 3, 10)):\n    g = torch.Generator().manual_seed(seed)\n    D = 2 + seed\n    low, high = stats(g, D)\n    x = low + (high - low) * (torch.rand(5, D, generator=g, dtype=torch.float64) * 1.4 - 0.2)\n    b = {fn}(low, high, n_bins, vocab, convention=\"openvla\")\n    ids = b.encode(x)\n    want = m_encode(x, low, high, n_bins, vocab, \"openvla\")\n    assert ids.dtype == torch.long and torch.equal(ids, want), (seed, ids, want)\n    assert ids.min() >= vocab - n_bins and ids.max() <= vocab - 1, seed\n    rec = b.decode(ids)\n    assert torch.allclose(rec, m_decode(ids, low, high, n_bins, vocab, \"openvla\"), atol=1e-12), seed\n    width = (high - low) / (n_bins - 1)\n    inside = ((x >= low) & (x <= high))\n    assert ((rec - x).abs() <= width + 1e-9)[inside].all(), seed\n"
+        },
+        {
+          "name": "OpenVLA boundaries: +1, -1, out-of-range values and ids",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "A value clipped to +1 digitizes to n_bins and must decode to the last center; values beyond q01/q99 clip to the end bins; out-of-range ids clamp.",
+          "hiddenCode": "\nimport torch\nlow, high = torch.zeros(3, dtype=torch.float64), torch.full((3,), 2.0, dtype=torch.float64)\nb = {fn}(low, high, 256, 32000, convention=\"openvla\")\nids = b.encode(torch.tensor([[50.0, 0.0, 1.0], [2.0, -50.0, 2.0]], dtype=torch.float64))\nassert ids.tolist() == [[31744, 31999, 31872], [31745, 31999, 31745]], ids\nedges = torch.linspace(-1, 1, 256, dtype=torch.float64)\ncenters = (edges[:-1] + edges[1:]) / 2\nrec = b.decode(ids)\nwant = torch.stack([centers[-1], centers[0], centers[127], centers[-1], centers[0], centers[-1]]).reshape(2, 3) + 1\nassert torch.allclose(rec, want, atol=1e-12), rec\nfar = b.decode(torch.tensor([40000, 5, 31998], dtype=torch.long))\nassert torch.allclose(far, torch.stack([centers[0], centers[-1], centers[1]]) + 1, atol=1e-12), far\n"
+        },
+        {
+          "name": "OpenVLA constant dimension encodes as the middle and decodes to low",
+          "visibility": "unshown",
+          "behavior": "numerics.stability",
+          "failureMessage": "A dimension with low == high normalizes to 0 before binning and unnormalizes back to low.",
+          "hiddenCode": "\nimport torch\n\ndef m_norm(x, low, high):\n    n = (2 * (x - low) / (high - low + 1e-8) - 1).clamp(-1, 1)\n    return torch.where(low == high, torch.zeros_like(n), n)\n\ndef m_encode(x, low, high, n_bins, vocab, conv):\n    n = m_norm(x, low, high)\n    if conv == \"openvla\":\n        edges = torch.linspace(-1, 1, n_bins, dtype=n.dtype)\n        idx = (n.unsqueeze(-1) >= edges).sum(-1)\n        return vocab - idx\n    return ((n + 1) / 2 * (n_bins - 1)).floor().long()\n\ndef m_decode(ids, low, high, n_bins, vocab, conv):\n    if conv == \"openvla\":\n        edges = torch.linspace(-1, 1, n_bins, dtype=low.dtype)\n        centers = (edges[:-1] + edges[1:]) / 2\n        n = centers[(vocab - ids - 1).clamp(0, n_bins - 2)]\n        return 0.5 * (n + 1) * (high - low) + low\n    return ids.to(low.dtype) / (n_bins - 1) * (high - low) + low\n\ndef stats(g, D, dtype=torch.float64):\n    low = torch.rand(D, generator=g, dtype=dtype) * 2 - 1.5\n    high = low + torch.rand(D, generator=g, dtype=dtype) * 3 + 0.1\n    return low, high\n\nlow = torch.tensor([3.0, -1.0], dtype=torch.float64)\nhigh = torch.tensor([3.0, 1.0], dtype=torch.float64)\nb = {fn}(low, high, 256, 32000, convention=\"openvla\")\nx = torch.tensor([[2.0, 0.3], [7.0, -0.3]], dtype=torch.float64)\nids = b.encode(x)\nassert torch.equal(ids[:, 0], torch.tensor([31872, 31872])), ids\nassert torch.equal(ids, m_encode(x, low, high, 256, 32000, \"openvla\")), ids\nrec = b.decode(ids)\nassert torch.allclose(rec[:, 0], torch.tensor([3.0, 3.0], dtype=torch.float64)), rec\n"
+        },
+        {
+          "name": "RT-1 encode and decode match a seeded model",
+          "visibility": "unshown",
+          "behavior": "numerics.stability",
+          "failureMessage": "RT-1 ids are floor((n + 1) / 2 * (n_bins - 1)) with no vocabulary offset, and decode is id / (n_bins - 1) mapped back to [low, high].",
+          "hiddenCode": "\nimport torch\n\ndef m_norm(x, low, high):\n    n = (2 * (x - low) / (high - low + 1e-8) - 1).clamp(-1, 1)\n    return torch.where(low == high, torch.zeros_like(n), n)\n\ndef m_encode(x, low, high, n_bins, vocab, conv):\n    n = m_norm(x, low, high)\n    if conv == \"openvla\":\n        edges = torch.linspace(-1, 1, n_bins, dtype=n.dtype)\n        idx = (n.unsqueeze(-1) >= edges).sum(-1)\n        return vocab - idx\n    return ((n + 1) / 2 * (n_bins - 1)).floor().long()\n\ndef m_decode(ids, low, high, n_bins, vocab, conv):\n    if conv == \"openvla\":\n        edges = torch.linspace(-1, 1, n_bins, dtype=low.dtype)\n        centers = (edges[:-1] + edges[1:]) / 2\n        n = centers[(vocab - ids - 1).clamp(0, n_bins - 2)]\n        return 0.5 * (n + 1) * (high - low) + low\n    return ids.to(low.dtype) / (n_bins - 1) * (high - low) + low\n\ndef stats(g, D, dtype=torch.float64):\n    low = torch.rand(D, generator=g, dtype=dtype) * 2 - 1.5\n    high = low + torch.rand(D, generator=g, dtype=dtype) * 3 + 0.1\n    return low, high\n\nfor seed, n_bins in ((0, 256), (1, 11), (2, 3), (3, 100), (4, 2)):\n    g = torch.Generator().manual_seed(seed)\n    D = 2 + seed\n    low, high = stats(g, D)\n    x = low + (high - low) * (torch.rand(6, D, generator=g, dtype=torch.float64) * 1.4 - 0.2)\n    b = {fn}(low, high, n_bins, 32000, convention=\"rt1\")\n    ids = b.encode(x)\n    want = m_encode(x, low, high, n_bins, 32000, \"rt1\")\n    assert ids.dtype == torch.long and torch.equal(ids, want), (seed, ids, want)\n    assert ids.min() >= 0 and ids.max() <= n_bins - 1, seed\n    rec = b.decode(ids)\n    assert torch.allclose(rec, m_decode(ids, low, high, n_bins, 32000, \"rt1\"), atol=1e-12), seed\n    assert (rec <= torch.maximum(x, low) + 1e-9).all(), seed\n"
+        },
+        {
+          "name": "RT-1 decode does not clamp ids",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "RT-1 decodes id / (n_bins - 1) * (high - low) + low for any id, without clamping.",
+          "hiddenCode": "\nimport torch\nlow, high = torch.tensor([0.0], dtype=torch.float64), torch.tensor([4.0], dtype=torch.float64)\nb = {fn}(low, high, 5, 32000, convention=\"rt1\")\nrec = b.decode(torch.tensor([[0], [2], [4], [6]], dtype=torch.long))\nassert torch.allclose(rec.reshape(-1), torch.tensor([0.0, 2.0, 4.0, 6.0], dtype=torch.float64)), rec\n"
+        },
+        {
+          "name": "Keeps leading batch and time dimensions",
+          "visibility": "unshown",
+          "behavior": "tensor.shape",
+          "failureMessage": "Bin each of the D dimensions elementwise and keep every leading dimension of the input.",
+          "hiddenCode": "\nimport torch\ng = torch.Generator().manual_seed(7)\nlow, high = -torch.ones(7), torch.ones(7)\nfor conv in (\"openvla\", \"rt1\"):\n    b = {fn}(low, high, 256, 32000, convention=conv)\n    x = torch.rand(2, 3, 4, 7, generator=g) * 2 - 1\n    ids = b.encode(x)\n    assert ids.shape == (2, 3, 4, 7) and ids.dtype == torch.long, (conv, ids.shape, ids.dtype)\n    rec = b.decode(ids)\n    assert rec.shape == (2, 3, 4, 7) and rec.dtype == torch.float32, (conv, rec.shape, rec.dtype)\n    assert b.normalize(x).dtype == torch.float32, conv\n"
+        },
+        {
+          "name": "Rejects invalid arguments",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Raise ValueError for an unknown convention, n_bins < 2, mismatched or inverted low/high, and actions with the wrong last dimension.",
+          "hiddenCode": "\nimport torch\nlo, hi = torch.zeros(3), torch.ones(3)\nbad = [\n    lambda: {fn}(lo, hi, 256, 32000, convention=\"fast\"),\n    lambda: {fn}(lo, hi, 1, 32000),\n    lambda: {fn}(lo, torch.ones(4), 256, 32000),\n    lambda: {fn}(hi, lo, 256, 32000),\n    lambda: {fn}(lo, hi, 256, 32000).encode(torch.zeros(2, 4)),\n    lambda: {fn}(lo, hi, 256, 32000, convention=\"rt1\").normalize(torch.zeros(5, 2)),\n]\nfor i, call in enumerate(bad):\n    try:\n        call()\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"case {i} accepted\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "How many bin edges and how many bin centers do n_bins edges give? Which bin does a value exactly at +1 fall in, and how does decode keep that index in range? What should a dimension with low == high become?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Normalize with the given low/high, clamp to [-1, 1] and zero the constant dims with torch.where. For OpenVLA, torch.bucketize(n, edges, right=True) equals np.digitize; ids are vocab_size - bin. Decode with clamp(vocab_size - id - 1, 0, n_bins - 2) into the centers. For RT-1, floor (n + 1) / 2 * (n_bins - 1)."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "int8_quantization"
+      ],
+      "modelConnections": [
+        "OpenVLA (Llama 2 backbone) overwrites the last 256 vocabulary tokens with action bins and normalizes each dimension with q01/q99 statistics.",
+        "RT-1 discretizes each action dimension into 256 buckets of its own action vocabulary; RT-2 reuses the same 256-bin scheme inside a VLM.",
+        "pi0-FAST and the FAST tokenizer start from the same q01/q99 normalization but compress a whole chunk with a DCT and BPE instead of one token per dimension."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Reuses the language model's cross-entropy head unchanged, so a VLM becomes a policy with no new output layer.",
+          "Each token is easy to read back: one dimension, one bin."
+        ],
+        "cons": [
+          "Resolution is fixed at (high - low) / (n_bins - 1) per dimension, and high-frequency control needs one token per dimension per step.",
+          "Cross-entropy ignores bin order, so predicting a neighboring bin costs as much as predicting a distant one."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why do RT-1, RT-2 and OpenVLA turn each continuous action dimension into a discrete token?",
+          "hint": "Think about reusing the language model's softmax head and cross-entropy loss unchanged. Cover what a token per dimension buys (multimodal distributions, shared vocabulary) and what it costs per control step."
+        },
+        {
+          "stage": "concept",
+          "question": "Why normalize actions with the 1st and 99th percentiles instead of the min and max?",
+          "hint": "Consider what a single outlier does to a min/max range when the bin count is fixed. Cover bin resolution, clipping of the tails, and how dimensions that never move are handled."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "With 256 bin edges from linspace(-1, 1, 256), how many intervals are there, what does np.digitize return for a value of exactly +1, and how does OpenVLA decode it?",
+          "hint": "Count edges versus intervals and recall that digitize returns an index in 1..n_bins. Walk through subtracting 1 and clipping to n_bins - 2 before indexing the centers."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why does OpenVLA place action tokens at the end of the Llama vocabulary, and how do you map a bin to a token id and back?",
+          "hint": "Think about which BPE tokens are least used and what overwriting them costs. Write the forward map id = vocab_size - bin and its inverse, and say how ids outside that range are handled."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Compare the reconstruction error of OpenVLA's center decoding with RT-1's floor-and-left-edge decoding for a value spread uniformly inside a bin.",
+          "hint": "Compare where each scheme puts the decoded value inside a bin of width w. Cover the bias and the maximum absolute error of each, and what happens at the top of the range."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Per-dimension uniform bins versus a learned action tokenizer such as FAST or VQ: what changes in sequence length, resolution and smoothness?",
+          "hint": "Compare tokens per chunk, how correlation across time and dimensions is exploited, and what high-frequency control does to per-step binning. Mention decoding robustness to invalid tokens."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Discrete action tokens with cross-entropy versus a continuous action head trained with regression or flow matching: what do you gain and lose?",
+          "hint": "Weigh multimodality, ordinal structure between bins, precision, inference latency per action, and how much of the pretrained VLM head is reused."
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/openvla/openvla/blob/c8f03f48af692657d3060c19588038c7220e9af9/prismatic/vla/action_tokenizer.py",
+          "commit": "c8f03f48af692657d3060c19588038c7220e9af9",
+          "path": "prismatic/vla/action_tokenizer.py",
+          "symbol": "ActionTokenizer.__call__, ActionTokenizer.decode_token_ids_to_actions",
+          "license": "MIT",
+          "adapted": "np.digitize over linspace(-1, 1, n_bins), ids vocab_size - bin, decode to bin centers with the clipped index, in torch.",
+          "simplifications": "Returns token ids instead of decoded strings; vocab_size is passed in instead of read from a Hugging Face tokenizer."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/openvla/openvla/blob/c8f03f48af692657d3060c19588038c7220e9af9/prismatic/vla/datasets/rlds/utils/data_utils.py",
+          "commit": "c8f03f48af692657d3060c19588038c7220e9af9",
+          "path": "prismatic/vla/datasets/rlds/utils/data_utils.py",
+          "symbol": "normalize_action_and_proprio",
+          "license": "MIT",
+          "adapted": "The BOUNDS_Q99 branch: 2 * (x - q01) / (q99 - q01 + 1e-8) - 1, clipped to [-1, 1].",
+          "simplifications": "Upstream zeroes dimensions where the dataset min equals max; the exercise only has q01/q99 and zeroes dimensions where q01 equals q99. The two agree whenever min equals max; a dimension with q01 == q99 but min != max is set to 0 here, while upstream pins it to -1 or +1. The optional per-dimension normalization mask is dropped."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/openvla/openvla/blob/c8f03f48af692657d3060c19588038c7220e9af9/prismatic/extern/hf/modeling_prismatic.py",
+          "commit": "c8f03f48af692657d3060c19588038c7220e9af9",
+          "path": "prismatic/extern/hf/modeling_prismatic.py",
+          "symbol": "OpenVLAForActionPrediction.predict_action",
+          "license": "MIT",
+          "adapted": "Unnormalize: 0.5 * (n + 1) * (q99 - q01) + q01.",
+          "simplifications": "Only the arithmetic after generate is kept; the normalization mask is dropped."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/google-research/robotics_transformer/blob/4569641b8111f3f402c32d8e24becd2a6e952ecc/tokenizers/action_tokenizer.py",
+          "commit": "4569641b8111f3f402c32d8e24becd2a6e952ecc",
+          "path": "tokenizers/action_tokenizer.py",
+          "symbol": "RT1ActionTokenizer.tokenize, RT1ActionTokenizer.detokenize",
+          "license": "Apache-2.0",
+          "adapted": "Float branch: int((a - min) / (max - min) * (V - 1)) and a / (V - 1) * (max - min) + min, in torch.",
+          "simplifications": "Applied to the q01/q99-normalized value with min = -1 and max = 1 instead of to the raw action with the action-spec bounds; one (..., D) tensor instead of a TensorSpecStruct; the int32 one-hot branch is dropped."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2406.09246",
+          "section": "Kim et al. 2024 (OpenVLA), Section 3.2 Training Procedure",
+          "note": "256 uniform bins per dimension between the 1st and 99th quantile, overwriting the 256 least-used Llama tokens."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2212.06817",
+          "section": "Brohan et al. 2022 (RT-1), Section 4 RT-1: Robotics Transformer, Action tokenization",
+          "note": "Each action dimension discretized into 256 uniform bins."
+        }
+      ]
+    },
+    {
+      "id": "rtc_prefix_guidance",
+      "title": "Real-Time Chunking Prefix Guidance",
+      "titleZh": "Real-Time Chunking Prefix Guidance",
+      "difficulty": "Hard",
+      "functionName": "prefix_weights",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Implement Real-Time Chunking (RTC): while a robot executes the previous action chunk, a flow-matching policy denoises the next one, and guidance keeps the new chunk consistent with the actions that are already committed.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior, so one solution passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- A chunk has `T` steps. Step `i` counts from 0.\n- Define both functions at module level in one solution. Part 2 calls `prefix_weights` from Part 1.\n- Use only torch and the standard library.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**The problem RTC solves.** A VLA such as pi0 predicts a chunk of H actions per inference call, but inference takes d control steps. By the time the new chunk is ready, the robot has already executed d more actions of the old chunk, so the first d actions of the new chunk are fixed. Naively switching chunks causes jerks at the boundary; RTC treats the switch as inpainting: the frozen prefix is known, the rest is generated to agree with it.\n\n**Two pieces.** A per-step weight says how strongly each step of the new chunk must match the leftover of the previous chunk: fully for the committed steps, fading over the overlap, not at all after it. Pseudo-inverse guidance (PiGDM) then nudges the flow-matching velocity at every denoising step so the predicted clean chunk moves toward the previous one where the weights say so.\n\n**Where it is used.** Physical Intelligence's RTC paper evaluates it on Kinetix and real pi0.5 robots. LeRobot ships it as `RTCProcessor` for pi0, pi0.5 and SmolVLA, with the same four schedules.",
+      "descriptionZh": "Implement Real-Time Chunking (RTC): while a robot executes the previous action chunk, a flow-matching policy denoises the next one, and guidance keeps the new chunk consistent with the actions that are already committed.\n\nThe requirement arrives in parts. Each part keeps every earlier behavior, so one solution passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- A chunk has `T` steps. Step `i` counts from 0.\n- Define both functions at module level in one solution. Part 2 calls `prefix_weights` from Part 1.\n- Use only torch and the standard library.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**The problem RTC solves.** A VLA such as pi0 predicts a chunk of H actions per inference call, but inference takes d control steps. By the time the new chunk is ready, the robot has already executed d more actions of the old chunk, so the first d actions of the new chunk are fixed. Naively switching chunks causes jerks at the boundary; RTC treats the switch as inpainting: the frozen prefix is known, the rest is generated to agree with it.\n\n**Two pieces.** A per-step weight says how strongly each step of the new chunk must match the leftover of the previous chunk: fully for the committed steps, fading over the overlap, not at all after it. Pseudo-inverse guidance (PiGDM) then nudges the flow-matching velocity at every denoising step so the predicted clean chunk moves toward the previous one where the weights say so.\n\n**Where it is used.** Physical Intelligence's RTC paper evaluates it on Kinetix and real pi0.5 robots. LeRobot ships it as `RTCProcessor` for pi0, pi0.5 and SmolVLA, with the same four schedules.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Part 1: the four schedules on start=2, end=6, total=10",
+          "code": "\nimport math, random, torch\n\ndef want_weights(start, end, total, schedule):\n    end = min(end, total)\n    start = min(start, end)\n    out = []\n    for i in range(total):\n        if schedule == \"ones\":\n            w = 1.0 if i < end else 0.0\n        elif schedule == \"zeros\":\n            w = 1.0 if i < start else 0.0\n        elif i < start:\n            w = 1.0\n        elif i >= end:\n            w = 0.0\n        else:\n            w = (end - i) / (end - start + 1)\n            if schedule == \"exp\":\n                w = w * math.expm1(w) / (math.e - 1)\n        out.append(w)\n    return torch.tensor(out, dtype=torch.float64)\n\ndef want_gain(time, max_w):\n    tau = 1.0 - time\n    if tau == 0.0:\n        return max_w\n    if tau == 1.0:\n        return 0.0\n    inv_r2 = ((1 - tau) ** 2 + tau ** 2) / (1 - tau) ** 2\n    return min((1 - tau) / tau * inv_r2, max_w)\n\ndef padded(prev, steps):\n    out = torch.zeros(prev.shape[:-2] + (steps, prev.shape[-1]), dtype=prev.dtype)\n    out[..., : prev.shape[-2], :] = prev\n    return out\n\ndef guided():\n    g = {fn}.__globals__.get(\"guided_velocity\")\n    assert callable(g), \"define guided_velocity next to prefix_weights\"\n    return g\n\nlin = {fn}(2, 6, 10, \"linear\")\nassert lin.shape == (10,), lin.shape\nassert torch.allclose(lin.double(), torch.tensor([1, 1, 0.8, 0.6, 0.4, 0.2, 0, 0, 0, 0], dtype=torch.float64), atol=1e-6), lin\nassert {fn}(2, 6, 10, \"zeros\").tolist() == [1, 1, 0, 0, 0, 0, 0, 0, 0, 0]\nassert {fn}(2, 6, 10, \"ones\").tolist() == [1, 1, 1, 1, 1, 1, 0, 0, 0, 0]\nexp = {fn}(2, 6, 10, \"exp\")\nassert torch.allclose(exp.double(), want_weights(2, 6, 10, \"exp\"), atol=1e-6), exp\n",
+          "behavior": "attention.masking",
+          "part": 1
+        },
+        {
+          "name": "Part 1: random schedules match the closed form",
+          "visibility": "unshown",
+          "behavior": "attention.masking",
+          "failureMessage": "The ramp over start <= i < end must fall from 1 toward 0 without reaching either end, (end - i) / (end - start + 1), and exp multiplies it by expm1(w) / (e - 1).",
+          "hiddenCode": "\nimport math, random, torch\n\ndef want_weights(start, end, total, schedule):\n    end = min(end, total)\n    start = min(start, end)\n    out = []\n    for i in range(total):\n        if schedule == \"ones\":\n            w = 1.0 if i < end else 0.0\n        elif schedule == \"zeros\":\n            w = 1.0 if i < start else 0.0\n        elif i < start:\n            w = 1.0\n        elif i >= end:\n            w = 0.0\n        else:\n            w = (end - i) / (end - start + 1)\n            if schedule == \"exp\":\n                w = w * math.expm1(w) / (math.e - 1)\n        out.append(w)\n    return torch.tensor(out, dtype=torch.float64)\n\ndef want_gain(time, max_w):\n    tau = 1.0 - time\n    if tau == 0.0:\n        return max_w\n    if tau == 1.0:\n        return 0.0\n    inv_r2 = ((1 - tau) ** 2 + tau ** 2) / (1 - tau) ** 2\n    return min((1 - tau) / tau * inv_r2, max_w)\n\ndef padded(prev, steps):\n    out = torch.zeros(prev.shape[:-2] + (steps, prev.shape[-1]), dtype=prev.dtype)\n    out[..., : prev.shape[-2], :] = prev\n    return out\n\ndef guided():\n    g = {fn}.__globals__.get(\"guided_velocity\")\n    assert callable(g), \"define guided_velocity next to prefix_weights\"\n    return g\n\nrng = random.Random(7)\nfor _ in range(200):\n    total = rng.randint(1, 16)\n    start, end = rng.randint(0, total), rng.randint(0, total)\n    schedule = rng.choice([\"zeros\", \"ones\", \"linear\", \"exp\"])\n    got = {fn}(start, end, total, schedule)\n    assert got.shape == (total,), (start, end, total, schedule, got.shape)\n    assert torch.allclose(got.double(), want_weights(start, end, total, schedule), atol=1e-6), (start, end, total, schedule, got)\n",
+          "part": 1
+        },
+        {
+          "name": "Part 1: start past end, end past total, empty ramps",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "Clamp end to total first, then start to end, so a late start never outlives end and an end past the chunk ramps only inside it.",
+          "hiddenCode": "\nimport math, random, torch\n\ndef want_weights(start, end, total, schedule):\n    end = min(end, total)\n    start = min(start, end)\n    out = []\n    for i in range(total):\n        if schedule == \"ones\":\n            w = 1.0 if i < end else 0.0\n        elif schedule == \"zeros\":\n            w = 1.0 if i < start else 0.0\n        elif i < start:\n            w = 1.0\n        elif i >= end:\n            w = 0.0\n        else:\n            w = (end - i) / (end - start + 1)\n            if schedule == \"exp\":\n                w = w * math.expm1(w) / (math.e - 1)\n        out.append(w)\n    return torch.tensor(out, dtype=torch.float64)\n\ndef want_gain(time, max_w):\n    tau = 1.0 - time\n    if tau == 0.0:\n        return max_w\n    if tau == 1.0:\n        return 0.0\n    inv_r2 = ((1 - tau) ** 2 + tau ** 2) / (1 - tau) ** 2\n    return min((1 - tau) / tau * inv_r2, max_w)\n\ndef padded(prev, steps):\n    out = torch.zeros(prev.shape[:-2] + (steps, prev.shape[-1]), dtype=prev.dtype)\n    out[..., : prev.shape[-2], :] = prev\n    return out\n\ndef guided():\n    g = {fn}.__globals__.get(\"guided_velocity\")\n    assert callable(g), \"define guided_velocity next to prefix_weights\"\n    return g\n\ncases = [(5, 3, 8), (2, 12, 10), (12, 15, 10), (0, 0, 6), (0, 6, 6), (3, 3, 6), (6, 9, 6), (4, 2, 1), (0, 4, 4)]\nfor start, end, total in cases:\n    for schedule in (\"zeros\", \"ones\", \"linear\", \"exp\"):\n        got = {fn}(start, end, total, schedule)\n        assert got.shape == (total,), (start, end, total, schedule, got.shape)\n        assert torch.allclose(got.double(), want_weights(start, end, total, schedule), atol=1e-6), (start, end, total, schedule, got)\nassert {fn}(0, 3, 0, \"linear\").shape == (0,)\n",
+          "part": 1
+        },
+        {
+          "name": "Part 1: float32 output and an unknown schedule",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Return a float32 tensor of shape (total,), and raise ValueError for a schedule other than zeros, ones, linear or exp.",
+          "hiddenCode": "\nimport math, random, torch\n\ndef want_weights(start, end, total, schedule):\n    end = min(end, total)\n    start = min(start, end)\n    out = []\n    for i in range(total):\n        if schedule == \"ones\":\n            w = 1.0 if i < end else 0.0\n        elif schedule == \"zeros\":\n            w = 1.0 if i < start else 0.0\n        elif i < start:\n            w = 1.0\n        elif i >= end:\n            w = 0.0\n        else:\n            w = (end - i) / (end - start + 1)\n            if schedule == \"exp\":\n                w = w * math.expm1(w) / (math.e - 1)\n        out.append(w)\n    return torch.tensor(out, dtype=torch.float64)\n\ndef want_gain(time, max_w):\n    tau = 1.0 - time\n    if tau == 0.0:\n        return max_w\n    if tau == 1.0:\n        return 0.0\n    inv_r2 = ((1 - tau) ** 2 + tau ** 2) / (1 - tau) ** 2\n    return min((1 - tau) / tau * inv_r2, max_w)\n\ndef padded(prev, steps):\n    out = torch.zeros(prev.shape[:-2] + (steps, prev.shape[-1]), dtype=prev.dtype)\n    out[..., : prev.shape[-2], :] = prev\n    return out\n\ndef guided():\n    g = {fn}.__globals__.get(\"guided_velocity\")\n    assert callable(g), \"define guided_velocity next to prefix_weights\"\n    return g\n\nfor schedule in (\"zeros\", \"ones\", \"linear\", \"exp\"):\n    got = {fn}(1, 4, 7, schedule)\n    assert isinstance(got, torch.Tensor) and got.dtype == torch.float32 and not got.requires_grad, (schedule, got)\nfor bad in (\"cosine\", \"LINEAR\", \"\"):\n    try:\n        {fn}(1, 4, 7, bad)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"accepted schedule {bad!r}\")\n",
+          "part": 1
+        },
+        {
+          "name": "Part 2: guidance pulls the committed prefix toward the previous chunk",
+          "code": "\nimport math, random, torch\n\ndef want_weights(start, end, total, schedule):\n    end = min(end, total)\n    start = min(start, end)\n    out = []\n    for i in range(total):\n        if schedule == \"ones\":\n            w = 1.0 if i < end else 0.0\n        elif schedule == \"zeros\":\n            w = 1.0 if i < start else 0.0\n        elif i < start:\n            w = 1.0\n        elif i >= end:\n            w = 0.0\n        else:\n            w = (end - i) / (end - start + 1)\n            if schedule == \"exp\":\n                w = w * math.expm1(w) / (math.e - 1)\n        out.append(w)\n    return torch.tensor(out, dtype=torch.float64)\n\ndef want_gain(time, max_w):\n    tau = 1.0 - time\n    if tau == 0.0:\n        return max_w\n    if tau == 1.0:\n        return 0.0\n    inv_r2 = ((1 - tau) ** 2 + tau ** 2) / (1 - tau) ** 2\n    return min((1 - tau) / tau * inv_r2, max_w)\n\ndef padded(prev, steps):\n    out = torch.zeros(prev.shape[:-2] + (steps, prev.shape[-1]), dtype=prev.dtype)\n    out[..., : prev.shape[-2], :] = prev\n    return out\n\ndef guided():\n    g = {fn}.__globals__.get(\"guided_velocity\")\n    assert callable(g), \"define guided_velocity next to prefix_weights\"\n    return g\n\ng = guided()\nx_t = torch.zeros(5, 1)\nv_fn = lambda x: torch.ones_like(x)\nprev = torch.full((3, 1), 2.0)\nout = g(x_t, v_fn, prev, 0.5, 1, 3, 10.0, \"linear\")\n# x1 = 0 - 0.5 * 1 = -0.5; weights [1, 2/3, 1/3, 0, 0]; error 2.5 * w; gain 2 at time 0.5.\nassert out.shape == (5, 1), out.shape\nassert torch.allclose(out.flatten(), torch.tensor([-4.0, -7 / 3, -2 / 3, 1.0, 1.0]), atol=1e-5), out.flatten()\nassert torch.equal(g(x_t, v_fn, None, 0.5, 1, 3, 10.0, \"linear\"), torch.ones(5, 1))\n",
+          "behavior": "gradient.flow",
+          "part": 2
+        },
+        {
+          "name": "Part 2: the vector-Jacobian product goes through the velocity",
+          "visibility": "unshown",
+          "behavior": "gradient.flow",
+          "failureMessage": "Make x_t require grad before calling v_fn, so the correction is the error times the Jacobian of x1 = x_t - time * v, not the error alone.",
+          "hiddenCode": "\nimport math, random, torch\n\ndef want_weights(start, end, total, schedule):\n    end = min(end, total)\n    start = min(start, end)\n    out = []\n    for i in range(total):\n        if schedule == \"ones\":\n            w = 1.0 if i < end else 0.0\n        elif schedule == \"zeros\":\n            w = 1.0 if i < start else 0.0\n        elif i < start:\n            w = 1.0\n        elif i >= end:\n            w = 0.0\n        else:\n            w = (end - i) / (end - start + 1)\n            if schedule == \"exp\":\n                w = w * math.expm1(w) / (math.e - 1)\n        out.append(w)\n    return torch.tensor(out, dtype=torch.float64)\n\ndef want_gain(time, max_w):\n    tau = 1.0 - time\n    if tau == 0.0:\n        return max_w\n    if tau == 1.0:\n        return 0.0\n    inv_r2 = ((1 - tau) ** 2 + tau ** 2) / (1 - tau) ** 2\n    return min((1 - tau) / tau * inv_r2, max_w)\n\ndef padded(prev, steps):\n    out = torch.zeros(prev.shape[:-2] + (steps, prev.shape[-1]), dtype=prev.dtype)\n    out[..., : prev.shape[-2], :] = prev\n    return out\n\ndef guided():\n    g = {fn}.__globals__.get(\"guided_velocity\")\n    assert callable(g), \"define guided_velocity next to prefix_weights\"\n    return g\n\ng = guided()\ngen = torch.Generator().manual_seed(3)\nfor seed in range(5):\n    B, T, A = 2, 6, 3\n    M = torch.randn(A, A, generator=gen, dtype=torch.float64)\n    b = torch.randn(A, generator=gen, dtype=torch.float64)\n    x_t = torch.randn(B, T, A, generator=gen, dtype=torch.float64)\n    prev = torch.randn(B, 4, A, generator=gen, dtype=torch.float64)\n    time, max_w = 0.3 + 0.1 * seed, 50.0\n    for kind in (\"linear\", \"tanh\"):\n        v_fn = (lambda x: x @ M + b) if kind == \"linear\" else (lambda x: torch.tanh(x @ M) + b)\n        out = g(x_t, v_fn, prev, time, 2, 5, max_w, \"exp\")\n        v = v_fn(x_t)\n        w = want_weights(2, 4, T, \"exp\")[:, None]\n        err = (padded(prev, T) - (x_t - time * v)) * w\n        if kind == \"linear\":\n            jvp = err @ M.T\n        else:\n            jvp = (err * (1 - torch.tanh(x_t @ M) ** 2)) @ M.T\n        want = v - want_gain(time, max_w) * (err - time * jvp)\n        assert torch.allclose(out, want, rtol=1e-5, atol=1e-8), (seed, kind, (out - want).abs().max())\n",
+          "part": 2
+        },
+        {
+          "name": "Part 2: guidance weight over time, with the clamp and both endpoints",
+          "visibility": "unshown",
+          "behavior": "numerics.stability",
+          "failureMessage": "Use tau = 1 - time, weight min((1 - tau) / tau * inv_r2, max_guidance_weight), max_guidance_weight at time 1 and 0 at time 0, never nan.",
+          "hiddenCode": "\nimport math, random, torch\n\ndef want_weights(start, end, total, schedule):\n    end = min(end, total)\n    start = min(start, end)\n    out = []\n    for i in range(total):\n        if schedule == \"ones\":\n            w = 1.0 if i < end else 0.0\n        elif schedule == \"zeros\":\n            w = 1.0 if i < start else 0.0\n        elif i < start:\n            w = 1.0\n        elif i >= end:\n            w = 0.0\n        else:\n            w = (end - i) / (end - start + 1)\n            if schedule == \"exp\":\n                w = w * math.expm1(w) / (math.e - 1)\n        out.append(w)\n    return torch.tensor(out, dtype=torch.float64)\n\ndef want_gain(time, max_w):\n    tau = 1.0 - time\n    if tau == 0.0:\n        return max_w\n    if tau == 1.0:\n        return 0.0\n    inv_r2 = ((1 - tau) ** 2 + tau ** 2) / (1 - tau) ** 2\n    return min((1 - tau) / tau * inv_r2, max_w)\n\ndef padded(prev, steps):\n    out = torch.zeros(prev.shape[:-2] + (steps, prev.shape[-1]), dtype=prev.dtype)\n    out[..., : prev.shape[-2], :] = prev\n    return out\n\ndef guided():\n    g = {fn}.__globals__.get(\"guided_velocity\")\n    assert callable(g), \"define guided_velocity next to prefix_weights\"\n    return g\n\ng = guided()\nx_t = torch.zeros(4, 2, dtype=torch.float64)\nv_fn = lambda x: torch.zeros_like(x) + 0.25\nprev = torch.ones(4, 2, dtype=torch.float64)\nfor max_w in (0.5, 3.0, 100.0):\n    for time in (0.0, 0.05, 0.2, 0.5, 0.7, 0.9, 0.99, 1.0):\n        out = g(x_t, v_fn, prev, time, 4, 4, max_w, \"ones\")\n        assert torch.isfinite(out).all(), (time, max_w, out)\n        err = 1.0 + time * 0.25\n        gain = (0.25 - out[0, 0].item()) / err\n        assert math.isclose(gain, want_gain(time, max_w), rel_tol=1e-5, abs_tol=1e-6), (time, max_w, gain, want_gain(time, max_w))\n",
+          "part": 2
+        },
+        {
+          "name": "Part 2: a short previous chunk is zero-padded and caps the horizon",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "Zero-pad prev_chunk at the end up to the chunk length and use min(execution_horizon, prev steps) as the end of the weights.",
+          "hiddenCode": "\nimport math, random, torch\n\ndef want_weights(start, end, total, schedule):\n    end = min(end, total)\n    start = min(start, end)\n    out = []\n    for i in range(total):\n        if schedule == \"ones\":\n            w = 1.0 if i < end else 0.0\n        elif schedule == \"zeros\":\n            w = 1.0 if i < start else 0.0\n        elif i < start:\n            w = 1.0\n        elif i >= end:\n            w = 0.0\n        else:\n            w = (end - i) / (end - start + 1)\n            if schedule == \"exp\":\n                w = w * math.expm1(w) / (math.e - 1)\n        out.append(w)\n    return torch.tensor(out, dtype=torch.float64)\n\ndef want_gain(time, max_w):\n    tau = 1.0 - time\n    if tau == 0.0:\n        return max_w\n    if tau == 1.0:\n        return 0.0\n    inv_r2 = ((1 - tau) ** 2 + tau ** 2) / (1 - tau) ** 2\n    return min((1 - tau) / tau * inv_r2, max_w)\n\ndef padded(prev, steps):\n    out = torch.zeros(prev.shape[:-2] + (steps, prev.shape[-1]), dtype=prev.dtype)\n    out[..., : prev.shape[-2], :] = prev\n    return out\n\ndef guided():\n    g = {fn}.__globals__.get(\"guided_velocity\")\n    assert callable(g), \"define guided_velocity next to prefix_weights\"\n    return g\n\ng = guided()\ngen = torch.Generator().manual_seed(11)\nx_t = torch.randn(8, 2, generator=gen, dtype=torch.float64)\nprev = torch.randn(3, 2, generator=gen, dtype=torch.float64) + 3.0\nv_fn = lambda x: torch.zeros_like(x) - 1.0\ntime, max_w = 0.6, 10.0\nout = g(x_t, v_fn, prev, time, 1, 6, max_w, \"linear\")\nx1 = x_t + time\nerr = (padded(prev, 8) - x1) * want_weights(1, 3, 8, \"linear\")[:, None]\nwant = -1.0 - want_gain(time, max_w) * err\nassert torch.allclose(out, want, rtol=1e-5, atol=1e-8), (out, want)\nassert torch.equal(out[3:], torch.full((5, 2), -1.0, dtype=torch.float64)), out\n",
+          "part": 2
+        },
+        {
+          "name": "Part 2: batched seeded sweep against an independent model",
+          "visibility": "unshown",
+          "behavior": "tensor.shape",
+          "failureMessage": "Broadcast the (T,) weights over batch and action dims, keep the dtype and shape of x_t, and pass the schedule through to prefix_weights.",
+          "hiddenCode": "\nimport math, random, torch\n\ndef want_weights(start, end, total, schedule):\n    end = min(end, total)\n    start = min(start, end)\n    out = []\n    for i in range(total):\n        if schedule == \"ones\":\n            w = 1.0 if i < end else 0.0\n        elif schedule == \"zeros\":\n            w = 1.0 if i < start else 0.0\n        elif i < start:\n            w = 1.0\n        elif i >= end:\n            w = 0.0\n        else:\n            w = (end - i) / (end - start + 1)\n            if schedule == \"exp\":\n                w = w * math.expm1(w) / (math.e - 1)\n        out.append(w)\n    return torch.tensor(out, dtype=torch.float64)\n\ndef want_gain(time, max_w):\n    tau = 1.0 - time\n    if tau == 0.0:\n        return max_w\n    if tau == 1.0:\n        return 0.0\n    inv_r2 = ((1 - tau) ** 2 + tau ** 2) / (1 - tau) ** 2\n    return min((1 - tau) / tau * inv_r2, max_w)\n\ndef padded(prev, steps):\n    out = torch.zeros(prev.shape[:-2] + (steps, prev.shape[-1]), dtype=prev.dtype)\n    out[..., : prev.shape[-2], :] = prev\n    return out\n\ndef guided():\n    g = {fn}.__globals__.get(\"guided_velocity\")\n    assert callable(g), \"define guided_velocity next to prefix_weights\"\n    return g\n\ng = guided()\nrng = random.Random(5)\ngen = torch.Generator().manual_seed(5)\nfor _ in range(12):\n    B, T, A = rng.randint(1, 3), rng.randint(2, 9), rng.randint(1, 4)\n    dtype = rng.choice([torch.float32, torch.float64])\n    P = rng.randint(1, T)\n    d, h = rng.randint(0, T), rng.randint(0, T + 2)\n    schedule = rng.choice([\"zeros\", \"ones\", \"linear\", \"exp\"])\n    time, max_w = rng.uniform(0.05, 0.95), rng.choice([1.0, 5.0, 10.0])\n    scale = torch.randn(A, generator=gen, dtype=torch.float64).to(dtype)\n    x_t = torch.randn(B, T, A, generator=gen, dtype=torch.float64).to(dtype)\n    prev = torch.randn(B, P, A, generator=gen, dtype=torch.float64).to(dtype)\n    v_fn = lambda x: x * scale\n    out = g(x_t, v_fn, prev, time, d, h, max_w, schedule)\n    assert out.shape == x_t.shape and out.dtype == dtype, (out.shape, out.dtype)\n    x, pv = x_t.double(), padded(prev, T).double()\n    s = scale.double()\n    err = (pv - (x - time * x * s)) * want_weights(d, min(h, P), T, schedule)[:, None]\n    want = x * s - want_gain(time, max_w) * err * (1 - time * s)\n    tol = 1e-4 if dtype == torch.float32 else 1e-6\n    assert torch.allclose(out.double(), want, rtol=tol, atol=tol), (B, T, A, P, d, h, schedule, (out.double() - want).abs().max())\n",
+          "part": 2
+        },
+        {
+          "name": "Part 2: works under no_grad and leaves the caller's tensors alone",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "Enable grad locally, differentiate a detached copy of x_t, call v_fn once, and return a detached result.",
+          "hiddenCode": "\nimport math, random, torch\n\ndef want_weights(start, end, total, schedule):\n    end = min(end, total)\n    start = min(start, end)\n    out = []\n    for i in range(total):\n        if schedule == \"ones\":\n            w = 1.0 if i < end else 0.0\n        elif schedule == \"zeros\":\n            w = 1.0 if i < start else 0.0\n        elif i < start:\n            w = 1.0\n        elif i >= end:\n            w = 0.0\n        else:\n            w = (end - i) / (end - start + 1)\n            if schedule == \"exp\":\n                w = w * math.expm1(w) / (math.e - 1)\n        out.append(w)\n    return torch.tensor(out, dtype=torch.float64)\n\ndef want_gain(time, max_w):\n    tau = 1.0 - time\n    if tau == 0.0:\n        return max_w\n    if tau == 1.0:\n        return 0.0\n    inv_r2 = ((1 - tau) ** 2 + tau ** 2) / (1 - tau) ** 2\n    return min((1 - tau) / tau * inv_r2, max_w)\n\ndef padded(prev, steps):\n    out = torch.zeros(prev.shape[:-2] + (steps, prev.shape[-1]), dtype=prev.dtype)\n    out[..., : prev.shape[-2], :] = prev\n    return out\n\ndef guided():\n    g = {fn}.__globals__.get(\"guided_velocity\")\n    assert callable(g), \"define guided_velocity next to prefix_weights\"\n    return g\n\ng = guided()\ngen = torch.Generator().manual_seed(2)\nx_t = torch.randn(1, 5, 2, generator=gen)\nbefore = x_t.clone()\nprev = torch.randn(1, 5, 2, generator=gen)\ncalls = []\ndef v_fn(x):\n    calls.append(1)\n    return torch.sin(x)\nwith torch.no_grad():\n    out = g(x_t, v_fn, prev, 0.4, 2, 4, 10.0, \"linear\")\nassert len(calls) == 1, f\"v_fn called {len(calls)} times\"\nassert not out.requires_grad and out.grad_fn is None, out\nassert not x_t.requires_grad and torch.equal(x_t, before), x_t\ncalls.clear()\nagain = g(x_t, v_fn, prev, 0.4, 2, 4, 10.0, \"linear\")\nassert not again.requires_grad and again.grad_fn is None, \"return a detached tensor outside no_grad too\"\nassert torch.equal(again, out) and not x_t.requires_grad, again\ncalls.clear()\nplain = g(x_t, v_fn, None, 0.4, 2, 4, 10.0, \"linear\")\nassert len(calls) == 1 and torch.equal(plain, torch.sin(x_t)), plain\n",
+          "part": 2
+        },
+        {
+          "name": "Part 2: rejects a previous chunk that does not fit",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Raise ValueError when prev_chunk has more steps than x_t, a different action dim, or a different number of dims.",
+          "hiddenCode": "\nimport math, random, torch\n\ndef want_weights(start, end, total, schedule):\n    end = min(end, total)\n    start = min(start, end)\n    out = []\n    for i in range(total):\n        if schedule == \"ones\":\n            w = 1.0 if i < end else 0.0\n        elif schedule == \"zeros\":\n            w = 1.0 if i < start else 0.0\n        elif i < start:\n            w = 1.0\n        elif i >= end:\n            w = 0.0\n        else:\n            w = (end - i) / (end - start + 1)\n            if schedule == \"exp\":\n                w = w * math.expm1(w) / (math.e - 1)\n        out.append(w)\n    return torch.tensor(out, dtype=torch.float64)\n\ndef want_gain(time, max_w):\n    tau = 1.0 - time\n    if tau == 0.0:\n        return max_w\n    if tau == 1.0:\n        return 0.0\n    inv_r2 = ((1 - tau) ** 2 + tau ** 2) / (1 - tau) ** 2\n    return min((1 - tau) / tau * inv_r2, max_w)\n\ndef padded(prev, steps):\n    out = torch.zeros(prev.shape[:-2] + (steps, prev.shape[-1]), dtype=prev.dtype)\n    out[..., : prev.shape[-2], :] = prev\n    return out\n\ndef guided():\n    g = {fn}.__globals__.get(\"guided_velocity\")\n    assert callable(g), \"define guided_velocity next to prefix_weights\"\n    return g\n\ng = guided()\nx_t = torch.zeros(2, 4, 3)\nv_fn = lambda x: x\nfor prev in (torch.zeros(2, 5, 3), torch.zeros(2, 4, 2), torch.zeros(4, 3)):\n    try:\n        g(x_t, v_fn, prev, 0.5, 1, 3, 10.0, \"linear\")\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"accepted prev_chunk of shape {tuple(prev.shape)}\")\n",
+          "part": 2
+        }
+      ],
+      "parts": [
+        {
+          "title": "Prefix weights",
+          "descriptionEn": "**Signature:** `prefix_weights(start, end, total, schedule) -> Tensor`\n\n**Parameters:** non-negative ints `start`, `end`, `total`, and `schedule`, one of `\"zeros\"`, `\"ones\"`, `\"linear\"`, `\"exp\"`.\n\n**Returns:** a float32 tensor of shape `(total,)`.\n\n**Constraints:**\n- Clamp first: `end = min(end, total)`, then `start = min(start, end)`.\n- `\"zeros\"`: 1 for `i < start`, else 0.\n- `\"ones\"`: 1 for `i < end`, else 0.\n- `\"linear\"`: 1 for `i < start`, 0 for `i >= end`, and in between a ramp that falls toward 0 without touching 1 or 0: `w_i = (end - i) / (end - start + 1)`.\n- `\"exp\"`: like `\"linear\"`, but each ramp value becomes `w * expm1(w) / (e - 1)`. The 1s and 0s stay as they are.\n- Raise `ValueError` for any other schedule.\n\n**Example:** `prefix_weights(2, 6, 10, \"linear\")` is\n\n    [1, 1, 0.8, 0.6, 0.4, 0.2, 0, 0, 0, 0]\n\n`\"zeros\"` gives `[1, 1, 0, ...]` and `\"ones\"` gives six 1s followed by four 0s."
+        },
+        {
+          "title": "Guided velocity",
+          "descriptionEn": "Keep Part 1. Add:\n\n**Signature:** `guided_velocity(x_t, v_fn, prev_chunk, time, inference_delay, execution_horizon, max_guidance_weight, schedule) -> Tensor`\n\n**Parameters:**\n- `x_t`: the noisy chunk, float tensor `(T, A)` or `(B, T, A)`.\n- `v_fn`: a callable that maps a tensor shaped like `x_t` to the velocity, same shape.\n- `prev_chunk`: the unexecuted leftover of the previous chunk, with the same number of dims as `x_t`, `P <= T` steps and the same action dim `A`; or `None`.\n- `time`: a float in `[0, 1]`. Noise is at `time = 1` and data at `time = 0`, so `x_t - time * v` predicts the clean chunk.\n- `inference_delay`, `execution_horizon`: ints, the `start` and `end` of the prefix weights.\n- `max_guidance_weight`: a positive float. `schedule`: as in Part 1.\n\n**Returns:** the guided velocity, with the shape and dtype of `x_t`, detached.\n\n**Constraints:**\n- If `prev_chunk` is `None`, return `v_fn(x_t)`.\n- Raise `ValueError` if `prev_chunk` has more steps than `x_t`, a different action dim, or a different number of dims.\n- Zero-pad `prev_chunk` at the end of the time axis to `T` steps.\n- Weights: `prefix_weights(inference_delay, min(execution_horizon, P), T, schedule)`, broadcast over batch and action dims.\n- Call `v_fn` exactly once, on a detached copy of `x_t` that requires grad, with grad enabled even if the caller is inside `torch.no_grad()`.\n- Predict `x1 = x - time * v`. The error is `(prev - x1) * weights`, treated as a constant.\n- The correction is the vector-Jacobian product of `x1` with respect to `x` against the error, from `torch.autograd.grad`. It includes the Jacobian of `v_fn`.\n- With `tau = 1 - time`: `inv_r2 = ((1 - tau)^2 + tau^2) / (1 - tau)^2`, `c = (1 - tau) / tau`, and the guidance weight is `min(c * inv_r2, max_guidance_weight)`.\n- At `time = 1` the guidance weight is `max_guidance_weight`. At `time = 0` it is 0. Never return nan.\n- Return `v - weight * correction`. Do not modify `x_t`.\n\n**Example:** with `x_t = zeros(5, 1)`, `v_fn = lambda x: torch.ones_like(x)`, `prev_chunk = full((3, 1), 2.0)`, `time = 0.5`, delay 1, horizon 3, max weight 10 and `\"linear\"`: the weights are `[1, 2/3, 1/3, 0, 0]`, `x1 = -0.5`, the guidance weight is 2, and the result is\n\n    [-4, -7/3, -2/3, 1, 1]"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which steps of the new chunk can no longer change, and which should merely lean toward the old chunk? If x_t does not require grad when v_fn runs, what does autograd.grad of x1 return? What happens to (1 - tau) / tau and inv_r2 at tau = 0 and tau = 1?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Part 1: clamp end, then start, and concatenate three pieces: the committed ones, a ramp that excludes both of its endpoints, and the zeros. The exp schedule reshapes that same ramp. Part 2: the correction is a vector-Jacobian product, so the velocity must be computed from a copy of x_t that requires grad, with grad enabled even when the caller disabled it. Treat the error as a constant, and compute the guidance weight on tensors so that infinities and nan can be cleaned before the clamp."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "flow_matching",
+        "ddim_step",
+        "pi0_flow_matching_chunk",
+        "act_temporal_ensemble"
+      ],
+      "modelConnections": [
+        "LeRobot's RTCProcessor.denoise_step wraps the pi0, pi0.5 and SmolVLA denoisers with exactly this guidance, using the same four prefix schedules.",
+        "Physical Intelligence's Kinetix reference computes the correction with jax.vjp through the whole denoiser, the same product this exercise takes with torch.autograd.grad.",
+        "PiGDM (pseudo-inverse guided diffusion) supplies the r_tau^2 weighting; RTC adds the clamp at max_guidance_weight for few-step sampling."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Training-free: any flow-matching chunk policy gets smooth chunk transitions at inference time.",
+          "The soft exp ramp keeps continuity past the frozen prefix without pinning the whole overlap."
+        ],
+        "cons": [
+          "Each denoising step needs a backward pass through the action expert, roughly doubling the sampling cost.",
+          "The weight diverges near pure noise, so results depend on the max_guidance_weight clamp, a tuned hyperparameter."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What problem does Real-Time Chunking solve when a policy predicts action chunks but inference takes several control steps?",
+          "hint": "Cover the latency gap: d control steps pass during inference, so the first d actions of the new chunk are already executed from the old one. Name the jerk at a naive chunk switch and frame the fix as inpainting."
+        },
+        {
+          "stage": "concept",
+          "question": "Why are the first inference_delay steps of the new chunk weighted 1, and why does the weight fade instead of dropping straight to 0 after them?",
+          "hint": "Committed steps cannot change, so they must match exactly. Then discuss continuity: a soft exponential ramp over the overlap keeps the new chunk close to the old plan without pinning steps the robot could still improve."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through one guided denoising step: what is x1, what is the error, and what does the vector-Jacobian product compute?",
+          "hint": "Name the three pieces: x1 = x - time * v predicts the clean chunk, the error is (prev - x1) * W, and the VJP pulls that error back through x1 to x_t. Mention the sign of the update in the Euler step."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why must x_t require grad before the velocity network runs, and what does the correction collapse to if it does not?",
+          "hint": "Autograd only records ops on tensors that require grad when they run. Explain what the graph from x to v looks like in each order, and what J^T err reduces to if v is a constant."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How does the guidance weight behave as tau approaches 0 and 1, and how do nan_to_num and the clamp keep it finite?",
+          "hint": "Write the weight in terms of tau = 1 - time and evaluate each factor at both ends. Say which undefined or infinite values appear, which value each end should take, and why a cap on the weight matters with few sampling steps."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "RTC guidance versus hard inpainting that overwrites the prefix after every denoising step: smoothness, cost and failure modes?",
+          "hint": "Compare continuity at the boundary, extra compute (a backward pass per step) and what happens when the prefix is off-distribution for the model, for guidance versus overwriting the prefix after each step."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "RTC versus ACT-style temporal ensembling of overlapping chunks: latency, compute and action quality?",
+          "hint": "Contrast averaging overlapping chunks at execution time with conditioning generation on the committed prefix. Cover inference frequency, latency hiding, and mode averaging for multimodal action distributions."
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/huggingface/lerobot/blob/75cd2ba0ce9ff47686bb2bd7b7f65840606c02ee/src/lerobot/policies/rtc/modeling_rtc.py",
+          "commit": "75cd2ba0ce9ff47686bb2bd7b7f65840606c02ee",
+          "path": "src/lerobot/policies/rtc/modeling_rtc.py",
+          "symbol": "RTCProcessor.get_prefix_weights, RTCProcessor.denoise_step",
+          "license": "Apache-2.0",
+          "adapted": "Prefix weights and the guided velocity follow get_prefix_weights and denoise_step, with the config fields passed as arguments and lowercase schedule names.",
+          "simplifications": "Upstream calls the denoiser before x_t requires grad, so its correction drops the Jacobian of the velocity and equals the weighted error; the exercise differentiates through v_fn as the paper and Kinetix do. Upstream also zero-pads a narrower action dim and pads in float32; the exercise rejects a different action dim and keeps the dtype of x_t. An unknown schedule raises ValueError instead of UnboundLocalError. The debug tracker is dropped."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/Physical-Intelligence/real-time-chunking-kinetix/blob/9296f31d62d5bfeb5779dcb2f9bcf71ca37f448b/src/model.py",
+          "commit": "9296f31d62d5bfeb5779dcb2f9bcf71ca37f448b",
+          "path": "src/model.py",
+          "symbol": "get_prefix_weights, FlowPolicy.realtime_action",
+          "license": "MIT",
+          "adapted": "Cross-check for the closed-form ramp and the vjp-based correction, with time flipped to noise at 1 (tau = 1 - time, v negated).",
+          "simplifications": "Kinetix keeps the ramp slope from the unclamped end, (end - i) / (end - start + 1), when end > total; the exercise follows LeRobot and clamps end to total first, so the ramp reaches toward 0 inside the chunk. The simulated-delay training path and bidirectional decoding are left out."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2506.07339",
+          "section": "Black, Galliker and Levine 2025, Section 3.1 Eqs. 2-4 (guided velocity, clamp beta, r_tau^2) and Section 3.2 Eq. 5 (soft-masking weights); Algorithm 1",
+          "note": "Real-Time Execution of Action Chunking Flow Policies: the RTC guidance and prefix weights."
+        }
+      ]
     }
   ]
 }

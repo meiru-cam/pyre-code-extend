@@ -19,16 +19,16 @@ TASK = {
 - `min_token` — integer subtracted from every rounded coefficient, so the smallest expected coefficient becomes token 0.
 - `tokens` — integer tensor of shape `(T * D,)` or `(B, T * D)`, as returned by `fast_encode`.
 
-**Encode,** for each chunk:
-1. Apply the orthonormal DCT-II along the time axis, separately for every action dimension. With `n` the time index and `k` the frequency index, both in `0 .. T-1`:
+**Encode,** for each chunk, in this order:
+- Apply the orthonormal DCT-II along the time axis, separately for every action dimension. With `n` the time index and `k` the frequency index, both in `0 .. T-1`:
 
         C[k, n] = sqrt(1 / T) * cos(pi * (2n + 1) * k / (2T))   if k == 0
         C[k, n] = sqrt(2 / T) * cos(pi * (2n + 1) * k / (2T))   otherwise
         coeff   = C @ chunk          # (T, D): row k holds frequency k of every dimension
 
-2. Round `coeff * scale` to the nearest integer with `torch.round`. Exact ties depend on the last bit of the DCT, so no case relies on them.
-3. Flatten the `(T, D)` result row-major: all dimensions of frequency 0, then all dimensions of frequency 1, and so on.
-4. Subtract `min_token` and clamp at 0.
+- Round `coeff * scale` to the nearest integer with `torch.round`. Exact ties depend on the last bit of the DCT, so no case relies on them.
+- Flatten the `(T, D)` result row-major: all dimensions of frequency 0, then all dimensions of frequency 1, and so on.
+- Subtract `min_token` and clamp at 0.
 
 **Decode** inverts the steps it can: reshape to `(T, D)`, add `min_token`, divide by `scale`, and apply the inverse DCT `C.T @ coeff` along time.
 
@@ -54,10 +54,10 @@ TASK = {
 **What the DCT buys.** Smooth action trajectories put almost all their energy into a few low-frequency coefficients. After scaling and rounding, most high-frequency coefficients become 0. Flattening low frequencies first puts the informative coefficients at the front and long runs of zeros at the back, which BPE then merges into a handful of tokens. The orthonormal DCT keeps the round trip exact apart from rounding: each coefficient is off by at most `0.5 / scale`, and because `C` is orthogonal the same error budget carries over to the actions.
 
 **Where BPE comes in.** Upstream turns each integer into a character with `chr` and trains a byte-level BPE tokenizer on those strings (the `bpe` exercise covers that part). `min_token` is the smallest rounded coefficient seen while fitting, so every character is non-negative. openpi maps the resulting BPE ids onto the tail of the PaliGemma vocabulary for pi0-FAST.""",
-    "advisory_prerequisites": ["bpe"],
+    "advisory_prerequisites": ["bpe", "vla_action_bins"],
     "hints": [
         {"level": 1, "kind": "questions", "content": "Which axis of a (B, T, D) tensor is time, and how do you multiply every batch item by a (T, T) matrix along it? After the DCT, which index should vary fastest when you flatten so that frequency 0 of every dimension comes first?"},
-        {"level": 2, "kind": "analysis", "content": "Build n = arange(T) and k = arange(T) in float64, C = cos(pi * (2n + 1) * k / (2T)) with row 0 scaled by sqrt(1/T) and the rest by sqrt(2/T). coeff = C @ x works for (T, D) and broadcasts over (B, T, D); reshape(..., T * D) on a contiguous tensor is row-major. Decode with C.T @ coeff."},
+        {"level": 2, "kind": "analysis", "content": "Build the matrix from an outer product of a frequency index and a time index, in float64, and give row 0 its own scale. A matrix product with the time axis on the right broadcasts over a batch dimension, and a row-major reshape of the (T, D) coefficients already puts frequency 0 first. Decoding reuses the same matrix, because an orthonormal matrix is inverted by its transpose."},
     ],
     "model_connections": [
         "pi0-FAST tokenizes 1-second action chunks with FAST and trains an autoregressive VLA on the BPE ids, matching diffusion pi0 on dexterous tasks while training several times faster.",

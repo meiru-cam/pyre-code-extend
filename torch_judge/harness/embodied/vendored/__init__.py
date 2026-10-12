@@ -11,4 +11,11 @@ same author as its reference solution. Each exercise's oracle test in
 counterpart directly.
 
 No module in this package may import `torch_judge.tasks`.
+
+Licenses of vendored material:
+  * openvla_action_tokenizer.py        — MIT License, the OpenVLA authors
+  * fast_action_tokenizer.py           — Apache License 2.0, Physical Intelligence
+  * lerobot_act_temporal_ensembler.py  — Apache License 2.0, the HuggingFace Team
+  * lerobot_flow_matching.py           — Apache License 2.0, the HuggingFace Team
+  * lerobot_rtc.py                     — Apache License 2.0, the HuggingFace Team
 """
