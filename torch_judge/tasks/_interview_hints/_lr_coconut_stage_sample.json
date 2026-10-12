@@ -1,0 +1,11 @@
+{
+  "coconut_stage_sample": {
+    "In Coconut's curriculum, what changes in a training sample from stage k to stage k + 1?": "Name the two counts that move together (written steps removed, latent slots added) and the unit of change per stage. Mention what stays fixed: question, markers, answer, and where the loss applies.",
+    "Why is the loss masked on the latent positions, and how do the continuous thoughts still get a training signal?": "Cover what a label at a latent position would even mean when its input is a fed-back hidden state, then trace the gradient path from the loss on later language tokens back through the recurrent latent inputs.",
+    "Walk through a GSM8k sample with four reasoning steps at stages 0 through 4 using c = 2 and max_latent_stage = 3. How many latent tokens and written steps does each stage have?": "Make a small table: stage, steps skipped, latent groups, latent tokens, steps kept. Treat the stages up to the maximum and the final stage separately, and note which setting decides the final row.",
+    "What does pad_latent_to_max change, at which stages does it matter, and why might padding help or hurt?": "Say which branch reads the flag and what it compares against. Discuss a sample with fewer steps than the maximum, and weigh a fixed thinking budget against matching compute to problem length.",
+    "The label mask has the length of the question plus the latents plus two. What breaks in training if the two marker positions are left unmasked?": "Identify which tokens the extra two positions are and what the model would be asked to predict there. Consider what the eot label teaches about when to stop thinking, and how the mismatch shifts every later boundary.",
+    "A hand-scheduled curriculum versus training with all steps replaced by latent thoughts from the start?": "Contrast optimisation difficulty without language supervision, the reported ablation result, total training cost of multiple stages, and the burden of tuning epochs per stage.",
+    "Choosing c, the number of latent thoughts per removed step: accuracy, training cost and inference latency?": "Weigh more sequential forward passes per thought against capacity to encode a step; mention that latent passes cannot be parallelised and that the paper reports a trend as c grows."
+  }
+}
