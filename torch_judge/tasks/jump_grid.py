@@ -4,7 +4,7 @@ from ._interview import interview
 
 # Enumerates every path of a small board, independent of the reference's dynamic programming.
 _HELPERS = r"""
-import random, time
+import random
 
 def all_paths(board, p, k):
     n, m = len(board), len(board[0])
@@ -55,6 +55,39 @@ def zero_paths(n, m, p, k):
 def big_board(seed, n=60, m=60):
     rng = random.Random(seed)
     return [[rng.randint(-10**9, 10**9) for _ in range(m)] for _ in range(n)]
+
+class Cell(int):
+    # A board value that counts the arithmetic and comparisons made on it, so trying paths shows up as work.
+    ops = 0
+    budget = None
+    __hash__ = int.__hash__
+
+def _counting(name):
+    base = getattr(int, name)
+    def op(self, other):
+        Cell.ops += 1
+        if Cell.budget is not None and Cell.ops > Cell.budget:
+            Cell.budget = None
+            raise AssertionError("too many operations on board values")
+        return base(self, other)
+    return op
+
+for _name in ("__add__", "__radd__", "__sub__", "__rsub__", "__lt__", "__le__", "__gt__", "__ge__", "__eq__", "__ne__"):
+    setattr(Cell, _name, _counting(_name))
+
+def counted(board):
+    return [[Cell(v) for v in row] for row in board]
+
+def bounded_work(call, n, m, k):
+    # A table over (row, column, jumps left) touches each board value a few times per entry; trying paths is exponential.
+    budget = 100 * n * m * (k + 1)
+    Cell.ops, Cell.budget = 0, budget
+    try:
+        result = call()
+    finally:
+        ops, Cell.budget = Cell.ops, None
+    assert ops <= budget, f"{ops} operations on board values for a {n} x {m} board with k = {k}"
+    return result
 """
 
 P1 = [[-2, 4, 5], [-5, -5, -5], [-5, 4, 0], [-1, -4, 3]]
@@ -95,15 +128,14 @@ for trial in range(400):
     assert {fn}(board).max_score(p, k) == brute(board, p, k)[0], (board, p, k)
 """},
     {"name": "Part 1: a 60 by 60 board", "part": 1, "visibility": "unshown", "behavior": "performance.complexity",
-     "failure_message": "A 60 by 60 board with k = 60 took too long: the number of paths is astronomically large, so reuse the best score from each (row, column, jumps left) instead of trying paths.",
+     "failure_message": "Scoring a large board added and compared board values far more often than a table over (row, column, jumps left) needs: the number of paths is astronomically large, so reuse the best score from each (row, column, jumps left) instead of trying paths.",
      "code": _HELPERS + r"""
+small = counted(big_board(11, 24, 24))
+bounded_work(lambda: {fn}(small).max_score(5, 24), 24, 24, 24)
 board = big_board(1)
 g = {fn}(board)
-start = time.perf_counter()
 first = g.max_score(7, 60)
-elapsed = time.perf_counter() - start
 assert first >= g.max_score(7, 0) and g.max_score(7, 60) == first
-assert elapsed < 4.0, f"{elapsed:.2f}s for one 60 x 60 board"
 """},
     {"name": "Part 2: the worked example", "part": 2, "behavior": "metrics.ties", "code": f"""
 g = {{fn}}({P2!r})
@@ -122,12 +154,11 @@ for trial in range(400):
     got = {fn}(board).optimal_path(p, k)
     assert got == brute(board, p, k)[1], (board, p, k, got)
     assert all(type(cell) is tuple for cell in got)
+small = counted(big_board(12, 24, 24))
+bounded_work(lambda: {fn}(small).optimal_path(5, 24), 24, 24, 24)
 board = big_board(2)
-start = time.perf_counter()
 path = {fn}(board).optimal_path(3, 60)
-elapsed = time.perf_counter() - start
 assert path[0] == (0, 3) and path[-1][0] == 59 and sum(board[i][j] for i, j in path) == {fn}(board).max_score(3, 60)
-assert elapsed < 4.0, f"{elapsed:.2f}s for one 60 x 60 path"
 """},
     {"name": "Part 3: the worked example", "part": 3, "behavior": "metrics.ties", "code": f"""
 g = {{fn}}({P3!r})
@@ -136,7 +167,7 @@ assert g.count_optimal_paths(1, 2) == 4
 assert g.count_optimal_paths(1, 0) == 2
 """},
     {"name": "Part 3: counts, the modulus and size", "part": 3, "visibility": "unshown", "behavior": "metrics.ties",
-     "failure_message": "Counts must match every path that reaches the best score on random boards, a jump and the two steps it skips count as different paths, the count is taken modulo 10**9 + 7, and a 60 by 60 board must count in a few seconds.",
+     "failure_message": "Counts must match every path that reaches the best score on random boards, a jump and the two steps it skips count as different paths, the count is taken modulo 10**9 + 7, and counting a large board must not try paths one by one.",
      "code": _HELPERS + r"""
 rng = random.Random(33)
 for trial in range(400):
@@ -145,12 +176,11 @@ for trial in range(400):
     p, k = rng.randrange(m), rng.randint(0, 3)
     assert {fn}(board).count_optimal_paths(p, k) == brute(board, p, k)[2], (board, p, k)
 assert {fn}([[0], [0], [0]]).count_optimal_paths(0, 1) == 2
-for n, m, k in [(30, 4, 5), (60, 60, 60)]:
-    start = time.perf_counter()
+got = bounded_work(lambda: {fn}(counted([[0] * 24 for _ in range(24)])).count_optimal_paths(0, 24), 24, 24, 24)
+assert got == zero_paths(24, 24, 0, 24) % (10**9 + 7), got
+for n, m, k in [(30, 4, 5), (40, 40, 40)]:
     got = {fn}([[0] * m for _ in range(n)]).count_optimal_paths(0, k)
-    elapsed = time.perf_counter() - start
     assert got == zero_paths(n, m, 0, k) % (10**9 + 7), (n, m, k, got)
-assert elapsed < 4.0, f"{elapsed:.2f}s to count a 60 x 60 board"
 """},
     {"name": "Part 4: the worked example", "part": 4, "behavior": "contract.signature", "code": f"""
 g = {{fn}}({P4!r})
@@ -159,7 +189,7 @@ assert g.max_score_with_bonuses(1, 1, 2, 5) == 14
 assert g.max_score_with_bonuses(1, 1, 0, 0) == 10
 """},
     {"name": "Part 4: bonuses across jumps and ties", "part": 4, "visibility": "unshown", "behavior": "state.invariant",
-     "failure_message": "Bonuses look at the values in visiting order, so a jump's two ends count as neighbours; equal neighbours add x; three strictly rising values in a row add y, with no y for the first two cells; the result must match trying every path, and a 60 by 60 board must finish in a few seconds.",
+     "failure_message": "Bonuses look at the values in visiting order, so a jump's two ends count as neighbours; equal neighbours add x; three strictly rising values in a row add y, with no y for the first two cells; the result must match trying every path, and a large board must not be solved by trying paths one by one.",
      "code": _HELPERS + r"""
 assert {fn}([[1], [9], [1]]).max_score_with_bonuses(0, 1, 10, 0) == 12, "the jump makes 1 and 1 neighbours"
 assert {fn}([[1], [2], [3]]).max_score_with_bonuses(0, 0, 0, 7) == 13
@@ -172,12 +202,11 @@ for trial in range(400):
     p, k = rng.randrange(m), rng.randint(0, 3)
     x, y = rng.randint(0, 5), rng.randint(0, 5)
     assert {fn}(board).max_score_with_bonuses(p, k, x, y) == brute(board, p, k, x, y)[3], (board, p, k, x, y)
+small = counted(big_board(14, 24, 24))
+bounded_work(lambda: {fn}(small).max_score_with_bonuses(5, 24, 10**9, 10**9), 24, 24, 24)
 board = big_board(4)
-start = time.perf_counter()
 got = {fn}(board).max_score_with_bonuses(9, 60, 10**9, 10**9)
-elapsed = time.perf_counter() - start
 assert got >= {fn}(board).max_score(9, 60)
-assert elapsed < 4.0, f"{elapsed:.2f}s with bonuses on a 60 x 60 board"
 """},
 ]
 
