@@ -560,7 +560,7 @@ def build(n):
     fs = FileSystem()
     store = {fn}(fs, log=True)
     for i in range(n):
-        store.put(f"k{i % 500}", f"value {i}")
+        store.put(f"k{i % 500}", f"value {i} " + "x" * 50)  # padded so a per-record copy of the log dominates
         if i % 5 == 0:
             store.delete(f"k{(i * 7) % 500}")
     return fs, {f"k{j}": store.get(f"k{j}") for j in range(500)}
@@ -576,7 +576,7 @@ def best_of_three(fs, expected):
 
 small, big = build(1500), build(15000)
 ratio = best_of_three(*big) / best_of_three(*small)
-assert ratio < 40, f"10x the records took {ratio:.0f}x as long to load"
+assert ratio < 30, f"10x the records took {ratio:.0f}x as long to load"
 """},
         {"name": "Part 3: compaction", "part": 3, "visibility": "unshown", "behavior": "checkpoint.recovery",
          "failure_message": "After compact(), the stored size must depend only on the current keys and values and load() must give the same store; a crash at any point of compact() must lose nothing.",
