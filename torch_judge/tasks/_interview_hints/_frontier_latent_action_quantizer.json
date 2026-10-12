@@ -1,0 +1,11 @@
+{
+  "latent_action_quantizer": {
+    "What is a latent action, and how do LAPA and UniVLA use it to pretrain a VLA on video without action labels?": "Cover the encoder as an inverse-dynamics model over a frame pair, the decoder as a world model, the code index as a pseudo-label the VLM predicts, and the later swap to a real action head on labelled data.",
+    "Why does a VQ-VAE need a special trick to pass gradients through the quantizer, and what does the straight-through estimator do?": "Start from argmin having no useful derivative. Explain what x + stop_grad(q - x) evaluates to in the forward pass and what its gradient is in the backward pass, and what it leaves untrained.",
+    "In straight-through VQ, which parameters does each of the codebook loss and the commitment loss update, and what goes wrong if you drop either?": "Trace where stop_grad sits in each term. Discuss codes that never move without the codebook term, and an encoder whose outputs drift away from the codes without commitment; mention the role of beta.",
+    "Write the NSVQ substitution and explain why the codebook still learns without a codebook loss.": "Write the replacement of q - x by a scaled random direction, then follow the gradient through the residual norm back to the chosen code. Compare the forward distance to the true quantization error.",
+    "How do you detect and repair dead codes, and why is perplexity a useful health metric?": "Cover usage counting over a window, a threshold on the usage rate, copying live codes with a small perturbation, and when to stop. Relate exp(entropy) of usage to the effective number of codes.",
+    "Quantizing the difference of frame features versus quantizing the pair jointly: what does each make the code capture, and what can leak in?": "Contrast a code driven by change alone with one that can also encode scene appearance. Discuss camera motion and distractors, and how UniVLA's language-conditioned stage tries to separate task-relevant dynamics.",
+    "Discrete latent action codes versus GR00T N1's continuous pre-quantized embedding as a pretraining label: what does each give the policy?": "Compare a token head with cross-entropy over a small vocabulary to regressing a continuous vector. Discuss information lost by quantization, compatibility with VLM token heads, and multimodality."
+  }
+}
