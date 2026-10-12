@@ -30784,6 +30784,899 @@
           "simplifications": "einops rewritten as torch reshapes. Left out: rotary embeddings, the pre-LayerNorm in each attention layer, the Conv3d feed-forward block and the space_skip/ffn_skip Conv3d skips, cross-attention conditioning, dropout, and the in_channels/out_channels attributes; the spatial module accepts only 5-D input. Projections are explicit (2, D, D) weights; upstream silently uses nn.Identity for q/k/v and output when the width equals n_head * d_head. Divergence: upstream's default scale is n_head * d_head ** -0.5, which is n_head / sqrt(d_head); the exercise uses 1 / sqrt(d_head), as the oracle test pins."
         }
       ]
+    },
+    {
+      "id": "pause_token_training_mask",
+      "title": "Pause-Token Training Mask",
+      "titleZh": "Pause-Token Training Mask",
+      "difficulty": "Easy",
+      "functionName": "insert_pauses",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Build one pause-finetuning example: append `<pause>` tokens to the prefix, then build causal-LM labels that train only on the answer and never on predicting a pause.\n\n**Signature:** `insert_pauses(prefix_ids, target_ids, pause_id, n_pause) -> (input_ids, labels, answer_start)`\n\n**Parameters:**\n- `prefix_ids` — 1-D integer tensor of shape `(N,)` with `N >= 1`. The prompt.\n- `target_ids` — 1-D integer tensor of shape `(T,)` with `T >= 0`. The answer.\n- `pause_id` — integer id of the `<pause>` token.\n- `n_pause` — integer `M >= 0`. The number of pause tokens to append after the prefix.\n\n**Returns:** a tuple of three values.\n- `input_ids` — `torch.long` tensor of shape `(N + M + T,)`: the prefix, then `M` copies of `pause_id`, then the target.\n- `labels` — `torch.long` tensor of the same shape, a new tensor that does not share memory with `input_ids`.\n- `answer_start` — Python `int` equal to `N + M`, the index of the first target token (equal to the length when `T = 0`).\n\n**Label convention.** Labels are aligned with `input_ids`, as Hugging Face causal-LM labels are: `labels[j]` is the token the model must predict at index `j`, and the model shifts internally so the logits at `j - 1` are scored against `labels[j]`. They are not pre-shifted.\n\n**The rule.** Write `S_ignore = {k : input_ids[k + 1] == pause_id}`, the paper's set of positions whose next token is `<pause>`. In this aligned convention the loss term for position `k` sits at `labels[k + 1]`, so:\n\n    labels[j] = -100            if j < answer_start               (prefix and pauses)\n    labels[j] = -100            if input_ids[j] == pause_id      (j - 1 is in S_ignore)\n    labels[j] = input_ids[j]    otherwise\n\n**Constraints:**\n- Append the pauses after the prefix, never before it.\n- Keep `labels[answer_start]`: the first answer token is predicted from the last pause and must be trained.\n- A target token equal to `pause_id` gets label -100 too, because the paper never trains the model to emit a pause.\n- `answer_start` is always `N + M`. Do not search for the last pause: `pause_id` may also appear in the prefix or the target.\n- With `n_pause = 0` the result is the plain supervised-finetuning example.\n- Accept any integer dtype for the inputs and always return `torch.long` on the input device. Do not modify the inputs.\n- Raise `ValueError` when either tensor is not 1-D or not an integer dtype, when the prefix is empty, or when `n_pause` is not a non-negative `int` (a `bool` is rejected).\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**The idea.** A decoder computes one vector per input token in each layer before it emits the next token. Appending `M` inert `<pause>` tokens gives it `M` more vectors to work with before its first answer token, at the cost of `M` extra positions. The paper ignores the model's outputs until the last pause, at training and at inference time.\n\n**Why the pause predictions are masked.** The paper's pause-pretraining loss sums cross-entropy over every position except those in `S_ignore`. Asking the model to predict the pauses would teach it to produce a token whose only job is to delay it.\n\n**Where the off-by-one hides.** The paper indexes loss terms by the position that predicts, and HF labels index them by the token predicted. Masking position `k` in the paper's notation means writing -100 at `labels[k + 1]`. Transcribing `S_ignore` directly into aligned labels masks the last pause instead of the token after it, and on a pause in the target it masks the answer token before the pause.\n\n**Finetuning versus pretraining.** In pause-finetuning (Algorithm 2) the loss covers only target tokens, so every pause in the prefix block is already masked. The `S_ignore` rule from pretraining (Equation 3) only adds something when a target token is itself the pause id, which is why this exercise states both rules.",
+      "descriptionZh": "Build one pause-finetuning example: append `<pause>` tokens to the prefix, then build causal-LM labels that train only on the answer and never on predicting a pause.\n\n**Signature:** `insert_pauses(prefix_ids, target_ids, pause_id, n_pause) -> (input_ids, labels, answer_start)`\n\n**Parameters:**\n- `prefix_ids` — 1-D integer tensor of shape `(N,)` with `N >= 1`. The prompt.\n- `target_ids` — 1-D integer tensor of shape `(T,)` with `T >= 0`. The answer.\n- `pause_id` — integer id of the `<pause>` token.\n- `n_pause` — integer `M >= 0`. The number of pause tokens to append after the prefix.\n\n**Returns:** a tuple of three values.\n- `input_ids` — `torch.long` tensor of shape `(N + M + T,)`: the prefix, then `M` copies of `pause_id`, then the target.\n- `labels` — `torch.long` tensor of the same shape, a new tensor that does not share memory with `input_ids`.\n- `answer_start` — Python `int` equal to `N + M`, the index of the first target token (equal to the length when `T = 0`).\n\n**Label convention.** Labels are aligned with `input_ids`, as Hugging Face causal-LM labels are: `labels[j]` is the token the model must predict at index `j`, and the model shifts internally so the logits at `j - 1` are scored against `labels[j]`. They are not pre-shifted.\n\n**The rule.** Write `S_ignore = {k : input_ids[k + 1] == pause_id}`, the paper's set of positions whose next token is `<pause>`. In this aligned convention the loss term for position `k` sits at `labels[k + 1]`, so:\n\n    labels[j] = -100            if j < answer_start               (prefix and pauses)\n    labels[j] = -100            if input_ids[j] == pause_id      (j - 1 is in S_ignore)\n    labels[j] = input_ids[j]    otherwise\n\n**Constraints:**\n- Append the pauses after the prefix, never before it.\n- Keep `labels[answer_start]`: the first answer token is predicted from the last pause and must be trained.\n- A target token equal to `pause_id` gets label -100 too, because the paper never trains the model to emit a pause.\n- `answer_start` is always `N + M`. Do not search for the last pause: `pause_id` may also appear in the prefix or the target.\n- With `n_pause = 0` the result is the plain supervised-finetuning example.\n- Accept any integer dtype for the inputs and always return `torch.long` on the input device. Do not modify the inputs.\n- Raise `ValueError` when either tensor is not 1-D or not an integer dtype, when the prefix is empty, or when `n_pause` is not a non-negative `int` (a `bool` is rejected).\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**The idea.** A decoder computes one vector per input token in each layer before it emits the next token. Appending `M` inert `<pause>` tokens gives it `M` more vectors to work with before its first answer token, at the cost of `M` extra positions. The paper ignores the model's outputs until the last pause, at training and at inference time.\n\n**Why the pause predictions are masked.** The paper's pause-pretraining loss sums cross-entropy over every position except those in `S_ignore`. Asking the model to predict the pauses would teach it to produce a token whose only job is to delay it.\n\n**Where the off-by-one hides.** The paper indexes loss terms by the position that predicts, and HF labels index them by the token predicted. Masking position `k` in the paper's notation means writing -100 at `labels[k + 1]`. Transcribing `S_ignore` directly into aligned labels masks the last pause instead of the token after it, and on a pause in the target it masks the answer token before the pause.\n\n**Finetuning versus pretraining.** In pause-finetuning (Algorithm 2) the loss covers only target tokens, so every pause in the prefix block is already masked. The `S_ignore` rule from pretraining (Equation 3) only adds something when a target token is itself the pause id, which is why this exercise states both rules.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Two pauses between prefix and answer",
+          "code": "\nimport torch\nP = 99\ninput_ids, labels, answer_start = {fn}(torch.tensor([5, 6, 7]), torch.tensor([8, 9]), P, 2)\nassert input_ids.tolist() == [5, 6, 7, P, P, 8, 9], input_ids\n# Aligned labels: index 5 holds the first answer token, scored against the last pause's logits.\nassert labels.tolist() == [-100, -100, -100, -100, -100, 8, 9], labels\nassert answer_start == 5 and isinstance(answer_start, int), answer_start\nassert input_ids.dtype == torch.long and labels.dtype == torch.long\n",
+          "behavior": "edge.empty_or_boundary"
+        },
+        {
+          "name": "A pause token inside the target is not trained",
+          "code": "\nimport torch\nP = 0\ninput_ids, labels, answer_start = {fn}(torch.tensor([4, 4]), torch.tensor([3, P, 2]), P, 1)\nassert input_ids.tolist() == [4, 4, P, 3, P, 2], input_ids\nassert labels.tolist() == [-100, -100, -100, 3, -100, 2], labels\nassert answer_start == 3, answer_start\n",
+          "behavior": "edge.empty_or_boundary"
+        },
+        {
+          "name": "First answer token keeps its label",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "labels[answer_start] was masked. In aligned labels the first answer token sits at answer_start and is predicted from the last pause, so it must keep its id.",
+          "hiddenCode": "\nimport torch\ntorch.manual_seed(0)\nfor n_pause in (1, 3, 6):\n    prefix = torch.randint(1, 50, (4,))\n    target = torch.randint(1, 50, (5,))\n    input_ids, labels, s = {fn}(prefix, target, 77, n_pause)\n    assert s == 4 + n_pause, (n_pause, s)\n    assert int(labels[s]) == int(target[0]), (n_pause, labels)\n    assert labels[s:].tolist() == target.tolist(), (n_pause, labels)\n"
+        },
+        {
+          "name": "No pause is ever a training target",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "A label equals pause_id. Every index holding a pause, in the pause block or in the target, must have label -100.",
+          "hiddenCode": "\nimport torch\ntorch.manual_seed(1)\nP = 3\nfor _ in range(5):\n    prefix = torch.randint(0, 6, (int(torch.randint(1, 6, ()).item()),))\n    target = torch.randint(0, 6, (int(torch.randint(0, 8, ()).item()),))\n    m = int(torch.randint(0, 5, ()).item())\n    input_ids, labels, s = {fn}(prefix, target, P, m)\n    assert not (labels == P).any(), (prefix, target, m, labels)\n    assert (labels[input_ids == P] == -100).all(), labels\n"
+        },
+        {
+          "name": "Pauses are appended after the prefix",
+          "visibility": "unshown",
+          "behavior": "tensor.shape",
+          "failureMessage": "input_ids is not prefix, then the pauses, then the target. The pauses go between the prompt and the answer, not before the prompt.",
+          "hiddenCode": "\nimport torch\nprefix = torch.tensor([11, 12, 13, 14])\ntarget = torch.tensor([21, 22, 23])\ninput_ids, labels, s = {fn}(prefix, target, 5, 3)\nassert input_ids.shape == (10,), input_ids.shape\nassert input_ids[:4].tolist() == [11, 12, 13, 14], input_ids\nassert input_ids[4:7].tolist() == [5, 5, 5], input_ids\nassert input_ids[7:].tolist() == [21, 22, 23], input_ids\nassert s == 7 and labels.tolist() == [-100] * 7 + [21, 22, 23], labels\n"
+        },
+        {
+          "name": "Matches the paper's loss terms on random examples",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "The labels do not match the paper's rule. Train on index j exactly when j >= N + M and input_ids[j] != pause_id; everything else is -100.",
+          "hiddenCode": "\nimport torch\ng = torch.Generator().manual_seed(2)\nfor _ in range(8):\n    N = int(torch.randint(1, 7, (), generator=g))\n    T = int(torch.randint(0, 9, (), generator=g))\n    M = int(torch.randint(0, 5, (), generator=g))\n    P = int(torch.randint(0, 4, (), generator=g))\n    prefix = torch.randint(0, 4, (N,), generator=g)\n    target = torch.randint(0, 4, (T,), generator=g)\n    input_ids, labels, s = {fn}(prefix, target, P, M)\n    seq = prefix.tolist() + [P] * M + target.tolist()\n    want = [(-100 if (j < N + M or seq[j] == P) else seq[j]) for j in range(len(seq))]\n    assert input_ids.tolist() == seq, (seq, input_ids)\n    assert labels.tolist() == want, (seq, want, labels)\n    assert s == N + M\n"
+        },
+        {
+          "name": "Zero pauses is plain supervised finetuning",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "With n_pause = 0 the example must be prefix plus target, the prefix masked and every target label kept (unless it equals pause_id).",
+          "hiddenCode": "\nimport torch\ninput_ids, labels, s = {fn}(torch.tensor([1, 2, 3]), torch.tensor([4, 5]), 9, 0)\nassert input_ids.tolist() == [1, 2, 3, 4, 5], input_ids\nassert labels.tolist() == [-100, -100, -100, 4, 5], labels\nassert s == 3\n"
+        },
+        {
+          "name": "answer_start ignores pause ids outside the pause block",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "answer_start must be len(prefix) + n_pause. Do not locate it by searching for the pause id, which may also appear in the prefix or the target.",
+          "hiddenCode": "\nimport torch\nP = 7\n# A pause id in the prefix with no pause block, and one in the target after the pause block.\n_, labels, s = {fn}(torch.tensor([1, P, 2]), torch.tensor([3, 4]), P, 0)\nassert s == 3, s\nassert labels.tolist() == [-100, -100, -100, 3, 4], labels\n_, labels, s = {fn}(torch.tensor([1]), torch.tensor([3, P, 4]), P, 2)\nassert s == 3, s\nassert labels.tolist() == [-100, -100, -100, 3, -100, 4], labels\n"
+        },
+        {
+          "name": "Empty target",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "With an empty target, input_ids is prefix plus pauses, every label is -100 and answer_start equals the length.",
+          "hiddenCode": "\nimport torch\ninput_ids, labels, s = {fn}(torch.tensor([1, 2]), torch.tensor([], dtype=torch.long), 0, 3)\nassert input_ids.tolist() == [1, 2, 0, 0, 0], input_ids\nassert labels.tolist() == [-100] * 5, labels\nassert s == 5 and isinstance(s, int), s\n"
+        },
+        {
+          "name": "Returns long tensors and leaves inputs untouched",
+          "visibility": "unshown",
+          "behavior": "tensor.dtype_device",
+          "failureMessage": "Return torch.long input_ids and labels that do not share memory, and do not modify prefix_ids or target_ids.",
+          "hiddenCode": "\nimport torch\nprefix = torch.tensor([3, 4, 5], dtype=torch.int32)\ntarget = torch.tensor([6, 7], dtype=torch.int32)\ninput_ids, labels, s = {fn}(prefix, target, 1, 2)\nassert input_ids.dtype == torch.long and labels.dtype == torch.long, (input_ids.dtype, labels.dtype)\nassert input_ids.device == prefix.device and labels.device == prefix.device\nassert input_ids.tolist() == [3, 4, 5, 1, 1, 6, 7], input_ids\nassert labels.data_ptr() != input_ids.data_ptr()\nlabels[-1] = 123\nassert input_ids[-1].item() == 7, 'labels share storage with input_ids'\nassert prefix.tolist() == [3, 4, 5] and target.tolist() == [6, 7]\nassert prefix.dtype == torch.int32 and target.dtype == torch.int32\n"
+        },
+        {
+          "name": "Rejects invalid inputs",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "An invalid input was accepted. Raise ValueError for a non 1-D or non-integer tensor, an empty prefix, or an n_pause that is negative, a float or a bool.",
+          "hiddenCode": "\nimport torch\nok_p, ok_t = torch.tensor([1, 2]), torch.tensor([3])\ncases = [\n    (torch.tensor([[1, 2]]), ok_t, 0, 1),\n    (ok_p, torch.tensor([[3]]), 0, 1),\n    (torch.tensor([1.0, 2.0]), ok_t, 0, 1),\n    (ok_p, torch.tensor([3.0]), 0, 1),\n    (torch.tensor([], dtype=torch.long), ok_t, 0, 1),\n    (ok_p, ok_t, 0, -1),\n    (ok_p, ok_t, 0, 1.0),\n    (ok_p, ok_t, 0, True),\n]\nfor i, (p, t, pid, m) in enumerate(cases):\n    try:\n        {fn}(p, t, pid, m)\n    except ValueError:\n        continue\n    raise AssertionError(f'case {i} should raise ValueError')\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Write out a tiny example: prefix [5, 6], two pauses, target [7, 8]. Which index holds each token, and which index is answer_start? In HF-style labels, which index's label is scored against the logits of the last pause? The paper's S_ignore names the position that predicts a pause. Which label index does that loss term live at once labels are aligned with the input? What should happen to a target token that happens to equal pause_id, and why must answer_start not be found by searching for pauses?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Validate first: both inputs 1-D integer tensors, the prefix non-empty, n_pause a plain non-negative int. Build the pause block with torch.full on the prefix's device, cast all three pieces to long and concatenate them in the order prefix, pauses, target. answer_start is the prefix length plus n_pause. Clone the concatenated ids for the labels, so writing -100 does not corrupt input_ids. Write -100 on every index below answer_start, then on every index whose token equals pause_id. Do not shift the labels: the model does that. Check the empty-target case returns all -100 and answer_start equal to the length."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "response_token_mask",
+        "cross_entropy"
+      ],
+      "modelConnections": [
+        "Hugging Face causal-LM models take labels aligned with input_ids and shift them inside the loss, so any -100 written here is read one position later than it is stored.",
+        "The supervised-finetuning collators in TRL mask the prompt the same way; pause-finetuning is that mask with M extra masked positions between prompt and answer.",
+        "Coconut's staged curriculum replaces reasoning steps with latent thoughts and gives those positions label -100 in the same way, so pause tokens are the simplest member of that family.",
+        "Pause pretraining in the paper inserts pauses at random positions in the middle of a document, where the next-token-is-pause rule is the whole mask rather than an extra case."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Adds compute before the answer with almost no new parameters: one extra embedding for the pause token.",
+          "The data change is tiny: a fixed number of appended tokens and a mask, with no change to the model or the loss function.",
+          "The aligned-label convention matches standard training code, so the example drops into an existing finetuning loop."
+        ],
+        "cons": [
+          "The paper finds gains mainly when the model is also pause-pretrained; pause-finetuning a standard model gives mixed results.",
+          "M is fixed per task and must match at inference; the paper reports that zero pauses at inference after pause-training hurts.",
+          "Each pause costs a full position of attention and memory with no direct supervision on what the pause computes."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What do pause tokens give a decoder-only model, and where in the sequence are they placed during finetuning?",
+          "hint": "Angle: compute per emitted token. Cover how many vectors each layer computes before the next token, what M appended inert tokens add, where they sit relative to prompt and answer, and that outputs before the last pause are ignored."
+        },
+        {
+          "stage": "concept",
+          "question": "Why does the pause-training loss skip the positions whose next token is a pause?",
+          "hint": "Angle: what the pause is for. Cover what the model would learn if it were trained to emit pauses, how that competes with the real targets, and the paper's S_ignore set over predicting positions."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "The paper defines S_ignore by the position that predicts a pause. How do you translate that into Hugging Face labels that are aligned with input_ids?",
+          "hint": "Angle: the internal shift. Cover which logit index is scored against labels[j], which label index therefore carries the term for predicting position k, and the off-by-one that copying S_ignore directly would cause."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Which label carries the first answer token, and which position's hidden state is scored against it?",
+          "hint": "Angle: the boundary between pauses and answer. Cover where answer_start is, why its label must be kept, and which position's output the paper starts reading at inference."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What edge cases does the mask have to handle: zero pauses, an empty target, and the pause id appearing in the prefix or the target?",
+          "hint": "Angle: walk each case. Cover what zero pauses reduces to, what an empty target returns, why answer_start must come from lengths rather than a search, and what label a pause inside the target gets."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Pause tokens versus chain-of-thought: what does each add in compute and in supervision, and when would you choose one over the other?",
+          "hint": "Angle: extra positions with and without content. Compare tokens generated, whether intermediate steps are supervised or interpretable, data requirements, latency, and which tasks benefit."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Why does the paper find that pause-finetuning alone helps less than pause-pretraining plus pause-finetuning, and what does that imply for adopting it on an existing model?",
+          "hint": "Angle: learning to use the delay. Cover whether a standard model's attention has learned to exploit inert tokens, how much finetuning data can teach that, and the cost of re-pretraining versus the gain."
+        }
+      ],
+      "sources": [
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2310.02226",
+          "section": "Goyal et al. 2024 (arXiv v3), Section 3.1 Learning and inference with the pause token: 'Pretraining with the pause token' (S_ignore and Equation 3) and 'Finetuning with the pause token'; Appendix Algorithms 1 and 2",
+          "equation": "3",
+          "note": "The ORACLE for this exercise is the paper itself: no official code was released. The paper's definitions are transcribed into torch_judge/harness/reasoning/vendored/pause_tokens_paper.py in the paper's own 1-based, predicting-position indexing, and the oracle test converts the reference's aligned labels into those loss terms. The exercise applies Equation 3's S_ignore during finetuning too, which differs from Algorithm 2 alone only when a target token equals the pause id."
+        }
+      ]
+    },
+    {
+      "id": "coconut_stage_sample",
+      "title": "Coconut Curriculum Stage Sample",
+      "titleZh": "Coconut Curriculum Stage Sample",
+      "difficulty": "Medium",
+      "functionName": "build_stage_sample",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Coconut teaches a language model to reason in latent space with a multi-stage curriculum. At stage `k`, the first `k` written reasoning steps of a chain-of-thought sample are removed and `k * c` latent placeholder tokens take their place between a `<bot>` and an `<eot>` marker. Build one training sample for a given stage.\n\n**Signature:** `build_stage_sample(question_ids, step_ids, answer_ids, stage, c_thought, max_latent_stage, pad_latent_to_max, special_ids, no_special_marker=False) -> dict`\n\n**Parameters:**\n- `question_ids` — list of int token ids for the question.\n- `step_ids` — list of reasoning steps, each a list of int token ids. It may be empty, and a step may be empty.\n- `answer_ids` — list of int token ids for the answer.\n- `stage` — int `>= 0`, the curriculum stage `k` of this sample.\n- `c_thought` — int `>= 1`, latent tokens per replaced step (`c`).\n- `max_latent_stage` — int `>= 0`, the last stage that still replaces steps one at a time.\n- `pad_latent_to_max` — bool, only used when `stage > max_latent_stage`.\n- `special_ids` — dict with int entries `\"bot\"`, `\"latent\"` and `\"eot\"`.\n- `no_special_marker` — bool. When True, leave out the `<bot>` and `<eot>` tokens.\n\n**Returns:** a dict with exactly the keys `\"input_ids\"`, `\"labels\"` and `\"position_ids\"`. Each value is a 1-D `torch.long` tensor, and all three have the same length.\n\n**How many steps to skip and how many latent groups to insert.**\n- When `stage <= max_latent_stage`: skip the first `stage` steps and insert `stage` groups. This holds even when `stage` is larger than the number of steps; then every step is skipped and there are still `stage` groups.\n- When `stage > max_latent_stage`: skip every step. Insert `max_latent_stage` groups if `pad_latent_to_max` is True, otherwise `min(len(step_ids), max_latent_stage)` groups.\n- Each group is `c_thought` copies of `special_ids[\"latent\"]`.\n\n**Layout:**\n\n    input_ids = question + [bot] + [latent] * (groups * c_thought) + [eot] + remaining steps (concatenated, in order) + answer\n\nWith `no_special_marker`, the `[bot]` and `[eot]` entries are absent.\n\n**Constraints:**\n- `labels` is `-100` at every question, marker and latent position, and equals `input_ids` at every position after them (remaining steps and answer). Do not shift the labels; the model shifts them.\n- `position_ids` is `0, 1, ..., len(input_ids) - 1`.\n- Stage 0 still has the `<bot><eot>` pair, with an empty latent span between them.\n- Do not modify the input lists.\n- Raise `ValueError` when `stage` or `max_latent_stage` is not an int `>= 0`, or `c_thought` is not an int `>= 1` (bools are rejected).\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Continuous thoughts.** Coconut (Chain of Continuous Thought) lets the model reason without writing words: after `<bot>`, the last hidden state at each step is fed back as the next input embedding instead of being decoded to a token. The latent placeholder ids in this sample only reserve those positions; at training time their embeddings are overwritten by the fed-back hidden states (the `coconut_latent_forward` idea).\n\n**Why a curriculum.** Training directly with no language reasoning fails, so Coconut starts from a chain-of-thought model and, stage by stage, swaps the first written steps for continuous thoughts. The loss stays on the remaining written steps and the answer, so the latent thoughts are trained only through their effect on what comes after them.\n\n**GSM8k settings.** The official config uses `c_thought = 2`, `max_latent_stage = 3` and `pad_latent_to_max = True`, with three epochs per stage. After stage 3, every written step is removed and the model keeps six latent thoughts. Without padding, a short problem gets fewer thoughts than a long one in that final stage.\n\n**Upstream extras left out.** The official builder can also draw a random stage per sample with probability `uniform_prob` (0 for GSM8k) and has a `no_cot` ablation that removes every step and every latent.",
+      "descriptionZh": "Coconut teaches a language model to reason in latent space with a multi-stage curriculum. At stage `k`, the first `k` written reasoning steps of a chain-of-thought sample are removed and `k * c` latent placeholder tokens take their place between a `<bot>` and an `<eot>` marker. Build one training sample for a given stage.\n\n**Signature:** `build_stage_sample(question_ids, step_ids, answer_ids, stage, c_thought, max_latent_stage, pad_latent_to_max, special_ids, no_special_marker=False) -> dict`\n\n**Parameters:**\n- `question_ids` — list of int token ids for the question.\n- `step_ids` — list of reasoning steps, each a list of int token ids. It may be empty, and a step may be empty.\n- `answer_ids` — list of int token ids for the answer.\n- `stage` — int `>= 0`, the curriculum stage `k` of this sample.\n- `c_thought` — int `>= 1`, latent tokens per replaced step (`c`).\n- `max_latent_stage` — int `>= 0`, the last stage that still replaces steps one at a time.\n- `pad_latent_to_max` — bool, only used when `stage > max_latent_stage`.\n- `special_ids` — dict with int entries `\"bot\"`, `\"latent\"` and `\"eot\"`.\n- `no_special_marker` — bool. When True, leave out the `<bot>` and `<eot>` tokens.\n\n**Returns:** a dict with exactly the keys `\"input_ids\"`, `\"labels\"` and `\"position_ids\"`. Each value is a 1-D `torch.long` tensor, and all three have the same length.\n\n**How many steps to skip and how many latent groups to insert.**\n- When `stage <= max_latent_stage`: skip the first `stage` steps and insert `stage` groups. This holds even when `stage` is larger than the number of steps; then every step is skipped and there are still `stage` groups.\n- When `stage > max_latent_stage`: skip every step. Insert `max_latent_stage` groups if `pad_latent_to_max` is True, otherwise `min(len(step_ids), max_latent_stage)` groups.\n- Each group is `c_thought` copies of `special_ids[\"latent\"]`.\n\n**Layout:**\n\n    input_ids = question + [bot] + [latent] * (groups * c_thought) + [eot] + remaining steps (concatenated, in order) + answer\n\nWith `no_special_marker`, the `[bot]` and `[eot]` entries are absent.\n\n**Constraints:**\n- `labels` is `-100` at every question, marker and latent position, and equals `input_ids` at every position after them (remaining steps and answer). Do not shift the labels; the model shifts them.\n- `position_ids` is `0, 1, ..., len(input_ids) - 1`.\n- Stage 0 still has the `<bot><eot>` pair, with an empty latent span between them.\n- Do not modify the input lists.\n- Raise `ValueError` when `stage` or `max_latent_stage` is not an int `>= 0`, or `c_thought` is not an int `>= 1` (bools are rejected).\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Continuous thoughts.** Coconut (Chain of Continuous Thought) lets the model reason without writing words: after `<bot>`, the last hidden state at each step is fed back as the next input embedding instead of being decoded to a token. The latent placeholder ids in this sample only reserve those positions; at training time their embeddings are overwritten by the fed-back hidden states (the `coconut_latent_forward` idea).\n\n**Why a curriculum.** Training directly with no language reasoning fails, so Coconut starts from a chain-of-thought model and, stage by stage, swaps the first written steps for continuous thoughts. The loss stays on the remaining written steps and the answer, so the latent thoughts are trained only through their effect on what comes after them.\n\n**GSM8k settings.** The official config uses `c_thought = 2`, `max_latent_stage = 3` and `pad_latent_to_max = True`, with three epochs per stage. After stage 3, every written step is removed and the model keeps six latent thoughts. Without padding, a short problem gets fewer thoughts than a long one in that final stage.\n\n**Upstream extras left out.** The official builder can also draw a random stage per sample with probability `uniform_prob` (0 for GSM8k) and has a `no_cot` ablation that removes every step and every latent.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Stage 0 keeps every step behind an empty latent span",
+          "code": "\nimport torch\nids = {\"bot\": 90, \"latent\": 91, \"eot\": 92}\nout = {fn}([1, 2], [[10, 11], [20], [30, 31]], [40, 41], 0, 2, 3, True, ids)\nassert set(out) == {\"input_ids\", \"labels\", \"position_ids\"}, set(out)\nassert out[\"input_ids\"].tolist() == [1, 2, 90, 92, 10, 11, 20, 30, 31, 40, 41], out[\"input_ids\"]\nassert out[\"labels\"].tolist() == [-100, -100, -100, -100, 10, 11, 20, 30, 31, 40, 41], out[\"labels\"]\nassert out[\"position_ids\"].tolist() == list(range(11)), out[\"position_ids\"]\n",
+          "behavior": "rl.rollout_assembly"
+        },
+        {
+          "name": "Stage 2 replaces two steps with 2 * c latents",
+          "code": "\nimport torch\nids = {\"bot\": 90, \"latent\": 91, \"eot\": 92}\nout = {fn}([1, 2], [[10, 11], [20], [30, 31]], [40, 41], 2, 2, 3, True, ids)\nassert out[\"input_ids\"].tolist() == [1, 2, 90, 91, 91, 91, 91, 92, 30, 31, 40, 41], out[\"input_ids\"]\nassert out[\"labels\"].tolist() == [-100] * 8 + [30, 31, 40, 41], out[\"labels\"]\nassert out[\"input_ids\"].dtype == torch.long\n",
+          "behavior": "rl.rollout_assembly"
+        },
+        {
+          "name": "Follows the GSM8k schedule at every stage",
+          "visibility": "unshown",
+          "behavior": "rl.rollout_assembly",
+          "failureMessage": "Up to max_latent_stage, skip the first `stage` steps and insert stage * c_thought latents; above it, skip all steps and insert max_latent_stage * c_thought latents.",
+          "hiddenCode": "\nids = {\"bot\": 7, \"latent\": 8, \"eot\": 9}\nq, steps, a = [100, 101, 102], [[200, 201], [210], [220, 221, 222], [230]], [300, 301]\nwant = {\n    0: [200, 201, 210, 220, 221, 222, 230],\n    1: [210, 220, 221, 222, 230],\n    2: [220, 221, 222, 230],\n    3: [230],\n    4: [],\n    5: [],\n}\nfor stage, rest in want.items():\n    n_latent = 2 * min(stage, 3)\n    out = {fn}(q, steps, a, stage, 2, 3, True, ids)\n    expected = q + [7] + [8] * n_latent + [9] + rest + a\n    assert out[\"input_ids\"].tolist() == expected, (stage, out[\"input_ids\"].tolist(), expected)\n"
+        },
+        {
+          "name": "Above max_latent_stage every step is skipped",
+          "visibility": "unshown",
+          "behavior": "rl.rollout_assembly",
+          "failureMessage": "Once stage > max_latent_stage, drop all reasoning steps, not just the first max_latent_stage of them, and keep max_latent_stage groups.",
+          "hiddenCode": "\nids = {\"bot\": 7, \"latent\": 8, \"eot\": 9}\nsteps = [[11], [12], [13], [14], [15]]\nfor stage in (3, 4, 9):\n    out = {fn}([1], steps, [50], stage, 3, 2, True, ids)\n    assert out[\"input_ids\"].tolist() == [1, 7] + [8] * 6 + [9, 50], (stage, out[\"input_ids\"].tolist())\n"
+        },
+        {
+          "name": "pad_latent_to_max decides the final-stage group count",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "Above max_latent_stage, use max_latent_stage groups when pad_latent_to_max is True, else min(len(step_ids), max_latent_stage).",
+          "hiddenCode": "\nids = {\"bot\": 7, \"latent\": 8, \"eot\": 9}\nsteps = [[11, 12], [13]]\npadded = {fn}([1], steps, [50], 4, 2, 3, True, ids)\nassert padded[\"input_ids\"].tolist() == [1, 7] + [8] * 6 + [9, 50], padded[\"input_ids\"].tolist()\nshort = {fn}([1], steps, [50], 4, 2, 3, False, ids)\nassert short[\"input_ids\"].tolist() == [1, 7] + [8] * 4 + [9, 50], short[\"input_ids\"].tolist()\nlong_steps = [[11], [12], [13], [14]]\nunpadded = {fn}([1], long_steps, [50], 4, 2, 3, False, ids)\nassert unpadded[\"input_ids\"].tolist() == [1, 7] + [8] * 6 + [9, 50], unpadded[\"input_ids\"].tolist()\n"
+        },
+        {
+          "name": "Within max, the group count is the stage even past the last step",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "When stage <= max_latent_stage, insert exactly stage * c_thought latents, even if the sample has fewer than `stage` steps and pad_latent_to_max is False.",
+          "hiddenCode": "\nids = {\"bot\": 7, \"latent\": 8, \"eot\": 9}\nfor pad in (True, False):\n    out = {fn}([1, 2], [[11]], [50], 3, 2, 3, pad, ids)\n    assert out[\"input_ids\"].tolist() == [1, 2, 7] + [8] * 6 + [9, 50], (pad, out[\"input_ids\"].tolist())\n    assert out[\"labels\"].tolist() == [-100] * 10 + [50], (pad, out[\"labels\"].tolist())\n"
+        },
+        {
+          "name": "Labels mask the question, both markers and the latents",
+          "visibility": "unshown",
+          "behavior": "rl.masking",
+          "failureMessage": "Set labels to -100 for len(question) + 2 + n_latent positions (the markers count) and copy input_ids, unshifted, for the rest.",
+          "hiddenCode": "\nids = {\"bot\": 7, \"latent\": 8, \"eot\": 9}\nout = {fn}([1, 2, 3], [[11, 12], [13], [14]], [50, 51], 1, 3, 3, True, ids)\ninp, lab = out[\"input_ids\"].tolist(), out[\"labels\"].tolist()\nassert inp == [1, 2, 3, 7, 8, 8, 8, 9, 13, 14, 50, 51], inp\nassert lab == [-100] * 8 + [13, 14, 50, 51], lab\n"
+        },
+        {
+          "name": "no_special_marker drops the markers and their mask",
+          "visibility": "unshown",
+          "behavior": "rl.masking",
+          "failureMessage": "With no_special_marker=True, emit no bot/eot tokens and mask only len(question) + n_latent positions.",
+          "hiddenCode": "\nids = {\"bot\": 7, \"latent\": 8, \"eot\": 9}\nout = {fn}([1, 2], [[11], [12], [13]], [50], 2, 2, 3, True, ids, no_special_marker=True)\nassert out[\"input_ids\"].tolist() == [1, 2, 8, 8, 8, 8, 13, 50], out[\"input_ids\"].tolist()\nassert out[\"labels\"].tolist() == [-100] * 6 + [13, 50], out[\"labels\"].tolist()\nassert out[\"position_ids\"].tolist() == list(range(8))\nplain = {fn}([1, 2], [[11], [12]], [50], 0, 2, 3, True, ids, no_special_marker=True)\nassert plain[\"input_ids\"].tolist() == [1, 2, 11, 12, 50] and plain[\"labels\"].tolist() == [-100, -100, 11, 12, 50]\n"
+        },
+        {
+          "name": "Handles empty steps and max_latent_stage 0",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "An empty step list or empty steps are fine; with max_latent_stage 0, any stage >= 1 skips all steps and inserts no latents.",
+          "hiddenCode": "\nids = {\"bot\": 7, \"latent\": 8, \"eot\": 9}\nout = {fn}([1], [], [50], 0, 2, 3, False, ids)\nassert out[\"input_ids\"].tolist() == [1, 7, 9, 50] and out[\"labels\"].tolist() == [-100, -100, -100, 50]\nout = {fn}([1], [], [50], 5, 2, 3, False, ids)\nassert out[\"input_ids\"].tolist() == [1, 7, 9, 50], out[\"input_ids\"].tolist()\nout = {fn}([1], [[], [12]], [50], 1, 2, 3, True, ids)\nassert out[\"input_ids\"].tolist() == [1, 7, 8, 8, 9, 12, 50], out[\"input_ids\"].tolist()\nout = {fn}([1], [[11], [12]], [50], 1, 2, 0, True, ids)\nassert out[\"input_ids\"].tolist() == [1, 7, 9, 50], out[\"input_ids\"].tolist()\nout = {fn}([1], [[11], [12]], [50], 0, 2, 0, True, ids)\nassert out[\"input_ids\"].tolist() == [1, 7, 9, 11, 12, 50], out[\"input_ids\"].tolist()\n"
+        },
+        {
+          "name": "Seeded random samples match the specification",
+          "visibility": "unshown",
+          "behavior": "rl.rollout_assembly",
+          "failureMessage": "Check the skip count, the latent count and the label prefix length for every combination of stage, c_thought, max_latent_stage, padding and markers.",
+          "hiddenCode": "\nimport random\ndef spec(q, steps, a, stage, c, m, pad, ids, nsm):\n    if stage > m:\n        skip, groups = len(steps), (m if pad else min(len(steps), m))\n    else:\n        skip, groups = stage, stage\n    head = q + ([] if nsm else [ids[\"bot\"]]) + [ids[\"latent\"]] * (groups * c) + ([] if nsm else [ids[\"eot\"]])\n    tail = [t for s in steps[skip:] for t in s] + a\n    return head + tail, [-100] * len(head) + tail\nids = {\"bot\": 1001, \"latent\": 1002, \"eot\": 1003}\nfor seed in range(6):\n    rng = random.Random(seed)\n    for _ in range(40):\n        q = [rng.randrange(1000) for _ in range(rng.randint(0, 5))]\n        steps = [[rng.randrange(1000) for _ in range(rng.randint(0, 4))] for _ in range(rng.randint(0, 6))]\n        a = [rng.randrange(1000) for _ in range(rng.randint(1, 3))]\n        stage, c, m = rng.randint(0, 8), rng.randint(1, 3), rng.randint(0, 4)\n        pad, nsm = rng.random() < 0.5, rng.random() < 0.3\n        out = {fn}(q, steps, a, stage, c, m, pad, ids, no_special_marker=nsm)\n        inp, lab = spec(q, steps, a, stage, c, m, pad, ids, nsm)\n        assert out[\"input_ids\"].tolist() == inp, (seed, stage, c, m, pad, nsm)\n        assert out[\"labels\"].tolist() == lab, (seed, stage, c, m, pad, nsm)\n        assert out[\"position_ids\"].tolist() == list(range(len(inp)))\n"
+        },
+        {
+          "name": "Returns 1-D long tensors of equal length",
+          "visibility": "unshown",
+          "behavior": "tensor.dtype_device",
+          "failureMessage": "Return exactly input_ids, labels and position_ids as 1-D torch.long tensors of the same length, position_ids starting at 0.",
+          "hiddenCode": "\nimport torch\nids = {\"bot\": 7, \"latent\": 8, \"eot\": 9}\nfor args in (([1, 2], [[3], [4]], [5], 1, 2, 3, True), ([], [], [5], 0, 1, 0, False)):\n    out = {fn}(*args, ids)\n    assert set(out) == {\"input_ids\", \"labels\", \"position_ids\"}, set(out)\n    n = out[\"input_ids\"].shape[0]\n    for key, value in out.items():\n        assert torch.is_tensor(value) and value.dtype == torch.long and value.ndim == 1, (key, value)\n        assert value.shape[0] == n, (key, value.shape)\n    assert out[\"position_ids\"].tolist() == list(range(n))\n"
+        },
+        {
+          "name": "Does not modify the input lists",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "Build new lists; never pop, extend or slice-assign question_ids, step_ids or answer_ids.",
+          "hiddenCode": "\nimport copy\nids = {\"bot\": 7, \"latent\": 8, \"eot\": 9}\nq, steps, a = [1, 2], [[11, 12], [13], [14]], [50]\nbefore = copy.deepcopy((q, steps, a, ids))\nfor stage in (0, 2, 5):\n    {fn}(q, steps, a, stage, 2, 3, False, ids)\n    assert (q, steps, a, ids) == before, (stage, q, steps, a, ids)\n"
+        },
+        {
+          "name": "Rejects invalid stage, c_thought and max_latent_stage",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Raise ValueError for a negative or non-int stage or max_latent_stage, a c_thought below 1, and bools.",
+          "hiddenCode": "\nids = {\"bot\": 7, \"latent\": 8, \"eot\": 9}\nbad = [(-1, 2, 3), (1.0, 2, 3), (True, 2, 3), (1, 0, 3), (1, 1.5, 3), (1, True, 3), (1, 2, -1), (1, 2, 2.0)]\nfor stage, c, m in bad:\n    try:\n        {fn}([1], [[2]], [3], stage, c, m, True, ids)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"accepted stage={stage!r} c_thought={c!r} max_latent_stage={m!r}\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which two numbers decide a sample: how many steps are skipped and how many latent groups appear? Do they move together at every stage, or only up to max_latent_stage? Once the input sequence is assembled, how long is the prefix that the loss must ignore, and what does it contain besides the question?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "First validate the three integers. Then branch on stage versus max_latent_stage to get the number of skipped steps and the number of groups; only the branch above the maximum looks at pad_latent_to_max, and it skips every step. Multiply groups by c_thought. Build the prefix (question, optional bot, latents, optional eot) and the tail (remaining steps flattened, then the answer) as separate lists, so the label mask is just the prefix length. Pitfalls: forgetting the two marker positions in the mask, slicing steps from the end, and pre-shifting labels."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "response_token_mask",
+        "pause_token_training_mask"
+      ],
+      "modelConnections": [
+        "Coconut (Hao et al. 2024, Meta) trains GPT-2 on GSM8k with c = 2 thoughts per step, three curriculum stages and a final stage with all steps removed.",
+        "The same 'replace written reasoning step by step' curriculum appears in implicit chain-of-thought work (iCoT, stepwise internalization), which removes tokens without adding latent slots.",
+        "Pause tokens also insert inert placeholders before the answer, but they carry no fed-back hidden state and need no curriculum."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "A simple data transform that turns any chain-of-thought dataset into a latent-reasoning curriculum, with the loss kept on the language the model still writes."
+        ],
+        "cons": [
+          "The schedule (c, number of stages, epochs per stage, padding) is hand-tuned per dataset, and each stage needs a full pass with sequential latent forward passes."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "In Coconut's curriculum, what changes in a training sample from stage k to stage k + 1?",
+          "hint": "Name the two counts that move together (written steps removed, latent slots added) and the unit of change per stage. Mention what stays fixed: question, markers, answer, and where the loss applies."
+        },
+        {
+          "stage": "concept",
+          "question": "Why is the loss masked on the latent positions, and how do the continuous thoughts still get a training signal?",
+          "hint": "Cover what a label at a latent position would even mean when its input is a fed-back hidden state, then trace the gradient path from the loss on later language tokens back through the recurrent latent inputs."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through a GSM8k sample with four reasoning steps at stages 0 through 4 using c = 2 and max_latent_stage = 3. How many latent tokens and written steps does each stage have?",
+          "hint": "Make a small table: stage, steps skipped, latent groups, latent tokens, steps kept. Treat the stages up to the maximum and the final stage separately, and note which setting decides the final row."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What does pad_latent_to_max change, at which stages does it matter, and why might padding help or hurt?",
+          "hint": "Say which branch reads the flag and what it compares against. Discuss a sample with fewer steps than the maximum, and weigh a fixed thinking budget against matching compute to problem length."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "The label mask has the length of the question plus the latents plus two. What breaks in training if the two marker positions are left unmasked?",
+          "hint": "Identify which tokens the extra two positions are and what the model would be asked to predict there. Consider what the eot label teaches about when to stop thinking, and how the mismatch shifts every later boundary."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "A hand-scheduled curriculum versus training with all steps replaced by latent thoughts from the start?",
+          "hint": "Contrast optimisation difficulty without language supervision, the reported ablation result, total training cost of multiple stages, and the burden of tuning epochs per stage."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Choosing c, the number of latent thoughts per removed step: accuracy, training cost and inference latency?",
+          "hint": "Weigh more sequential forward passes per thought against capacity to encode a step; mention that latent passes cannot be parallelised and that the paper reports a trend as c grows."
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/facebookresearch/coconut/blob/27273cb8cca4bb763c041a63b036d0c3b7cbbb48/dataset.py",
+          "commit": "27273cb8cca4bb763c041a63b036d0c3b7cbbb48",
+          "path": "dataset.py",
+          "symbol": "get_cot_latent_dataset.process_dataset (lines 243-302)",
+          "license": "MIT",
+          "adapted": "Same skip and latent counts per stage, same pad_latent_to_max rule, same token layout and the same -100 label prefix of question + latents + markers.",
+          "simplifications": "Runs uniform_prob = 0 only (no random stage draw) and drops the no_cot ablation; returns torch.long tensors instead of lists and drops attention_mask and idx; upstream's 'skip all' sentinel (slice from 10000) becomes slicing past the last step; adds argument validation."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/facebookresearch/coconut/blob/27273cb8cca4bb763c041a63b036d0c3b7cbbb48/args/gsm_coconut.yaml",
+          "commit": "27273cb8cca4bb763c041a63b036d0c3b7cbbb48",
+          "path": "args/gsm_coconut.yaml",
+          "symbol": "c_thought, max_latent_stage, pad_latent_to_max, uniform_prob",
+          "license": "MIT",
+          "adapted": "The GSM8k values (c_thought 2, max_latent_stage 3, pad_latent_to_max True, uniform_prob 0) used in the schedule test.",
+          "simplifications": "Only the four keys the sample builder reads are used."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2412.06769",
+          "section": "Hao et al. 2024 (Coconut), Section 3 (Training Procedure, Figure 2) and Section 4.1 (Experimental Setup, GSM8k c = 2)",
+          "note": "Multi-stage curriculum: stage k replaces the first k language steps with k * c continuous thoughts and masks the loss on questions and latent thoughts."
+        }
+      ]
+    },
+    {
+      "id": "latent_exit_criteria",
+      "title": "Recurrent-Depth Adaptive Exit Criteria",
+      "titleZh": "Recurrent-Depth Adaptive Exit Criteria",
+      "difficulty": "Medium",
+      "functionName": "first_exit_step",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "A recurrent-depth language model (Huginn) iterates one core block up to `R` times for every token and may stop a token early once its prediction has settled. You are given the logits and latent states the model produced after every iteration. Return, for every token, the step at which an exit criterion first fires.\n\n**Signature:** `first_exit_step(logits_per_step, latents_per_step, criterion, threshold=\"auto\") -> LongTensor`\n\n**Parameters:**\n- `logits_per_step` — floating tensor `(R, N, V)`. Row `r` (0-based) holds the logits for `N` tokens after recurrent step `r + 1`.\n- `latents_per_step` — floating tensor `(R, N, h)`. Row `r` holds the latent states after step `r + 1`. Only `latent-diff` reads it.\n- `criterion` — one of `\"kl\"`, `\"entropy-diff\"`, `\"latent-diff\"`, `\"argmax-stability\"`.\n- `threshold` — a number, or the string `\"auto\"` for the criterion's default.\n\n**Returns:** a `torch.long` tensor of shape `(N,)` on the input device. The value is **1-based**: the number of recurrent steps run when the token exits, so step `t` means row `t - 1` fired first. A token whose criterion never fires returns `R`.\n\n**The criteria.** For each token, compute one exit value per step `t = 1..R`, comparing step `t` with step `t - 1`:\n- `kl`: `p_t = log_softmax(logits_t)`. The value is the KL divergence of the previous step's distribution to the current one, exactly `F.kl_div(p_t, p_(t-1), reduction=\"none\", log_target=True).sum(-1)`, which equals `sum(exp(p_(t-1)) * (p_(t-1) - p_t))`. Before step 1, `p_0` is the uniform distribution: every entry is `log(1 / V)`.\n- `entropy-diff`: `q_t = softmax(logits_t)` and `H_t = -sum(q_t * log(q_t + 1e-10))`. The value is `abs(H_t - H_(t-1))`, with the sentinel `H_0 = 100.0`.\n- `latent-diff`: the relative change `norm(s_t - s_(t-1)) / norm(s_t)`, L2 norms over `h`. There is no state before step 1, so this criterion can never fire at step 1.\n- `argmax-stability`: `a_t = logits_t.argmax(-1)`, taking the lowest index when logits tie. A counter `c_t` counts how many consecutive steps the argmax has stayed the same: `c_t = c_(t-1) + 1` if `a_t == a_(t-1)`, else `0`. Before step 1 there is no argmax, so `c_1 = 0`.\n\n**Firing rule and ties:**\n- `kl`, `entropy-diff` and `latent-diff` fire when the value is **strictly less than** the threshold. A value exactly equal to the threshold does not fire.\n- `argmax-stability` fires when `c_t >= int(threshold)`, so a counter exactly equal to the threshold fires. With threshold `k` the earliest possible exit is step `k + 1`.\n\n**Defaults for `\"auto\"`:** `kl` 1e-3, `entropy-diff` 1e-3, `latent-diff` 0.03, `argmax-stability` 5.\n\n**Constraints:**\n- Compute in the dtype of the inputs; float64 inputs are checked exactly against a step-by-step evaluation.\n- Every token is evaluated independently.\n- Raise `ValueError` for an unknown criterion, when either input is not 3-D, when `R < 1`, or when the two inputs disagree on `R` or `N`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why exit early.** Huginn (Geiping et al. 2025) runs a prelude, then the same core block `r` times, then a coda that produces logits. More iterations buy more compute per token. Easy tokens converge after a few iterations, so the model card offers per-token adaptive compute: stop iterating a token once a convergence test passes, sample it, and move on.\n\n**How upstream evaluates it.** `generate_with_adaptive_compute` runs one iteration at a time and calls an exit evaluator after each, keeping the previous step's entropy, log-probabilities, latents or argmax as state. A token that exits at loop index `k` records `k + 1` steps; one that never exits records the maximum. This exercise computes the same answer for all steps at once.\n\n**Choosing a criterion.** The model card suggests `kl` for interesting exits and `argmax-stability` for conservative ones. The paper's experiments use KL between successive steps with threshold 5e-4; the code's `\"auto\"` default for `kl` is 1e-3. `latent-diff` needs no coda call, so it is the cheapest check; the logit-based criteria must run the coda after every step.\n\n**The sentinels.** The entropy sentinel 100.0 is far above any real entropy for practical vocabularies, so step 1 fires only with a huge threshold. The uniform start for `kl` lets a token whose first prediction is already nearly uniform exit at step 1.",
+      "descriptionZh": "A recurrent-depth language model (Huginn) iterates one core block up to `R` times for every token and may stop a token early once its prediction has settled. You are given the logits and latent states the model produced after every iteration. Return, for every token, the step at which an exit criterion first fires.\n\n**Signature:** `first_exit_step(logits_per_step, latents_per_step, criterion, threshold=\"auto\") -> LongTensor`\n\n**Parameters:**\n- `logits_per_step` — floating tensor `(R, N, V)`. Row `r` (0-based) holds the logits for `N` tokens after recurrent step `r + 1`.\n- `latents_per_step` — floating tensor `(R, N, h)`. Row `r` holds the latent states after step `r + 1`. Only `latent-diff` reads it.\n- `criterion` — one of `\"kl\"`, `\"entropy-diff\"`, `\"latent-diff\"`, `\"argmax-stability\"`.\n- `threshold` — a number, or the string `\"auto\"` for the criterion's default.\n\n**Returns:** a `torch.long` tensor of shape `(N,)` on the input device. The value is **1-based**: the number of recurrent steps run when the token exits, so step `t` means row `t - 1` fired first. A token whose criterion never fires returns `R`.\n\n**The criteria.** For each token, compute one exit value per step `t = 1..R`, comparing step `t` with step `t - 1`:\n- `kl`: `p_t = log_softmax(logits_t)`. The value is the KL divergence of the previous step's distribution to the current one, exactly `F.kl_div(p_t, p_(t-1), reduction=\"none\", log_target=True).sum(-1)`, which equals `sum(exp(p_(t-1)) * (p_(t-1) - p_t))`. Before step 1, `p_0` is the uniform distribution: every entry is `log(1 / V)`.\n- `entropy-diff`: `q_t = softmax(logits_t)` and `H_t = -sum(q_t * log(q_t + 1e-10))`. The value is `abs(H_t - H_(t-1))`, with the sentinel `H_0 = 100.0`.\n- `latent-diff`: the relative change `norm(s_t - s_(t-1)) / norm(s_t)`, L2 norms over `h`. There is no state before step 1, so this criterion can never fire at step 1.\n- `argmax-stability`: `a_t = logits_t.argmax(-1)`, taking the lowest index when logits tie. A counter `c_t` counts how many consecutive steps the argmax has stayed the same: `c_t = c_(t-1) + 1` if `a_t == a_(t-1)`, else `0`. Before step 1 there is no argmax, so `c_1 = 0`.\n\n**Firing rule and ties:**\n- `kl`, `entropy-diff` and `latent-diff` fire when the value is **strictly less than** the threshold. A value exactly equal to the threshold does not fire.\n- `argmax-stability` fires when `c_t >= int(threshold)`, so a counter exactly equal to the threshold fires. With threshold `k` the earliest possible exit is step `k + 1`.\n\n**Defaults for `\"auto\"`:** `kl` 1e-3, `entropy-diff` 1e-3, `latent-diff` 0.03, `argmax-stability` 5.\n\n**Constraints:**\n- Compute in the dtype of the inputs; float64 inputs are checked exactly against a step-by-step evaluation.\n- Every token is evaluated independently.\n- Raise `ValueError` for an unknown criterion, when either input is not 3-D, when `R < 1`, or when the two inputs disagree on `R` or `N`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why exit early.** Huginn (Geiping et al. 2025) runs a prelude, then the same core block `r` times, then a coda that produces logits. More iterations buy more compute per token. Easy tokens converge after a few iterations, so the model card offers per-token adaptive compute: stop iterating a token once a convergence test passes, sample it, and move on.\n\n**How upstream evaluates it.** `generate_with_adaptive_compute` runs one iteration at a time and calls an exit evaluator after each, keeping the previous step's entropy, log-probabilities, latents or argmax as state. A token that exits at loop index `k` records `k + 1` steps; one that never exits records the maximum. This exercise computes the same answer for all steps at once.\n\n**Choosing a criterion.** The model card suggests `kl` for interesting exits and `argmax-stability` for conservative ones. The paper's experiments use KL between successive steps with threshold 5e-4; the code's `\"auto\"` default for `kl` is 1e-3. `latent-diff` needs no coda call, so it is the cheapest check; the logit-based criteria must run the coda after every step.\n\n**The sentinels.** The entropy sentinel 100.0 is far above any real entropy for practical vocabularies, so step 1 fires only with a huge threshold. The uniform start for `kl` lets a token whose first prediction is already nearly uniform exit at step 1.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "KL exits start from a uniform distribution",
+          "code": "\nimport torch\nlogits = torch.tensor([\n    [[0.0, 0.0], [2.0, 0.0]],  # step 1\n    [[0.0, 0.0], [2.0, 0.0]],  # step 2\n    [[1.0, 0.0], [2.0, 0.0]],  # step 3\n])\nlatents = torch.zeros(3, 2, 4)\nout = {fn}(logits, latents, \"kl\", \"auto\")\n# token 0 is uniform at step 1, so KL(uniform || uniform) = 0 fires at once;\n# token 1 differs from uniform at step 1 and repeats itself at step 2.\nassert out.dtype == torch.long and out.tolist() == [1, 2], out\n",
+          "behavior": "rl.kl_estimator"
+        },
+        {
+          "name": "Argmax stability counts consecutive repeats",
+          "code": "\nimport torch\nseqs = [[0, 0, 0, 0, 0], [0, 1, 1, 1, 2], [0, 1, 0, 1, 0]]\nlogits = torch.stack([torch.nn.functional.one_hot(torch.tensor([s[t] for s in seqs]), 3).float() * 5 for t in range(5)])\nout = {fn}(logits, torch.zeros(5, 3, 2), \"argmax-stability\", 2)\n# counters: [0,1,2,..] -> step 3; [0,0,1,2,..] -> step 4; never -> R = 5\nassert out.tolist() == [3, 4, 5], out\n",
+          "behavior": "state.invariant"
+        },
+        {
+          "name": "Latent-diff uses the relative change and skips step 1",
+          "code": "\nimport torch\nlatents = torch.tensor([\n    [[1.0, 0.0], [1.0, 0.0]],\n    [[1.0, 0.0], [3.0, 0.0]],\n    [[1.0, 0.0], [3.2, 0.0]],\n])\nout = {fn}(torch.zeros(3, 2, 5), latents, \"latent-diff\", 0.1)\n# token 1: step 2 changes by 2 / 3, step 3 by 0.2 / 3.2 = 0.0625 < 0.1\nassert out.tolist() == [2, 3], out\n",
+          "behavior": "numerics.stability"
+        },
+        {
+          "name": "Matches a step-by-step evaluation on random trajectories",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "Compare each step with the one before it using the exact formulas in the requirement, and return the first 1-based step that fires or R.",
+          "hiddenCode": "\nimport math, torch\ndef slow(logits, latents, crit, thr):\n    R, N, V = logits.shape\n    out = []\n    for n in range(N):\n        step, prev, count, prev_arg = R, None, 0, -1\n        for r in range(R):\n            x = logits[r, n]\n            if crit == \"kl\":\n                lp = torch.log_softmax(x, -1)\n                q = torch.full_like(lp, math.log(1.0 / V)) if prev is None else prev\n                fire = (q.exp() * (q - lp)).sum().item() < thr\n                prev = lp\n            elif crit == \"entropy-diff\":\n                p = torch.softmax(x, -1)\n                H = -(p * torch.log(p + 1e-10)).sum().item()\n                fire = abs(H - (100.0 if prev is None else prev)) < thr\n                prev = H\n            elif crit == \"latent-diff\":\n                s = latents[r, n]\n                fire = prev is not None and ((s - prev).norm() / s.norm()).item() < thr\n                prev = s\n            else:\n                a = int(x.argmax())\n                count = count + 1 if a == prev_arg else 0\n                prev_arg = a\n                fire = count >= thr\n            if fire:\n                step = r + 1\n                break\n        out.append(step)\n    return out\nfor seed, crit, thr in ((0, \"kl\", 1e-3), (1, \"kl\", 2e-2), (2, \"entropy-diff\", 1e-3), (3, \"entropy-diff\", 3e-2),\n                        (4, \"latent-diff\", 0.03), (5, \"latent-diff\", 0.2), (6, \"argmax-stability\", 3), (7, \"argmax-stability\", 1)):\n    g = torch.Generator().manual_seed(seed)\n    R, N, V, h = 12, 24, 7, 6\n    decay = 0.6 ** torch.arange(R, dtype=torch.float64).view(R, 1, 1)\n    scale = torch.rand(1, N, 1, generator=g, dtype=torch.float64) * 4\n    logits = torch.randn(1, N, V, generator=g, dtype=torch.float64) * 2 + scale * decay * torch.randn(R, N, V, generator=g, dtype=torch.float64)\n    latents = torch.randn(1, N, h, generator=g, dtype=torch.float64) + scale * decay * torch.randn(R, N, h, generator=g, dtype=torch.float64)\n    got = {fn}(logits, latents, crit, thr)\n    want = slow(logits, latents, crit, thr)\n    assert got.tolist() == want, (crit, thr, got.tolist(), want)\n    assert len(set(want)) > 2, \"test data should spread the exit steps\"\n"
+        },
+        {
+          "name": "KL runs from the previous step to the current one",
+          "visibility": "unshown",
+          "behavior": "rl.kl_estimator",
+          "failureMessage": "Use the previous step's distribution as the reference: sum(exp(p_prev) * (p_prev - p_cur)), i.e. F.kl_div(p_cur, p_prev, log_target=True).",
+          "hiddenCode": "\nimport torch\nP = torch.tensor([0.99, 0.01]).log()\nQ = torch.tensor([0.9, 0.1]).log()\n# KL(P || Q) ~ 0.071 and KL(Q || P) ~ 0.144; the threshold 0.1 sits between them.\nlogits = torch.stack([torch.stack([P, Q]), torch.stack([Q, P]), torch.stack([Q, P])])\nout = {fn}(logits, torch.zeros(3, 2, 3), \"kl\", 0.1)\nassert out.tolist() == [2, 3], out\n"
+        },
+        {
+          "name": "Entropy-diff starts from the 100.0 sentinel",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "Compare step 1's entropy with the sentinel 100.0: a near-zero entropy must not fire at step 1, but a threshold above 100 - H_1 must.",
+          "hiddenCode": "\nimport torch\npeaked = torch.tensor([30.0, 0.0, 0.0, 0.0])\nlogits = peaked.expand(3, 2, 4).clone()\nout = {fn}(logits, torch.zeros(3, 2, 2), \"entropy-diff\", \"auto\")\nassert out.tolist() == [2, 2], out  # H_1 ~ 0 is far from 100, step 2 repeats it\nflat = torch.zeros(3, 1, 4)  # H = log 4 ~ 1.386, |1.386 - 100| ~ 98.6\nassert {fn}(flat, torch.zeros(3, 1, 2), \"entropy-diff\", 150.0).tolist() == [1]\nassert {fn}(flat, torch.zeros(3, 1, 2), \"entropy-diff\", 98.0).tolist() == [2]\n"
+        },
+        {
+          "name": "KL can fire at step 1 against the uniform start",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "Before step 1 the previous distribution is uniform (log(1/V) everywhere), so a uniform first prediction fires at step 1.",
+          "hiddenCode": "\nimport torch\nlogits = torch.zeros(4, 3, 6)\nlogits[:, 1, 0] = 9.0\nout = {fn}(logits, torch.zeros(4, 3, 2), \"kl\", 1e-6)\nassert out.tolist() == [1, 2, 1], out\n"
+        },
+        {
+          "name": "Latent-diff is scale invariant",
+          "visibility": "unshown",
+          "behavior": "numerics.stability",
+          "failureMessage": "Divide the change norm(s_t - s_(t-1)) by norm(s_t) so the criterion does not depend on the scale of the latents.",
+          "hiddenCode": "\nimport torch\nbase = torch.tensor([\n    [[1.0, 0.0], [1.0, 0.0]],\n    [[1.02, 0.0], [2.0, 0.0]],\n    [[1.02, 0.0], [2.0, 0.0]],\n], dtype=torch.float64)\nfor scale in (1.0, 1000.0, 0.001):\n    out = {fn}(torch.zeros(3, 2, 3, dtype=torch.float64), base * scale, \"latent-diff\", \"auto\")\n    assert out.tolist() == [2, 3], (scale, out)\n"
+        },
+        {
+          "name": "Latent-diff divides by the current state",
+          "visibility": "unshown",
+          "behavior": "numerics.stability",
+          "failureMessage": "The denominator is the norm of the current state s_t, not of the previous state.",
+          "hiddenCode": "\nimport torch\nlatents = torch.tensor([\n    [[1.0, 0.0], [2.0, 0.0]],\n    [[2.0, 0.0], [1.0, 0.0]],\n    [[2.0, 0.0], [1.0, 0.0]],\n])\n# token 0: 1 / 2 = 0.5 < 0.75 at step 2; token 1: 1 / 1 = 1 at step 2, 0 at step 3\nassert {fn}(torch.zeros(3, 2, 3), latents, \"latent-diff\", 0.75).tolist() == [2, 3]\n"
+        },
+        {
+          "name": "Latent-diff never fires at step 1",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "There is no latent state before step 1, so latent-diff cannot fire there even with a huge threshold.",
+          "hiddenCode": "\nimport torch\ng = torch.Generator().manual_seed(3)\nlatents = torch.randn(3, 5, 4, generator=g)\nassert {fn}(torch.zeros(3, 5, 2), latents, \"latent-diff\", 10.0).tolist() == [2] * 5\nassert {fn}(torch.zeros(1, 5, 2), latents[:1], \"latent-diff\", 10.0).tolist() == [1] * 5  # never fires -> R = 1\n"
+        },
+        {
+          "name": "Exact ties at the threshold",
+          "visibility": "unshown",
+          "behavior": "metrics.ties",
+          "failureMessage": "Difference criteria fire only when the value is strictly below the threshold; argmax-stability fires when the counter is greater than or equal to it.",
+          "hiddenCode": "\nimport torch\ng = torch.Generator().manual_seed(0)\nsame = torch.randn(1, 2, 5, generator=g).expand(4, 2, 5).clone()\nz = torch.zeros(4, 2, 3)\nassert {fn}(same, z, \"kl\", 0.0).tolist() == [4, 4]\nassert {fn}(same, z, \"entropy-diff\", 0.0).tolist() == [4, 4]\nlat = torch.tensor([[[1.0, 0.0]], [[2.0, 0.0]], [[4.0, 0.0]]])  # relative change exactly 0.5 twice\nassert {fn}(torch.zeros(3, 1, 2), lat, \"latent-diff\", 0.5).tolist() == [3]\nassert {fn}(torch.zeros(3, 1, 2), lat, \"latent-diff\", 0.5000001).tolist() == [2]\narg = torch.zeros(6, 1, 3)\narg[..., 1] = 1.0  # argmax 1 at every step: counters 0, 1, 2, 3, ...\nassert {fn}(arg, torch.zeros(6, 1, 2), \"argmax-stability\", 3).tolist() == [4]\nassert {fn}(arg, torch.zeros(6, 1, 2), \"argmax-stability\", 0).tolist() == [1]\n"
+        },
+        {
+          "name": "'auto' picks each criterion's default threshold",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Use the upstream defaults for 'auto': kl 1e-3, entropy-diff 1e-3, latent-diff 0.03, argmax-stability 5.",
+          "hiddenCode": "\nimport torch\ng = torch.Generator().manual_seed(42)\nR, N, V, h = 14, 64, 6, 5\ndecay = 0.55 ** torch.arange(R, dtype=torch.float64).view(R, 1, 1)\nscale = torch.rand(1, N, 1, generator=g, dtype=torch.float64) * 5\nlogits = torch.randn(1, N, V, generator=g, dtype=torch.float64) + scale * decay * torch.randn(R, N, V, generator=g, dtype=torch.float64)\nlatents = torch.randn(1, N, h, generator=g, dtype=torch.float64) + scale * decay * torch.randn(R, N, h, generator=g, dtype=torch.float64)\nfor crit, default, others in ((\"kl\", 1e-3, (5e-4, 2e-3)), (\"entropy-diff\", 1e-3, (5e-4, 3e-3)),\n                              (\"latent-diff\", 0.03, (0.01, 0.05)), (\"argmax-stability\", 5, (4, 6))):\n    auto = {fn}(logits, latents, crit, \"auto\")\n    assert torch.equal(auto, {fn}(logits, latents, crit, default)), crit\n    for other in others:\n        assert not torch.equal(auto, {fn}(logits, latents, crit, other)), (crit, other)\n"
+        },
+        {
+          "name": "Tokens that never exit return R as a long tensor",
+          "visibility": "unshown",
+          "behavior": "tensor.dtype_device",
+          "failureMessage": "Return a torch.long tensor of shape (N,) whose value is R for every token whose criterion never fires.",
+          "hiddenCode": "\nimport torch\ng = torch.Generator().manual_seed(9)\nlogits = torch.randn(7, 4, 5, generator=g, dtype=torch.float64) * 10\nlatents = torch.randn(7, 4, 3, generator=g, dtype=torch.float64)\nfor crit in (\"kl\", \"entropy-diff\", \"latent-diff\"):\n    out = {fn}(logits, latents, crit, 0.0)\n    assert out.dtype == torch.long and out.shape == (4,) and out.tolist() == [7] * 4, (crit, out)\nout = {fn}(logits, latents, \"argmax-stability\", 100)\nassert out.dtype == torch.long and out.tolist() == [7] * 4, out\n"
+        },
+        {
+          "name": "Tied logits take the lowest argmax index",
+          "visibility": "unshown",
+          "behavior": "metrics.ties",
+          "failureMessage": "Use argmax over the vocabulary, which returns the lowest index among tied maxima.",
+          "hiddenCode": "\nimport torch\nlogits = torch.tensor([[[1.0, 1.0, 0.0]], [[1.0, 0.0, 1.0]], [[0.0, 1.0, 1.0]]])\n# argmaxes 0, 0, 1 -> counters 0, 1, 0\nassert {fn}(logits, torch.zeros(3, 1, 2), \"argmax-stability\", 1).tolist() == [2]\n"
+        },
+        {
+          "name": "Rejects bad arguments",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Raise ValueError for an unknown criterion, non-3-D inputs, R < 1, or inputs that disagree on R or N.",
+          "hiddenCode": "\nimport torch\ngood_l, good_s = torch.zeros(3, 2, 4), torch.zeros(3, 2, 5)\nbad = [\n    (good_l, good_s, \"cosine\"),\n    (good_l, good_s, \"KL\"),\n    (torch.zeros(3, 4), good_s, \"kl\"),\n    (good_l, torch.zeros(3, 2), \"kl\"),\n    (good_l, torch.zeros(4, 2, 5), \"kl\"),\n    (good_l, torch.zeros(3, 3, 5), \"latent-diff\"),\n    (torch.zeros(0, 2, 4), torch.zeros(0, 2, 5), \"kl\"),\n]\nfor logits, latents, crit in bad:\n    try:\n        {fn}(logits, latents, crit, \"auto\")\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"accepted {tuple(logits.shape)}, {tuple(latents.shape)}, {crit}\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "What does each criterion compare step t against, and what stands in for step 0? In F.kl_div(input, target, log_target=True), which argument is the reference distribution? Once you have a (R, N) boolean tensor of 'fires at this step', how do you find the first true row per column, and what should a column with no true rows return?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Compute an exit value for all steps at once by shifting along the step axis: prepend the step-0 stand-in (uniform log-probabilities, the 100.0 entropy, or 'cannot fire' for latents) and compare each row with the one before it. Argmax stability is a run-length counter, so a short loop over R is fine. Then take the smallest 1-based step index where the condition holds, defaulting to R. Watch strict versus non-strict comparisons and the off-by-one between row index and step count."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "softmax_entropy",
+        "masked_kd_kl",
+        "recurrent_depth_unroll"
+      ],
+      "modelConnections": [
+        "Huginn-0125 (Geiping et al. 2025) exposes entropy-diff, latent-diff, kl and argmax-stability as `criterion` in generate_with_adaptive_compute.",
+        "Early-exit transformers (CALM, Depth-Adaptive Transformer) need trained exit heads; a recurrent-depth model can exit zero-shot because every iteration feeds the same coda.",
+        "The same convergence tests appear in Universal Transformers' ACT halting and in PonderNet, which learn the halting probability instead of thresholding a difference."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Saves compute on easy tokens with no retraining, and each criterion is a cheap comparison of consecutive steps."
+        ],
+        "cons": [
+          "Thresholds are tuned per model, logit criteria need a coda call every step, and batched decoding wastes compute because the KV cache holds the deepest step of the batch."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why can a recurrent-depth model like Huginn exit early per token without training an exit head?",
+          "hint": "Think about what the coda sees after every iteration. Cover why every step's state can already be decoded, what training on random iteration counts implies, and why a fixed-depth transformer needs extra exit heads."
+        },
+        {
+          "stage": "concept",
+          "question": "What do the four exit criteria (kl, entropy-diff, latent-diff, argmax-stability) each measure, and which ones need the coda at every step?",
+          "hint": "Sort them into output-space and state-space tests. Cover what each compares between consecutive steps, which need logits (and so a coda call) every step, and which is cheapest."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "In F.kl_div(log_p_cur, log_p_prev, log_target=True), which distribution is the reference, and why might the direction matter for an exit test?",
+          "hint": "Recall which argument of F.kl_div plays the target role. Cover which distribution weights the log-ratio here, and how forward versus reverse KL react to new mass appearing versus old mass vanishing."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What stands in for step 0 in each criterion, and how does that choice decide whether a token can exit at step 1?",
+          "hint": "Go criterion by criterion: the uniform log-probabilities, the 100.0 entropy sentinel, the random initial latent, the -1 argmax. Cover which stand-ins make a step-1 exit possible and under what thresholds."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why does batched adaptive-compute decoding make early exits look better than they are, and what does upstream recommend for benchmarking?",
+          "hint": "Think about what the KV cache holds for a batch. Cover whose depth decides the cached entries, how short-compute sequences then read deeper states they never computed, and which batch size upstream says to benchmark with."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Thresholding a difference between steps versus learning a halting probability as in ACT or PonderNet?",
+          "hint": "Compare a hand-set threshold on a convergence signal with a learned halting distribution. Cover training cost, whether a regularizer or prior is needed, robustness across models, and how each spends compute."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "A conservative criterion such as argmax-stability versus an aggressive one such as kl: what do you trade in compute and output quality?",
+          "hint": "Weigh how often each fires early and what an early exit risks. Cover average steps per token, how a k-step argmax window bounds the earliest exit, and how a small KL can still change sampled tokens."
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/seal-rg/recurrent-pretraining/blob/1ea7220ec7eb42d13e89db0663df254d0bcdc28e/recpre/raven_modeling_minimal.py",
+          "commit": "1ea7220ec7eb42d13e89db0663df254d0bcdc28e",
+          "path": "recpre/raven_modeling_minimal.py",
+          "symbol": "EntropyDiffExitEvaluator, LatentDiffExitEvaluator, KLExitEvaluator, ArgmaxStabilityExitEvaluator (lines 2128-2240); generate_with_adaptive_compute (line 1552)",
+          "license": "Apache-2.0",
+          "adapted": "Same exit values, sentinels, 'auto' thresholds and comparisons (strict < for differences, >= for the argmax counter); the 1-based step count and the never-exit value R come from generate_with_adaptive_compute.",
+          "simplifications": "Vectorized over all steps instead of evaluated one iteration at a time. Each token is its own sequence of length 1, so upstream's reduce over the sequence is a no-op. Divergence: upstream's latent-diff compares step 1 with the random initial state from initialize_state; the exercise has no initial state, so latent-diff cannot fire at step 1. The KL uniform start uses V from the logits instead of padded_vocab_size."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2502.05171",
+          "section": "Geiping et al. 2025, Section 6.1 Zero-Shot Adaptive Compute at Test-Time, Figure 10",
+          "note": "Exits when the KL divergence between two successive steps falls below 5e-4."
+        },
+        {
+          "kind": "paper",
+          "url": "https://huggingface.co/tomg-group-umd/huginn-0125",
+          "section": "Model card, Per-Token Adaptive Compute",
+          "note": "Lists the four criteria and suggests kl for interesting exits and argmax-stability for conservative exits."
+        }
+      ]
+    },
+    {
+      "id": "recurrent_depth_unroll",
+      "title": "Recurrent-Depth Unroll with Truncated Backprop",
+      "titleZh": "Recurrent-Depth Unroll with Truncated Backprop",
+      "difficulty": "Medium",
+      "functionName": "recurrent_forward",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "A recurrent-depth model (Huginn) reasons in latent space by applying one shared core block many times. The prelude embeds the input once as `e`; each iteration concatenates the current state with `e`, maps it back to width `h` with an adapter, and runs the core. Training samples the number of iterations and backpropagates through only the last few. Implement the unroll and the split of a sampled iteration count.\n\n**Signature:** `recurrent_forward(e, s0, adapter, core, n_no_grad, k_grad) -> Tensor`\n\n**Parameters:**\n- `e` — floating tensor of shape `(..., h)`, the prelude output. It may require grad.\n- `s0` — floating tensor with the same shape as `e`, the initial latent state.\n- `adapter` — callable mapping a `(..., 2h)` tensor to `(..., h)`.\n- `core` — callable mapping `(..., h)` to `(..., h)`.\n- `n_no_grad`, `k_grad` — integers `>= 0`.\n\n**Returns:** the state after `n_no_grad + k_grad` iterations of\n\n    s = core(adapter(torch.cat([s, e], dim=-1)))\n\nstarting from `s = s0`. The state comes first in the concatenation, and `e` is injected in every iteration.\n\n**Second function:** `split_iterations(p, mean_backprop_depth) -> (n_no_grad, k_grad)` takes a sampled total iteration count `p` and the backprop depth `s` and returns the plain Python ints\n\n    n_no_grad = max(p - s, 0)\n    k_grad    = min(s, p)\n\nso `n_no_grad + k_grad == p` and at most `s` iterations carry gradient.\n\n**Constraints:**\n- Run the first `n_no_grad` iterations inside `torch.no_grad()` and the last `k_grad` iterations with autograd enabled. Call `adapter` and `core` exactly once per iteration.\n- The core and adapter parameters receive exactly the gradient of the last `k_grad` iterations. With `k_grad = 0` the output carries no graph and they receive no gradient.\n- `e` keeps its graph: every gradient-carrying iteration sends gradient back through `e` to the prelude. Do not detach `e`.\n- Do not detach `s0` or the state between the gradient-carrying iterations. With `n_no_grad = 0` the gradient reaches `s0`; with `n_no_grad > 0` it does not.\n- Do not apply a final norm; with `n_no_grad = k_grad = 0` return a tensor equal to `s0`.\n- Results keep the dtype of the inputs; float64 values and gradients are checked to 1e-10.\n- `recurrent_forward` raises `ValueError` when `n_no_grad` or `k_grad` is not an integer `>= 0` or when `s0.shape != e.shape`. `split_iterations` raises `ValueError` when `p` or `mean_backprop_depth` is not an integer `>= 0`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**The architecture.** Geiping et al. split the model into a prelude `P`, a recurrent core `R` and a coda `C`: `e = P(x)`, `s_0` is random noise, `s_i = R(e, s_(i-1))` for `i = 1..r`, and the coda reads `s_r`. Injecting `e` every step keeps the recurrence anchored to the input, so the state can settle to a fixed point that does not depend on `s_0`.\n\n**Sampling the depth.** During training `r` is drawn from a log-normal Poisson distribution with a heavy tail, so the model learns to run for more iterations at test time. Upstream draws `p` and then splits it exactly as `split_iterations` does, with `mean_backprop_depth = 8` and `mean_recurrence = 32` by default. At evaluation it runs `mean_recurrence` iterations with none of them carrying gradient.\n\n**Truncated backpropagation.** Only the last `k` iterations keep activations, so memory and backward cost do not grow with the sampled depth. The earlier iterations still move the state; they just do not teach the core. The prelude is still trained through every gradient-carrying step, because `e` enters each one.",
+      "descriptionZh": "A recurrent-depth model (Huginn) reasons in latent space by applying one shared core block many times. The prelude embeds the input once as `e`; each iteration concatenates the current state with `e`, maps it back to width `h` with an adapter, and runs the core. Training samples the number of iterations and backpropagates through only the last few. Implement the unroll and the split of a sampled iteration count.\n\n**Signature:** `recurrent_forward(e, s0, adapter, core, n_no_grad, k_grad) -> Tensor`\n\n**Parameters:**\n- `e` — floating tensor of shape `(..., h)`, the prelude output. It may require grad.\n- `s0` — floating tensor with the same shape as `e`, the initial latent state.\n- `adapter` — callable mapping a `(..., 2h)` tensor to `(..., h)`.\n- `core` — callable mapping `(..., h)` to `(..., h)`.\n- `n_no_grad`, `k_grad` — integers `>= 0`.\n\n**Returns:** the state after `n_no_grad + k_grad` iterations of\n\n    s = core(adapter(torch.cat([s, e], dim=-1)))\n\nstarting from `s = s0`. The state comes first in the concatenation, and `e` is injected in every iteration.\n\n**Second function:** `split_iterations(p, mean_backprop_depth) -> (n_no_grad, k_grad)` takes a sampled total iteration count `p` and the backprop depth `s` and returns the plain Python ints\n\n    n_no_grad = max(p - s, 0)\n    k_grad    = min(s, p)\n\nso `n_no_grad + k_grad == p` and at most `s` iterations carry gradient.\n\n**Constraints:**\n- Run the first `n_no_grad` iterations inside `torch.no_grad()` and the last `k_grad` iterations with autograd enabled. Call `adapter` and `core` exactly once per iteration.\n- The core and adapter parameters receive exactly the gradient of the last `k_grad` iterations. With `k_grad = 0` the output carries no graph and they receive no gradient.\n- `e` keeps its graph: every gradient-carrying iteration sends gradient back through `e` to the prelude. Do not detach `e`.\n- Do not detach `s0` or the state between the gradient-carrying iterations. With `n_no_grad = 0` the gradient reaches `s0`; with `n_no_grad > 0` it does not.\n- Do not apply a final norm; with `n_no_grad = k_grad = 0` return a tensor equal to `s0`.\n- Results keep the dtype of the inputs; float64 values and gradients are checked to 1e-10.\n- `recurrent_forward` raises `ValueError` when `n_no_grad` or `k_grad` is not an integer `>= 0` or when `s0.shape != e.shape`. `split_iterations` raises `ValueError` when `p` or `mean_backprop_depth` is not an integer `>= 0`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**The architecture.** Geiping et al. split the model into a prelude `P`, a recurrent core `R` and a coda `C`: `e = P(x)`, `s_0` is random noise, `s_i = R(e, s_(i-1))` for `i = 1..r`, and the coda reads `s_r`. Injecting `e` every step keeps the recurrence anchored to the input, so the state can settle to a fixed point that does not depend on `s_0`.\n\n**Sampling the depth.** During training `r` is drawn from a log-normal Poisson distribution with a heavy tail, so the model learns to run for more iterations at test time. Upstream draws `p` and then splits it exactly as `split_iterations` does, with `mean_backprop_depth = 8` and `mean_recurrence = 32` by default. At evaluation it runs `mean_recurrence` iterations with none of them carrying gradient.\n\n**Truncated backpropagation.** Only the last `k` iterations keep activations, so memory and backward cost do not grow with the sampled depth. The earlier iterations still move the state; they just do not teach the core. The prelude is still trained through every gradient-carrying step, because `e` enters each one.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "No-grad iterations first, then gradient-carrying ones",
+          "code": "\nimport torch\nmodes = []\ndef adapter(x):\n    return x[..., :2] + 0.5 * x[..., 2:]\ndef core(x):\n    modes.append(torch.is_grad_enabled())\n    return 0.5 * x + 1.0\ne = torch.tensor([[1.0, -2.0]])\ns0 = torch.zeros(1, 2)\nout = {fn}(e, s0, adapter, core, 2, 1)\nwant = s0\nfor _ in range(3):\n    want = 0.5 * (want + 0.5 * e) + 1.0\nassert torch.allclose(out, want), (out, want)\nassert modes == [False, False, True], modes\n",
+          "behavior": "gradient.flow"
+        },
+        {
+          "name": "Splitting a sampled iteration count",
+          "code": "\nsplit_iterations = {fn}.__globals__[\"split_iterations\"]\nassert split_iterations(40, 8) == (32, 8)\nassert split_iterations(8, 8) == (0, 8)\nassert split_iterations(5, 8) == (0, 5)\n",
+          "behavior": "edge.empty_or_boundary"
+        },
+        {
+          "name": "Matches a seeded unroll",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "Each iteration must compute core(adapter(cat([s, e], dim=-1))) with the state first and e injected every time, for exactly n_no_grad + k_grad iterations.",
+          "hiddenCode": "\nimport torch\nfor seed, n, k in ((0, 3, 2), (1, 0, 4), (2, 5, 1), (3, 1, 0)):\n    torch.manual_seed(seed)\n    h = 3\n    A = torch.nn.Linear(2 * h, h).double()\n    W = torch.nn.Linear(h, h).double()\n    core = lambda x: torch.tanh(W(x))\n    e = torch.randn(2, 4, h, dtype=torch.float64)\n    s0 = torch.randn(2, 4, h, dtype=torch.float64)\n    out = {fn}(e, s0, A, core, n, k)\n    want = s0\n    with torch.no_grad():\n        for _ in range(n + k):\n            want = torch.tanh(W(A(torch.cat([want, e], dim=-1))))\n    assert out.shape == e.shape and out.dtype == torch.float64, (out.shape, out.dtype)\n    assert torch.allclose(out.detach(), want, atol=1e-10, rtol=0), (seed, n, k)\n"
+        },
+        {
+          "name": "Grad mode schedule per call",
+          "visibility": "unshown",
+          "behavior": "gradient.flow",
+          "failureMessage": "The first n_no_grad iterations run under torch.no_grad() and the last k_grad with autograd, calling adapter and core once each per iteration.",
+          "hiddenCode": "\nimport torch\nfor n, k in ((0, 3), (4, 0), (3, 2), (1, 5)):\n    a_modes, c_modes = [], []\n    def adapter(x):\n        a_modes.append(torch.is_grad_enabled())\n        return x[..., :3] - 0.25 * x[..., 3:]\n    def core(x):\n        c_modes.append(torch.is_grad_enabled())\n        return torch.sin(x)\n    e = torch.randn(2, 3, requires_grad=True)\n    {fn}(e, torch.zeros(2, 3), adapter, core, n, k)\n    want = [False] * n + [True] * k\n    assert a_modes == want and c_modes == want, (n, k, a_modes, c_modes)\n"
+        },
+        {
+          "name": "Core gradient comes from the last k iterations only",
+          "visibility": "unshown",
+          "behavior": "gradient.flow",
+          "failureMessage": "Core and adapter parameters must get exactly the gradient of the last k_grad iterations: no detach between them and no gradient from the no-grad ones.",
+          "hiddenCode": "\nimport torch\nfor seed, n, k in ((10, 3, 3), (11, 2, 1), (12, 0, 4)):\n    torch.manual_seed(seed)\n    h = 3\n    A = torch.nn.Linear(2 * h, h).double()\n    W = torch.nn.Linear(h, h).double()\n    params = list(A.parameters()) + list(W.parameters())\n    core = lambda x: torch.tanh(W(x))\n    e = torch.randn(4, h, dtype=torch.float64)\n    s0 = torch.randn(4, h, dtype=torch.float64)\n    g = torch.randn(4, h, dtype=torch.float64)\n    got = torch.autograd.grad(({fn}(e, s0, A, core, n, k) * g).sum(), params)\n    def unroll(steps_no_grad, steps_grad):\n        s = s0\n        with torch.no_grad():\n            for _ in range(steps_no_grad):\n                s = torch.tanh(W(A(torch.cat([s, e], dim=-1))))\n        for _ in range(steps_grad):\n            s = torch.tanh(W(A(torch.cat([s, e], dim=-1))))\n        return torch.autograd.grad((s * g).sum(), params)\n    want = unroll(n, k)\n    full = unroll(0, n + k)\n    for a, b in zip(got, want):\n        assert torch.allclose(a, b, atol=1e-10, rtol=0), (seed, n, k)\n    if n > 0:\n        assert any(not torch.allclose(a, b, atol=1e-6) for a, b in zip(want, full))\n"
+        },
+        {
+          "name": "Prelude gets gradient through e on every gradient step",
+          "visibility": "unshown",
+          "behavior": "gradient.flow",
+          "failureMessage": "Keep e attached and inject it in every gradient-carrying iteration, so the prelude receives the sum of gradients from all k_grad steps.",
+          "hiddenCode": "\nimport torch\nfor seed, n, k in ((20, 2, 3), (21, 4, 1), (22, 0, 2)):\n    torch.manual_seed(seed)\n    h = 3\n    P = torch.nn.Linear(5, h).double()\n    A = torch.nn.Linear(2 * h, h).double()\n    W = torch.nn.Linear(h, h).double()\n    core = lambda x: torch.tanh(W(x))\n    x = torch.randn(2, 3, 5, dtype=torch.float64)\n    s0 = torch.randn(2, 3, h, dtype=torch.float64)\n    g = torch.randn(2, 3, h, dtype=torch.float64)\n    got = torch.autograd.grad(({fn}(P(x), s0, A, core, n, k) * g).sum(), list(P.parameters()))\n    e = P(x)\n    s = s0\n    with torch.no_grad():\n        for _ in range(n):\n            s = torch.tanh(W(A(torch.cat([s, e], dim=-1))))\n    for _ in range(k):\n        s = torch.tanh(W(A(torch.cat([s, e], dim=-1))))\n    want = torch.autograd.grad((s * g).sum(), list(P.parameters()))\n    for a, b in zip(got, want):\n        assert torch.allclose(a, b, atol=1e-10, rtol=0), (seed, n, k)\n"
+        },
+        {
+          "name": "Gradient reaches s0 only without no-grad iterations",
+          "visibility": "unshown",
+          "behavior": "gradient.flow",
+          "failureMessage": "Do not detach s0: with n_no_grad = 0 its gradient flows through every iteration, and with n_no_grad > 0 the no-grad phase cuts it.",
+          "hiddenCode": "\nimport torch\ntorch.manual_seed(30)\nh = 2\nA = torch.nn.Linear(2 * h, h).double()\nW = torch.nn.Linear(h, h).double()\ncore = lambda x: torch.tanh(W(x))\ne = torch.randn(3, h, dtype=torch.float64)\ns0 = torch.randn(3, h, dtype=torch.float64, requires_grad=True)\n(got,) = torch.autograd.grad({fn}(e, s0, A, core, 0, 3).sum(), [s0])\ns = s0\nfor _ in range(3):\n    s = torch.tanh(W(A(torch.cat([s, e], dim=-1))))\n(want,) = torch.autograd.grad(s.sum(), [s0])\nassert torch.allclose(got, want, atol=1e-10, rtol=0), (got, want)\nout = {fn}(e, s0, A, core, 2, 3)\n(gs0, gw) = torch.autograd.grad(out.sum(), [s0, W.weight], allow_unused=True)\nassert gs0 is None or torch.count_nonzero(gs0) == 0, gs0\nassert gw is not None and torch.count_nonzero(gw) > 0\n"
+        },
+        {
+          "name": "k_grad = 0 carries no graph",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "With k_grad = 0 every iteration runs under no_grad, so the output has no graph; with no iterations at all, return s0's values.",
+          "hiddenCode": "\nimport torch\ntorch.manual_seed(40)\nh = 3\nA = torch.nn.Linear(2 * h, h).double()\nW = torch.nn.Linear(h, h).double()\ncore = lambda x: torch.tanh(W(x))\ne = torch.randn(2, h, dtype=torch.float64, requires_grad=True)\ns0 = torch.randn(2, h, dtype=torch.float64)\nout = {fn}(e, s0, A, core, 5, 0)\nassert not out.requires_grad and out.grad_fn is None, out\nwant = s0\nwith torch.no_grad():\n    for _ in range(5):\n        want = torch.tanh(W(A(torch.cat([want, e], dim=-1))))\nassert torch.allclose(out, want, atol=1e-10, rtol=0)\nsame = {fn}(e, s0, A, core, 0, 0)\nassert torch.equal(same, s0), same\n"
+        },
+        {
+          "name": "Split covers p below, at and above the backprop depth",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "Return (max(p - s, 0), min(s, p)) as Python ints, so the counts sum to p and at most s iterations carry gradient.",
+          "hiddenCode": "\nsplit_iterations = {fn}.__globals__[\"split_iterations\"]\nfor s in range(0, 11):\n    for p in range(0, 41):\n        n, k = split_iterations(p, s)\n        assert type(n) is int and type(k) is int, (p, s, type(n), type(k))\n        assert (n, k) == (max(p - s, 0), min(s, p)), (p, s, n, k)\n"
+        },
+        {
+          "name": "Rejects invalid counts and shapes",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Raise ValueError for negative or non-integer counts and for s0 whose shape differs from e.",
+          "hiddenCode": "\nimport torch\nsplit_iterations = {fn}.__globals__[\"split_iterations\"]\nident = lambda x: x[..., :2]\ne = torch.zeros(3, 2)\ncases = [\n    lambda: {fn}(e, torch.zeros(3, 2), ident, ident, -1, 2),\n    lambda: {fn}(e, torch.zeros(3, 2), ident, ident, 2, -1),\n    lambda: {fn}(e, torch.zeros(3, 2), ident, ident, 1.5, 2),\n    lambda: {fn}(e, torch.zeros(3, 3), ident, ident, 1, 1),\n    lambda: split_iterations(-1, 8),\n    lambda: split_iterations(5, -2),\n    lambda: split_iterations(5.0, 8),\n]\nfor i, case in enumerate(cases):\n    try:\n        case()\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"case {i} was accepted\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which context manager stops autograd from recording an operation, and what does a tensor produced inside it look like to a later backward pass? If the no-grad iterations come first, do you need to detach anything by hand at the boundary? How many times does e enter the graph when k_grad is 3?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Validate the counts and shapes, then keep one running state starting at s0. Run the first loop inside a no-grad block and the second loop outside it, using the same update both times. Watch the concatenation order, injecting e in every iteration, and not adding detaches that cut the gradient-carrying chain. The split is two lines of integer arithmetic; check the case where p is smaller than the backprop depth."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "mamba_ssm",
+        "gradient_accumulation"
+      ],
+      "modelConnections": [
+        "Huginn-0125 (Geiping et al. 2025) runs a 4-layer core block a sampled number of times and backpropagates through the last 8 iterations.",
+        "Deep-thinking networks (Bansal et al. 2022) introduced recalling the input at every iteration so long unrolls stay stable.",
+        "Truncated backpropagation through time for RNNs makes the same memory trade along the time axis instead of depth."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Activation memory and backward cost are fixed by k, so training can sample very deep unrolls, and test-time compute scales by just running more iterations."
+        ],
+        "cons": [
+          "The core never gets gradient from the early iterations, so it relies on reaching a stable fixed point; the gradient is biased whenever early steps matter."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What are the prelude, the recurrent core and the coda in a recurrent-depth model, and what does each iteration compute?",
+          "hint": "Name the role of each group: what runs once at the input, what is looped, and what produces logits. Cover the two inputs of each iteration, the adapter's job, and where the initial state comes from."
+        },
+        {
+          "stage": "concept",
+          "question": "Why does the core receive the prelude output e in every iteration instead of only as the initial state?",
+          "hint": "Think of an iterative solver that needs the data at every step. Cover stability of long unrolls, convergence to a fixed point that does not depend on the random initial state, and what the core could not represent without e."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why does running the first iterations under no_grad give exactly the gradient of the last k iterations, without an explicit detach?",
+          "hint": "Consider what autograd records for a tensor produced inside no_grad, and what the first gradient-carrying step sees as its input. Cover where the graph begins, memory, and why the order of the two phases matters."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How does the prelude get trained when only the last k iterations carry gradient, and how many gradient contributions does it receive?",
+          "hint": "Trace every path from the loss back to e. Cover how many gradient-carrying iterations read e, how autograd combines those paths, and why detaching e would freeze the prelude."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you split a sampled depth p into no-grad and gradient-carrying iterations, and what happens when p is smaller than the backprop depth?",
+          "hint": "Work from two invariants: the counts sum to p, and at most the backprop depth carry gradient. Cover the clamp, the short-unroll case, and what evaluation mode looks like in these terms."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Truncated backpropagation through the last k iterations versus full backpropagation or activation checkpointing: memory, compute and gradient bias?",
+          "hint": "Compare how activation memory and backward compute scale with the sampled depth in each option. Cover which one is unbiased, what truncation assumes about early iterations, and the link to truncated BPTT."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Concatenating the state with e through an adapter versus adding e to the state: what does each cost, and when does the choice matter?",
+          "hint": "Compare parameters and flops of a 2h-to-h adapter with a plain sum. Cover how each lets the core weigh the state against the input, and what the Huginn authors reported at small versus large scale."
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/seal-rg/recurrent-pretraining",
+          "commit": "1ea7220ec7eb42d13e89db0663df254d0bcdc28e",
+          "path": "recpre/raven_modeling_minimal.py",
+          "symbol": "RavenForCausalLM.iterate_forward, core_block_forward, randomized_iteration_sampler, initialize_state",
+          "license": "Apache-2.0",
+          "adapted": "The no-grad then grad unroll of iterate_forward and the update of core_block_forward, with the adapter and core passed in as callables; the n/k split of randomized_iteration_sampler with the sampled total p passed in.",
+          "simplifications": "No final ln_f on the returned state (upstream normalizes it inside iterate_forward); no test-time noise, RoPE, masks, KV cache or activation checkpointing; the log-normal Poisson draw happens outside, so split_iterations takes p and also accepts p = 0 (upstream always samples p >= 1); counts are Python ints instead of long tensors; the evaluation branch (n = mean_recurrence, k = 0) is a call with k_grad = 0 instead of part of the split."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2502.05171",
+          "section": "Geiping et al. 2025, Section 3.1 Macroscopic Design and Section 3.3 Training Objective (Truncated Backpropagation, equations 1 and 2)",
+          "note": "The prelude/core/coda recurrence, the log-normal Poisson depth sampler and backpropagating through only the last k = 8 iterations."
+        }
+      ]
+    },
+    {
+      "id": "coconut_latent_forward",
+      "title": "Coconut Continuous-Thought Forward",
+      "titleZh": "Coconut Continuous-Thought Forward",
+      "difficulty": "Hard",
+      "functionName": "coconut_forward",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Coconut lets a language model reason in latent space. The question is followed by placeholder `<|latent|>` tokens, and each placeholder's input embedding is replaced by the model's own last hidden state at the position just before it, a \"continuous thought\". Implement this forward pass with full recomputation.\n\n**Signature:** `coconut_forward(model, embed, input_ids, latent_id) -> Tensor`\n\n**Parameters:**\n- `model` — a causal language model. `model(inputs_embeds)` takes a floating tensor of shape `(B, T, d)` and returns `(logits, last_hidden)` with shapes `(B, T, V)` and `(B, T, d)`. Position `t` of either output depends only on input positions `0..t`.\n- `embed` — an `nn.Embedding` that maps a `(B, T)` id tensor to `(B, T, d)` input embeddings.\n- `input_ids` — integer tensor of shape `(B, T)`.\n- `latent_id` — the integer id of the `<|latent|>` token.\n\n**Returns:** the `logits` from the last call to `model`, shape `(B, T, V)`.\n\n**The passes.** For item `b`, let `p_b0 < p_b1 < ...` be the positions where `input_ids[b] == latent_id`, and let `N` be the largest latent count over the batch.\n- Start from `E = embed(input_ids)`.\n- For pass `i = 0 .. N - 1`: call `(logits, H) = model(E)`. Then, for every item with more than `i` latents, set `E[b, p_bi] = H[b, p_bi - 1]`. Every other entry of `E` keeps its value.\n- Pass `N`: call `model(E)` once more and return its logits.\n\n**Constraints:**\n- Call `model` exactly `N + 1` times, each time on the full `(B, T, d)` sequence. Do not use a KV cache or slice the sequence.\n- When no item has a latent, call `model` once and return its logits.\n- Items are independent: each has its own latent count and positions, and latents need not be contiguous. An item with fewer than `N` latents keeps its embeddings unchanged in the later passes.\n- Keep every fed-back hidden state in the autograd graph: no `detach`, no `torch.no_grad`. Backpropagating from the returned logits must reach the parameters of `model` and `embed` through each continuous thought.\n- Do not modify in place a tensor that an earlier `model` call received; build a new tensor for each pass (for example with `index_put` or `torch.where`).\n- Do not modify `input_ids`.\n- Raise `ValueError` when `input_ids` is not a 2-D integer tensor, or when any item has a latent at position 0 (there is no previous position to read).\n- Tests use a float64 model and compare logits and gradients to about `1e-9`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why one pass per latent.** The thought at `p_bi` is the hidden state at `p_bi - 1`, which in turn depends on every earlier thought. So the thoughts must be produced in order, one forward pass each. Different items fill their `i`-th thought in the same pass even when their latents sit at different positions.\n\n**Why full recomputation is enough.** With a causal model the hidden state at `p_bi - 1` only sees positions up to `p_bi - 1`, all of which are already final by pass `i`. Recomputing the whole sequence each pass costs `O(N * T^2)` attention but gives exactly the same logits as the cached version.\n\n**What upstream does instead.** Coconut's `Coconut.forward` computes the prefix before the earliest latent once, then on each pass feeds only the next position and reuses `past_key_values`. The logits of each pass are concatenated along the sequence. This is cheaper but needs every item's latents to be contiguous and to start at the same index, which Coconut's collator guarantees by left-padding.\n\n**Why gradients through thoughts matter.** Coconut trains the thoughts end to end: the loss on the answer tokens backpropagates through every fed-back hidden state into the earlier passes. Detaching a thought silently turns the latent chain into a fixed prompt and the model never learns what to put there.",
+      "descriptionZh": "Coconut lets a language model reason in latent space. The question is followed by placeholder `<|latent|>` tokens, and each placeholder's input embedding is replaced by the model's own last hidden state at the position just before it, a \"continuous thought\". Implement this forward pass with full recomputation.\n\n**Signature:** `coconut_forward(model, embed, input_ids, latent_id) -> Tensor`\n\n**Parameters:**\n- `model` — a causal language model. `model(inputs_embeds)` takes a floating tensor of shape `(B, T, d)` and returns `(logits, last_hidden)` with shapes `(B, T, V)` and `(B, T, d)`. Position `t` of either output depends only on input positions `0..t`.\n- `embed` — an `nn.Embedding` that maps a `(B, T)` id tensor to `(B, T, d)` input embeddings.\n- `input_ids` — integer tensor of shape `(B, T)`.\n- `latent_id` — the integer id of the `<|latent|>` token.\n\n**Returns:** the `logits` from the last call to `model`, shape `(B, T, V)`.\n\n**The passes.** For item `b`, let `p_b0 < p_b1 < ...` be the positions where `input_ids[b] == latent_id`, and let `N` be the largest latent count over the batch.\n- Start from `E = embed(input_ids)`.\n- For pass `i = 0 .. N - 1`: call `(logits, H) = model(E)`. Then, for every item with more than `i` latents, set `E[b, p_bi] = H[b, p_bi - 1]`. Every other entry of `E` keeps its value.\n- Pass `N`: call `model(E)` once more and return its logits.\n\n**Constraints:**\n- Call `model` exactly `N + 1` times, each time on the full `(B, T, d)` sequence. Do not use a KV cache or slice the sequence.\n- When no item has a latent, call `model` once and return its logits.\n- Items are independent: each has its own latent count and positions, and latents need not be contiguous. An item with fewer than `N` latents keeps its embeddings unchanged in the later passes.\n- Keep every fed-back hidden state in the autograd graph: no `detach`, no `torch.no_grad`. Backpropagating from the returned logits must reach the parameters of `model` and `embed` through each continuous thought.\n- Do not modify in place a tensor that an earlier `model` call received; build a new tensor for each pass (for example with `index_put` or `torch.where`).\n- Do not modify `input_ids`.\n- Raise `ValueError` when `input_ids` is not a 2-D integer tensor, or when any item has a latent at position 0 (there is no previous position to read).\n- Tests use a float64 model and compare logits and gradients to about `1e-9`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why one pass per latent.** The thought at `p_bi` is the hidden state at `p_bi - 1`, which in turn depends on every earlier thought. So the thoughts must be produced in order, one forward pass each. Different items fill their `i`-th thought in the same pass even when their latents sit at different positions.\n\n**Why full recomputation is enough.** With a causal model the hidden state at `p_bi - 1` only sees positions up to `p_bi - 1`, all of which are already final by pass `i`. Recomputing the whole sequence each pass costs `O(N * T^2)` attention but gives exactly the same logits as the cached version.\n\n**What upstream does instead.** Coconut's `Coconut.forward` computes the prefix before the earliest latent once, then on each pass feeds only the next position and reuses `past_key_values`. The logits of each pass are concatenated along the sequence. This is cheaper but needs every item's latents to be contiguous and to start at the same index, which Coconut's collator guarantees by left-padding.\n\n**Why gradients through thoughts matter.** Coconut trains the thoughts end to end: the loss on the answer tokens backpropagates through every fed-back hidden state into the earlier passes. Detaching a thought silently turns the latent chain into a fixed prompt and the model never learns what to put there.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "No latents: one call, plain logits",
+          "code": "\nimport torch, torch.nn as nn, torch.nn.functional as F\n\nclass TinyCausalLM(nn.Module):\n    def __init__(self, seed, vocab=12, d=8, layers=2, max_len=40):\n        super().__init__()\n        g = torch.Generator().manual_seed(seed)\n        p = lambda *s: nn.Parameter(torch.randn(*s, generator=g, dtype=torch.float64) * 0.5)\n        self.embed = nn.Embedding(vocab, d).double()\n        with torch.no_grad():\n            self.embed.weight.copy_(torch.randn(vocab, d, generator=g, dtype=torch.float64))\n        self.d, self.layers = d, layers\n        self.pos = p(max_len, d)\n        self.gain = nn.Parameter(1 + 0.1 * torch.randn(d, generator=g, dtype=torch.float64))\n        self.wq, self.wk, self.wv, self.wo, self.w1, self.w2 = (\n            nn.ParameterList([p(d, d) for _ in range(layers)]) for _ in range(6))\n        self.head = p(d, vocab)\n        self.calls, self.hiddens = [], []\n\n    def forward(self, inputs_embeds):\n        assert inputs_embeds.dim() == 3 and inputs_embeds.shape[-1] == self.d, inputs_embeds.shape\n        self.calls.append(inputs_embeds.detach().clone())\n        T = inputs_embeds.shape[1]\n        h = inputs_embeds * self.gain + self.pos[:T]  # saves inputs_embeds for backward, like an input norm\n        future = torch.ones(T, T, dtype=torch.bool).triu(1)\n        for l in range(self.layers):\n            x = F.layer_norm(h, (self.d,))\n            s = (x @ self.wq[l]) @ (x @ self.wk[l]).transpose(-1, -2) / self.d ** 0.5\n            h = h + s.masked_fill(future, float('-inf')).softmax(-1) @ (x @ self.wv[l]) @ self.wo[l]\n            h = h + torch.tanh(F.layer_norm(h, (self.d,)) @ self.w1[l]) @ self.w2[l]\n        last = F.layer_norm(h, (self.d,))\n        self.hiddens.append(last.detach().clone())\n        return last @ self.head, last\n\nLAT = 11\n\nm = TinyCausalLM(0)\nids = torch.tensor([[1, 2, 3, 4, 5], [5, 4, 3, 2, 1]])\nout = {fn}(m, m.embed, ids, LAT)\nassert len(m.calls) == 1, f\"expected 1 model call, got {len(m.calls)}\"\nm.calls.clear()\nwant = m(m.embed(ids))[0]\nassert out.shape == (2, 5, 12), out.shape\nassert torch.allclose(out, want, atol=1e-12), (out - want).abs().max()\n",
+          "behavior": "edge.empty_or_boundary"
+        },
+        {
+          "name": "One latent takes the hidden state just before it",
+          "code": "\nimport torch, torch.nn as nn, torch.nn.functional as F\n\nclass TinyCausalLM(nn.Module):\n    def __init__(self, seed, vocab=12, d=8, layers=2, max_len=40):\n        super().__init__()\n        g = torch.Generator().manual_seed(seed)\n        p = lambda *s: nn.Parameter(torch.randn(*s, generator=g, dtype=torch.float64) * 0.5)\n        self.embed = nn.Embedding(vocab, d).double()\n        with torch.no_grad():\n            self.embed.weight.copy_(torch.randn(vocab, d, generator=g, dtype=torch.float64))\n        self.d, self.layers = d, layers\n        self.pos = p(max_len, d)\n        self.gain = nn.Parameter(1 + 0.1 * torch.randn(d, generator=g, dtype=torch.float64))\n        self.wq, self.wk, self.wv, self.wo, self.w1, self.w2 = (\n            nn.ParameterList([p(d, d) for _ in range(layers)]) for _ in range(6))\n        self.head = p(d, vocab)\n        self.calls, self.hiddens = [], []\n\n    def forward(self, inputs_embeds):\n        assert inputs_embeds.dim() == 3 and inputs_embeds.shape[-1] == self.d, inputs_embeds.shape\n        self.calls.append(inputs_embeds.detach().clone())\n        T = inputs_embeds.shape[1]\n        h = inputs_embeds * self.gain + self.pos[:T]  # saves inputs_embeds for backward, like an input norm\n        future = torch.ones(T, T, dtype=torch.bool).triu(1)\n        for l in range(self.layers):\n            x = F.layer_norm(h, (self.d,))\n            s = (x @ self.wq[l]) @ (x @ self.wk[l]).transpose(-1, -2) / self.d ** 0.5\n            h = h + s.masked_fill(future, float('-inf')).softmax(-1) @ (x @ self.wv[l]) @ self.wo[l]\n            h = h + torch.tanh(F.layer_norm(h, (self.d,)) @ self.w1[l]) @ self.w2[l]\n        last = F.layer_norm(h, (self.d,))\n        self.hiddens.append(last.detach().clone())\n        return last @ self.head, last\n\nLAT = 11\n\nm = TinyCausalLM(1)\nids = torch.tensor([[1, 2, LAT, 4, 5]])\nout = {fn}(m, m.embed, ids, LAT)\nassert len(m.calls) == 2, f\"N = 1 latent needs 2 model calls, got {len(m.calls)}\"\n# The second call sees the first call's last hidden state at position 1 in slot 2.\nassert torch.allclose(m.calls[1][0, 2], m.hiddens[0][0, 1], atol=1e-12)\nassert torch.equal(m.calls[1][0, [0, 1, 3, 4]], m.calls[0][0, [0, 1, 3, 4]])\nassert torch.allclose(out, m(m.calls[1])[0], atol=1e-12)\n",
+          "behavior": "state.invariant"
+        },
+        {
+          "name": "Each pass fills the next latent of every item",
+          "code": "\nimport torch, torch.nn as nn, torch.nn.functional as F\n\nclass TinyCausalLM(nn.Module):\n    def __init__(self, seed, vocab=12, d=8, layers=2, max_len=40):\n        super().__init__()\n        g = torch.Generator().manual_seed(seed)\n        p = lambda *s: nn.Parameter(torch.randn(*s, generator=g, dtype=torch.float64) * 0.5)\n        self.embed = nn.Embedding(vocab, d).double()\n        with torch.no_grad():\n            self.embed.weight.copy_(torch.randn(vocab, d, generator=g, dtype=torch.float64))\n        self.d, self.layers = d, layers\n        self.pos = p(max_len, d)\n        self.gain = nn.Parameter(1 + 0.1 * torch.randn(d, generator=g, dtype=torch.float64))\n        self.wq, self.wk, self.wv, self.wo, self.w1, self.w2 = (\n            nn.ParameterList([p(d, d) for _ in range(layers)]) for _ in range(6))\n        self.head = p(d, vocab)\n        self.calls, self.hiddens = [], []\n\n    def forward(self, inputs_embeds):\n        assert inputs_embeds.dim() == 3 and inputs_embeds.shape[-1] == self.d, inputs_embeds.shape\n        self.calls.append(inputs_embeds.detach().clone())\n        T = inputs_embeds.shape[1]\n        h = inputs_embeds * self.gain + self.pos[:T]  # saves inputs_embeds for backward, like an input norm\n        future = torch.ones(T, T, dtype=torch.bool).triu(1)\n        for l in range(self.layers):\n            x = F.layer_norm(h, (self.d,))\n            s = (x @ self.wq[l]) @ (x @ self.wk[l]).transpose(-1, -2) / self.d ** 0.5\n            h = h + s.masked_fill(future, float('-inf')).softmax(-1) @ (x @ self.wv[l]) @ self.wo[l]\n            h = h + torch.tanh(F.layer_norm(h, (self.d,)) @ self.w1[l]) @ self.w2[l]\n        last = F.layer_norm(h, (self.d,))\n        self.hiddens.append(last.detach().clone())\n        return last @ self.head, last\n\nLAT = 11\n\nm = TinyCausalLM(2)\nids = torch.tensor([[1, LAT, LAT, LAT, 6, 7],\n                    [3, 4, LAT, 5, 6, 7]])\n{fn}(m, m.embed, ids, LAT)\nassert len(m.calls) == 4, f\"max latent count is 3, so 4 calls; got {len(m.calls)}\"\n# Pass 0 fills (0, 1) and (1, 2); pass 1 fills (0, 2); pass 2 fills (0, 3).\nassert torch.allclose(m.calls[1][0, 1], m.hiddens[0][0, 0], atol=1e-12)\nassert torch.allclose(m.calls[1][1, 2], m.hiddens[0][1, 1], atol=1e-12)\nassert torch.allclose(m.calls[2][0, 2], m.hiddens[1][0, 1], atol=1e-12)\nassert torch.allclose(m.calls[3][0, 3], m.hiddens[2][0, 2], atol=1e-12)\nassert torch.equal(m.calls[3][1], m.calls[1][1]), \"item 1 has one latent and must not change after pass 0\"\n",
+          "behavior": "state.invariant"
+        },
+        {
+          "name": "Matches the full-recompute loop on ragged batches",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "In pass i, write H[b, p_bi - 1] from that pass's model call into each item's i-th latent slot, then run one final pass.",
+          "hiddenCode": "\nimport torch, torch.nn as nn, torch.nn.functional as F\n\nclass TinyCausalLM(nn.Module):\n    def __init__(self, seed, vocab=12, d=8, layers=2, max_len=40):\n        super().__init__()\n        g = torch.Generator().manual_seed(seed)\n        p = lambda *s: nn.Parameter(torch.randn(*s, generator=g, dtype=torch.float64) * 0.5)\n        self.embed = nn.Embedding(vocab, d).double()\n        with torch.no_grad():\n            self.embed.weight.copy_(torch.randn(vocab, d, generator=g, dtype=torch.float64))\n        self.d, self.layers = d, layers\n        self.pos = p(max_len, d)\n        self.gain = nn.Parameter(1 + 0.1 * torch.randn(d, generator=g, dtype=torch.float64))\n        self.wq, self.wk, self.wv, self.wo, self.w1, self.w2 = (\n            nn.ParameterList([p(d, d) for _ in range(layers)]) for _ in range(6))\n        self.head = p(d, vocab)\n        self.calls, self.hiddens = [], []\n\n    def forward(self, inputs_embeds):\n        assert inputs_embeds.dim() == 3 and inputs_embeds.shape[-1] == self.d, inputs_embeds.shape\n        self.calls.append(inputs_embeds.detach().clone())\n        T = inputs_embeds.shape[1]\n        h = inputs_embeds * self.gain + self.pos[:T]  # saves inputs_embeds for backward, like an input norm\n        future = torch.ones(T, T, dtype=torch.bool).triu(1)\n        for l in range(self.layers):\n            x = F.layer_norm(h, (self.d,))\n            s = (x @ self.wq[l]) @ (x @ self.wk[l]).transpose(-1, -2) / self.d ** 0.5\n            h = h + s.masked_fill(future, float('-inf')).softmax(-1) @ (x @ self.wv[l]) @ self.wo[l]\n            h = h + torch.tanh(F.layer_norm(h, (self.d,)) @ self.w1[l]) @ self.w2[l]\n        last = F.layer_norm(h, (self.d,))\n        self.hiddens.append(last.detach().clone())\n        return last @ self.head, last\n\nLAT = 11\n\ndef oracle(model, embed, ids, latent_id):\n    E = embed(ids)\n    B, T = ids.shape\n    lists = [[t for t in range(T) if int(ids[b, t]) == latent_id] for b in range(B)]\n    n = max([len(l) for l in lists] + [0])\n    for i in range(n):\n        _, H = model(E)\n        rows = []\n        for b in range(B):\n            row = [E[b, t] for t in range(T)]\n            if len(lists[b]) > i:\n                row[lists[b][i]] = H[b, lists[b][i] - 1]\n            rows.append(torch.stack(row))\n        E = torch.stack(rows)\n    return model(E)[0]\n\nfor seed in range(6):\n    g = torch.Generator().manual_seed(100 + seed)\n    B, T = 3, 12\n    ids = torch.randint(0, 10, (B, T), generator=g)\n    for b in range(B):\n        k = int(torch.randint(0, 5, (1,), generator=g))\n        start = int(torch.randint(1, T - k, (1,), generator=g))\n        ids[b, start:start + k] = LAT\n    m = TinyCausalLM(seed)\n    got = {fn}(m, m.embed, ids, LAT)\n    want = oracle(m, m.embed, ids, LAT)\n    assert got.shape == want.shape, (got.shape, want.shape)\n    assert torch.allclose(got, want, atol=1e-9, rtol=0), (seed, (got - want).abs().max())\n"
+        },
+        {
+          "name": "Non-contiguous latents and different offsets",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "Latents may be separated by ordinary tokens; the i-th latent of each item reads the hidden state at its own position minus one, wherever it is.",
+          "hiddenCode": "\nimport torch, torch.nn as nn, torch.nn.functional as F\n\nclass TinyCausalLM(nn.Module):\n    def __init__(self, seed, vocab=12, d=8, layers=2, max_len=40):\n        super().__init__()\n        g = torch.Generator().manual_seed(seed)\n        p = lambda *s: nn.Parameter(torch.randn(*s, generator=g, dtype=torch.float64) * 0.5)\n        self.embed = nn.Embedding(vocab, d).double()\n        with torch.no_grad():\n            self.embed.weight.copy_(torch.randn(vocab, d, generator=g, dtype=torch.float64))\n        self.d, self.layers = d, layers\n        self.pos = p(max_len, d)\n        self.gain = nn.Parameter(1 + 0.1 * torch.randn(d, generator=g, dtype=torch.float64))\n        self.wq, self.wk, self.wv, self.wo, self.w1, self.w2 = (\n            nn.ParameterList([p(d, d) for _ in range(layers)]) for _ in range(6))\n        self.head = p(d, vocab)\n        self.calls, self.hiddens = [], []\n\n    def forward(self, inputs_embeds):\n        assert inputs_embeds.dim() == 3 and inputs_embeds.shape[-1] == self.d, inputs_embeds.shape\n        self.calls.append(inputs_embeds.detach().clone())\n        T = inputs_embeds.shape[1]\n        h = inputs_embeds * self.gain + self.pos[:T]  # saves inputs_embeds for backward, like an input norm\n        future = torch.ones(T, T, dtype=torch.bool).triu(1)\n        for l in range(self.layers):\n            x = F.layer_norm(h, (self.d,))\n            s = (x @ self.wq[l]) @ (x @ self.wk[l]).transpose(-1, -2) / self.d ** 0.5\n            h = h + s.masked_fill(future, float('-inf')).softmax(-1) @ (x @ self.wv[l]) @ self.wo[l]\n            h = h + torch.tanh(F.layer_norm(h, (self.d,)) @ self.w1[l]) @ self.w2[l]\n        last = F.layer_norm(h, (self.d,))\n        self.hiddens.append(last.detach().clone())\n        return last @ self.head, last\n\nLAT = 11\n\ndef oracle(model, embed, ids, latent_id):\n    E = embed(ids)\n    B, T = ids.shape\n    lists = [[t for t in range(T) if int(ids[b, t]) == latent_id] for b in range(B)]\n    n = max([len(l) for l in lists] + [0])\n    for i in range(n):\n        _, H = model(E)\n        rows = []\n        for b in range(B):\n            row = [E[b, t] for t in range(T)]\n            if len(lists[b]) > i:\n                row[lists[b][i]] = H[b, lists[b][i] - 1]\n            rows.append(torch.stack(row))\n        E = torch.stack(rows)\n    return model(E)[0]\n\nm = TinyCausalLM(7)\nids = torch.tensor([[1, LAT, 2, LAT, 3, LAT, 4, 5],\n                    [1, 2, 3, 4, LAT, 6, LAT, 7],\n                    [LAT if t == 7 else t % 10 for t in range(8)]])\ngot = {fn}(m, m.embed, ids, LAT)\nm.calls.clear()\nwant = oracle(m, m.embed, ids, LAT)\nassert torch.allclose(got, want, atol=1e-9, rtol=0), (got - want).abs().max()\n"
+        },
+        {
+          "name": "Exactly N + 1 full-length model calls",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Call the model exactly max_latents + 1 times, each time on the whole (B, T, d) embedding tensor.",
+          "hiddenCode": "\nimport torch, torch.nn as nn, torch.nn.functional as F\n\nclass TinyCausalLM(nn.Module):\n    def __init__(self, seed, vocab=12, d=8, layers=2, max_len=40):\n        super().__init__()\n        g = torch.Generator().manual_seed(seed)\n        p = lambda *s: nn.Parameter(torch.randn(*s, generator=g, dtype=torch.float64) * 0.5)\n        self.embed = nn.Embedding(vocab, d).double()\n        with torch.no_grad():\n            self.embed.weight.copy_(torch.randn(vocab, d, generator=g, dtype=torch.float64))\n        self.d, self.layers = d, layers\n        self.pos = p(max_len, d)\n        self.gain = nn.Parameter(1 + 0.1 * torch.randn(d, generator=g, dtype=torch.float64))\n        self.wq, self.wk, self.wv, self.wo, self.w1, self.w2 = (\n            nn.ParameterList([p(d, d) for _ in range(layers)]) for _ in range(6))\n        self.head = p(d, vocab)\n        self.calls, self.hiddens = [], []\n\n    def forward(self, inputs_embeds):\n        assert inputs_embeds.dim() == 3 and inputs_embeds.shape[-1] == self.d, inputs_embeds.shape\n        self.calls.append(inputs_embeds.detach().clone())\n        T = inputs_embeds.shape[1]\n        h = inputs_embeds * self.gain + self.pos[:T]  # saves inputs_embeds for backward, like an input norm\n        future = torch.ones(T, T, dtype=torch.bool).triu(1)\n        for l in range(self.layers):\n            x = F.layer_norm(h, (self.d,))\n            s = (x @ self.wq[l]) @ (x @ self.wk[l]).transpose(-1, -2) / self.d ** 0.5\n            h = h + s.masked_fill(future, float('-inf')).softmax(-1) @ (x @ self.wv[l]) @ self.wo[l]\n            h = h + torch.tanh(F.layer_norm(h, (self.d,)) @ self.w1[l]) @ self.w2[l]\n        last = F.layer_norm(h, (self.d,))\n        self.hiddens.append(last.detach().clone())\n        return last @ self.head, last\n\nLAT = 11\n\nfor ids, n in ((torch.tensor([[1, LAT, LAT, 2], [1, 2, 3, 4]]), 3),\n               (torch.tensor([[1, 2, LAT, 4, 5, 6, LAT, LAT, LAT, LAT, 3]]), 6),\n               (torch.tensor([[4, 3, 2, 1]]), 1)):\n    m = TinyCausalLM(3)\n    {fn}(m, m.embed, ids, LAT)\n    assert len(m.calls) == n, f\"expected {n} calls, got {len(m.calls)}\"\n    for c in m.calls:\n        assert c.shape == (ids.shape[0], ids.shape[1], 8), c.shape\n"
+        },
+        {
+          "name": "Each item matches running it alone",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "Use each item's own latent positions and count; never reuse another item's positions or the batch minimum.",
+          "hiddenCode": "\nimport torch, torch.nn as nn, torch.nn.functional as F\n\nclass TinyCausalLM(nn.Module):\n    def __init__(self, seed, vocab=12, d=8, layers=2, max_len=40):\n        super().__init__()\n        g = torch.Generator().manual_seed(seed)\n        p = lambda *s: nn.Parameter(torch.randn(*s, generator=g, dtype=torch.float64) * 0.5)\n        self.embed = nn.Embedding(vocab, d).double()\n        with torch.no_grad():\n            self.embed.weight.copy_(torch.randn(vocab, d, generator=g, dtype=torch.float64))\n        self.d, self.layers = d, layers\n        self.pos = p(max_len, d)\n        self.gain = nn.Parameter(1 + 0.1 * torch.randn(d, generator=g, dtype=torch.float64))\n        self.wq, self.wk, self.wv, self.wo, self.w1, self.w2 = (\n            nn.ParameterList([p(d, d) for _ in range(layers)]) for _ in range(6))\n        self.head = p(d, vocab)\n        self.calls, self.hiddens = [], []\n\n    def forward(self, inputs_embeds):\n        assert inputs_embeds.dim() == 3 and inputs_embeds.shape[-1] == self.d, inputs_embeds.shape\n        self.calls.append(inputs_embeds.detach().clone())\n        T = inputs_embeds.shape[1]\n        h = inputs_embeds * self.gain + self.pos[:T]  # saves inputs_embeds for backward, like an input norm\n        future = torch.ones(T, T, dtype=torch.bool).triu(1)\n        for l in range(self.layers):\n            x = F.layer_norm(h, (self.d,))\n            s = (x @ self.wq[l]) @ (x @ self.wk[l]).transpose(-1, -2) / self.d ** 0.5\n            h = h + s.masked_fill(future, float('-inf')).softmax(-1) @ (x @ self.wv[l]) @ self.wo[l]\n            h = h + torch.tanh(F.layer_norm(h, (self.d,)) @ self.w1[l]) @ self.w2[l]\n        last = F.layer_norm(h, (self.d,))\n        self.hiddens.append(last.detach().clone())\n        return last @ self.head, last\n\nLAT = 11\n\nm = TinyCausalLM(4)\nids = torch.tensor([[1, 2, 3, LAT, LAT, 4, 5, 6, 7],\n                    [1, LAT, LAT, LAT, LAT, 2, 3, 4, 5],\n                    [9, 8, 7, 6, 5, 4, 3, 2, 1],\n                    [1, 2, 3, 4, 5, 6, LAT, 8, 9]])\njoint = {fn}(m, m.embed, ids, LAT)\nfor b in range(4):\n    single = {fn}(m, m.embed, ids[b:b + 1], LAT)\n    assert torch.allclose(joint[b:b + 1], single, atol=1e-9, rtol=0), (b, (joint[b:b + 1] - single).abs().max())\n"
+        },
+        {
+          "name": "Gradients flow through every continuous thought",
+          "visibility": "unshown",
+          "behavior": "gradient.flow",
+          "failureMessage": "Do not detach the gathered hidden states, run a pass under no_grad, or write in place into embeddings the model already consumed; build a new tensor each pass.",
+          "hiddenCode": "\nimport torch, torch.nn as nn, torch.nn.functional as F\n\nclass TinyCausalLM(nn.Module):\n    def __init__(self, seed, vocab=12, d=8, layers=2, max_len=40):\n        super().__init__()\n        g = torch.Generator().manual_seed(seed)\n        p = lambda *s: nn.Parameter(torch.randn(*s, generator=g, dtype=torch.float64) * 0.5)\n        self.embed = nn.Embedding(vocab, d).double()\n        with torch.no_grad():\n            self.embed.weight.copy_(torch.randn(vocab, d, generator=g, dtype=torch.float64))\n        self.d, self.layers = d, layers\n        self.pos = p(max_len, d)\n        self.gain = nn.Parameter(1 + 0.1 * torch.randn(d, generator=g, dtype=torch.float64))\n        self.wq, self.wk, self.wv, self.wo, self.w1, self.w2 = (\n            nn.ParameterList([p(d, d) for _ in range(layers)]) for _ in range(6))\n        self.head = p(d, vocab)\n        self.calls, self.hiddens = [], []\n\n    def forward(self, inputs_embeds):\n        assert inputs_embeds.dim() == 3 and inputs_embeds.shape[-1] == self.d, inputs_embeds.shape\n        self.calls.append(inputs_embeds.detach().clone())\n        T = inputs_embeds.shape[1]\n        h = inputs_embeds * self.gain + self.pos[:T]  # saves inputs_embeds for backward, like an input norm\n        future = torch.ones(T, T, dtype=torch.bool).triu(1)\n        for l in range(self.layers):\n            x = F.layer_norm(h, (self.d,))\n            s = (x @ self.wq[l]) @ (x @ self.wk[l]).transpose(-1, -2) / self.d ** 0.5\n            h = h + s.masked_fill(future, float('-inf')).softmax(-1) @ (x @ self.wv[l]) @ self.wo[l]\n            h = h + torch.tanh(F.layer_norm(h, (self.d,)) @ self.w1[l]) @ self.w2[l]\n        last = F.layer_norm(h, (self.d,))\n        self.hiddens.append(last.detach().clone())\n        return last @ self.head, last\n\nLAT = 11\n\ndef oracle(model, embed, ids, latent_id):\n    E = embed(ids)\n    B, T = ids.shape\n    lists = [[t for t in range(T) if int(ids[b, t]) == latent_id] for b in range(B)]\n    n = max([len(l) for l in lists] + [0])\n    for i in range(n):\n        _, H = model(E)\n        rows = []\n        for b in range(B):\n            row = [E[b, t] for t in range(T)]\n            if len(lists[b]) > i:\n                row[lists[b][i]] = H[b, lists[b][i] - 1]\n            rows.append(torch.stack(row))\n        E = torch.stack(rows)\n    return model(E)[0]\n\nids = torch.tensor([[1, 2, LAT, LAT, LAT, 3, 4], [5, LAT, 6, 7, LAT, 8, 9]])\nw = torch.randn(7, 12, generator=torch.Generator().manual_seed(9), dtype=torch.float64)\ngrads = []\nfor impl in ({fn}, oracle):\n    m = TinyCausalLM(5)\n    (impl(m, m.embed, ids, LAT) * w).sum().backward()\n    grads.append({n: p.grad.clone() for n, p in m.named_parameters()})\nfor name in grads[1]:\n    assert grads[0][name] is not None, name\n    assert torch.allclose(grads[0][name], grads[1][name], atol=1e-9, rtol=0), (name, (grads[0][name] - grads[1][name]).abs().max())\n"
+        },
+        {
+          "name": "Latent at position 0 and bad input_ids are rejected",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "Raise ValueError when any item has a latent at position 0, or input_ids is not a 2-D integer tensor.",
+          "hiddenCode": "\nimport torch, torch.nn as nn, torch.nn.functional as F\n\nclass TinyCausalLM(nn.Module):\n    def __init__(self, seed, vocab=12, d=8, layers=2, max_len=40):\n        super().__init__()\n        g = torch.Generator().manual_seed(seed)\n        p = lambda *s: nn.Parameter(torch.randn(*s, generator=g, dtype=torch.float64) * 0.5)\n        self.embed = nn.Embedding(vocab, d).double()\n        with torch.no_grad():\n            self.embed.weight.copy_(torch.randn(vocab, d, generator=g, dtype=torch.float64))\n        self.d, self.layers = d, layers\n        self.pos = p(max_len, d)\n        self.gain = nn.Parameter(1 + 0.1 * torch.randn(d, generator=g, dtype=torch.float64))\n        self.wq, self.wk, self.wv, self.wo, self.w1, self.w2 = (\n            nn.ParameterList([p(d, d) for _ in range(layers)]) for _ in range(6))\n        self.head = p(d, vocab)\n        self.calls, self.hiddens = [], []\n\n    def forward(self, inputs_embeds):\n        assert inputs_embeds.dim() == 3 and inputs_embeds.shape[-1] == self.d, inputs_embeds.shape\n        self.calls.append(inputs_embeds.detach().clone())\n        T = inputs_embeds.shape[1]\n        h = inputs_embeds * self.gain + self.pos[:T]  # saves inputs_embeds for backward, like an input norm\n        future = torch.ones(T, T, dtype=torch.bool).triu(1)\n        for l in range(self.layers):\n            x = F.layer_norm(h, (self.d,))\n            s = (x @ self.wq[l]) @ (x @ self.wk[l]).transpose(-1, -2) / self.d ** 0.5\n            h = h + s.masked_fill(future, float('-inf')).softmax(-1) @ (x @ self.wv[l]) @ self.wo[l]\n            h = h + torch.tanh(F.layer_norm(h, (self.d,)) @ self.w1[l]) @ self.w2[l]\n        last = F.layer_norm(h, (self.d,))\n        self.hiddens.append(last.detach().clone())\n        return last @ self.head, last\n\nLAT = 11\n\nm = TinyCausalLM(6)\nfor bad in (torch.tensor([[1, 2, 3], [LAT, 2, 3]]), torch.tensor([1, LAT, 3]), torch.tensor([[1.0, 2.0, 3.0]])):\n    try:\n        {fn}(m, m.embed, bad, LAT)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"accepted input_ids {bad.tolist()} ({bad.dtype})\")\n"
+        },
+        {
+          "name": "input_ids is not modified",
+          "visibility": "unshown",
+          "behavior": "tensor.dtype_device",
+          "failureMessage": "Treat input_ids as read-only; build the latent positions without writing into it.",
+          "hiddenCode": "\nimport torch, torch.nn as nn, torch.nn.functional as F\n\nclass TinyCausalLM(nn.Module):\n    def __init__(self, seed, vocab=12, d=8, layers=2, max_len=40):\n        super().__init__()\n        g = torch.Generator().manual_seed(seed)\n        p = lambda *s: nn.Parameter(torch.randn(*s, generator=g, dtype=torch.float64) * 0.5)\n        self.embed = nn.Embedding(vocab, d).double()\n        with torch.no_grad():\n            self.embed.weight.copy_(torch.randn(vocab, d, generator=g, dtype=torch.float64))\n        self.d, self.layers = d, layers\n        self.pos = p(max_len, d)\n        self.gain = nn.Parameter(1 + 0.1 * torch.randn(d, generator=g, dtype=torch.float64))\n        self.wq, self.wk, self.wv, self.wo, self.w1, self.w2 = (\n            nn.ParameterList([p(d, d) for _ in range(layers)]) for _ in range(6))\n        self.head = p(d, vocab)\n        self.calls, self.hiddens = [], []\n\n    def forward(self, inputs_embeds):\n        assert inputs_embeds.dim() == 3 and inputs_embeds.shape[-1] == self.d, inputs_embeds.shape\n        self.calls.append(inputs_embeds.detach().clone())\n        T = inputs_embeds.shape[1]\n        h = inputs_embeds * self.gain + self.pos[:T]  # saves inputs_embeds for backward, like an input norm\n        future = torch.ones(T, T, dtype=torch.bool).triu(1)\n        for l in range(self.layers):\n            x = F.layer_norm(h, (self.d,))\n            s = (x @ self.wq[l]) @ (x @ self.wk[l]).transpose(-1, -2) / self.d ** 0.5\n            h = h + s.masked_fill(future, float('-inf')).softmax(-1) @ (x @ self.wv[l]) @ self.wo[l]\n            h = h + torch.tanh(F.layer_norm(h, (self.d,)) @ self.w1[l]) @ self.w2[l]\n        last = F.layer_norm(h, (self.d,))\n        self.hiddens.append(last.detach().clone())\n        return last @ self.head, last\n\nLAT = 11\n\nm = TinyCausalLM(8)\nids = torch.tensor([[1, 2, LAT, LAT, 5], [1, LAT, 3, 4, 5]])\nbefore = ids.clone()\nout = {fn}(m, m.embed, ids, LAT)\nassert torch.equal(ids, before), ids\nassert out.dtype == torch.float64 and out.shape == (2, 5, 12), (out.dtype, out.shape)\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which hidden state becomes the input at a latent position: the one at that position, or the one before it? Why can thought i only be computed after thought i - 1 is in place? How many model calls does an item with three latents need if another item in the batch has five? How do you replace a few rows of the embedding tensor without breaking autograd for the earlier calls?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "First collect each item's sorted latent positions and validate them, including the position-0 case. Embed once, then loop N times: run the model on the whole sequence, gather the hidden states one position before each item's i-th latent, and write them into a fresh copy of the embeddings. A final call produces the logits. Pitfalls: reading the latent's own position, filling every latent from the first pass, detaching the gathered states, and writing in place into a tensor the model already consumed."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "gpt2_block",
+        "kv_cache",
+        "coconut_stage_sample"
+      ],
+      "modelConnections": [
+        "Coconut (Hao et al. 2024) trains GPT-2 to replace chain-of-thought language steps with continuous thoughts and runs this loop in Coconut.forward.",
+        "The same loop works with any decoder that exposes its last hidden state; upstream tests it with GPT-2 and Llama 3.",
+        "Pause tokens add inert positions for extra compute; Coconut makes those positions carry information by feeding hidden states back, and recurrent-depth models (Huginn) recur in depth instead of along the sequence."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Reasoning steps are dense vectors instead of sampled tokens, so a thought can encode several candidate next steps at once and needs far fewer positions than a language chain of thought."
+        ],
+        "cons": [
+          "Each thought needs its own sequential forward pass, so training cannot be parallelised over the latent span, and the thoughts are not human-readable."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What is a continuous thought in Coconut, and where does its input embedding come from?",
+          "hint": "Contrast it with a sampled language token. Cover which layer's state is reused, which position it is read from, and that it skips the vocabulary projection and sampling entirely."
+        },
+        {
+          "stage": "concept",
+          "question": "Why does a sequence with n latent tokens need n + 1 forward passes instead of one?",
+          "hint": "Think about the dependency chain between consecutive thoughts under causal attention. Cover what each pass produces, why thoughts cannot be filled in parallel, and what the extra final pass is for."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why is the thought at a latent position taken from the hidden state one position earlier rather than at the latent position itself?",
+          "hint": "Relate it to next-token prediction: which position's state is the model's prediction of what comes at the latent slot. Cover what the latent's own position would contain before it is filled."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How does Coconut's KV-cached loop decide which positions to compute in each pass, and what does it assume about where latents sit in a batch?",
+          "hint": "Walk through next_compute_range and hidden_states_offset. Cover the prefix pass, the one-position steps, the final range to the end, and why the collator pads so latents line up."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What goes wrong in training if the fed-back hidden states are detached, and how would you detect it with a test?",
+          "hint": "Think about which parameters lose a gradient path and what the thoughts then learn. Cover a gradient comparison against a reference, and a case where a parameter is only reachable through a thought."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Full recomputation on every pass versus reusing a KV cache: cost, simplicity and constraints on the batch layout?",
+          "hint": "Compare attention cost per pass, memory, and code paths. Cover what the cache forces on latent positions across a batch, and when the simpler loop is the better teaching or debugging tool."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Continuous thoughts versus language chain of thought versus pause tokens: what does each buy and cost at training and inference time?",
+          "hint": "Compare information carried per position, sequential passes, interpretability and supervision needs. Cover the multi-stage curriculum Coconut needs and why pause tokens need none."
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/facebookresearch/coconut/blob/27273cb8cca4bb763c041a63b036d0c3b7cbbb48/coconut.py",
+          "commit": "27273cb8cca4bb763c041a63b036d0c3b7cbbb48",
+          "path": "coconut.py",
+          "symbol": "Coconut.forward (lines 39-193)",
+          "license": "MIT",
+          "adapted": "Same feedback rule: latent_lists from input_ids == latent_token_id, max_n_latents + 1 passes, and in pass i each item's i-th latent takes the last-layer hidden state at token_idx - 1; no in-place writes into embeddings the model has seen.",
+          "simplifications": "Divergence: upstream reuses past_key_values and feeds only the new positions, with hidden_states_offset taken from the earliest latent in the batch, so it requires contiguous latents that start at the same index in every item and raises IndexError otherwise; a latent at position 0 reads position -1. The exercise recomputes the full sequence on each pass, accepts any latent positions, and raises ValueError for a latent at position 0. The model takes only inputs_embeds (no attention_mask or position_ids), returns the last pass's logits instead of concatenating per-pass logits, and computes no loss."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2412.06769",
+          "section": "Hao et al. 2024, Training Large Language Models to Reason in a Continuous Latent Space, Section 3 (Method), 'Continuous thought' and 'Training details', Figure 1",
+          "note": "Defines the continuous thought as the last hidden state fed back as the next input embedding, and the n + 1 forward passes for n thoughts."
+        }
+      ]
     }
   ]
 }

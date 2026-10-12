@@ -47,7 +47,7 @@ TASK = {
 **Choosing a criterion.** The model card suggests `kl` for interesting exits and `argmax-stability` for conservative ones. The paper's experiments use KL between successive steps with threshold 5e-4; the code's `"auto"` default for `kl` is 1e-3. `latent-diff` needs no coda call, so it is the cheapest check; the logit-based criteria must run the coda after every step.
 
 **The sentinels.** The entropy sentinel 100.0 is far above any real entropy for practical vocabularies, so step 1 fires only with a huge threshold. The uniform start for `kl` lets a token whose first prediction is already nearly uniform exit at step 1.""",
-    "advisory_prerequisites": ["softmax_entropy", "masked_kd_kl"],
+    "advisory_prerequisites": ["softmax_entropy", "masked_kd_kl", "recurrent_depth_unroll"],
     "hints": [
         {"level": 1, "kind": "questions", "content": "What does each criterion compare step t against, and what stands in for step 0? In F.kl_div(input, target, log_target=True), which argument is the reference distribution? Once you have a (R, N) boolean tensor of 'fires at this step', how do you find the first true row per column, and what should a column with no true rows return?"},
         {"level": 2, "kind": "analysis", "content": "Compute an exit value for all steps at once by shifting along the step axis: prepend the step-0 stand-in (uniform log-probabilities, the 100.0 entropy, or 'cannot fire' for latents) and compare each row with the one before it. Argmax stability is a run-length counter, so a short loop over R is fine. Then take the smallest 1-based step index where the condition holds, defaulting to R. Watch strict versus non-strict comparisons and the off-by-one between row index and step count."},

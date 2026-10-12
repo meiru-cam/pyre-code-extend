@@ -53,7 +53,7 @@ With `no_special_marker`, the `[bot]` and `[eot]` entries are absent.
 **GSM8k settings.** The official config uses `c_thought = 2`, `max_latent_stage = 3` and `pad_latent_to_max = True`, with three epochs per stage. After stage 3, every written step is removed and the model keeps six latent thoughts. Without padding, a short problem gets fewer thoughts than a long one in that final stage.
 
 **Upstream extras left out.** The official builder can also draw a random stage per sample with probability `uniform_prob` (0 for GSM8k) and has a `no_cot` ablation that removes every step and every latent.""",
-    "advisory_prerequisites": ["response_token_mask"],
+    "advisory_prerequisites": ["response_token_mask", "pause_token_training_mask"],
     "hints": [
         {"level": 1, "kind": "questions", "content": "Which two numbers decide a sample: how many steps are skipped and how many latent groups appear? Do they move together at every stage, or only up to max_latent_stage? Once the input sequence is assembled, how long is the prefix that the loss must ignore, and what does it contain besides the question?"},
         {"level": 2, "kind": "analysis", "content": "First validate the three integers. Then branch on stage versus max_latent_stage to get the number of skipped steps and the number of groups; only the branch above the maximum looks at pad_latent_to_max, and it skips every step. Multiply groups by c_thought. Build the prefix (question, optional bot, latents, optional eot) and the tail (remaining steps flattened, then the answer) as separate lists, so the label mask is just the prefix length. Pitfalls: forgetting the two marker positions in the mask, slicing steps from the end, and pre-shifting labels."},

@@ -11,4 +11,12 @@ same author as its reference solution. Each exercise's oracle test in
 counterpart directly.
 
 No module in this package may import `torch_judge.tasks`.
+
+Licenses of vendored material:
+  * pause_tokens_paper.py        — no code copied; transcribed from the formulas of
+                                   Goyal et al., "Think before you speak" (arXiv 2310.02226)
+  * coconut_dataset.py           — MIT License, Meta Platforms, Inc. and affiliates
+  * coconut_model.py             — MIT License, Meta Platforms, Inc. and affiliates
+  * huginn_recurrent_depth.py    — Apache License 2.0, the recurrent-pretraining authors
+  * huginn_exit_evaluators.py    — Apache License 2.0, the recurrent-pretraining authors
 """
