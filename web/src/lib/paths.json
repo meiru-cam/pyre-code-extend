@@ -213,6 +213,28 @@
       ]
     },
     {
+      "id": "embodied-frontier",
+      "titleEn": "Embodied AI II: Frontier VLAs & Generative World Models",
+      "titleZh": "具身智能进阶：前沿 VLA 与生成式世界模型",
+      "descriptionEn": "Techniques behind current VLAs and video world models: OpenVLA-OFT parallel action decoding, latent actions learned from video, pi0.5 knowledge insulation, pi*0.6 RECAP advantage conditioning, FSQ tokenizers, diffusion forcing schedules, Dreamer 4 shortcut forcing and Self-Forcing rollouts.",
+      "descriptionZh": "当前 VLA 与视频世界模型背后的技术：OpenVLA-OFT 并行动作解码、从视频学到的 latent action、pi0.5 的知识隔离、pi*0.6 的 RECAP 优势条件化、FSQ tokenizer、diffusion forcing 噪声调度、Dreamer 4 的 shortcut forcing 和 Self-Forcing rollout。",
+      "icon": "Sparkles",
+      "problems": [
+        "oft_parallel_action_decoding",
+        "latent_action_quantizer",
+        "knowledge_insulation_attention",
+        "recap_advantage_conditioning",
+        "fsq_quantizer",
+        "diffusion_forcing_schedule",
+        "shortcut_forcing_loss",
+        "self_forcing_rollout"
+      ],
+      "group": "architectures",
+      "prerequisites": [
+        "embodied-ai"
+      ]
+    },
+    {
       "id": "graph-neural-networks",
       "titleEn": "Graph Neural Networks",
       "titleZh": "图神经网络",
