@@ -11,4 +11,16 @@ same author as its reference solution. Each exercise's oracle test in
 counterpart directly.
 
 No module in this package may import `torch_judge.tasks`.
+
+Licenses of vendored material:
+  * gymnasium_core.py              — MIT License, (c) 2016 OpenAI, (c) 2022 Farama Foundation (Gymnasium);
+                                     step-flag and sparse-reward logic follow ManiSkill, Apache License 2.0
+  * openpi_svr_action_adapter.py   — Apache License 2.0, Physical Intelligence (openpi);
+                                     MIT License, (c) 2025 PRIME-RL (SimpleVLA-RL)
+  * rlinf_maniskill_chunk_step.py  — Apache License 2.0, the RLinf authors and the ManiSkill authors
+  * gymnasium_sync_vector_env.py   — MIT License, (c) 2016 OpenAI, (c) 2022 Farama Foundation (Gymnasium)
+  * maniskill_vector_env.py        — Apache License 2.0, the ManiSkill authors
+  * maniskill_ppo_gae.py           — Apache License 2.0, the ManiSkill authors and the RLinf authors
+  * simplevla_rl_core_algos.py     — MIT License, (c) 2025 PRIME-RL (SimpleVLA-RL)
+  * rlinf_flow_sde.py              — Apache License 2.0, (c) 2025-2026 The RLinf Authors
 """

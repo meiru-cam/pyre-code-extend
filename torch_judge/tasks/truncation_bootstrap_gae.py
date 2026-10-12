@@ -96,7 +96,7 @@ The environments auto-reset: after an episode ends at row `t`, `values[t + 1]` i
 **Where this contract differs from that baseline.** At the pinned commit ManiSkill fills `final_values` for every env that finished on a step, terminated or truncated, so its baseline also bootstraps through terminations; a comment refers to a `bootstrap_at_done` option that is no longer an argument. This exercise follows the Gymnasium definitions and bootstraps only through truncation.
 
 **Chunk level.** A VLA that outputs `H` actions at a time can be trained with one decision per chunk. RLinf's `chunk_level` reward type sums the chunk's rewards along the chunk axis, takes the max of the done flags, and then runs GAE with one `gamma` per chunk. RLinf's GAE takes a single done flag and documents that it does not support auto-reset, which is why the step-level form here follows ManiSkill.""",
-    "advisory_prerequisites": ["gae_advantage"],
+    "advisory_prerequisites": ["gae_advantage", "vector_autoreset", "chunk_step_executor"],
     "hints": [
         {
             "level": 1,

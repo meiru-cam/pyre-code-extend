@@ -138,7 +138,7 @@ Raise `ValueError` when `chunk` is not a 3-D floating-point tensor, or when `B` 
 This exercise takes ManiSkill's rule for the observation and the flags (both from the ending step) and RLinf's per-action mask.
 
 **Where the outputs go.** The valid mask zeroes the log-probability and loss terms of actions that were never executed. Chunk-level rewards and flags feed a chunk-level advantage estimate, and `final_obs` is what a value function should bootstrap from when the episode was truncated.""",
-    "advisory_prerequisites": ["embodied_action_stream", "act_temporal_ensemble", "rl_eval_loop"],
+    "advisory_prerequisites": ["embodied_action_stream", "act_temporal_ensemble", "rl_eval_loop", "vla_action_adapter"],
     "hints": [
         {"level": 1, "kind": "questions", "content": "Which slot of an env's chunk is its last executed one, and is that slot inside or outside the mask? After an env has ended, which of the values the simulator still returns for it may you read? When can the loop stop before slot H - 1?"},
         {"level": 2, "kind": "analysis", "content": "Validate the chunk. Keep a boolean active vector, all True at the start. At each slot, call env_step on the full slice, then write reward, flags and a copy of the observation only into the rows that are still active, and add one to their executed count. An env stops being active once either flag is True. Break when no env is active. Build the mask by comparing a slot index range with the counts."},
