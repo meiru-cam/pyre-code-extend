@@ -107,7 +107,7 @@ Adapted from the infection spread question in Schuture/OpenAI-Interview-Notes (C
 
 - `2` marks an immune cell. Its state never changes, and it never infects anything, so it blocks the spread like a wall.
 - `days_until_all_infected` keeps its meaning, so it returns `-1` when an immune wall shuts some healthy cell off.
-- Each cell is processed a constant number of times: grids of 10,000 cells must finish within a second, even when the infection takes thousands of days to wind through them.
+- Each cell is processed a constant number of times, even on grids of 10,000 cells where the infection takes thousands of days to wind through them.
 
 **Example:**
 - `[[0, 2, 1], [0, 2, 0], [0, 0, 0]]` gives `6`: the infection goes around the immune column
@@ -225,9 +225,27 @@ for seed in range(300):
     assert {fn}(grid).days_until_all_infected() == slow_all_infected(grid), (seed, grid)
 """},
         {"name": "Part 2: a long winding corridor", "part": 2, "visibility": "unshown", "behavior": "performance.complexity",
-         "failure_message": "A 101 x 101 grid whose corridor takes thousands of days was too slow; visit each cell a constant number of times instead of rescanning the grid every day.",
+         "failure_message": "On a 101 x 101 grid whose corridor takes thousands of days, the cells were read far more than a constant number of times each; visit each cell a constant number of times instead of rescanning the grid every day.",
          "code": r"""
-import time
+class Cell(int):
+    # A grid value that counts the comparisons and truth tests made on it; past the budget it raises.
+    reads, budget = 0, float("inf")
+    def _read(self):
+        Cell.reads += 1
+        if Cell.reads > Cell.budget:
+            raise AssertionError(f"grid values were read more than {Cell.budget} times")
+
+def _counting(name):
+    base = getattr(int, name)
+    def method(self, *args):
+        self._read()
+        return base(self, *args)
+    return method
+
+for _name in ("__eq__", "__ne__", "__lt__", "__le__", "__gt__", "__ge__", "__bool__"):
+    setattr(Cell, _name, _counting(_name))
+Cell.__hash__ = int.__hash__
+
 size = 101
 grid = [[0] * size for _ in range(size)]
 for r in range(1, size, 2):
@@ -236,11 +254,10 @@ for r in range(1, size, 2):
         if c != gap:
             grid[r][c] = 2
 grid[0][0] = 1
-start = time.perf_counter()
+grid = [[Cell(v) for v in row] for row in grid]
+Cell.budget = 50 * size * size  # a rescan per day reads thousands of cells on each of 5200 days
 days = {fn}(grid).days_until_all_infected()
-elapsed = time.perf_counter() - start
 assert days == 5200, days
-assert elapsed < 1.0, f"took {elapsed:.2f}s"
 """},
         {"name": "Part 3: recovery comes before the spread", "part": 3, "behavior": "state.invariant", "code": r"""
 assert {fn}([[0, 0, 1]]).days_until_outbreak_ends(2) == 4

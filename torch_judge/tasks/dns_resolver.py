@@ -70,6 +70,75 @@ def check(resolver, zone, fallback, limit, name, label):
     return want
 """
 
+# A zone whose reads of chosen names block until the test opens a gate, so concurrent callers are
+# proven to overlap by events instead of by sleeps and elapsed time.
+_GATE = r"""
+import sys
+
+class GatedZone(dict):
+    # Counts reads per name; a read of a gated name blocks until opened is set.
+    def __init__(self, items, gated=()):
+        super().__init__(items)
+        self.gated, self.hits, self.blocked = set(gated), {}, 0
+        self.lock, self.opened = threading.Lock(), threading.Event()
+    def _touch(self, key):
+        with self.lock:
+            self.hits[key] = self.hits.get(key, 0) + 1
+        if key in self.gated and not self.opened.is_set():
+            with self.lock:
+                self.blocked += 1
+            assert self.opened.wait(5), f"the read of {key} was never released"  # a deadlock guard
+    def __getitem__(self, key):
+        self._touch(key)
+        return super().__getitem__(key)
+    def __contains__(self, key):
+        self._touch(key)
+        return super().__contains__(key)
+    def get(self, key, default=None):
+        self._touch(key)
+        return super().get(key, default)
+    def total(self):
+        return sum(self.hits.values())
+
+def parked(threads):
+    # Every live thread is blocked in a threading wait: an Event, Condition, Barrier or Future.
+    frames = sys._current_frames()
+    for t in threads:
+        f = frames.get(t.ident)
+        if f is not None and not (f.f_code.co_name == "wait" and f.f_code.co_filename.endswith("threading.py")):
+            return False
+    return True
+
+def run_gated(r, zone, names, all_blocked=False):
+    # Resolve every name on its own thread. Once every caller has entered resolve and is waiting,
+    # open the gate. With all_blocked, first require every caller to be blocked inside the zone.
+    out, entered, lock = {}, [0], threading.Lock()
+    def call(i, name):
+        with lock:
+            entered[0] += 1
+        try:
+            out[i] = r.resolve(name)
+        except Exception as e:
+            out[i] = type(e).__name__
+    threads = [threading.Thread(target=call, args=(i, n), daemon=True) for i, n in enumerate(names)]
+    for t in threads:
+        t.start()
+    guard = time.monotonic() + 5  # a deadlock guard, not a speed limit
+    while entered[0] < len(names) and time.monotonic() < guard:
+        time.sleep(0.001)
+    if all_blocked:
+        while zone.blocked < len(names) and time.monotonic() < guard:
+            time.sleep(0.001)
+    overlapped = zone.blocked >= len(names)
+    settle = time.monotonic() + 0.15  # only waits outside threading (a bare lock) use up this settle
+    while not parked(threads) and time.monotonic() < settle:
+        time.sleep(0.001)
+    zone.opened.set()
+    for t in threads:
+        t.join(10)
+    return out, overlapped
+"""
+
 TESTS = [
     {"name": "Part 1: the worked example", "part": 1, "behavior": "state.invariant", "code": _HELPERS + r"""
 zone = {"web.lab.test.": A("192.0.2.4", ttl=120), "mail.lab.test.": A("192.0.2.8", "192.0.2.9", ttl=120)}
@@ -222,105 +291,42 @@ for seed in range(150):
         if isinstance(want[0], list):
             cache[key] = (want[0], clock + want[1])
 """},
-    {"name": "Part 5: concurrent callers share one resolution", "part": 5, "behavior": "scheduler.concurrency", "code": _HELPERS + r"""
-class SlowZone(dict):
-    def __init__(self, items, slow):
-        super().__init__(items)
-        self.slow, self.hits, self.lock = slow, {}, threading.Lock()
-    def _touch(self, key):
-        with self.lock:
-            self.hits[key] = self.hits.get(key, 0) + 1
-        if key in self.slow:
-            time.sleep(0.3)
-    def __getitem__(self, key):
-        self._touch(key)
-        return super().__getitem__(key)
-    def __contains__(self, key):
-        self._touch(key)
-        return super().__contains__(key)
-    def get(self, key, default=None):
-        self._touch(key)
-        return super().get(key, default)
-zone = SlowZone({"feed.lab.test.": CNAME("cache.lab.test."), "img.lab.test.": CNAME("cache.lab.test."),
-                 "cache.lab.test.": A("10.1.1.1"), "loop.lab.test.": CNAME("loop.lab.test.")},
-                slow={"feed.lab.test.", "img.lab.test.", "loop.lab.test."})
-r = {fn}(zone)
-def run(names):
-    results, gate = [], threading.Barrier(len(names))
-    def call(name):
-        gate.wait()
-        try:
-            results.append((name, r.resolve(name)))
-        except Exception as e:
-            results.append((name, type(e).__name__))
-    threads = [threading.Thread(target=call, args=(n,)) for n in names]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join(10)
-    return sorted(results)
-got = run(["feed.lab.test"] * 6 + ["img.lab.test"])
+    {"name": "Part 5: concurrent callers share one resolution", "part": 5, "behavior": "scheduler.concurrency", "code": _HELPERS + _GATE + r"""
+records = {"feed.lab.test.": CNAME("cache.lab.test."), "img.lab.test.": CNAME("cache.lab.test."),
+           "cache.lab.test.": A("10.1.1.1"), "loop.lab.test.": CNAME("loop.lab.test.")}
+zone = GatedZone(records, gated={"feed.lab.test.", "img.lab.test."})
+names = ["feed.lab.test"] * 6 + ["img.lab.test"]
+out, _ = run_gated({fn}(zone), zone, names)
+got = sorted((names[i], out.get(i)) for i in range(len(names)))
 assert got == sorted([("feed.lab.test", ["10.1.1.1"])] * 6 + [("img.lab.test", ["10.1.1.1"])]), got
 assert zone.hits["feed.lab.test."] <= 3, f"feed.lab.test. was looked up {zone.hits['feed.lab.test.']} times: the six callers resolved it separately"
-got = run(["loop.lab.test"] * 4)
-assert got == [("loop.lab.test", "ResolutionCycleError")] * 4, got
+zone = GatedZone(records, gated={"loop.lab.test."})
+out, _ = run_gated({fn}(zone), zone, ["loop.lab.test"] * 4)
+assert [out.get(i) for i in range(4)] == ["ResolutionCycleError"] * 4, out
 assert zone.hits["loop.lab.test."] <= 4, f"loop.lab.test. was looked up {zone.hits['loop.lab.test.']} times: the four callers resolved it separately"
 """},
     {"name": "Part 5: errors, copies and parallel names", "part": 5, "visibility": "unshown", "behavior": "scheduler.concurrency",
      "failure_message": "Callers waiting on a shared resolution must all get the same error when it fails, each caller gets its own list, a later call after a failure resolves again, and resolutions of different names must run at the same time rather than one after another.",
-     "code": _HELPERS + r"""
-class SlowZone(dict):
-    def __init__(self, items, delay):
-        super().__init__(items)
-        self.delay, self.hits, self.lock = delay, 0, threading.Lock()
-    def _touch(self, key):
-        with self.lock:
-            self.hits += 1
-        time.sleep(self.delay)
-    def __getitem__(self, key):
-        self._touch(key)
-        return super().__getitem__(key)
-    def __contains__(self, key):
-        self._touch(key)
-        return super().__contains__(key)
-    def get(self, key, default=None):
-        self._touch(key)
-        return super().get(key, default)
-def run_all(r, names):
-    out, gate = {}, threading.Barrier(len(names))
-    def call(i, name):
-        gate.wait()
-        try:
-            out[i] = r.resolve(name)
-        except Exception as e:
-            out[i] = type(e).__name__
-    threads = [threading.Thread(target=call, args=(i, n)) for i, n in enumerate(names)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join(10)
-    return out
-broken = SlowZone({"a.": CNAME("b."), "b.": CNAME("a.")}, 0.1)
+     "code": _HELPERS + _GATE + r"""
+broken = GatedZone({"a.": CNAME("b."), "b.": CNAME("a.")}, gated={"a."})
 r = {fn}(broken)
-out = run_all(r, ["a"] * 6)
-assert list(out.values()) == ["ResolutionCycleError"] * 6, out
-first = broken.hits
+out, _ = run_gated(r, broken, ["a"] * 6)
+assert [out.get(i) for i in range(6)] == ["ResolutionCycleError"] * 6, out
+first = broken.total()
 assert first <= 8, f"{first} lookups for six callers: they did not share one resolution"
 raises("ResolutionCycleError", lambda: r.resolve("a"))
-assert broken.hits > first, "a failure is not cached, so a later call resolves again"
-good = {fn}(SlowZone({"x.": A("10.7.7.7")}, 0.1))
-lists = run_all(good, ["x"] * 4)
+assert broken.total() > first, "a failure is not cached, so a later call resolves again"
+zone = GatedZone({"x.": A("10.7.7.7")}, gated={"x."})
+good = {fn}(zone)
+lists, _ = run_gated(good, zone, ["x"] * 4)
 for i in range(4):
     lists[i].append(i)
 assert all(lists[i] == ["10.7.7.7", i] for i in range(4)), "each caller must get its own list"
 assert good.resolve("x") == ["10.7.7.7"], "a caller's list must not be the cached one"
-wide = SlowZone({f"h{i}.": A(f"10.8.0.{i}") for i in range(6)}, 0.25)
-r3 = {fn}(wide)
-start = time.perf_counter()
-out = run_all(r3, [f"h{i}" for i in range(6)])
-elapsed = time.perf_counter() - start
-assert [out[i] for i in range(6)] == [[f"10.8.0.{i}"] for i in range(6)]
-assert elapsed < 1.2, f"six different names took {elapsed:.2f}s: resolutions of different names must overlap"
+wide = GatedZone({f"h{i}.": A(f"10.8.0.{i}") for i in range(6)}, gated={f"h{i}." for i in range(6)})
+out, overlapped = run_gated({fn}(wide), wide, [f"h{i}" for i in range(6)], all_blocked=True)
+assert [out.get(i) for i in range(6)] == [[f"10.8.0.{i}"] for i in range(6)], out
+assert overlapped, f"only {wide.blocked} of six different names were being resolved at once: resolutions of different names must overlap"
 """},
 ]
 

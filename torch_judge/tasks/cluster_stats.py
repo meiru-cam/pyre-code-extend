@@ -25,11 +25,11 @@ class Cluster:
             self.boxes[(rank, dst)].put(pickle.loads(data))
         def recv(src):
             try:
-                return self.boxes[(src, rank)].get(timeout=4)
+                return self.boxes[(src, rank)].get(timeout=6)  # a deadlock guard with slack, not a speed limit
             except queue.Empty:
                 raise AssertionError(f"rank {rank} waited for rank {src} forever") from None
         def barrier():
-            self.bar.wait(timeout=4)
+            self.bar.wait(timeout=6)
         return send, recv, barrier
 
     def run(self, method):
@@ -43,7 +43,7 @@ class Cluster:
         threads = [threading.Thread(target=body, args=(r,), daemon=True) for r in range(P)]
         for t in threads:
             t.start()
-        deadline = time.monotonic() + 7
+        deadline = time.monotonic() + 8
         for t in threads:
             t.join(timeout=max(0.0, deadline - time.monotonic()))
         assert not errors, errors[0]

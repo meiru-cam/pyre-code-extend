@@ -4,8 +4,9 @@ from ._interview import interview
 
 # The loop loss as written in the script, and random inputs of matching shapes.
 _MODEL = r"""
-import math, random, time
+import math, random
 import torch
+from torch.overrides import TorchFunctionMode
 
 def nll_loop(p, M, Y):
     total = torch.zeros((), dtype=p.dtype)
@@ -24,6 +25,17 @@ def rand_inputs(g, N, A, C, missing=0.4):
     Y = torch.randint(0, C, (N, A), generator=g)
     Y[torch.rand(N, A, generator=g) < missing] = -1
     return p, M, Y
+
+class CountTorchCalls(TorchFunctionMode):
+    # Counts top-level torch calls (functions, tensor methods, indexing); past the budget it raises.
+    def __init__(self, budget):
+        super().__init__()
+        self.calls, self.budget = 0, budget
+    def __torch_function__(self, func, types, args=(), kwargs=None):
+        self.calls += 1
+        if self.calls > self.budget:
+            raise AssertionError(f"more than {self.budget} torch calls")
+        return func(*args, **(kwargs or {}))
 
 def learner(fn, name):
     f = fn.__globals__.get(name)
@@ -80,8 +92,8 @@ got = nll_vectorized(p, M, Y)
 want = -(math.log(0.69 + 1e-8) + math.log(0.66 + 1e-8) + math.log(0.48 + 1e-8))
 assert got.dim() == 0 and abs(got.item() - want) < 1e-9, (got, want)
 """},
-    {"name": "Part 3: values, gradients and speed", "part": 3, "visibility": "unshown", "behavior": "gradient.flow",
-     "failure_message": "nll_vectorized differed from the double loop in value or in its gradients with respect to p and M, was not a 0-dim tensor (0 when nothing is observed), or took more than 0.5 seconds on 20000 samples and 10 annotators, which a Python loop over pairs cannot meet.",
+    {"name": "Part 3: values, gradients and no loop over samples", "part": 3, "visibility": "unshown", "behavior": "gradient.flow",
+     "failure_message": "nll_vectorized differed from the double loop in value or in its gradients with respect to p and M, was not a 0-dim tensor (0 when nothing is observed), or made more than 2000 torch calls on 20000 samples and 10 annotators, which a Python loop over samples or pairs cannot meet.",
      "code": _MODEL + r"""
 nll_vectorized = learner({fn}, "nll_vectorized")
 g = torch.Generator().manual_seed(1)
@@ -99,10 +111,11 @@ p, M, Y = rand_inputs(g, 3, 2, 3)
 Y[:] = -1
 assert nll_vectorized(p, M, Y).item() == 0.0
 p, M, Y = rand_inputs(g, 20000, 10, 4)
-start = time.perf_counter()
-nll_vectorized(p.detach(), M.detach(), Y)
-took = time.perf_counter() - start
-assert took < 0.5, f"took {took:.2f}s"
+want = nll_loop(p[:50].detach(), M.detach(), Y[:50])
+with CountTorchCalls(2000):  # a loop over annotators fits easily; a loop over samples makes 20000 or more
+    got = nll_vectorized(p.detach(), M.detach(), Y)
+assert got.dim() == 0, got
+assert torch.allclose(nll_vectorized(p[:50].detach(), M.detach(), Y[:50]).double(), want)
 """},
 ]
 
@@ -129,7 +142,7 @@ The requirement arrives in parts. Each part keeps every earlier function, so one
 
 **Where it is used:** labels from crowds or from several model graders disagree, and confusion-matrix layers learn how far to trust each source. Removing Python loops from a loss like this one is everyday work in training code.
 
-Adapted from the PyTorch code-reading question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded. The written answers about shapes and complexity become `op_counts`, and `reliability` takes the confusion matrices instead of being attached to the crowd layer. The script itself, its data generator and the bonus operator questions are left out; the vectorized loss is graded on random inputs, on its gradients and on speed. The speed limit rules out a loop over samples, not the source's ban on a loop over annotators.""",
+Adapted from the PyTorch code-reading question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded. The written answers about shapes and complexity become `op_counts`, and `reliability` takes the confusion matrices instead of being attached to the crowd layer. The script itself, its data generator and the bonus operator questions are left out; the vectorized loss is graded on random inputs, on its gradients and on how many torch calls it makes. The call limit rules out a loop over samples, not the source's ban on a loop over annotators.""",
     "parts": [
         {
             "title": "Reading the costs",
@@ -162,7 +175,7 @@ Return exact counts for one training step, ignoring biases and the softmax:
             "description_en": r"""Keep Parts 1–2. Add `nll_vectorized(p, M, Y)`.
 
 - Return the double loop's value as a 0-dim tensor, with the same gradients with respect to `p` and `M`, up to floating-point error. With no observed label it returns `0`.
-- Use no Python loop over samples or over observed pairs: on `20000` samples and `10` annotators it must finish within `0.5` seconds.
+- Use no Python loop over samples or over observed pairs: on `20000` samples and `10` annotators it may make at most `2000` calls into torch, counting functions, tensor methods and indexing.
 
 **Example:** `p = [[0.7, 0.3], [0.2, 0.8]]`, `M[0] = [[0.9, 0.1], [0.2, 0.8]]`, `M[1] = [[0.6, 0.4], [0.5, 0.5]]` and `Y = [[0, -1], [1, 1]]`:
 - the observed pairs give probabilities `0.69`, `0.66` and `0.48`

@@ -4,7 +4,7 @@ from ._interview import interview
 
 # A brute-force model and generators for programs with exactly one repairing flip.
 _HELPERS = r"""
-import random, time
+import random
 
 class Bad(Exception):
     pass
@@ -62,6 +62,44 @@ def one_fix_programs(rng, count, lo, hi):
             out.append((prog, found[0]))
     return out
 
+class Counted(int):
+    # A program value that counts the additions and equality checks it takes part in. pc and acc
+    # built from it stay Counted, so the count measures the steps taken; past the budget it raises.
+    ops, budget = 0, float("inf")
+    @staticmethod
+    def tick():
+        Counted.ops += 1
+        if Counted.ops > Counted.budget:
+            raise AssertionError(f"more than {Counted.budget} steps")
+    def __add__(self, other):
+        Counted.tick()
+        result = int.__add__(self, other)
+        return result if result is NotImplemented else Counted(result)
+    __radd__ = __add__
+    def __sub__(self, other):
+        Counted.tick()
+        result = int.__sub__(self, other)
+        return result if result is NotImplemented else Counted(result)
+    def __rsub__(self, other):
+        Counted.tick()
+        result = int.__rsub__(self, other)
+        return result if result is NotImplemented else Counted(result)
+    def __eq__(self, other):
+        Counted.tick()
+        return int.__eq__(self, other)
+    __hash__ = int.__hash__
+
+def counted(program):
+    return [(op, Counted(v)) for op, v in program]
+
+def steps(budget, call):
+    # The result of call, which must take at most budget steps on Counted values.
+    Counted.ops, Counted.budget = 0, budget
+    try:
+        return call()
+    finally:
+        Counted.budget = float("inf")
+
 def raises(name, call):
     try:
         call()
@@ -98,7 +136,7 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Where it is used:** emulators and bytecode interpreters detect loops and bad jumps the same way, and control-flow graphs with one successor per node are how compilers and static analysers reason about reachability.
 
-Adapted from the boot loader loop question in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, on one class, with renamed operations and methods (`run`, `find_fix`, `parse`). Values use ASCII digits only. The linear repair is checked by speed on large programs.""",
+Adapted from the boot loader loop question in Schuture/Anthropic-Interview-Notes (CC BY-NC 4.0), reworded, on one class, with renamed operations and methods (`run`, `find_fix`, `parse`). Values use ASCII digits only. The linear repair is checked by counting the steps taken on large programs.""",
     "parts": [
         {
             "title": "Run and detect the loop",
@@ -107,7 +145,7 @@ Adapted from the boot loader loop question in Schuture/Anthropic-Interview-Notes
 - On a normal end, return `(True, acc, None)`.
 - On a loop, return `(False, acc, line)`: `line` is the line about to run a second time, and `acc` is its value before that line runs again.
 - If a step sends `pc` out of range, raise `ProgramError`.
-- Run in `O(n)` time: a program of `100000` lines must finish well under a second.
+- Run in `O(n)` time: each line is checked and run a constant number of times, even on a program of `100000` lines.
 
 **Example:**
 - lines `0` to `7`: `skip +2`, `add +5`, `goto +4`, `add -1`, `goto -3`, `add +20`, `goto -3`, `add +2`
@@ -123,7 +161,7 @@ Adapted from the boot loader loop question in Schuture/Anthropic-Interview-Notes
 - Exactly one line was corrupted: a `goto` became a `skip`, or a `skip` became a `goto`, with its value unchanged. `add` lines are never corrupted.
 - So `run` loops on the given program, and switching exactly one line between `skip` and `goto` makes it end normally. No other single switch does.
 - Return `(line, acc)`: that line, and `acc` at the normal end of the repaired program.
-- Run in `O(n)` time. Trying every line and rerunning the program costs `O(n²)`, which is too slow for the tests: a program of `40000` lines must finish in about a second.
+- Run in `O(n)` time. Trying every line and rerunning the program costs `O(n²)`, which the tests reject on a program of `40000` lines.
 
 **Example**, the program from Part 1:
 - switching line `6` to `skip -3` gives the path `0`, `1`, `2`, `6`, `7`, then `pc = 8`, the end
@@ -193,7 +231,7 @@ raises("ProgramError", lambda: d.run([("add", 1), ("goto", -2)]))
 assert d.run([("skip", -7), ("skip", 99)]) == (True, 0, None), "skip ignores its value"
 """},
         {"name": "Part 1: random programs and a long one", "part": 1, "visibility": "unshown", "behavior": "performance.complexity",
-         "failure_message": "On random programs the result or the ProgramError differed from a plain simulation, or a 100000-line program took more than about a second.",
+         "failure_message": "On random programs the result or the ProgramError differed from a plain simulation, or a 100000-line program took far more than a constant number of steps per line, as when a visited list is scanned on every check.",
          "code": _HELPERS + r"""
 d = {fn}()
 rng = random.Random(3)
@@ -206,10 +244,8 @@ for trial in range(400):
         continue
     assert d.run(prog) == want, (trial, prog)
 n = 100000
-prog = [("add", 1)] * (n - 1) + [("goto", -(n - 1))]
-start = time.perf_counter()
-assert d.run(prog) == (False, n - 1, 0)
-assert time.perf_counter() - start < 2.0, "run must be linear in the program length"
+prog = counted([("goto", 1)] + [("add", 1)] * (n - 2) + [("goto", -(n - 1))])
+assert steps(20 * n, lambda: d.run(prog)) == (False, n - 2, 0), "run must take a constant number of steps per line"
 """},
         {"name": "Part 2: the worked example", "part": 2, "behavior": "state.invariant", "code": r"""
 program = [("skip", 2), ("add", 5), ("goto", 4), ("add", -1), ("goto", -3), ("add", 20), ("goto", -3), ("add", 2)]
@@ -225,21 +261,17 @@ assert d.find_fix([("skip", 9), ("add", 1), ("goto", -2)]) == (2, 1), "switching
 assert d.find_fix([("add", 4), ("skip", -1), ("goto", -2)]) == (2, 4)
 """},
         {"name": "Part 2: linear time on a long program", "part": 2, "visibility": "unshown", "behavior": "performance.complexity",
-         "failure_message": "find_fix took more than about a second on a 40000-line program whose repair is in the middle: rerunning the program for every candidate line is O(n^2).",
+         "failure_message": "find_fix took far more than a constant number of steps per line on a 40000-line program whose repair is in the middle: rerunning the program for every candidate line is O(n^2).",
          "code": _HELPERS + r"""
 d = {fn}()
 n = 40000
 a = n // 2
-prog = [("skip", 0)] * (n - 2) + [("goto", -(n - 2)), ("goto", 0)]
+prog = [("goto", 1)] + [("skip", 0)] * (n - 3) + [("goto", -(n - 2)), ("goto", 0)]
 prog[a] = ("skip", n - a)
 prog[a - 1] = ("add", 7)
-start = time.perf_counter()
-assert d.find_fix(prog) == (a, 7)
-assert time.perf_counter() - start < 2.0, "find_fix must be linear, not one rerun per line"
+assert steps(40 * n, lambda: d.find_fix(counted(prog))) == (a, 7), "find_fix must be linear, not one rerun per line"
 chain = [("add", 7)] + [("goto", 1)] * (n - 2) + [("goto", -(n - 1))]
-start = time.perf_counter()
-assert d.find_fix(chain) == (n - 1, 7)
-assert time.perf_counter() - start < 2.0, "find_fix must be linear even when every wrong switch runs far before looping"
+assert steps(40 * n, lambda: d.find_fix(counted(chain))) == (n - 1, 7), "find_fix must be linear even when every wrong switch runs far before looping"
 """},
         {"name": "Part 3: the worked example", "part": 3, "behavior": "protocol.validation", "code": _HELPERS + r"""
 text = "goto +3   # over the next two\nadd +1\n\ngoto +3\n# back edge below\nadd +2\n   \ngoto -3"

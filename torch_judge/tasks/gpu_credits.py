@@ -5,7 +5,7 @@ from ._interview import interview
 # A slow model written straight from the statement: every query replays every call so far,
 # sorted by timestamp, from an empty ledger.
 _HELPERS = r"""
-import random, time
+import random
 
 class Replay:
     def __init__(self):
@@ -48,13 +48,26 @@ def call_ts(call):
     name, args = call
     return args[2] if name == "add_credit" else args[1]
 
-def best_of_three(fn):
-    best = float("inf")
-    for _ in range(3):
-        start = time.perf_counter()
-        fn()
-        best = min(best, time.perf_counter() - start)
-    return best
+class Amount(int):
+    # An amount that counts the arithmetic and comparisons it takes part in; past the budget it raises.
+    # Applying a call uses its amount a few times, so the count tracks how often calls are applied.
+    uses, budget = 0, float("inf")
+    def _use(self):
+        Amount.uses += 1
+        if Amount.uses > Amount.budget:
+            raise AssertionError(f"amounts were used more than {Amount.budget} times")
+
+def _counting(name):
+    base = getattr(int, name)
+    def method(self, *args):
+        self._use()
+        return base(self, *args)
+    return method
+
+for _name in ("__add__", "__radd__", "__sub__", "__rsub__", "__neg__", "__mul__", "__rmul__",
+              "__lt__", "__le__", "__gt__", "__ge__", "__eq__", "__ne__", "__bool__"):
+    setattr(Amount, _name, _counting(_name))
+Amount.__hash__ = int.__hash__
 """
 
 TASK = {
@@ -115,7 +128,7 @@ Adapted from the GPU credits question in Schuture/OpenAI-Interview-Notes (CC BY-
 - When queries arrive in non-decreasing order of `timestamp`, each after every call at or before its time, all `Q` queries together cost `O(U log U + Q)`, not a replay per query.
 - Any other order may take a slower path but must return the same answers as Part 2.
 
-**Example:** 3,000 calls, each followed by a query at its own timestamp, take about ten times as long as 300 such calls, not a hundred times.""",
+**Example:** 3,000 calls, each followed by a query at its own timestamp, cost about ten times the work of 300 such calls, not a hundred times: each call is applied a constant number of times overall, not once per query.""",
         },
     ],
     "hints": [
@@ -244,32 +257,29 @@ for seed in range(200):
             assert ledger.get_balance(q) == model.get_balance(q), (seed, q)
 """},
         {"name": "Part 3: in-order queries do not replay", "part": 3, "visibility": "unshown", "behavior": "performance.complexity",
-         "failure_message": "3,000 calls each followed by a query took far more than ten times as long as 300; keep a cursor and apply each call once instead of replaying per query.",
+         "failure_message": "With 3,000 calls each followed by in-order queries, the amounts were used far more than a constant number of times per call; keep a cursor and apply each call once instead of replaying per query.",
          "code": _HELPERS + r"""
-def workload(n):
-    rng = random.Random(n)
-    calls = []
-    for ts in range(0, 10 * n, 10):
-        if rng.random() < 0.5:
-            calls.append(("add_credit", (f"g{ts}", rng.randint(1, 50), ts, rng.randint(0, 300))))
-        else:
-            calls.append(("subtract", (rng.randint(1, 60), ts)))
-    calls.append(("add_credit", ("last", 10**9, 10 * n, 10)))
-    model = Replay()
-    for call in calls:
-        getattr(model, call[0])(*call[1])
-    expected = model.get_balance(10 * n)
-    assert expected is not None
-    def run():
-        ledger = {fn}()
-        for call in calls:
-            getattr(ledger, call[0])(*call[1])
-            ledger.get_balance(call_ts(call))
-            ledger.get_balance(call_ts(call) + 5)
-        assert ledger.get_balance(10 * n) == expected
-    return run
-ratio = best_of_three(workload(3000)) / best_of_three(workload(300))
-assert ratio < 40, f"10x the calls took {ratio:.0f}x as long"
+n = 3000
+rng = random.Random(n)
+calls = []
+for ts in range(0, 10 * n, 10):
+    if rng.random() < 0.5:
+        calls.append(("add_credit", (f"g{ts}", Amount(rng.randint(1, 50)), ts, rng.randint(0, 300))))
+    else:
+        calls.append(("subtract", (Amount(rng.randint(1, 60)), ts)))
+calls.append(("add_credit", ("last", Amount(10**9), 10 * n, 10)))
+model = Replay()
+for call in calls:
+    getattr(model, call[0])(*call[1])
+expected = model.get_balance(10 * n)
+assert expected is not None
+Amount.uses, Amount.budget = 0, 40 * len(calls)  # a replay per query uses every amount once per query
+ledger = {fn}()
+for call in calls:
+    getattr(ledger, call[0])(*call[1])
+    ledger.get_balance(call_ts(call))
+    ledger.get_balance(call_ts(call) + 5)
+assert ledger.get_balance(10 * n) == expected
 """},
         {"name": "Part 3: every arrival order still matches a replay", "part": 3, "visibility": "unshown", "behavior": "state.invariant",
          "failure_message": "Mixing in-order queries with late calls and earlier queries gave a balance different from replaying the calls.",
