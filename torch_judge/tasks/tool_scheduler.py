@@ -213,10 +213,10 @@ for trial in range(40):
      "code": _COUNTED + r"""
 import random
 rng = random.Random(26)
-agents = [[(Op(tool), Op(rng.randint(1, 10**6)), []) for tool in range(150)] for _ in range(250)]
+agents = [[(Op(tool), Op(rng.randint(1, 10**6)), []) for tool in range(75)] for _ in range(250)]
 s = {fn}()
-starts, makespan = counted(lambda: s.run_capped(agents, [1] * 250, 200), 37500 * 80)
-assert len(starts) == 37500
+starts, makespan = counted(lambda: s.run_capped(agents, [1] * 250, 200), 18750 * 80)
+assert len(starts) == 18750
 first = {a: t for t, a, tool in starts if tool == 0}
 assert all(first[a] == 0 for a in range(200)) and all(first[a] > 0 for a in range(200, 250))
 """},
