@@ -55,7 +55,7 @@ TASK = {
         {
             "level": 1,
             "kind": "questions",
-            "content": "Write out a tiny example: prefix [5, 6], two pauses, target [7, 8]. Which index holds each token, and which index is answer_start? In HF-style labels, which index's label is scored against the logits of the last pause? The paper's S_ignore names the position that predicts a pause. Which label index does that loss term live at once labels are aligned with the input? What should happen to a target token that happens to equal pause_id, and why must answer_start not be found by searching for pauses?",
+            "content": "With prefix [5, 6], two pauses and target [7, 8], which index holds each token, and which index is answer_start? In HF-style labels, which index's label is scored against the logits of the last pause? The paper's S_ignore names the position that predicts a pause. Which label index does that loss term live at once labels are aligned with the input? What should happen to a target token that happens to equal pause_id, and why must answer_start not be found by searching for pauses?",
         },
         {
             "level": 2,

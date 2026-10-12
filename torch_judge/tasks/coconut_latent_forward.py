@@ -235,7 +235,7 @@ for b in range(4):
     assert torch.allclose(joint[b:b + 1], single, atol=1e-9, rtol=0), (b, (joint[b:b + 1] - single).abs().max())
 """)},
         {"name": "Gradients flow through every continuous thought", "visibility": "unshown", "behavior": "gradient.flow",
-         "failure_message": "Do not detach the gathered hidden states, run a pass under no_grad, or write in place into embeddings the model already consumed; build a new tensor each pass.",
+         "failure_message": "Do not detach the gathered hidden states or run a pass under no_grad; every continuous thought must stay in the autograd graph.",
          "code": _case(r"""
 ids = torch.tensor([[1, 2, LAT, LAT, LAT, 3, 4], [5, LAT, 6, 7, LAT, 8, 9]])
 w = torch.randn(7, 12, generator=torch.Generator().manual_seed(9), dtype=torch.float64)
@@ -269,6 +269,23 @@ before = ids.clone()
 out = {fn}(m, m.embed, ids, LAT)
 assert torch.equal(ids, before), ids
 assert out.dtype == torch.float64 and out.shape == (2, 5, 12), (out.dtype, out.shape)
+""")},
+        {"name": "Embeddings a pass consumed are never written in place", "visibility": "unshown", "behavior": "state.invariant",
+         "failure_message": "Do not write into a tensor an earlier model call received; build a new embedding tensor for each pass.",
+         "code": _case(r"""
+m = TinyCausalLM(10)
+seen = []
+inner = m.forward
+def recording_forward(inputs_embeds):
+    seen.append((inputs_embeds, inputs_embeds._version, inputs_embeds.detach().clone()))
+    return inner(inputs_embeds)
+m.forward = recording_forward
+ids = torch.tensor([[1, 2, LAT, LAT, LAT, 3, 4], [5, LAT, 6, 7, LAT, 8, 9]])
+{fn}(m, m.embed, ids, LAT)
+assert len(seen) == 4, len(seen)
+for i, (t, version, values) in enumerate(seen):
+    assert t._version == version, ("pass", i, "version", version, "->", t._version)
+    assert torch.equal(t.detach(), values), ("pass", i, "values changed")
 """)},
     ],
     "solution": '''import torch
