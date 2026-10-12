@@ -1,0 +1,11 @@
+{
+  "chunk_step_executor": {
+    "Why does a VLA RL rollout need a per-action valid mask when it executes action chunks?": "Episodes end at arbitrary slots, not chunk boundaries. Cover what the batched simulator returns after an end, and which loss terms (log-probs, advantages) the mask must zero.",
+    "Why must the action that ends an episode be counted as executed?": "Think about where a sparse success reward arrives. Cover what happens to the learning signal if the ending slot is masked out, and how the count relates to the first done index.",
+    "A batched GPU simulator cannot pause one env. What does it return for an env whose episode ended mid-chunk, and how do you keep that out of training data?": "Contrast stepping every env each call with per-env control. Cover the active vector, writing only active rows, and copying results the simulator may overwrite.",
+    "RLinf folds termination with any() over the whole chunk, while ManiSkill's ActionRepeatWrapper keeps the flags of the ending step. When do the two disagree?": "Look at flags reported after an env's end, for example a truncation followed by a later success. Cover which fold reports both and why the value target cares.",
+    "Which observation should a value function bootstrap from when an env is truncated at slot 2 of an 8-action chunk, and why not the observation after slot 7?": "Name the true last state of the episode. Cover what the env rows hold after the end, and why truncation bootstraps while termination does not.",
+    "Auto-resetting envs inside a chunk versus only after it: what do you gain and what gets harder?": "Weigh idle simulator steps against bookkeeping. Cover splitting one chunk across two episodes, where the reset observation goes, and how masks and advantages change.",
+    "Larger chunks mean fewer policy calls. What do they cost in wasted simulator steps and in credit assignment?": "Consider the slowest env in the batch and open-loop execution. Cover wasted steps after early ends, coarser chunk-level rewards and reaction latency."
+  }
+}
