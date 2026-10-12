@@ -1,0 +1,11 @@
+{
+  "truncation_bootstrap_gae": {
+    "What is the difference between terminated and truncated, and which one should a value target bootstrap through?": "Use Gymnasium's definitions: a terminal state of the MDP versus a condition outside it such as a time limit. Say what V of each next state is, and name partial-episode bootstrapping.",
+    "Why does an auto-resetting vector environment force you to compute a separate value for the final observation?": "Say what observation the env returns on the step an episode ends, where the true last one goes (final_obs), and which state values[t + 1] then describes.",
+    "Walk through the bootstrap value and the continuation factor at a step that is truncated, one that is terminated, and one where both flags are set.": "Give boot and cont for each of the three cases, say which flag wins when both are set, and explain why the next row's value is never used at a boundary.",
+    "Why must the GAE trace still be cut at a truncation even though the TD residual bootstraps through it?": "Separate the two terms: the bootstrap carries the truncated episode's future, while A[t + 1] belongs to the next episode in the buffer. Say what leaks if the trace is not cut.",
+    "How do you turn per-step rewards inside an action chunk into a chunk-level GAE, and what happens to gamma?": "Cover the valid mask after an episode ends mid-chunk, the undiscounted sum, folded flags, and that gamma now applies per chunk, so the effective horizon changes. Mention RLinf's chunk_level reward type.",
+    "When is bootstrapping through a time limit the wrong choice, and what is the alternative?": "Distinguish tasks whose time limit is part of the objective from limits used only to reset more often. Name the time-aware alternative from Pardo et al. and what it adds to the observation.",
+    "Step-level versus chunk-level advantages for a VLA that outputs action chunks: what do you gain and lose?": "Weigh matching credit to policy decisions and fewer recursion steps against losing within-chunk timing and discounting. Mention how the log-prob is defined per chunk and how gamma must be retuned."
+  }
+}
