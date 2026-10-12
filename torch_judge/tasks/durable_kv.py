@@ -554,29 +554,41 @@ assert len(put_sizes) == 1, f"put sizes varied with the history: {sorted(put_siz
 assert len(delete_sizes) == 1, f"delete sizes varied with the history: {sorted(delete_sizes)}"
 """},
         {"name": "Part 3: load is linear in the log", "part": 3, "visibility": "unshown", "behavior": "performance.complexity",
-         "failure_message": "Replaying 10x as many log records took far more than 10x as long; load() must read the log once, without re-slicing or re-reading it per record.",
+         "failure_message": "Replaying the log copied far more bytes than the log holds, or read it more than once; load() must read the log once, without re-slicing or re-reading it per record.",
          "code": _FS + r"""
-def build(n):
-    fs = FileSystem()
-    store = {fn}(fs, log=True)
-    for i in range(n):
-        store.put(f"k{i % 500}", f"value {i} " + "x" * 50)  # padded so a per-record copy of the log dominates
-        if i % 5 == 0:
-            store.delete(f"k{(i * 7) % 500}")
-    return fs, {f"k{j}": store.get(f"k{j}") for j in range(500)}
+class TrackedBytes(bytes):
+    # Counts the bytes every slice copies, and keeps counting on the slices themselves.
+    copied = 0
+    def __getitem__(self, index):
+        part = bytes.__getitem__(self, index)
+        if isinstance(index, slice):
+            TrackedBytes.copied += len(part)
+            return TrackedBytes(part)
+        return part
 
-def best_of_three(fs, expected):
-    best = float("inf")
-    for _ in range(3):
-        start = time.perf_counter()
-        store = reopen(fs, log=True)
-        best = min(best, time.perf_counter() - start)
-    assert {k: store.get(k) for k in expected} == expected
-    return best
+class TrackingFileSystem(FileSystem):
+    def __init__(self):
+        super().__init__()
+        self.reads = 0
+    def read(self, name):
+        self.reads += 1
+        data = super().read(name)
+        return None if data is None else TrackedBytes(data)
 
-small, big = build(1500), build(15000)
-ratio = best_of_three(*big) / best_of_three(*small)
-assert ratio < 30, f"10x the records took {ratio:.0f}x as long to load"
+fs = TrackingFileSystem()
+store = {fn}(fs, log=True)
+for i in range(3000):
+    store.put(f"k{i % 500}", f"value {i}")
+    if i % 5 == 0:
+        store.delete(f"k{(i * 7) % 500}")
+expected = {f"k{j}": store.get(f"k{j}") for j in range(500)}
+size = fs.total_size()
+fs.reads, TrackedBytes.copied = 0, 0
+reloaded = reopen(fs, log=True)
+reads, copied = fs.reads, TrackedBytes.copied
+assert {k: reloaded.get(k) for k in expected} == expected
+assert reads <= 2, f"load() called fs.read {reads} times"
+assert copied <= 8 * size, f"load() copied {copied} bytes by slicing a {size}-byte log"
 """},
         {"name": "Part 3: compaction", "part": 3, "visibility": "unshown", "behavior": "checkpoint.recovery",
          "failure_message": "After compact(), the stored size must depend only on the current keys and values and load() must give the same store; a crash at any point of compact() must lose nothing.",
