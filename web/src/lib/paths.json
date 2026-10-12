@@ -81,10 +81,10 @@
       "id": "embodied-ai",
       "titleEn": "Embodied AI: VLA & World Models",
       "titleZh": "具身智能：VLA 与世界模型",
-      "descriptionEn": "The action side of vision-language-action models, from LeRobot, openpi and OpenVLA: turning actions into tokens with uniform bins and FAST, ACT temporal ensembling, pi0 flow-matching action chunks, and real-time chunking guidance.",
-      "descriptionZh": "视觉-语言-动作模型的动作端，取材自 LeRobot、openpi 和 OpenVLA：用均匀分箱和 FAST 把动作变成 token、ACT 时序集成、pi0 flow matching 动作块，以及实时分块引导。",
+      "descriptionEn": "The action side of vision-language-action models, from LeRobot, openpi and OpenVLA: action tokens with uniform bins and FAST, ACT temporal ensembling, pi0 flow-matching chunks and real-time chunking. Then world models: DreamerV3 two-hot heads and RSSM KL balancing, V-JEPA 2 latent prediction, Genie spatiotemporal attention, and CEM planning.",
+      "descriptionZh": "视觉-语言-动作模型的动作端，取材自 LeRobot、openpi 和 OpenVLA：均匀分箱与 FAST 动作 token、ACT 时序集成、pi0 flow matching 动作块和实时分块。然后是世界模型：DreamerV3 的 two-hot 头与 RSSM KL balancing、V-JEPA 2 latent 预测、Genie 时空注意力和 CEM 规划。",
       "icon": "Bot",
-      "problems": ["vla_action_bins", "fast_dct_action_tokens", "act_temporal_ensemble", "pi0_flow_matching_chunk", "rtc_prefix_guidance"],
+      "problems": ["vla_action_bins", "fast_dct_action_tokens", "act_temporal_ensemble", "pi0_flow_matching_chunk", "rtc_prefix_guidance", "symlog_twohot", "rssm_kl_balance", "jepa_block_masks_and_loss", "st_transformer_attention", "world_model_cem_step"],
       "group": "architectures",
       "prerequisites": ["vision-transformer"]
     },

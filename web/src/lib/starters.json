@@ -237,5 +237,10 @@
   "fast_dct_action_tokens": "def fast_encode(chunk, scale=10.0, min_token=0):\n    pass\n\n\ndef fast_decode(tokens, T, D, scale=10.0, min_token=0):\n    pass",
   "act_temporal_ensemble": "class TemporalEnsembler:\n\n    def __init__(self, coeff, chunk_size):\n        pass\n\n    def reset(self):\n        pass\n\n    def update(self, actions):\n        pass",
   "pi0_flow_matching_chunk": "class Pi0FlowMatching:\n\n    def make_inputs(self, actions, noise, time, convention, prefix_mask=None):\n        pass\n\n    def euler_sample(self, velocity_fn, noise, num_steps, convention, hard_prefix=None, hard_prefix_mask=None):\n        pass",
-  "rtc_prefix_guidance": "def prefix_weights(start, end, total, schedule):\n    pass\n\n\ndef guided_velocity(x_t, v_fn, prev_chunk, time, inference_delay, execution_horizon, max_guidance_weight, schedule):\n    pass"
+  "rtc_prefix_guidance": "def prefix_weights(start, end, total, schedule):\n    pass\n\n\ndef guided_velocity(x_t, v_fn, prev_chunk, time, inference_delay, execution_horizon, max_guidance_weight, schedule):\n    pass",
+  "symlog_twohot": "def symlog(x):\n    pass\n\n\ndef symexp(x):\n    pass\n\n\ndef symmetric_bins(K, limit=20.0):\n    pass\n\n\ndef twohot_target(y, bins):\n    pass\n\n\ndef twohot_loss(logits, y, bins):\n    pass\n\n\ndef twohot_mean(logits, bins):\n    pass",
+  "rssm_kl_balance": "def rssm_kl_loss(post_logits, prior_logits, free_nats=1.0, beta_dyn=1.0, beta_rep=0.1, unimix=0.01):\n    pass",
+  "jepa_block_masks_and_loss": "class JEPA:\n\n    def make_masks(self, grid, blocks, max_keep=None):\n        pass\n\n    def jepa_loss(self, pred, target_feats, tgt_idx, loss_exp=1.0):\n        pass\n\n    def ema_update(self, target_params, online_params, m):\n        pass\n\n    def momentum(self, step, total_steps, start, end):\n        pass",
+  "st_transformer_attention": "def st_mask(T, N):\n    pass\n\n\ndef st_attention(x, Wq, Wk, Wv, Wo, n_heads):\n    pass",
+  "world_model_cem_step": "def cem_refit(samples, energies, mean, std, topk, momentum_mean, momentum_std, mode=\"vjepa2\", temperature=0.5):\n    pass"
 }

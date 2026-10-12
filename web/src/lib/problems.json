@@ -29669,6 +29669,1121 @@
           "note": "Real-Time Execution of Action Chunking Flow Policies: the RTC guidance and prefix weights."
         }
       ]
+    },
+    {
+      "id": "jepa_block_masks_and_loss",
+      "title": "JEPA Block Masks, Latent Loss and EMA Target",
+      "titleZh": "JEPA Block Masks, Latent Loss and EMA Target",
+      "difficulty": "Medium",
+      "functionName": "JEPA",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Write `JEPA`, the deterministic pieces of a V-JEPA 2 training step: which video tokens the context encoder sees and which ones the predictor must predict, the loss on the predicted features, and the slowly moving target encoder that produces those features.\n\nThe requirement arrives in parts. Each part keeps every earlier method, so one `JEPA` passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- `JEPA()` takes no arguments and keeps no state between calls.\n- A video is a grid of `T x H x W` tokens; token `(t, y, x)` has flat index `t*H*W + y*W + x`.\n- Block placements are given, so nothing is random. Tests are seeded and run on CPU.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**The objective.** A JEPA (joint-embedding predictive architecture) hides part of the input and predicts the hidden part's representation, not its pixels. The context encoder sees only the context tokens; a predictor takes its output plus position tokens for the target and outputs one feature per target token. A target encoder sees the whole clip, and its layer-normalized features at the target positions are the regression targets. V-JEPA 2 uses an L1 loss (`loss_exp = 1`).\n\n**Multi-block masks.** V-JEPA 2 draws several rectangular blocks per clip, each spanning all time steps, and predicts their union. Whole tubes through time stop the model from copying a patch from the neighbouring frame. The released ViT-L recipe mixes 8 small blocks (15% of the frame each) with 2 large ones (70% each), as two separate masks averaged in the loss. Upstream draws one block size per batch and a position per sample, so samples end up with different numbers of tokens; truncating to the batch minimum lets them stack into one tensor. The truncation keeps the lowest flat indices, which slightly favours early frames and top rows.\n\n**Why the target is safe to chase.** The target branch gets no gradient and is updated only as an exponential moving average of the context encoder, `target = m * target + (1 - m) * online`. With the stop-gradient and the layer norm, the trivial solution of predicting a constant is not a fixed point the encoders can reach together. V-JEPA 2's configs keep `m = 0.99925` constant; the code builds a linear schedule from `ema[0]` to `ema[1]` over every step, so a ramp is one config change away.",
+      "descriptionZh": "Write `JEPA`, the deterministic pieces of a V-JEPA 2 training step: which video tokens the context encoder sees and which ones the predictor must predict, the loss on the predicted features, and the slowly moving target encoder that produces those features.\n\nThe requirement arrives in parts. Each part keeps every earlier method, so one `JEPA` passes all parts at the end. Pass every test of the current part to reveal the next one.\n\n**Rules for every part:**\n- `JEPA()` takes no arguments and keeps no state between calls.\n- A video is a grid of `T x H x W` tokens; token `(t, y, x)` has flat index `t*H*W + y*W + x`.\n- Block placements are given, so nothing is random. Tests are seeded and run on CPU.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**The objective.** A JEPA (joint-embedding predictive architecture) hides part of the input and predicts the hidden part's representation, not its pixels. The context encoder sees only the context tokens; a predictor takes its output plus position tokens for the target and outputs one feature per target token. A target encoder sees the whole clip, and its layer-normalized features at the target positions are the regression targets. V-JEPA 2 uses an L1 loss (`loss_exp = 1`).\n\n**Multi-block masks.** V-JEPA 2 draws several rectangular blocks per clip, each spanning all time steps, and predicts their union. Whole tubes through time stop the model from copying a patch from the neighbouring frame. The released ViT-L recipe mixes 8 small blocks (15% of the frame each) with 2 large ones (70% each), as two separate masks averaged in the loss. Upstream draws one block size per batch and a position per sample, so samples end up with different numbers of tokens; truncating to the batch minimum lets them stack into one tensor. The truncation keeps the lowest flat indices, which slightly favours early frames and top rows.\n\n**Why the target is safe to chase.** The target branch gets no gradient and is updated only as an exponential moving average of the context encoder, `target = m * target + (1 - m) * online`. With the stop-gradient and the layer norm, the trivial solution of predicting a constant is not a fixed point the encoders can reach together. V-JEPA 2's configs keep `m = 0.99925` constant; the code builds a linear schedule from `ema[0]` to `ema[1]` over every step, so a ramp is one config change away.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "Part 1: union target, complement context, batch truncation",
+          "code": "\nimport torch\n\ndef model_masks(grid, blocks, max_keep=None):\n    T, H, W = grid\n    targets, contexts = [], []\n    for sample in blocks:\n        covered = set()\n        for (t0, t, top, h, left, w) in sample:\n            for a in range(t0, t0 + t):\n                for y in range(top, top + h):\n                    for x in range(left, left + w):\n                        covered.add((a * H + y) * W + x)\n        targets.append(sorted(covered))\n        contexts.append(sorted(set(range(T * H * W)) - covered))\n    k_tgt = min(len(x) for x in targets)\n    k_ctx = min(len(x) for x in contexts)\n    if max_keep is not None:\n        k_ctx = min(k_ctx, max_keep)\n    return [c[:k_ctx] for c in contexts], [x[:k_tgt] for x in targets]\n\ndef draw(g, low, high):\n    return int(torch.randint(low, high + 1, (1,), generator=g))\n\ndef random_blocks(g, grid, batch, max_blocks):\n    T, H, W = grid\n    while True:\n        out = []\n        for _ in range(batch):\n            sample = []\n            for _ in range(draw(g, 1, max_blocks)):\n                t, h, w = draw(g, 1, T), draw(g, 1, H), draw(g, 1, W)\n                sample.append((draw(g, 0, T - t), t, draw(g, 0, H - h), h, draw(g, 0, W - w), w))\n            out.append(sample)\n        if all(model_masks(grid, [s])[0][0] for s in out):\n            return out\n\ndef check_masks(got, want, label):\n    assert isinstance(got, tuple) and len(got) == 2, (label, \"return (ctx_idx, tgt_idx)\")\n    ctx, tgt = got\n    assert isinstance(ctx, torch.Tensor) and isinstance(tgt, torch.Tensor), label\n    assert ctx.dtype == torch.int64 and tgt.dtype == torch.int64, (label, ctx.dtype, tgt.dtype)\n    assert ctx.ndim == 2 and tgt.ndim == 2, (label, ctx.shape, tgt.shape)\n    assert ctx.tolist() == want[0], (label, \"context\", ctx.tolist(), want[0])\n    assert tgt.tolist() == want[1], (label, \"target\", tgt.tolist(), want[1])\n\njepa = {fn}()\nblocks = [[(0, 1, 0, 2, 0, 2)], [(0, 1, 1, 1, 0, 3), (0, 1, 0, 2, 2, 1), (0, 1, 2, 1, 0, 1)]]\ncheck_masks(jepa.make_masks((1, 3, 3), blocks), ([[2, 5, 6, 7], [0, 1, 7, 8]], [[0, 1, 3, 4], [2, 3, 4, 5]]), \"example\")\n# Flat index is t*H*W + y*W + x: time 1, row 0, columns 1-2 of a (2, 2, 3) grid.\nctx, tgt = jepa.make_masks((2, 2, 3), [[(1, 1, 0, 1, 1, 2)]])\nassert tgt.tolist() == [[7, 8]], tgt\nassert ctx.tolist() == [[0, 1, 2, 3, 4, 5, 6, 9, 10, 11]], ctx\n",
+          "behavior": "state.invariant",
+          "part": 1
+        },
+        {
+          "name": "Part 1: seeded batches match a brute-force mask",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "The target is every token covered by any block, the context is the rest, both ascending, each truncated to its batch minimum.",
+          "hiddenCode": "\nimport torch\n\ndef model_masks(grid, blocks, max_keep=None):\n    T, H, W = grid\n    targets, contexts = [], []\n    for sample in blocks:\n        covered = set()\n        for (t0, t, top, h, left, w) in sample:\n            for a in range(t0, t0 + t):\n                for y in range(top, top + h):\n                    for x in range(left, left + w):\n                        covered.add((a * H + y) * W + x)\n        targets.append(sorted(covered))\n        contexts.append(sorted(set(range(T * H * W)) - covered))\n    k_tgt = min(len(x) for x in targets)\n    k_ctx = min(len(x) for x in contexts)\n    if max_keep is not None:\n        k_ctx = min(k_ctx, max_keep)\n    return [c[:k_ctx] for c in contexts], [x[:k_tgt] for x in targets]\n\ndef draw(g, low, high):\n    return int(torch.randint(low, high + 1, (1,), generator=g))\n\ndef random_blocks(g, grid, batch, max_blocks):\n    T, H, W = grid\n    while True:\n        out = []\n        for _ in range(batch):\n            sample = []\n            for _ in range(draw(g, 1, max_blocks)):\n                t, h, w = draw(g, 1, T), draw(g, 1, H), draw(g, 1, W)\n                sample.append((draw(g, 0, T - t), t, draw(g, 0, H - h), h, draw(g, 0, W - w), w))\n            out.append(sample)\n        if all(model_masks(grid, [s])[0][0] for s in out):\n            return out\n\ndef check_masks(got, want, label):\n    assert isinstance(got, tuple) and len(got) == 2, (label, \"return (ctx_idx, tgt_idx)\")\n    ctx, tgt = got\n    assert isinstance(ctx, torch.Tensor) and isinstance(tgt, torch.Tensor), label\n    assert ctx.dtype == torch.int64 and tgt.dtype == torch.int64, (label, ctx.dtype, tgt.dtype)\n    assert ctx.ndim == 2 and tgt.ndim == 2, (label, ctx.shape, tgt.shape)\n    assert ctx.tolist() == want[0], (label, \"context\", ctx.tolist(), want[0])\n    assert tgt.tolist() == want[1], (label, \"target\", tgt.tolist(), want[1])\n\njepa = {fn}()\nfor seed, grid, batch, nblocks in ((0, (4, 5, 6), 3, 3), (1, (2, 3, 7), 4, 2), (2, (3, 4, 4), 2, 5), (3, (1, 6, 5), 5, 4), (4, (5, 2, 3), 3, 2)):\n    g = torch.Generator().manual_seed(seed)\n    blocks = random_blocks(g, grid, batch, nblocks)\n    check_masks(jepa.make_masks(grid, blocks), model_masks(grid, blocks), seed)\n",
+          "part": 1
+        },
+        {
+          "name": "Part 1: flat index order on a non-square grid",
+          "visibility": "unshown",
+          "behavior": "tensor.shape",
+          "failureMessage": "Flatten the (T, H, W) grid row-major: token (t, y, x) has index t*H*W + y*W + x, so x varies fastest.",
+          "hiddenCode": "\nimport torch\n\ndef model_masks(grid, blocks, max_keep=None):\n    T, H, W = grid\n    targets, contexts = [], []\n    for sample in blocks:\n        covered = set()\n        for (t0, t, top, h, left, w) in sample:\n            for a in range(t0, t0 + t):\n                for y in range(top, top + h):\n                    for x in range(left, left + w):\n                        covered.add((a * H + y) * W + x)\n        targets.append(sorted(covered))\n        contexts.append(sorted(set(range(T * H * W)) - covered))\n    k_tgt = min(len(x) for x in targets)\n    k_ctx = min(len(x) for x in contexts)\n    if max_keep is not None:\n        k_ctx = min(k_ctx, max_keep)\n    return [c[:k_ctx] for c in contexts], [x[:k_tgt] for x in targets]\n\ndef draw(g, low, high):\n    return int(torch.randint(low, high + 1, (1,), generator=g))\n\ndef random_blocks(g, grid, batch, max_blocks):\n    T, H, W = grid\n    while True:\n        out = []\n        for _ in range(batch):\n            sample = []\n            for _ in range(draw(g, 1, max_blocks)):\n                t, h, w = draw(g, 1, T), draw(g, 1, H), draw(g, 1, W)\n                sample.append((draw(g, 0, T - t), t, draw(g, 0, H - h), h, draw(g, 0, W - w), w))\n            out.append(sample)\n        if all(model_masks(grid, [s])[0][0] for s in out):\n            return out\n\ndef check_masks(got, want, label):\n    assert isinstance(got, tuple) and len(got) == 2, (label, \"return (ctx_idx, tgt_idx)\")\n    ctx, tgt = got\n    assert isinstance(ctx, torch.Tensor) and isinstance(tgt, torch.Tensor), label\n    assert ctx.dtype == torch.int64 and tgt.dtype == torch.int64, (label, ctx.dtype, tgt.dtype)\n    assert ctx.ndim == 2 and tgt.ndim == 2, (label, ctx.shape, tgt.shape)\n    assert ctx.tolist() == want[0], (label, \"context\", ctx.tolist(), want[0])\n    assert tgt.tolist() == want[1], (label, \"target\", tgt.tolist(), want[1])\n\njepa = {fn}()\nfor grid, block in (((3, 2, 5), (1, 2, 0, 1, 3, 2)), ((2, 4, 3), (0, 1, 1, 3, 2, 1)), ((2, 3, 2), (1, 1, 2, 1, 0, 2))):\n    check_masks(jepa.make_masks(grid, [[block]]), model_masks(grid, [[block]]), grid)\n",
+          "part": 1
+        },
+        {
+          "name": "Part 1: overlapping and repeated blocks count once",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "Take the union of the blocks: a token covered by two blocks is one target token, and a token outside every block is context.",
+          "hiddenCode": "\nimport torch\n\ndef model_masks(grid, blocks, max_keep=None):\n    T, H, W = grid\n    targets, contexts = [], []\n    for sample in blocks:\n        covered = set()\n        for (t0, t, top, h, left, w) in sample:\n            for a in range(t0, t0 + t):\n                for y in range(top, top + h):\n                    for x in range(left, left + w):\n                        covered.add((a * H + y) * W + x)\n        targets.append(sorted(covered))\n        contexts.append(sorted(set(range(T * H * W)) - covered))\n    k_tgt = min(len(x) for x in targets)\n    k_ctx = min(len(x) for x in contexts)\n    if max_keep is not None:\n        k_ctx = min(k_ctx, max_keep)\n    return [c[:k_ctx] for c in contexts], [x[:k_tgt] for x in targets]\n\ndef draw(g, low, high):\n    return int(torch.randint(low, high + 1, (1,), generator=g))\n\ndef random_blocks(g, grid, batch, max_blocks):\n    T, H, W = grid\n    while True:\n        out = []\n        for _ in range(batch):\n            sample = []\n            for _ in range(draw(g, 1, max_blocks)):\n                t, h, w = draw(g, 1, T), draw(g, 1, H), draw(g, 1, W)\n                sample.append((draw(g, 0, T - t), t, draw(g, 0, H - h), h, draw(g, 0, W - w), w))\n            out.append(sample)\n        if all(model_masks(grid, [s])[0][0] for s in out):\n            return out\n\ndef check_masks(got, want, label):\n    assert isinstance(got, tuple) and len(got) == 2, (label, \"return (ctx_idx, tgt_idx)\")\n    ctx, tgt = got\n    assert isinstance(ctx, torch.Tensor) and isinstance(tgt, torch.Tensor), label\n    assert ctx.dtype == torch.int64 and tgt.dtype == torch.int64, (label, ctx.dtype, tgt.dtype)\n    assert ctx.ndim == 2 and tgt.ndim == 2, (label, ctx.shape, tgt.shape)\n    assert ctx.tolist() == want[0], (label, \"context\", ctx.tolist(), want[0])\n    assert tgt.tolist() == want[1], (label, \"target\", tgt.tolist(), want[1])\n\njepa = {fn}()\ngrid = (2, 4, 4)\none = (0, 2, 1, 2, 1, 2)\nblocks = [[one, one, one], [(0, 1, 0, 3, 0, 3), (0, 2, 2, 2, 2, 2)], [one, (1, 1, 0, 4, 0, 1)]]\ncheck_masks(jepa.make_masks(grid, blocks), model_masks(grid, blocks), \"overlap\")\nctx, tgt = jepa.make_masks(grid, [[one, one]])\nassert tgt.shape == (1, 8) and ctx.shape == (1, 24), (tgt.shape, ctx.shape)\n",
+          "part": 1
+        },
+        {
+          "name": "Part 1: truncation keeps the lowest indices",
+          "visibility": "unshown",
+          "behavior": "tensor.shape",
+          "failureMessage": "Cut each list to the batch minimum by keeping its first (lowest) indices, separately for context and target.",
+          "hiddenCode": "\nimport torch\n\ndef model_masks(grid, blocks, max_keep=None):\n    T, H, W = grid\n    targets, contexts = [], []\n    for sample in blocks:\n        covered = set()\n        for (t0, t, top, h, left, w) in sample:\n            for a in range(t0, t0 + t):\n                for y in range(top, top + h):\n                    for x in range(left, left + w):\n                        covered.add((a * H + y) * W + x)\n        targets.append(sorted(covered))\n        contexts.append(sorted(set(range(T * H * W)) - covered))\n    k_tgt = min(len(x) for x in targets)\n    k_ctx = min(len(x) for x in contexts)\n    if max_keep is not None:\n        k_ctx = min(k_ctx, max_keep)\n    return [c[:k_ctx] for c in contexts], [x[:k_tgt] for x in targets]\n\ndef draw(g, low, high):\n    return int(torch.randint(low, high + 1, (1,), generator=g))\n\ndef random_blocks(g, grid, batch, max_blocks):\n    T, H, W = grid\n    while True:\n        out = []\n        for _ in range(batch):\n            sample = []\n            for _ in range(draw(g, 1, max_blocks)):\n                t, h, w = draw(g, 1, T), draw(g, 1, H), draw(g, 1, W)\n                sample.append((draw(g, 0, T - t), t, draw(g, 0, H - h), h, draw(g, 0, W - w), w))\n            out.append(sample)\n        if all(model_masks(grid, [s])[0][0] for s in out):\n            return out\n\ndef check_masks(got, want, label):\n    assert isinstance(got, tuple) and len(got) == 2, (label, \"return (ctx_idx, tgt_idx)\")\n    ctx, tgt = got\n    assert isinstance(ctx, torch.Tensor) and isinstance(tgt, torch.Tensor), label\n    assert ctx.dtype == torch.int64 and tgt.dtype == torch.int64, (label, ctx.dtype, tgt.dtype)\n    assert ctx.ndim == 2 and tgt.ndim == 2, (label, ctx.shape, tgt.shape)\n    assert ctx.tolist() == want[0], (label, \"context\", ctx.tolist(), want[0])\n    assert tgt.tolist() == want[1], (label, \"target\", tgt.tolist(), want[1])\n\njepa = {fn}()\ngrid = (2, 3, 4)\nblocks = [[(0, 2, 0, 3, 0, 1)], [(1, 1, 1, 2, 1, 3)], [(0, 1, 0, 1, 0, 4), (1, 1, 2, 1, 2, 2)]]\nwant = model_masks(grid, blocks)\nctx, tgt = jepa.make_masks(grid, blocks)\nassert tgt.shape == (3, 6) and ctx.shape == (3, 18), (tgt.shape, ctx.shape)\ncheck_masks((ctx, tgt), want, \"lowest\")\n",
+          "part": 1
+        },
+        {
+          "name": "Part 1: max_keep caps the context only",
+          "visibility": "unshown",
+          "behavior": "budget.enforcement",
+          "failureMessage": "max_keep caps the context length at min(batch minimum, max_keep) and never changes the target length.",
+          "hiddenCode": "\nimport torch\n\ndef model_masks(grid, blocks, max_keep=None):\n    T, H, W = grid\n    targets, contexts = [], []\n    for sample in blocks:\n        covered = set()\n        for (t0, t, top, h, left, w) in sample:\n            for a in range(t0, t0 + t):\n                for y in range(top, top + h):\n                    for x in range(left, left + w):\n                        covered.add((a * H + y) * W + x)\n        targets.append(sorted(covered))\n        contexts.append(sorted(set(range(T * H * W)) - covered))\n    k_tgt = min(len(x) for x in targets)\n    k_ctx = min(len(x) for x in contexts)\n    if max_keep is not None:\n        k_ctx = min(k_ctx, max_keep)\n    return [c[:k_ctx] for c in contexts], [x[:k_tgt] for x in targets]\n\ndef draw(g, low, high):\n    return int(torch.randint(low, high + 1, (1,), generator=g))\n\ndef random_blocks(g, grid, batch, max_blocks):\n    T, H, W = grid\n    while True:\n        out = []\n        for _ in range(batch):\n            sample = []\n            for _ in range(draw(g, 1, max_blocks)):\n                t, h, w = draw(g, 1, T), draw(g, 1, H), draw(g, 1, W)\n                sample.append((draw(g, 0, T - t), t, draw(g, 0, H - h), h, draw(g, 0, W - w), w))\n            out.append(sample)\n        if all(model_masks(grid, [s])[0][0] for s in out):\n            return out\n\ndef check_masks(got, want, label):\n    assert isinstance(got, tuple) and len(got) == 2, (label, \"return (ctx_idx, tgt_idx)\")\n    ctx, tgt = got\n    assert isinstance(ctx, torch.Tensor) and isinstance(tgt, torch.Tensor), label\n    assert ctx.dtype == torch.int64 and tgt.dtype == torch.int64, (label, ctx.dtype, tgt.dtype)\n    assert ctx.ndim == 2 and tgt.ndim == 2, (label, ctx.shape, tgt.shape)\n    assert ctx.tolist() == want[0], (label, \"context\", ctx.tolist(), want[0])\n    assert tgt.tolist() == want[1], (label, \"target\", tgt.tolist(), want[1])\n\njepa = {fn}()\ng = torch.Generator().manual_seed(9)\ngrid = (3, 4, 5)\nblocks = random_blocks(g, grid, 3, 3)\nfor max_keep in (1, 4, 7, 10 ** 6):\n    check_masks(jepa.make_masks(grid, blocks, max_keep=max_keep), model_masks(grid, blocks, max_keep), max_keep)\nctx, tgt = jepa.make_masks(grid, blocks, max_keep=1)\nassert ctx.shape[1] == 1 and tgt.shape[1] == min(len(x) for x in model_masks(grid, blocks)[1]), (ctx.shape, tgt.shape)\n",
+          "part": 1
+        },
+        {
+          "name": "Part 1: an empty context raises, a one-token context does not",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "Raise ValueError when a sample's blocks cover every token; a context of one token is valid and gives shape (B, 1).",
+          "hiddenCode": "\nimport torch\n\ndef model_masks(grid, blocks, max_keep=None):\n    T, H, W = grid\n    targets, contexts = [], []\n    for sample in blocks:\n        covered = set()\n        for (t0, t, top, h, left, w) in sample:\n            for a in range(t0, t0 + t):\n                for y in range(top, top + h):\n                    for x in range(left, left + w):\n                        covered.add((a * H + y) * W + x)\n        targets.append(sorted(covered))\n        contexts.append(sorted(set(range(T * H * W)) - covered))\n    k_tgt = min(len(x) for x in targets)\n    k_ctx = min(len(x) for x in contexts)\n    if max_keep is not None:\n        k_ctx = min(k_ctx, max_keep)\n    return [c[:k_ctx] for c in contexts], [x[:k_tgt] for x in targets]\n\ndef draw(g, low, high):\n    return int(torch.randint(low, high + 1, (1,), generator=g))\n\ndef random_blocks(g, grid, batch, max_blocks):\n    T, H, W = grid\n    while True:\n        out = []\n        for _ in range(batch):\n            sample = []\n            for _ in range(draw(g, 1, max_blocks)):\n                t, h, w = draw(g, 1, T), draw(g, 1, H), draw(g, 1, W)\n                sample.append((draw(g, 0, T - t), t, draw(g, 0, H - h), h, draw(g, 0, W - w), w))\n            out.append(sample)\n        if all(model_masks(grid, [s])[0][0] for s in out):\n            return out\n\ndef check_masks(got, want, label):\n    assert isinstance(got, tuple) and len(got) == 2, (label, \"return (ctx_idx, tgt_idx)\")\n    ctx, tgt = got\n    assert isinstance(ctx, torch.Tensor) and isinstance(tgt, torch.Tensor), label\n    assert ctx.dtype == torch.int64 and tgt.dtype == torch.int64, (label, ctx.dtype, tgt.dtype)\n    assert ctx.ndim == 2 and tgt.ndim == 2, (label, ctx.shape, tgt.shape)\n    assert ctx.tolist() == want[0], (label, \"context\", ctx.tolist(), want[0])\n    assert tgt.tolist() == want[1], (label, \"target\", tgt.tolist(), want[1])\n\njepa = {fn}()\ngrid = (2, 2, 2)\nfor blocks in ([[(0, 2, 0, 2, 0, 2)]], [[(0, 1, 0, 1, 0, 1)], [(0, 2, 0, 2, 0, 1), (0, 2, 0, 2, 1, 1)]]):\n    try:\n        jepa.make_masks(grid, blocks)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"empty context accepted: {blocks}\")\nblocks = [[(0, 2, 0, 2, 0, 1), (0, 1, 0, 2, 1, 1), (1, 1, 1, 1, 1, 1)], [(0, 1, 0, 1, 0, 1)]]\nctx, tgt = jepa.make_masks(grid, blocks)\nassert ctx.tolist() == [[5], [1]] and tgt.tolist() == [[0], [0]], (ctx.tolist(), tgt.tolist())\n",
+          "part": 1
+        },
+        {
+          "name": "Part 1: rejects malformed grids and blocks",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Raise ValueError for an empty batch, a sample with no blocks, a zero-size block, a block outside the grid, or max_keep < 1.",
+          "hiddenCode": "\njepa = {fn}()\ngrid = (2, 3, 3)\nok = (0, 1, 0, 1, 0, 1)\nbad = [\n    lambda: jepa.make_masks(grid, []),\n    lambda: jepa.make_masks(grid, [[ok], []]),\n    lambda: jepa.make_masks(grid, [[(0, 0, 0, 1, 0, 1)]]),\n    lambda: jepa.make_masks(grid, [[(0, 1, 0, 1, 0, 0)]]),\n    lambda: jepa.make_masks(grid, [[(1, 2, 0, 1, 0, 1)]]),\n    lambda: jepa.make_masks(grid, [[(0, 1, 2, 2, 0, 1)]]),\n    lambda: jepa.make_masks(grid, [[(0, 1, 0, 1, -1, 1)]]),\n    lambda: jepa.make_masks(grid, [[(0, 1, 0, 1, 1, 3)]]),\n    lambda: jepa.make_masks(grid, [[ok]], max_keep=0),\n]\nfor i, call in enumerate(bad):\n    try:\n        call()\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"case {i} was accepted\")\n",
+          "part": 1
+        },
+        {
+          "name": "Part 2: layer-normalized targets, L1 and L2",
+          "code": "\nimport torch\njepa = {fn}()\nfeats = torch.tensor([[[1.0, 3.0], [0.0, 4.0], [2.0, 2.0]]], dtype=torch.float64)\nidx = torch.tensor([[2, 0]])\npred = torch.tensor([[[0.5, 0.5], [-1.0, 1.0]]], dtype=torch.float64)\nl1 = jepa.jepa_loss(pred, feats, idx)\nl2 = jepa.jepa_loss(pred, feats, idx, loss_exp=2.0)\nassert l1.shape == () and l2.shape == (), (l1.shape, l2.shape)\nassert abs(l1.item() - 0.25) < 1e-5, l1\nassert abs(l2.item() - 0.0625) < 1e-5, l2\n",
+          "behavior": "state.invariant",
+          "part": 2
+        },
+        {
+          "name": "Part 2: seeded losses match the formula",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "Layer-normalize target_feats per token (eps 1e-5, no affine), gather row b with tgt_idx[b], then return mean(|pred - h| ** p) / p.",
+          "hiddenCode": "\nimport torch\n\ndef normalized(feats):\n    mu = feats.mean(-1, keepdim=True)\n    var = feats.var(-1, unbiased=False, keepdim=True)\n    return (feats - mu) / torch.sqrt(var + 1e-5)\n\ndef model_loss(pred, feats, idx, p):\n    h = normalized(feats)\n    picked = torch.stack([h[b, idx[b]] for b in range(h.shape[0])])\n    return (pred - picked).abs().pow(p).mean() / p\n\ndef seeded(seed, B=3, N=10, K=4, D=6):\n    g = torch.Generator().manual_seed(seed)\n    feats = torch.randn(B, N, D, generator=g, dtype=torch.float64) * 3 + 1\n    idx = torch.stack([torch.randperm(N, generator=g)[:K] for _ in range(B)])\n    pred = torch.randn(B, K, D, generator=g, dtype=torch.float64)\n    return pred, feats, idx\n\njepa = {fn}()\nfor seed in (0, 1, 2, 3, 4):\n    pred, feats, idx = seeded(seed)\n    for p in (1.0, 1.5, 2.0, 3.0):\n        got = jepa.jepa_loss(pred, feats, idx, loss_exp=p)\n        want = model_loss(pred, feats, idx, p)\n        assert abs(got.item() - want.item()) < 1e-10, (seed, p, got.item(), want.item())\n",
+          "part": 2
+        },
+        {
+          "name": "Part 2: predicting the normalized targets gives zero loss",
+          "visibility": "unshown",
+          "behavior": "numerics.stability",
+          "failureMessage": "Regress onto layer_norm(target_feats) over the feature dimension, not onto the raw features or a norm over tokens.",
+          "hiddenCode": "\nimport torch\n\ndef normalized(feats):\n    mu = feats.mean(-1, keepdim=True)\n    var = feats.var(-1, unbiased=False, keepdim=True)\n    return (feats - mu) / torch.sqrt(var + 1e-5)\n\ndef model_loss(pred, feats, idx, p):\n    h = normalized(feats)\n    picked = torch.stack([h[b, idx[b]] for b in range(h.shape[0])])\n    return (pred - picked).abs().pow(p).mean() / p\n\ndef seeded(seed, B=3, N=10, K=4, D=6):\n    g = torch.Generator().manual_seed(seed)\n    feats = torch.randn(B, N, D, generator=g, dtype=torch.float64) * 3 + 1\n    idx = torch.stack([torch.randperm(N, generator=g)[:K] for _ in range(B)])\n    pred = torch.randn(B, K, D, generator=g, dtype=torch.float64)\n    return pred, feats, idx\n\njepa = {fn}()\ng = torch.Generator().manual_seed(5)\nfeats = torch.randn(2, 7, 5, generator=g, dtype=torch.float64) * 20 + 50\nidx = torch.tensor([[6, 0, 3], [1, 1, 4]])\nh = normalized(feats)\npred = torch.stack([h[b, idx[b]] for b in range(2)])\nfor p in (1.0, 2.0):\n    loss = jepa.jepa_loss(pred, feats, idx, loss_exp=p)\n    assert abs(loss.item()) < 1e-10, (p, loss.item())\n",
+          "part": 2
+        },
+        {
+          "name": "Part 2: several masks are averaged per mask",
+          "visibility": "unshown",
+          "behavior": "metrics.averaging",
+          "failureMessage": "With lists, compute one loss per (pred, tgt_idx) pair and return their plain average, not a mean over all tokens pooled together.",
+          "hiddenCode": "\nimport torch\n\ndef normalized(feats):\n    mu = feats.mean(-1, keepdim=True)\n    var = feats.var(-1, unbiased=False, keepdim=True)\n    return (feats - mu) / torch.sqrt(var + 1e-5)\n\ndef model_loss(pred, feats, idx, p):\n    h = normalized(feats)\n    picked = torch.stack([h[b, idx[b]] for b in range(h.shape[0])])\n    return (pred - picked).abs().pow(p).mean() / p\n\ndef seeded(seed, B=3, N=10, K=4, D=6):\n    g = torch.Generator().manual_seed(seed)\n    feats = torch.randn(B, N, D, generator=g, dtype=torch.float64) * 3 + 1\n    idx = torch.stack([torch.randperm(N, generator=g)[:K] for _ in range(B)])\n    pred = torch.randn(B, K, D, generator=g, dtype=torch.float64)\n    return pred, feats, idx\n\njepa = {fn}()\ng = torch.Generator().manual_seed(8)\nfeats = torch.randn(2, 12, 4, generator=g, dtype=torch.float64)\nidx_a = torch.stack([torch.randperm(12, generator=g)[:2] for _ in range(2)])\nidx_b = torch.stack([torch.randperm(12, generator=g)[:7] for _ in range(2)])\npred_a = torch.randn(2, 2, 4, generator=g, dtype=torch.float64) * 3\npred_b = torch.randn(2, 7, 4, generator=g, dtype=torch.float64)\nfor p in (1.0, 2.0):\n    got = jepa.jepa_loss([pred_a, pred_b], feats, [idx_a, idx_b], loss_exp=p)\n    want = (model_loss(pred_a, feats, idx_a, p) + model_loss(pred_b, feats, idx_b, p)) / 2\n    assert abs(got.item() - want.item()) < 1e-10, (p, got.item(), want.item())\n    single = jepa.jepa_loss([pred_b], feats, [idx_b], loss_exp=p)\n    assert abs(single.item() - model_loss(pred_b, feats, idx_b, p).item()) < 1e-10, p\n",
+          "part": 2
+        },
+        {
+          "name": "Part 2: gradients reach pred and never the targets",
+          "visibility": "unshown",
+          "behavior": "gradient.flow",
+          "failureMessage": "Compute the normalized targets without gradient (torch.no_grad or detach) so target_feats gets no gradient; pred still must.",
+          "hiddenCode": "\nimport torch\n\ndef normalized(feats):\n    mu = feats.mean(-1, keepdim=True)\n    var = feats.var(-1, unbiased=False, keepdim=True)\n    return (feats - mu) / torch.sqrt(var + 1e-5)\n\ndef model_loss(pred, feats, idx, p):\n    h = normalized(feats)\n    picked = torch.stack([h[b, idx[b]] for b in range(h.shape[0])])\n    return (pred - picked).abs().pow(p).mean() / p\n\ndef seeded(seed, B=3, N=10, K=4, D=6):\n    g = torch.Generator().manual_seed(seed)\n    feats = torch.randn(B, N, D, generator=g, dtype=torch.float64) * 3 + 1\n    idx = torch.stack([torch.randperm(N, generator=g)[:K] for _ in range(B)])\n    pred = torch.randn(B, K, D, generator=g, dtype=torch.float64)\n    return pred, feats, idx\n\njepa = {fn}()\npred, feats, idx = seeded(11)\npred = pred.clone().requires_grad_(True)\nfeats = feats.clone().requires_grad_(True)\nloss = jepa.jepa_loss(pred, feats, idx, loss_exp=2.0)\nloss.backward()\nassert feats.grad is None, \"a gradient reached target_feats\"\nh = normalized(feats.detach())\npicked = torch.stack([h[b, idx[b]] for b in range(3)])\nwant = (pred.detach() - picked) / pred.numel()\nassert pred.grad is not None and torch.allclose(pred.grad, want, atol=1e-12), \"wrong gradient for pred\"\n",
+          "part": 2
+        },
+        {
+          "name": "Part 2: returns a scalar in pred's dtype",
+          "visibility": "unshown",
+          "behavior": "tensor.dtype_device",
+          "failureMessage": "Return a 0-d tensor in pred's dtype; do not call .item() or cast to float32.",
+          "hiddenCode": "\nimport torch\n\ndef normalized(feats):\n    mu = feats.mean(-1, keepdim=True)\n    var = feats.var(-1, unbiased=False, keepdim=True)\n    return (feats - mu) / torch.sqrt(var + 1e-5)\n\ndef model_loss(pred, feats, idx, p):\n    h = normalized(feats)\n    picked = torch.stack([h[b, idx[b]] for b in range(h.shape[0])])\n    return (pred - picked).abs().pow(p).mean() / p\n\ndef seeded(seed, B=3, N=10, K=4, D=6):\n    g = torch.Generator().manual_seed(seed)\n    feats = torch.randn(B, N, D, generator=g, dtype=torch.float64) * 3 + 1\n    idx = torch.stack([torch.randperm(N, generator=g)[:K] for _ in range(B)])\n    pred = torch.randn(B, K, D, generator=g, dtype=torch.float64)\n    return pred, feats, idx\n\njepa = {fn}()\npred, feats, idx = seeded(2)\nloss = jepa.jepa_loss(pred, feats, idx)\nassert isinstance(loss, torch.Tensor) and loss.shape == () and loss.dtype == torch.float64, (type(loss), getattr(loss, \"shape\", None))\nloss32 = jepa.jepa_loss(pred.float(), feats.float(), idx)\nassert loss32.dtype == torch.float32 and abs(loss32.item() - loss.item()) < 1e-5, loss32\n",
+          "part": 2
+        },
+        {
+          "name": "Part 2: rejects bad exponents and shapes",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Raise ValueError for loss_exp <= 0, a pred that is not (B, K, D), non-3-D target_feats, or mismatched lists.",
+          "hiddenCode": "\nimport torch\njepa = {fn}()\nfeats = torch.randn(2, 6, 3)\nidx = torch.tensor([[0, 1], [2, 3]])\npred = torch.randn(2, 2, 3)\nbad = [\n    lambda: jepa.jepa_loss(pred, feats, idx, loss_exp=0.0),\n    lambda: jepa.jepa_loss(pred, feats, idx, loss_exp=-1.0),\n    lambda: jepa.jepa_loss(torch.randn(2, 3, 3), feats, idx),\n    lambda: jepa.jepa_loss(torch.randn(1, 2, 3), feats, idx),\n    lambda: jepa.jepa_loss(torch.randn(2, 2, 4), feats, idx),\n    lambda: jepa.jepa_loss(pred, feats[0], idx),\n    lambda: jepa.jepa_loss([pred, pred], feats, [idx]),\n    lambda: jepa.jepa_loss([], feats, []),\n    lambda: jepa.jepa_loss(pred, feats, [idx]),\n]\nfor i, call in enumerate(bad):\n    try:\n        call()\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"case {i} was accepted\")\n",
+          "part": 2
+        },
+        {
+          "name": "Part 3: one EMA step and the momentum schedule",
+          "code": "\nimport torch\njepa = {fn}()\ntarget = [torch.tensor([1.0, 2.0]), torch.tensor([[0.0]])]\nonline = [torch.tensor([3.0, 0.0]), torch.tensor([[10.0]])]\nfirst = target[0]\njepa.ema_update(target, online, 0.75)\nassert target[0] is first, \"update the target tensors in place\"\nassert torch.allclose(target[0], torch.tensor([1.5, 1.5])) and torch.allclose(target[1], torch.tensor([[2.5]])), target\nassert abs(jepa.momentum(0, 10, 0.99, 1.0) - 0.99) < 1e-12\nassert abs(jepa.momentum(5, 10, 0.99, 1.0) - 0.995) < 1e-12\nassert abs(jepa.momentum(10, 10, 0.99, 1.0) - 1.0) < 1e-12\n",
+          "behavior": "optim.state",
+          "part": 3
+        },
+        {
+          "name": "Part 3: seeded EMA is in place and leaves online untouched",
+          "visibility": "unshown",
+          "behavior": "optim.state",
+          "failureMessage": "Write m * target + (1 - m) * online into each target tensor in place; never write into the online tensors.",
+          "hiddenCode": "\nimport torch\njepa = {fn}()\nfor seed in (0, 1, 2):\n    g = torch.Generator().manual_seed(seed)\n    shapes = [(4, 3), (3,), (2, 2, 2)]\n    target = [torch.randn(s, generator=g, dtype=torch.float64) for s in shapes]\n    online = [torch.randn(s, generator=g, dtype=torch.float64) for s in shapes]\n    t0, o0 = [t.clone() for t in target], [o.clone() for o in online]\n    ptrs = [t.data_ptr() for t in target]\n    objs = list(target)\n    for m in (0.9, 0.99925, 0.3):\n        want = [m * t + (1 - m) * o for t, o in zip(target, online)]\n        jepa.ema_update(target, online, m)\n        for t, w in zip(target, want):\n            assert torch.allclose(t, w, atol=1e-12), (seed, m)\n    assert all(a is b for a, b in zip(target, objs)) and [t.data_ptr() for t in target] == ptrs, \"not in place\"\n    assert all(torch.equal(o, c) for o, c in zip(online, o0)), \"online tensors were modified\"\n",
+          "part": 3
+        },
+        {
+          "name": "Part 3: momentum 1 keeps the target, 0 copies online",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "m weights the old target: m = 1 leaves it unchanged and m = 0 copies the online weights.",
+          "hiddenCode": "\nimport torch\njepa = {fn}()\ng = torch.Generator().manual_seed(4)\ntarget = [torch.randn(5, generator=g, dtype=torch.float64)]\nonline = [torch.randn(5, generator=g, dtype=torch.float64)]\nbefore = target[0].clone()\njepa.ema_update(target, online, 1.0)\nassert torch.equal(target[0], before), \"m = 1 changed the target\"\njepa.ema_update(target, online, 0.0)\nassert torch.allclose(target[0], online[0], atol=1e-15), \"m = 0 did not copy online\"\n",
+          "part": 3
+        },
+        {
+          "name": "Part 3: works on module parameters without building a graph",
+          "visibility": "unshown",
+          "behavior": "gradient.flow",
+          "failureMessage": "Run the update under torch.no_grad() so in-place writes to parameters that require grad are allowed and record nothing.",
+          "hiddenCode": "\nimport torch\nimport torch.nn as nn\njepa = {fn}()\ntorch.manual_seed(0)\nonline = nn.Sequential(nn.Linear(4, 3), nn.Linear(3, 2)).double()\ntarget = nn.Sequential(nn.Linear(4, 3), nn.Linear(3, 2)).double()\nwant = [0.6 * t.detach() + 0.4 * o.detach() for t, o in zip(target.parameters(), online.parameters())]\njepa.ema_update(target.parameters(), online.parameters(), 0.6)\nfor t, w in zip(target.parameters(), want):\n    assert t.requires_grad and t.grad_fn is None, \"the update recorded a graph\"\n    assert torch.allclose(t.detach(), w, atol=1e-12), \"wrong update through parameters() generators\"\n",
+          "part": 3
+        },
+        {
+          "name": "Part 3: mismatched inputs raise before anything changes",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Check lengths, shapes and 0 <= m <= 1 first and raise ValueError without modifying any target tensor.",
+          "hiddenCode": "\nimport torch\njepa = {fn}()\na, b = torch.ones(3), torch.ones(2, 2)\ncases = [\n    ([a.clone(), b.clone()], [torch.zeros(3)], 0.5),\n    ([a.clone()], [torch.zeros(3), torch.zeros(2, 2)], 0.5),\n    ([a.clone(), b.clone()], [torch.zeros(3), torch.zeros(4)], 0.5),\n    ([a.clone()], [torch.zeros(3)], 1.5),\n    ([a.clone()], [torch.zeros(3)], -0.1),\n]\nfor i, (target, online, m) in enumerate(cases):\n    try:\n        jepa.ema_update(target, online, m)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"case {i} was accepted\")\n    assert all(torch.all(t == 1) for t in target), f\"case {i} modified a target before raising\"\n",
+          "part": 3
+        },
+        {
+          "name": "Part 3: the momentum schedule is linear with both ends included",
+          "visibility": "unshown",
+          "behavior": "optim.state",
+          "failureMessage": "momentum(step, total, start, end) = start + step * (end - start) / total for 0 <= step <= total; raise ValueError outside.",
+          "hiddenCode": "\njepa = {fn}()\nfor start, end, total in ((0.996, 1.0, 1000), (0.99925, 0.99925, 3750), (0.5, 0.9, 7)):\n    for step in sorted({0, 1, total // 3, total - 1, total}):\n        want = start + step * (end - start) / total\n        got = jepa.momentum(step, total, start, end)\n        assert isinstance(got, float), type(got)\n        assert abs(got - want) < 1e-12, (start, end, total, step, got, want)\nfor args in ((-1, 10, 0.9, 1.0), (11, 10, 0.9, 1.0), (0, 0, 0.9, 1.0)):\n    try:\n        jepa.momentum(*args)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"{args} was accepted\")\n",
+          "part": 3
+        }
+      ],
+      "parts": [
+        {
+          "title": "Context and target masks",
+          "descriptionEn": "**Signature:** `make_masks(grid, blocks, max_keep=None) -> (ctx_idx, tgt_idx)`\n\n- `grid = (T, H, W)` is the token grid: `T` time steps of `H x W` patches. Token `(t, y, x)` has flat index `t*H*W + y*W + x`.\n- `blocks` has one entry per sample. Each entry is a non-empty list of blocks `(t0, t, top, h, left, w)`: the block covers times `t0 .. t0+t-1`, rows `top .. top+h-1` and columns `left .. left+w-1`.\n- A sample's target is the union of its blocks: every token covered by at least one block. Its context is every other token. Both lists are in ascending flat-index order.\n- Truncate every sample's target list to the shortest target list in the batch, and every context list to the shortest context list, keeping the first (lowest) indices. When `max_keep` is given, the context length is also capped at `max_keep`; the target length is not.\n- Return two `torch.int64` tensors, `ctx_idx` of shape `(B, K_ctx)` and `tgt_idx` of shape `(B, K_tgt)`.\n- Raise `ValueError` when any sample's blocks cover the whole grid (its context would be empty).\n- Raise `ValueError` for a `grid` that is not three positive integers, an empty batch, a sample with no blocks, a block whose sizes are not at least 1 or that does not fit inside the grid, or a `max_keep` that is not a positive integer.\n\n**Example:** `make_masks((1, 3, 3), [[(0, 1, 0, 2, 0, 2)], [(0, 1, 1, 1, 0, 3), (0, 1, 0, 2, 2, 1), (0, 1, 2, 1, 0, 1)]])`\n- Sample 0 targets `[0, 1, 3, 4]` and keeps context `[2, 5, 6, 7, 8]`.\n- Sample 1 targets `[2, 3, 4, 5, 6]` (two blocks overlap at 5) and keeps context `[0, 1, 7, 8]`.\n- Both truncate to length 4: `ctx_idx = [[2, 5, 6, 7], [0, 1, 7, 8]]`, `tgt_idx = [[0, 1, 3, 4], [2, 3, 4, 5]]`."
+        },
+        {
+          "title": "The latent prediction loss",
+          "descriptionEn": "Keep Part 1. Add `jepa_loss(pred, target_feats, tgt_idx, loss_exp=1.0) -> Tensor`.\n\n- `target_feats` is the target encoder's output for every token, shape `(B, N, D)`. Layer-normalize it over the last dimension with `eps = 1e-5` and no learnable scale or shift, then gather the tokens named by `tgt_idx` (shape `(B, K)`, row `b` indexes sample `b`) to get `h` of shape `(B, K, D)`.\n- The loss for one mask is `mean(|pred - h| ** loss_exp) / loss_exp`, a scalar, where `pred` has shape `(B, K, D)`.\n- `pred` and `tgt_idx` may also be equal-length lists, one entry per mask, all indexing the same `target_feats`. The loss is then the plain average of the per-mask losses, not a mean over all their tokens pooled together.\n- No gradient may reach `target_feats`. Gradients flow to `pred` as usual.\n- Return a 0-d tensor with the dtype of `pred`. Tests use `float64` and compare with a tolerance of `1e-10`.\n- Raise `ValueError` when `loss_exp <= 0`, when `target_feats` is not 3-D, when a `pred` does not have shape `(B, K, D)` for its `tgt_idx` of shape `(B, K)`, or when `pred` and `tgt_idx` are not both tensors or both lists of the same non-zero length.\n\n**Example:** `target_feats = [[[1, 3], [0, 4], [2, 2]]]` normalizes to about `[[[-1, 1], [-1, 1], [0, 0]]]`. With `tgt_idx = [[2, 0]]` and `pred = [[[0.5, 0.5], [-1, 1]]]`, the loss is about `0.25` with `loss_exp = 1` and `0.0625` with `loss_exp = 2`."
+        },
+        {
+          "title": "The EMA target encoder",
+          "descriptionEn": "Keep Parts 1–2. Add `ema_update(target_params, online_params, m) -> None` and `momentum(step, total_steps, start, end) -> float`.\n\n- `ema_update` sets every target tensor to `m * target + (1 - m) * online`, in place: the same tensor objects hold the new values afterwards. The online tensors are not modified.\n- Both arguments are iterables of tensors, such as `module.parameters()`; a generator may be iterated only once. Pair them in order.\n- The update must work when target tensors have `requires_grad=True`, and must not record an autograd graph: run it without gradient tracking.\n- Raise `ValueError`, before changing any tensor, when the two iterables have different lengths, when a pair's shapes differ, or when `m` is outside `[0, 1]`.\n- `momentum` is the linear schedule `start + step * (end - start) / total_steps` for `step` in `0 .. total_steps`, so step 0 gives `start` and step `total_steps` gives `end`. Raise `ValueError` when `total_steps < 1` or `step` is outside that range. Tests compare with a tolerance of `1e-12`.\n\n**Example:** with `target = [tensor([1., 2.]), tensor([[0.]])]` and `online = [tensor([3., 0.]), tensor([[10.]])]`, `ema_update(target, online, 0.75)` leaves `target` as `[tensor([1.5, 1.5]), tensor([[2.5]])]`. `momentum(5, 10, 0.99, 1.0)` is `0.995`."
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "If you mark covered tokens in a (T, H, W) boolean grid and flatten it, what order do the indices come out in, and what is the context? Which tensor in the loss must be cut off from autograd, and why does averaging per mask differ from pooling tokens when masks have different sizes? How do you change a parameter's values without replacing the tensor object or recording a graph?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Validate inputs first. For each sample, fill a boolean grid with every block's slice, flatten it, and take the indices of true entries as the target and of false entries as the context; raise if the context is empty. Find the two batch minimums (cap the context one with max_keep), slice each list and stack. In the loss, normalize the targets with layer_norm under no_grad, gather with the indices expanded over the feature dimension, and average the per-mask losses. For EMA, materialize both iterables into lists, check them, then multiply and add in place under no_grad."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "vit_patch",
+        "layernorm",
+        "contrastive_loss"
+      ],
+      "modelConnections": [
+        "V-JEPA 2's MaskCollator builds exactly these context and target index lists, and apply_masks gathers them from the encoder output.",
+        "The same EMA target encoder appears in BYOL, DINO and I-JEPA; MoCo uses it for the key encoder.",
+        "V-JEPA 2-AC, the action-conditioned world model, plans by comparing predicted latent states, which only works because the encoder was trained to be predictable in latent space."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Predicting features instead of pixels spends capacity on what is predictable and ignores unpredictable texture detail.",
+          "Index-list masks let the context encoder skip masked tokens entirely, which cuts compute in proportion to the mask ratio.",
+          "An EMA target needs no negatives and no second optimizer."
+        ],
+        "cons": [
+          "Truncating to the batch minimum throws away some context and target tokens, always the highest-indexed ones.",
+          "Collapse is avoided by architecture and schedule choices, not by the loss itself, so bad hyperparameters can still collapse.",
+          "The target encoder doubles parameter memory, and its lag makes early training slower to bootstrap."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why does a JEPA predict the target encoder's features of the hidden region instead of reconstructing its pixels, as a masked autoencoder does?",
+          "hint": "Think about what a pixel loss forces the model to spend capacity on. Cover unpredictable detail such as texture and noise, what an abstract target lets the encoder discard, and how that shows up in frozen-feature probing."
+        },
+        {
+          "stage": "concept",
+          "question": "Both the prediction and its target come from learned encoders. What stops a JEPA from collapsing to a constant representation?",
+          "hint": "Name the trivial solution first, then the pieces that keep training away from it: the stop-gradient on the target branch, the slow EMA target, the predictor in between, and the normalization of the targets."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "V-JEPA 2 masks the union of several blocks that each span every frame. Why mask whole tubes through time rather than independent random patches?",
+          "hint": "Consider how much video repeats from one frame to the next. Cover what the model could copy if only some frames of a region were hidden, and why short-range and long-range block sizes are mixed."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Each sample's context and target index lists are truncated to the batch minimum. Why is that needed, and what bias does keeping the lowest indices introduce?",
+          "hint": "Start from how the index lists become one batched tensor for the encoder. Then look at the flat index order: which time steps and rows sit at the end of each list, and so which tokens get dropped."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why are the target features layer-normalized and computed without gradient, and what goes wrong if gradients flow into the target branch?",
+          "hint": "Separate the two choices. For the norm, think about the scale and offset of the regression targets. For the stop-gradient, think about what the loss could reward if it could also move the targets."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "L1 versus L2 regression for the latent loss: how does loss_exp change the gradient and the sensitivity to outlier tokens?",
+          "hint": "Compare how the gradient's size depends on the error under each exponent. Cover a few badly predicted tokens dominating the batch, behaviour near zero error, and why the loss divides by the exponent."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "A constant EMA momentum such as 0.99925 versus a schedule that ramps toward 1: what do you trade between target stability and how quickly the target tracks the online encoder?",
+          "hint": "Relate the momentum to an effective averaging window in steps. Cover early training, when the online encoder changes fast, and late training, when a frozen-looking target helps, plus what changes when the run length changes."
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/facebookresearch/vjepa2/blob/204698b45b3712590f06245fbfba32d3be539812/src/masks/multiseq_multiblock3d.py",
+          "commit": "204698b45b3712590f06245fbfba32d3be539812",
+          "path": "src/masks/multiseq_multiblock3d.py",
+          "symbol": "_MaskGenerator._sample_block_mask, _MaskGenerator.__call__",
+          "license": "MIT",
+          "adapted": "Union of blocks as the prediction mask, its complement as the context, ascending flat indices, truncation of both lists to the batch minimum, and the max_keep cap on the context.",
+          "simplifications": "Block sizes and positions are passed in instead of drawn, and each block may have its own size (upstream: one size per batch); an empty context raises ValueError instead of redrawing the blocks; upstream's .squeeze() turns a one-token mask into a 0-d tensor that len() rejects, while the exercise always returns (B, K); max_context_frames_ratio, full_complement, pred_full_complement and inv_block are dropped."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/facebookresearch/vjepa2/blob/204698b45b3712590f06245fbfba32d3be539812/src/masks/utils.py",
+          "commit": "204698b45b3712590f06245fbfba32d3be539812",
+          "path": "src/masks/utils.py",
+          "symbol": "apply_masks",
+          "license": "MIT",
+          "adapted": "Gathering target tokens by per-sample index rows.",
+          "simplifications": "Used with concat=False only, inside the loss."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/facebookresearch/vjepa2/blob/204698b45b3712590f06245fbfba32d3be539812/app/vjepa/train.py",
+          "commit": "204698b45b3712590f06245fbfba32d3be539812",
+          "path": "app/vjepa/train.py",
+          "symbol": "forward_target, loss_fn, momentum_scheduler, momentum update of target_encoder",
+          "license": "MIT",
+          "adapted": "Layer norm on the target features under no_grad, mean(|z - h| ** loss_exp) / loss_exp averaged over masks, the in-place EMA update and the linear momentum schedule.",
+          "simplifications": "One clip group instead of a list per frames-per-clip; the momentum schedule is a function of the step instead of a generator; mismatched parameter lists raise instead of being cut short by zip; mixed precision and DDP are dropped."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2506.09985",
+          "section": "Assran et al. 2025 (V-JEPA 2), Section 2.1 (Methodology) and Section 2.4 (Pretraining Recipe)",
+          "note": "Mask-denoising in representation space with an L1 loss, stop-gradient and an EMA target encoder."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2404.08471",
+          "section": "Bardes et al. 2024 (V-JEPA), Section 3.1 (Training Objective) and Section 3.2 (Prediction Task: multi-block masking)",
+          "note": "Why the target encoder uses stop-gradient and EMA, and the short-range plus long-range block masks."
+        }
+      ]
+    },
+    {
+      "id": "rssm_kl_balance",
+      "title": "RSSM KL Balancing and Free Bits",
+      "titleZh": "RSSM KL Balancing and Free Bits",
+      "difficulty": "Medium",
+      "functionName": "rssm_kl_loss",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "A DreamerV3 world model keeps a latent state made of `S` independent categorical variables with `C` classes each. The encoder sees the current observation and outputs posterior logits; the dynamics model predicts prior logits without it. Implement the KL part of the world-model loss: unimix both distributions, measure the KL from posterior to prior, apply free bits, and split the KL into two terms whose gradients reach different networks.\n\n**Signature:** `rssm_kl_loss(post_logits, prior_logits, free_nats=1.0, beta_dyn=1.0, beta_rep=0.1, unimix=0.01) -> (loss, dyn, rep)`\n\n**Parameters:**\n- `post_logits`, `prior_logits` — floating tensors of the same shape `(B, T, S, C)`: `S` groups of `C` class logits per batch row and time step.\n- `free_nats` — float `>= 0`, the free-bits floor.\n- `beta_dyn`, `beta_rep` — floats that weight the two terms.\n- `unimix` — float in `[0, 1]`, the share of the uniform distribution mixed into each group.\n\n**Returns:**\n- `dyn` and `rep` — tensors of shape `(B, T)`, the two KL terms after free bits.\n- `loss` — a 0-d tensor, `mean(beta_dyn * dyn + beta_rep * rep)` over all `B * T` entries.\n\n**The steps, for each logits tensor and then for the pair:**\n- Unimix the probabilities, not the logits: `probs = (1 - unimix) * softmax(logits) + unimix / C`, then take `log(probs)`. With `unimix = 0`, use `log_softmax(logits)` directly.\n- KL per group: `kl_g = sum_c p_c * (log p_c - log q_c)`, with `p` the posterior and `q` the prior. Sum `kl_g` over the `S` groups to get one value per `(B, T)`.\n- Free bits on that sum: `max(free_nats, kl)` per `(B, T)`, never per group.\n- `dyn` is the KL with the posterior detached, so its gradient trains only the prior. `rep` is the KL with the prior detached, so its gradient trains only the posterior.\n\n**Constraints:**\n- `dyn` and `rep` have equal values; only their gradients differ.\n- Where the summed KL is below `free_nats`, the term equals `free_nats` and its gradient is exactly zero.\n- The gradient of `dyn` with respect to `post_logits` is zero (or `None`), and so is the gradient of `rep` with respect to `prior_logits`.\n- Logits of `-1e4` or lower must give finite results, with or without unimix.\n- Compute in the input dtype; float64 inputs are checked to about 1e-10, values and gradients alike.\n- Do not modify the inputs in place.\n- Raise `ValueError` when either input is not a 4-D floating tensor, when their shapes differ, or when `unimix` is outside `[0, 1]`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why two terms.** The KL between posterior and prior can shrink in two ways: the prior learns to predict the posterior, or the posterior gives up information until it is easy to predict. DreamerV3 wants mostly the first. Splitting the same KL into `dyn` (only the prior moves) and `rep` (only the posterior moves) and weighting them 1.0 and 0.1 does that. DreamerV2 called this KL balancing.\n\n**Why free bits.** Once the KL is below about one nat per time step, the model gains little from shrinking it further, and pushing on it collapses the latent. Clipping at `free_nats` turns the gradient off in that regime so the reconstruction and reward losses take over. It is applied to the total over groups, so a few informative groups can still carry the whole nat.\n\n**Why unimix.** Mixing 1% uniform into each categorical keeps every probability at least `unimix / C`. The log-probabilities stay bounded, so the KL cannot blow up when the posterior puts all its mass on a class the prior thinks is impossible. Mixing the logits instead would not bound anything.\n\n**The latent sample.** The world model feeds the posterior forward as a one-hot sample with a straight-through gradient, `onehot + probs - stopgrad(probs)`, using the unimixed probabilities. That sampling step is not part of this exercise.\n\n**Upstream differences.** The original JAX code uses `beta_dyn = 1.0`; the PyTorch port (dreamerv3-torch) uses 0.5, as did the first arXiv version of the paper, so both betas are parameters here.\n\n**Contrast with k3_kl_penalty.** That exercise estimates a KL from sampled tokens' log-probabilities. Here both distributions are small categoricals, so the KL is computed exactly.",
+      "descriptionZh": "A DreamerV3 world model keeps a latent state made of `S` independent categorical variables with `C` classes each. The encoder sees the current observation and outputs posterior logits; the dynamics model predicts prior logits without it. Implement the KL part of the world-model loss: unimix both distributions, measure the KL from posterior to prior, apply free bits, and split the KL into two terms whose gradients reach different networks.\n\n**Signature:** `rssm_kl_loss(post_logits, prior_logits, free_nats=1.0, beta_dyn=1.0, beta_rep=0.1, unimix=0.01) -> (loss, dyn, rep)`\n\n**Parameters:**\n- `post_logits`, `prior_logits` — floating tensors of the same shape `(B, T, S, C)`: `S` groups of `C` class logits per batch row and time step.\n- `free_nats` — float `>= 0`, the free-bits floor.\n- `beta_dyn`, `beta_rep` — floats that weight the two terms.\n- `unimix` — float in `[0, 1]`, the share of the uniform distribution mixed into each group.\n\n**Returns:**\n- `dyn` and `rep` — tensors of shape `(B, T)`, the two KL terms after free bits.\n- `loss` — a 0-d tensor, `mean(beta_dyn * dyn + beta_rep * rep)` over all `B * T` entries.\n\n**The steps, for each logits tensor and then for the pair:**\n- Unimix the probabilities, not the logits: `probs = (1 - unimix) * softmax(logits) + unimix / C`, then take `log(probs)`. With `unimix = 0`, use `log_softmax(logits)` directly.\n- KL per group: `kl_g = sum_c p_c * (log p_c - log q_c)`, with `p` the posterior and `q` the prior. Sum `kl_g` over the `S` groups to get one value per `(B, T)`.\n- Free bits on that sum: `max(free_nats, kl)` per `(B, T)`, never per group.\n- `dyn` is the KL with the posterior detached, so its gradient trains only the prior. `rep` is the KL with the prior detached, so its gradient trains only the posterior.\n\n**Constraints:**\n- `dyn` and `rep` have equal values; only their gradients differ.\n- Where the summed KL is below `free_nats`, the term equals `free_nats` and its gradient is exactly zero.\n- The gradient of `dyn` with respect to `post_logits` is zero (or `None`), and so is the gradient of `rep` with respect to `prior_logits`.\n- Logits of `-1e4` or lower must give finite results, with or without unimix.\n- Compute in the input dtype; float64 inputs are checked to about 1e-10, values and gradients alike.\n- Do not modify the inputs in place.\n- Raise `ValueError` when either input is not a 4-D floating tensor, when their shapes differ, or when `unimix` is outside `[0, 1]`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why two terms.** The KL between posterior and prior can shrink in two ways: the prior learns to predict the posterior, or the posterior gives up information until it is easy to predict. DreamerV3 wants mostly the first. Splitting the same KL into `dyn` (only the prior moves) and `rep` (only the posterior moves) and weighting them 1.0 and 0.1 does that. DreamerV2 called this KL balancing.\n\n**Why free bits.** Once the KL is below about one nat per time step, the model gains little from shrinking it further, and pushing on it collapses the latent. Clipping at `free_nats` turns the gradient off in that regime so the reconstruction and reward losses take over. It is applied to the total over groups, so a few informative groups can still carry the whole nat.\n\n**Why unimix.** Mixing 1% uniform into each categorical keeps every probability at least `unimix / C`. The log-probabilities stay bounded, so the KL cannot blow up when the posterior puts all its mass on a class the prior thinks is impossible. Mixing the logits instead would not bound anything.\n\n**The latent sample.** The world model feeds the posterior forward as a one-hot sample with a straight-through gradient, `onehot + probs - stopgrad(probs)`, using the unimixed probabilities. That sampling step is not part of this exercise.\n\n**Upstream differences.** The original JAX code uses `beta_dyn = 1.0`; the PyTorch port (dreamerv3-torch) uses 0.5, as did the first arXiv version of the paper, so both betas are parameters here.\n\n**Contrast with k3_kl_penalty.** That exercise estimates a KL from sampled tokens' log-probabilities. Here both distributions are small categoricals, so the KL is computed exactly.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "One group, two classes, no unimix",
+          "code": "\nimport math, torch\npost = torch.tensor([0.0, math.log(3.0)]).view(1, 1, 1, 2)   # p = [0.25, 0.75]\nprior = torch.zeros(1, 1, 1, 2)                               # q = [0.5, 0.5]\nloss, dyn, rep = {fn}(post, prior, free_nats=0.0, beta_dyn=1.0, beta_rep=0.1, unimix=0.0)\nkl = 0.25 * math.log(0.5) + 0.75 * math.log(1.5)\nassert dyn.shape == (1, 1) and rep.shape == (1, 1) and loss.shape == ()\nassert abs(dyn.item() - kl) < 1e-6 and abs(rep.item() - kl) < 1e-6, (dyn, rep, kl)\nassert abs(loss.item() - 1.1 * kl) < 1e-6, loss\n",
+          "behavior": "rl.kl_estimator"
+        },
+        {
+          "name": "Free bits apply to the sum over groups",
+          "code": "\nimport math, torch\n# Two groups with a KL of about 0.1308 nats each, 0.2616 in total.\ngroup_post = torch.tensor([0.0, math.log(3.0)])\npost = group_post.repeat(2, 1).view(1, 1, 2, 2)\nprior = torch.zeros(1, 1, 2, 2)\nloss, dyn, rep = {fn}(post, prior, free_nats=0.2, beta_dyn=1.0, beta_rep=0.0, unimix=0.0)\nkl = 2 * (0.25 * math.log(0.5) + 0.75 * math.log(1.5))   # 0.2616 > 0.2: not clipped\nassert abs(dyn.item() - kl) < 1e-6, dyn\nloss, dyn, rep = {fn}(post, prior, free_nats=1.0, beta_dyn=1.0, beta_rep=0.0, unimix=0.0)\nassert abs(dyn.item() - 1.0) < 1e-6, dyn                 # 0.2616 < 1.0: clipped to the floor\n",
+          "behavior": "rl.clipping"
+        },
+        {
+          "name": "Identical distributions sit on the floor with zero gradient",
+          "code": "\nimport torch\ng = torch.Generator().manual_seed(0)\nlogits = torch.randn(2, 3, 4, 5, generator=g)\npost = logits.clone().requires_grad_(True)\nprior = logits.clone().requires_grad_(True)\nloss, dyn, rep = {fn}(post, prior)\nassert torch.allclose(dyn, torch.ones(2, 3)) and torch.allclose(rep, torch.ones(2, 3))\nassert abs(loss.item() - 1.1) < 1e-6, loss\nloss.backward()\nassert torch.all(post.grad == 0) and torch.all(prior.grad == 0)\n",
+          "behavior": "gradient.flow"
+        },
+        {
+          "name": "Seeded inputs match the exact formula",
+          "visibility": "unshown",
+          "behavior": "rl.kl_estimator",
+          "failureMessage": "Mix unimix into the softmax probabilities, take the log, sum p * (log p - log q) over classes and then groups, floor each (B, T) sum at free_nats, and return mean(beta_dyn * dyn + beta_rep * rep).",
+          "hiddenCode": "\nimport torch\ndef logp(x, u):\n    if u == 0:\n        return torch.log_softmax(x, -1)\n    return torch.log((1 - u) * torch.softmax(x, -1) + u / x.shape[-1])\ndef oracle(post, prior, free, bd, br, u):\n    lp, lq = logp(post, u), logp(prior, u)\n    kl = (lp.exp() * (lp - lq)).sum(-1).sum(-1)\n    kl = torch.clamp(kl, min=free)\n    return (bd * kl + br * kl).mean(), kl\nfor seed, shape, scale, free, bd, br, u in (\n    (0, (2, 3, 4, 5), 1.0, 1.0, 1.0, 0.1, 0.01),\n    (1, (3, 2, 8, 4), 3.0, 0.5, 0.5, 0.1, 0.01),\n    (2, (1, 5, 32, 16), 2.0, 1.0, 1.0, 0.1, 0.01),\n    (3, (2, 2, 3, 7), 6.0, 0.0, 0.8, 0.2, 0.1),\n    (4, (4, 1, 6, 3), 4.0, 2.0, 1.0, 0.1, 0.0),\n    (5, (2, 4, 5, 9), 8.0, 3.0, 0.5, 0.3, 0.3),\n):\n    g = torch.Generator().manual_seed(seed)\n    post = scale * torch.randn(*shape, generator=g, dtype=torch.float64)\n    prior = scale * torch.randn(*shape, generator=g, dtype=torch.float64)\n    loss, dyn, rep = {fn}(post, prior, free_nats=free, beta_dyn=bd, beta_rep=br, unimix=u)\n    want_loss, want_kl = oracle(post, prior, free, bd, br, u)\n    assert dyn.shape == shape[:2] and rep.shape == shape[:2] and loss.shape == (), (dyn.shape, loss.shape)\n    assert torch.allclose(dyn, want_kl, atol=1e-10, rtol=0), (seed, dyn, want_kl)\n    assert torch.allclose(rep, want_kl, atol=1e-10, rtol=0), (seed, rep, want_kl)\n    assert torch.allclose(loss, want_loss, atol=1e-10, rtol=0), (seed, loss, want_loss)\n"
+        },
+        {
+          "name": "dyn trains only the prior and rep only the posterior",
+          "visibility": "unshown",
+          "behavior": "gradient.flow",
+          "failureMessage": "Detach the posterior inside dyn and the prior inside rep, so dyn's gradient reaches only prior_logits and rep's only post_logits.",
+          "hiddenCode": "\nimport torch\ndef logp(x, u):\n    return torch.log((1 - u) * torch.softmax(x, -1) + u / x.shape[-1])\ndef kl(p, q, u, free):\n    lp, lq = logp(p, u), logp(q, u)\n    return torch.clamp((lp.exp() * (lp - lq)).sum(-1).sum(-1), min=free)\ndef grads(out, post, prior):\n    gp, gq = torch.autograd.grad(out, [post, prior], allow_unused=True, retain_graph=True)\n    gp = torch.zeros_like(post) if gp is None else gp\n    gq = torch.zeros_like(prior) if gq is None else gq\n    return gp, gq\nfor seed, free in ((0, 0.0), (1, 0.5), (2, 1.0)):\n    g = torch.Generator().manual_seed(seed)\n    base_post = 3 * torch.randn(2, 3, 4, 6, generator=g, dtype=torch.float64)\n    base_prior = 3 * torch.randn(2, 3, 4, 6, generator=g, dtype=torch.float64)\n    post = base_post.clone().requires_grad_(True)\n    prior = base_prior.clone().requires_grad_(True)\n    w = torch.rand(2, 3, generator=g, dtype=torch.float64)\n    loss, dyn, rep = {fn}(post, prior, free_nats=free, beta_dyn=0.7, beta_rep=0.2, unimix=0.01)\n    dyn_post, dyn_prior = grads((w * dyn).sum(), post, prior)\n    rep_post, rep_prior = grads((w * rep).sum(), post, prior)\n    assert torch.all(dyn_post == 0), \"dyn sends gradient to the posterior\"\n    assert torch.all(rep_prior == 0), \"rep sends gradient to the prior\"\n    p2 = base_post.clone().requires_grad_(True)\n    q2 = base_prior.clone().requires_grad_(True)\n    want_prior, = torch.autograd.grad((w * kl(p2.detach(), q2, 0.01, free)).sum(), [q2])\n    want_post, = torch.autograd.grad((w * kl(p2, q2.detach(), 0.01, free)).sum(), [p2])\n    assert torch.allclose(dyn_prior, want_prior, atol=1e-10, rtol=0), seed\n    assert torch.allclose(rep_post, want_post, atol=1e-10, rtol=0), seed\n    want_loss = (0.7 * kl(p2.detach(), q2, 0.01, free) + 0.2 * kl(p2, q2.detach(), 0.01, free)).mean()\n    want_loss_post, want_loss_prior = torch.autograd.grad(want_loss, [p2, q2])\n    loss_post, loss_prior = grads(loss, post, prior)\n    assert torch.allclose(loss_prior, want_loss_prior, atol=1e-10, rtol=0), seed\n    assert torch.allclose(loss_post, want_loss_post, atol=1e-10, rtol=0), seed\n"
+        },
+        {
+          "name": "Clipped entries get exactly zero gradient",
+          "visibility": "unshown",
+          "behavior": "rl.clipping",
+          "failureMessage": "Floor with max(free_nats, kl) (or clamp) so a (B, T) entry below free_nats has value free_nats and exactly zero gradient; do not pass gradient through the floor.",
+          "hiddenCode": "\nimport torch\ng = torch.Generator().manual_seed(3)\npost = torch.randn(1, 4, 3, 5, generator=g, dtype=torch.float64)\nprior = post.clone()\nprior[0, 0] += 0.05 * torch.randn(3, 5, generator=g, dtype=torch.float64)   # tiny KL: clipped\nprior[0, 1] += 4.0 * torch.randn(3, 5, generator=g, dtype=torch.float64)    # large KL: not clipped\nprior[0, 2] += 0.10 * torch.randn(3, 5, generator=g, dtype=torch.float64)   # tiny KL: clipped\nprior[0, 3] += 5.0 * torch.randn(3, 5, generator=g, dtype=torch.float64)    # large KL: not clipped\npost.requires_grad_(True)\nprior.requires_grad_(True)\nloss, dyn, rep = {fn}(post, prior, free_nats=1.0, beta_dyn=1.0, beta_rep=0.1, unimix=0.01)\nassert torch.all(dyn[0, [0, 2]] == 1.0) and torch.all(dyn[0, [1, 3]] > 1.0), dyn\nloss.backward()\nfor t in (0, 2):\n    assert torch.all(post.grad[0, t] == 0) and torch.all(prior.grad[0, t] == 0), t\nfor t in (1, 3):\n    assert post.grad[0, t].abs().sum() > 0 and prior.grad[0, t].abs().sum() > 0, t\n"
+        },
+        {
+          "name": "Unimix bounds the KL of a confident miss",
+          "visibility": "unshown",
+          "behavior": "numerics.stability",
+          "failureMessage": "Mix in probability space: probs = (1 - unimix) * softmax(logits) + unimix / C, then log; mixing the logits leaves the KL unbounded.",
+          "hiddenCode": "\nimport math, torch\nC, u = 4, 0.01\npost = torch.full((1, 1, 1, C), -50.0, dtype=torch.float64); post[..., 0] = 50.0\nprior = torch.full((1, 1, 1, C), -50.0, dtype=torch.float64); prior[..., 1] = 50.0\nloss, dyn, rep = {fn}(post, prior, free_nats=0.0, beta_dyn=1.0, beta_rep=0.0, unimix=u)\nhi, lo = 1 - u + u / C, u / C\nwant = hi * math.log(hi / lo) + lo * math.log(lo / hi)\nassert abs(dyn.item() - want) < 1e-10, (dyn.item(), want)\nassert abs(loss.item() - want) < 1e-10, loss\n"
+        },
+        {
+          "name": "Very negative logits stay finite",
+          "visibility": "unshown",
+          "behavior": "numerics.stability",
+          "failureMessage": "With unimix = 0 use log_softmax, not log(softmax): a probability that underflows to zero must not turn the KL into nan or inf.",
+          "hiddenCode": "\nimport torch\npost = torch.tensor([0.0, -1e4, -2e4]).view(1, 1, 1, 3)\nprior = torch.tensor([0.0, 0.0, -1e4]).view(1, 1, 1, 3)\nfor u in (0.0, 0.01):\n    p = post.clone().requires_grad_(True)\n    q = prior.clone().requires_grad_(True)\n    loss, dyn, rep = {fn}(p, q, free_nats=0.0, beta_dyn=1.0, beta_rep=0.1, unimix=u)\n    assert torch.isfinite(loss) and torch.isfinite(dyn).all() and torch.isfinite(rep).all(), (u, loss, dyn)\n    loss.backward()\n    assert torch.isfinite(p.grad).all() and torch.isfinite(q.grad).all(), u\nlp = torch.log_softmax(post, -1)\nlq = torch.log_softmax(prior, -1)\nwant = (lp.exp() * (lp - lq)).sum()\nloss, dyn, rep = {fn}(post.double(), prior.double(), free_nats=0.0, unimix=0.0)\nassert abs(dyn.item() - want.item()) < 1e-6, (dyn, want)\n"
+        },
+        {
+          "name": "Betas weight the batch mean",
+          "visibility": "unshown",
+          "behavior": "metrics.averaging",
+          "failureMessage": "loss is the mean over all B * T entries of beta_dyn * dyn + beta_rep * rep; do not sum, and do not swap the two betas.",
+          "hiddenCode": "\nimport torch\ng = torch.Generator().manual_seed(9)\npost = 2 * torch.randn(3, 5, 4, 4, generator=g, dtype=torch.float64)\nprior = 2 * torch.randn(3, 5, 4, 4, generator=g, dtype=torch.float64)\n_, dyn, rep = {fn}(post, prior, free_nats=0.5, beta_dyn=1.0, beta_rep=0.0)\nfor bd, br in ((1.0, 0.1), (0.5, 0.1), (0.0, 1.0), (2.0, 0.0)):\n    loss, d, r = {fn}(post, prior, free_nats=0.5, beta_dyn=bd, beta_rep=br)\n    assert torch.allclose(d, dyn) and torch.allclose(r, rep)\n    want = (bd * dyn + br * rep).mean()\n    assert abs(loss.item() - want.item()) < 1e-10, (bd, br, loss, want)\n"
+        },
+        {
+          "name": "Keeps dtype and leaves the inputs alone",
+          "visibility": "unshown",
+          "behavior": "tensor.dtype_device",
+          "failureMessage": "Compute in the input dtype (float32 stays float32, float64 stays float64) and never modify post_logits or prior_logits in place.",
+          "hiddenCode": "\nimport torch\ng = torch.Generator().manual_seed(4)\nfor dtype in (torch.float32, torch.float64):\n    post = torch.randn(2, 2, 3, 4, generator=g).to(dtype)\n    prior = torch.randn(2, 2, 3, 4, generator=g).to(dtype)\n    a, b = post.clone(), prior.clone()\n    loss, dyn, rep = {fn}(post, prior)\n    assert loss.dtype == dyn.dtype == rep.dtype == dtype, (loss.dtype, dyn.dtype, rep.dtype)\n    assert torch.equal(post, a) and torch.equal(prior, b), \"inputs were modified\"\n"
+        },
+        {
+          "name": "Rejects bad inputs",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Raise ValueError for inputs that are not 4-D floating tensors, for mismatched shapes, and for unimix outside [0, 1].",
+          "hiddenCode": "\nimport torch\nok = torch.zeros(1, 2, 3, 4)\ncases = [\n    (torch.zeros(2, 3, 4), torch.zeros(2, 3, 4), {}),\n    (ok, torch.zeros(1, 2, 3, 5), {}),\n    (ok, torch.zeros(1, 2, 4, 4), {}),\n    (torch.zeros(1, 2, 3, 4, dtype=torch.long), torch.zeros(1, 2, 3, 4, dtype=torch.long), {}),\n    (ok, ok, {\"unimix\": -0.1}),\n    (ok, ok, {\"unimix\": 1.5}),\n]\nfor post, prior, kw in cases:\n    try:\n        {fn}(post, prior, **kw)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"accepted {tuple(post.shape)} {post.dtype} vs {tuple(prior.shape)} {kw}\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "If you detach the posterior inside the KL, which network still receives a gradient? In what order do you sum over classes, sum over groups and apply the floor, and what changes if you swap the last two? What is the smallest probability any class can have after unimix, and what does that do to log q?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Write one helper that turns logits into log-probabilities: mix in probability space when unimix is positive, and use a log-softmax when it is zero. Write a second helper for the KL that sums over the class axis and then the group axis. Call the KL twice with the detach on opposite sides, clamp each result from below at free_nats, then combine with the betas and take the mean. Pitfalls: mixing the logits instead of the probabilities, applying the floor per group, and taking log of a softmax that underflowed to zero."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "softmax",
+        "softmax_entropy",
+        "k3_kl_penalty",
+        "symlog_twohot"
+      ],
+      "modelConnections": [
+        "DreamerV3 (Hafner et al. 2023) trains its RSSM with exactly this loss: 32 groups, unimix 0.01, free bits of 1 nat, and dyn and rep weighted 1.0 and 0.1 in the final paper version.",
+        "DreamerV2 introduced discrete latents and KL balancing with a single mixing weight of 0.8; DreamerV3 splits it into two separately weighted terms and adds free bits and unimix.",
+        "The straight-through one-hot sample of the same unimixed probabilities is what the dynamics model and the actor-critic consume."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Stable world-model training across domains with fixed hyperparameters: the prior is pushed toward the posterior, latents do not collapse, and the KL stays bounded."
+        ],
+        "cons": [
+          "Three more hyperparameters, and below the free-bits floor the KL gives no learning signal at all, so representations can stay more informative than they need to be."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "Why does DreamerV3 split the KL between posterior and prior into a dynamics term and a representation term with different weights?",
+          "hint": "Think about the two ways the KL can shrink: the prior can move, or the posterior can drop information. Cover which network each term trains and why the weights favor one side."
+        },
+        {
+          "stage": "concept",
+          "question": "What are free bits, and why are they applied to the KL summed over all latent groups rather than to each group?",
+          "hint": "Cover what the floor does to the value and the gradient below it, and what it protects against. Then compare a per-group floor: how the total budget changes and whether a few groups can still carry the information."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Where exactly do the stop-gradients go in the dyn and rep terms, and how would you verify the gradient routing with autograd?",
+          "hint": "Name which logits are detached in each term and why the values stay equal. For the check, describe taking gradients of each term separately with respect to both inputs and what each must look like."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why is unimix applied to the probabilities and not to the logits, and what bound does it give on the KL?",
+          "hint": "Compare what mixing does in each space to the smallest probability a class can have. Cover how that floor limits the log-ratio, and what goes wrong when the posterior is confident about a class the prior rules out."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What happens to the gradient of an entry whose KL is below the free-bits floor, and why can that be a problem late in training?",
+          "hint": "Cover the value and gradient of a clamped entry, then think about which losses drive the latent once the KL is silent. Consider what happens to representations that carry more information than the dynamics can predict."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Discrete categorical latents with straight-through gradients versus Gaussian latents with the reparameterization trick in a world model?",
+          "hint": "Weigh gradient bias against variance, how each handles multimodal futures, KL stability, and what unimix or a variance floor does in each case. Mention which DreamerV2 and V3 chose and why."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "The original DreamerV3 uses beta_dyn 1.0 while the PyTorch port uses 0.5. What changes in training when beta_dyn is lowered relative to beta_rep?",
+          "hint": "Think about the ratio of the two weights rather than their size. Cover how fast the prior catches up with the posterior, how much the posterior is regularized, and how this interacts with the free-bits floor."
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/danijar/dreamerv3/blob/e01491fad6434b2245a3b8ca201dd7faedcc458c/dreamerv3/rssm.py",
+          "commit": "e01491fad6434b2245a3b8ca201dd7faedcc458c",
+          "path": "dreamerv3/rssm.py",
+          "symbol": "RSSM.loss (lines 120-131) and RSSM._dist (line 173)",
+          "license": "MIT",
+          "adapted": "Same loss: dyn = KL(sg(post) || prior), rep = KL(post || sg(prior)), each summed over the stoch groups by Agg and floored with jnp.maximum(kl, free_nats).",
+          "simplifications": "JAX transcribed to torch. Upstream skips the floor when free_nats is 0; the exercise always applies it, which differs only for KL values that round below zero. Upstream uses jnp.maximum (half the gradient at an exact tie); the exercise does not test ties."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/danijar/dreamerv3/blob/e01491fad6434b2245a3b8ca201dd7faedcc458c/embodied/jax/outs.py",
+          "commit": "e01491fad6434b2245a3b8ca201dd7faedcc458c",
+          "path": "embodied/jax/outs.py",
+          "symbol": "Categorical (line 208), OneHot, Agg.kl",
+          "license": "MIT",
+          "adapted": "Unimix in probability space followed by log, and the exact categorical KL sum_c p (log p - log q).",
+          "simplifications": "Upstream casts logits to float32; the exercise keeps the input dtype so float64 can be checked tightly. The OneHot/Agg wrappers become two helpers."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/danijar/dreamerv3/blob/e01491fad6434b2245a3b8ca201dd7faedcc458c/dreamerv3/configs.yaml",
+          "commit": "e01491fad6434b2245a3b8ca201dd7faedcc458c",
+          "path": "dreamerv3/configs.yaml",
+          "symbol": "agent.loss_scales (line 86), agent.dyn.rssm free_nats and unimix (line 91)",
+          "license": "MIT",
+          "adapted": "Defaults dyn 1.0, rep 0.1, free_nats 1.0, unimix 0.01; the total is sum(v.mean() * scale), as in Agent.loss.",
+          "simplifications": "Only the dyn and rep terms of the world-model loss are kept."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/NM512/dreamerv3-torch/blob/6ef8646d807cd10ce0c88e10a7e943211e7fc44c/networks.py",
+          "commit": "6ef8646d807cd10ce0c88e10a7e943211e7fc44c",
+          "path": "networks.py",
+          "symbol": "RSSM.kl_loss (line 272)",
+          "license": "MIT",
+          "adapted": "Cross-check: the same two detached KLs, floored with torch.clip(min=free) and weighted by dyn_scale and rep_scale.",
+          "simplifications": "Divergence: the port's default dyn_scale is 0.5 (configs.yaml line 57) against 1.0 upstream, so the exercise takes both betas as parameters. It returns the per-(B, T) loss and leaves the mean to the caller."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/NM512/dreamerv3-torch/blob/6ef8646d807cd10ce0c88e10a7e943211e7fc44c/tools.py",
+          "commit": "6ef8646d807cd10ce0c88e10a7e943211e7fc44c",
+          "path": "tools.py",
+          "symbol": "OneHotDist (line 425)",
+          "license": "MIT",
+          "adapted": "Cross-check of the unimix step: probs * (1 - u) + u / C, then log.",
+          "simplifications": "The KL comes from torch.distributions instead of an explicit sum; sampling and the straight-through mode are not part of the exercise."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2301.04104",
+          "section": "Hafner et al. 2023, Mastering Diverse Domains through World Models, Section 2 World model learning, Equations 3-5 (dynamics and representation losses with free bits) and the unimix paragraph",
+          "note": "beta_dyn = 1 and beta_rep = 0.1 in the final version; earlier versions used beta_dyn = 0.5."
+        }
+      ]
+    },
+    {
+      "id": "symlog_twohot",
+      "title": "DreamerV3 Symlog Two-Hot Head",
+      "titleZh": "DreamerV3 Symlog Two-Hot Head",
+      "difficulty": "Medium",
+      "functionName": "twohot_loss",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "Build the pieces of the DreamerV3 reward and value head: the symlog squash, a two-hot target over symmetric bins in symlog space, its cross-entropy loss, and a prediction that is exactly zero when the head is uniform.\n\n**Signatures:** define all six functions at the top level of your code.\n- `symlog(x) -> Tensor` and `symexp(x) -> Tensor`\n- `symmetric_bins(K, limit=20.0) -> Tensor`\n- `twohot_target(y, bins) -> Tensor`\n- `twohot_loss(logits, y, bins) -> Tensor`\n- `twohot_mean(logits, bins) -> Tensor`\n\n**symlog and symexp:**\n- `symlog(x) = sign(x) * log1p(|x|)` and `symexp(x) = sign(x) * expm1(|x|)`, elementwise. They are inverses.\n- Use `log1p` and `expm1`, not `log(1 + |x|)` and `exp(|x|) - 1`: in float64, `symlog(1e-20)` must be `1e-20` to a relative error of `1e-12`.\n\n**symmetric_bins:**\n- Returns `K` float32 bin positions in symlog space, equal to `torch.linspace(-limit, limit, K)` within `1e-5`.\n- Exactly antisymmetric: `bins[K - 1 - i] == -bins[i]` bit for bit. For odd `K` the middle bin is exactly 0; for even `K` no bin is 0.\n- Raise `ValueError` unless `K` is an integer of at least 2 and `limit > 0`.\n\n**Bins in general.** `bins` is a 1-D tensor of `K >= 2` strictly increasing values in symlog space. It need not be evenly spaced, symmetric, or come from `symmetric_bins`. Cast it to the dtype of the other input before use.\n\n**twohot_target:** `y` is a float tensor of any shape `(...)` in raw space. Return a `(..., K)` tensor in the dtype of `y`:\n- Let `x = symlog(y)`. `below` is the index of the last bin `<= x`, and `above` the index of the first bin `> x`, both clipped to `0 .. K-1`.\n- When `below != above`, put `|bins[above] - x| / (bins[above] - bins[below])` on `below` and the rest on `above`, so that `sum(target * bins) == x`.\n- A target exactly on a bin puts all its mass on that bin. A target below the first bin or above the last puts all its mass on that edge bin.\n- Every row sums to 1 and has at most two adjacent non-zero entries.\n\n**twohot_loss:** `logits` has shape `(..., K)` and `y` shape `(...)`. Return the per-element cross-entropy `-(twohot_target(y, bins) * log_softmax(logits)).sum(-1)`, shape `(...)`, in the dtype of `logits`. Do not reduce over the batch. The target is a constant: no gradient flows into `y`.\n\n**twohot_mean:** return `symexp` of the expected bin position under `softmax(logits)`, shape `(...)`, in the dtype of `logits`. Compute the expectation as a symmetric sum:\n- Multiply each probability by its bin. Add the product at bin `i` to the product at bin `K - 1 - i` for every `i < K // 2`, then sum those pair sums. For odd `K`, add the middle bin's product.\n- So when the bins are antisymmetric and `probs[i] == probs[K - 1 - i]` for all `i` (uniform logits, for example), the result is exactly `0.0`, not a rounding error like `-7e-8`. This must hold for even and odd `K`, in float32 and float64.\n\n**Errors.** `twohot_target`, `twohot_loss` and `twohot_mean` raise `ValueError` when `bins` is not 1-D with at least 2 values, when `logits.shape[-1] != K`, or when `logits.shape[:-1] != y.shape`.\n\n**Example:**\n\n    bins = symmetric_bins(5, 2.0)                 # [-2., -1., 0., 1., 2.]\n    twohot_target(symexp(torch.tensor(0.25)), bins)\n    # [0., 0., 0.75, 0.25, 0.]   symlog(y) = 0.25, a quarter of the way from the bin at 0 to the bin at 1\n    twohot_mean(torch.zeros(5), bins)             # exactly 0.0\n    twohot_loss(torch.zeros(5), torch.tensor(0.0), bins)   # log(5)\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why symlog.** Rewards and returns range from fractions to thousands across tasks, and a squared-error head on raw values lets the large ones dominate the gradient. symlog compresses large magnitudes like a logarithm, stays close to the identity near zero, and is defined for negative values. DreamerV3 trains every reward and value head in this space, so one set of hyperparameters works across domains.\n\n**Why two-hot instead of regression.** Predicting a categorical distribution over fixed bins turns regression into classification. The gradient of a cross-entropy has the same scale whatever the target's magnitude, and a distribution can represent several plausible returns. Two-hot encoding spreads a continuous target over its two neighbouring bins, with weights chosen so that the expected bin position is exactly the target. DreamerV3 uses 255 bins between -20 and 20 in symlog space, which covers raw values up to about 5e8.\n\n**Why a symmetric sum.** The output layer of the reward and value heads is initialized to zero, so the first predictions are a uniform softmax. Summed left to right in float32, uniform probabilities over 255 symmetric bins give about -7e-8 instead of 0, and that small bias feeds back into bootstrapped value targets. Pairing each bin with its mirror makes every pair cancel exactly.\n\n**Two places to interpolate.** This exercise interpolates linearly between bins in symlog space, as the first DreamerV3 paper and the PyTorch port do. The current DreamerV3 code instead places the bins at `symexp` of those positions and interpolates in raw space. Both decode a single two-hot target back to exactly `y`. They differ when returns are noisy: a symlog-space head learns the average of `symlog(y)`, and `symexp` of that average is smaller in magnitude than the average of `y`. A raw-space head learns the average of `y` itself.",
+      "descriptionZh": "Build the pieces of the DreamerV3 reward and value head: the symlog squash, a two-hot target over symmetric bins in symlog space, its cross-entropy loss, and a prediction that is exactly zero when the head is uniform.\n\n**Signatures:** define all six functions at the top level of your code.\n- `symlog(x) -> Tensor` and `symexp(x) -> Tensor`\n- `symmetric_bins(K, limit=20.0) -> Tensor`\n- `twohot_target(y, bins) -> Tensor`\n- `twohot_loss(logits, y, bins) -> Tensor`\n- `twohot_mean(logits, bins) -> Tensor`\n\n**symlog and symexp:**\n- `symlog(x) = sign(x) * log1p(|x|)` and `symexp(x) = sign(x) * expm1(|x|)`, elementwise. They are inverses.\n- Use `log1p` and `expm1`, not `log(1 + |x|)` and `exp(|x|) - 1`: in float64, `symlog(1e-20)` must be `1e-20` to a relative error of `1e-12`.\n\n**symmetric_bins:**\n- Returns `K` float32 bin positions in symlog space, equal to `torch.linspace(-limit, limit, K)` within `1e-5`.\n- Exactly antisymmetric: `bins[K - 1 - i] == -bins[i]` bit for bit. For odd `K` the middle bin is exactly 0; for even `K` no bin is 0.\n- Raise `ValueError` unless `K` is an integer of at least 2 and `limit > 0`.\n\n**Bins in general.** `bins` is a 1-D tensor of `K >= 2` strictly increasing values in symlog space. It need not be evenly spaced, symmetric, or come from `symmetric_bins`. Cast it to the dtype of the other input before use.\n\n**twohot_target:** `y` is a float tensor of any shape `(...)` in raw space. Return a `(..., K)` tensor in the dtype of `y`:\n- Let `x = symlog(y)`. `below` is the index of the last bin `<= x`, and `above` the index of the first bin `> x`, both clipped to `0 .. K-1`.\n- When `below != above`, put `|bins[above] - x| / (bins[above] - bins[below])` on `below` and the rest on `above`, so that `sum(target * bins) == x`.\n- A target exactly on a bin puts all its mass on that bin. A target below the first bin or above the last puts all its mass on that edge bin.\n- Every row sums to 1 and has at most two adjacent non-zero entries.\n\n**twohot_loss:** `logits` has shape `(..., K)` and `y` shape `(...)`. Return the per-element cross-entropy `-(twohot_target(y, bins) * log_softmax(logits)).sum(-1)`, shape `(...)`, in the dtype of `logits`. Do not reduce over the batch. The target is a constant: no gradient flows into `y`.\n\n**twohot_mean:** return `symexp` of the expected bin position under `softmax(logits)`, shape `(...)`, in the dtype of `logits`. Compute the expectation as a symmetric sum:\n- Multiply each probability by its bin. Add the product at bin `i` to the product at bin `K - 1 - i` for every `i < K // 2`, then sum those pair sums. For odd `K`, add the middle bin's product.\n- So when the bins are antisymmetric and `probs[i] == probs[K - 1 - i]` for all `i` (uniform logits, for example), the result is exactly `0.0`, not a rounding error like `-7e-8`. This must hold for even and odd `K`, in float32 and float64.\n\n**Errors.** `twohot_target`, `twohot_loss` and `twohot_mean` raise `ValueError` when `bins` is not 1-D with at least 2 values, when `logits.shape[-1] != K`, or when `logits.shape[:-1] != y.shape`.\n\n**Example:**\n\n    bins = symmetric_bins(5, 2.0)                 # [-2., -1., 0., 1., 2.]\n    twohot_target(symexp(torch.tensor(0.25)), bins)\n    # [0., 0., 0.75, 0.25, 0.]   symlog(y) = 0.25, a quarter of the way from the bin at 0 to the bin at 1\n    twohot_mean(torch.zeros(5), bins)             # exactly 0.0\n    twohot_loss(torch.zeros(5), torch.tensor(0.0), bins)   # log(5)\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why symlog.** Rewards and returns range from fractions to thousands across tasks, and a squared-error head on raw values lets the large ones dominate the gradient. symlog compresses large magnitudes like a logarithm, stays close to the identity near zero, and is defined for negative values. DreamerV3 trains every reward and value head in this space, so one set of hyperparameters works across domains.\n\n**Why two-hot instead of regression.** Predicting a categorical distribution over fixed bins turns regression into classification. The gradient of a cross-entropy has the same scale whatever the target's magnitude, and a distribution can represent several plausible returns. Two-hot encoding spreads a continuous target over its two neighbouring bins, with weights chosen so that the expected bin position is exactly the target. DreamerV3 uses 255 bins between -20 and 20 in symlog space, which covers raw values up to about 5e8.\n\n**Why a symmetric sum.** The output layer of the reward and value heads is initialized to zero, so the first predictions are a uniform softmax. Summed left to right in float32, uniform probabilities over 255 symmetric bins give about -7e-8 instead of 0, and that small bias feeds back into bootstrapped value targets. Pairing each bin with its mirror makes every pair cancel exactly.\n\n**Two places to interpolate.** This exercise interpolates linearly between bins in symlog space, as the first DreamerV3 paper and the PyTorch port do. The current DreamerV3 code instead places the bins at `symexp` of those positions and interpolates in raw space. Both decode a single two-hot target back to exactly `y`. They differ when returns are noisy: a symlog-space head learns the average of `symlog(y)`, and `symexp` of that average is smaller in magnitude than the average of `y`. A raw-space head learns the average of `y` itself.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "symlog, symexp and symmetric bins",
+          "code": "\nimport torch\nsymlog = {fn}.__globals__[\"symlog\"]\nsymexp = {fn}.__globals__[\"symexp\"]\nsymmetric_bins = {fn}.__globals__[\"symmetric_bins\"]\nx = torch.tensor([-3.0, 0.0, 0.5, 100.0])\nwant = torch.tensor([-1.3862944, 0.0, 0.4054651, 4.6151205])\nassert torch.allclose(symlog(x), want, atol=1e-6), symlog(x)\nassert torch.allclose(symexp(symlog(x)), x, rtol=1e-6), symexp(symlog(x))\nbins = symmetric_bins(5, 2.0)\nassert bins.dtype == torch.float32 and torch.equal(bins, torch.tensor([-2.0, -1.0, 0.0, 1.0, 2.0])), bins\n",
+          "behavior": "state.invariant"
+        },
+        {
+          "name": "Two-hot target between bins, on a bin and outside the range",
+          "code": "\nimport torch\nsymexp = {fn}.__globals__[\"symexp\"]\nsymmetric_bins = {fn}.__globals__[\"symmetric_bins\"]\ntwohot_target = {fn}.__globals__[\"twohot_target\"]\nbins = symmetric_bins(5, 2.0)\nt = twohot_target(symexp(torch.tensor(0.25)), bins)\nassert t.shape == (5,) and torch.allclose(t, torch.tensor([0.0, 0.0, 0.75, 0.25, 0.0]), atol=1e-6), t\nt = twohot_target(torch.tensor([0.0, 1e6, -1e6]), bins)\nwant = torch.tensor([[0.0, 0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0, 1.0], [1.0, 0.0, 0.0, 0.0, 0.0]])\nassert t.shape == (3, 5) and torch.allclose(t, want), t\n",
+          "behavior": "state.invariant"
+        },
+        {
+          "name": "Uniform logits: loss is log K and the mean is exactly zero",
+          "code": "\nimport math, torch\nsymmetric_bins = {fn}.__globals__[\"symmetric_bins\"]\ntwohot_mean = {fn}.__globals__[\"twohot_mean\"]\nbins = symmetric_bins(5, 2.0)\nloss = {fn}(torch.zeros(5), torch.tensor(0.0), bins)\nassert loss.shape == () and abs(loss.item() - math.log(5)) < 1e-6, loss\nbins = symmetric_bins(255)\nm = twohot_mean(torch.zeros(3, 255), bins)\nassert m.shape == (3,) and torch.equal(m, torch.zeros(3)), m\n",
+          "behavior": "state.invariant"
+        },
+        {
+          "name": "symlog and symexp keep precision near zero and invert each other",
+          "visibility": "unshown",
+          "behavior": "numerics.stability",
+          "failureMessage": "Use sign(x) * log1p(|x|) and sign(x) * expm1(|x|); log(1 + |x|) and exp(|x|) - 1 lose tiny values.",
+          "hiddenCode": "\nimport torch\nsymlog = {fn}.__globals__[\"symlog\"]\nsymexp = {fn}.__globals__[\"symexp\"]\ntiny = torch.tensor([1e-20, -3e-17, 1e-14], dtype=torch.float64)\nassert torch.allclose(symlog(tiny), tiny, rtol=1e-12, atol=0), symlog(tiny)\nassert torch.allclose(symexp(tiny), tiny, rtol=1e-12, atol=0), symexp(tiny)\ng = torch.Generator().manual_seed(0)\nx = torch.randn(200, generator=g, dtype=torch.float64) * torch.logspace(-6, 6, 200, dtype=torch.float64)\nwant = torch.sign(x) * torch.log1p(torch.abs(x))\nassert torch.allclose(symlog(x), want, rtol=1e-12, atol=0), \"symlog\"\nassert torch.allclose(symexp(want), x, rtol=1e-10, atol=0), \"symexp\"\nassert torch.allclose(symexp(torch.tensor([-2.0, 0.0, 3.0], dtype=torch.float64)), torch.tensor([-6.38905609893065, 0.0, 19.085536923187668], dtype=torch.float64)), \"symexp values\"\nassert symlog(torch.tensor(0.0)).item() == 0.0 and symexp(torch.tensor(0.0)).item() == 0.0\nassert symlog(x.float()).dtype == torch.float32 and symexp(x.float()).dtype == torch.float32\n"
+        },
+        {
+          "name": "symmetric_bins for even and odd K",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "Bins are float32, match linspace(-limit, limit, K), mirror exactly (bins[K-1-i] == -bins[i]), and include 0 only for odd K.",
+          "hiddenCode": "\nimport torch\nsymmetric_bins = {fn}.__globals__[\"symmetric_bins\"]\nfor K in (2, 3, 4, 5, 6, 41, 254, 255, 256):\n    for limit in (20.0, 3.5):\n        b = symmetric_bins(K, limit)\n        assert b.shape == (K,) and b.dtype == torch.float32, (K, b.shape, b.dtype)\n        assert torch.allclose(b, torch.linspace(-limit, limit, K), atol=1e-5, rtol=0), (K, limit)\n        assert torch.equal(b, -b.flip(0)), (K, limit, \"not exactly antisymmetric\")\n        assert torch.all(b[1:] > b[:-1]), (K, \"not strictly increasing\")\n        zeros = int((b == 0).sum())\n        assert zeros == (K % 2), (K, \"zero bins\", zeros)\nassert torch.allclose(symmetric_bins(255), torch.linspace(-20, 20, 255), atol=1e-5), \"default limit is 20\"\n"
+        },
+        {
+          "name": "Targets exactly on a bin, including uneven bins",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "below is the last bin <= symlog(y) and above the first bin > symlog(y); a target exactly on bin i is one-hot at i, not split across its neighbours.",
+          "hiddenCode": "\nimport torch\n\ndef uneven_bins(seed, n_pos, dtype=torch.float64, middle=True):\n    g = torch.Generator().manual_seed(seed)\n    raw = torch.sort(torch.rand(n_pos, generator=g, dtype=dtype) * 50 + 0.01).values\n    raw = torch.unique(raw)\n    pos = torch.sign(raw) * torch.log1p(torch.abs(raw))\n    zero = torch.zeros(1, dtype=dtype) if middle else torch.zeros(0, dtype=dtype)\n    bins = torch.cat([-pos.flip(0), zero, pos])\n    raws = torch.cat([-raw.flip(0), zero, raw])\n    return bins, raws\n\ntwohot_target = {fn}.__globals__[\"twohot_target\"]\nfor seed in (0, 1, 2):\n    bins, raws = uneven_bins(seed, 7)\n    t = twohot_target(raws, bins)\n    assert t.shape == (len(bins), len(bins)), t.shape\n    assert torch.allclose(t, torch.eye(len(bins), dtype=torch.float64), atol=1e-12), (seed, t)\nbins, raws = uneven_bins(3, 6, dtype=torch.float32, middle=False)\nt = twohot_target(raws, bins)\nassert torch.allclose(t, torch.eye(len(bins)), atol=1e-6), t\n"
+        },
+        {
+          "name": "Seeded targets interpolate in symlog space with the right weights",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "Compare symlog(y), not y, with the bins, and give the nearer bin the larger weight so that sum(target * bins) == symlog(y).",
+          "hiddenCode": "\nimport torch\n\ndef uneven_bins(seed, n_pos, dtype=torch.float64, middle=True):\n    g = torch.Generator().manual_seed(seed)\n    raw = torch.sort(torch.rand(n_pos, generator=g, dtype=dtype) * 50 + 0.01).values\n    raw = torch.unique(raw)\n    pos = torch.sign(raw) * torch.log1p(torch.abs(raw))\n    zero = torch.zeros(1, dtype=dtype) if middle else torch.zeros(0, dtype=dtype)\n    bins = torch.cat([-pos.flip(0), zero, pos])\n    raws = torch.cat([-raw.flip(0), zero, raw])\n    return bins, raws\n\ntwohot_target = {fn}.__globals__[\"twohot_target\"]\nsymlog = lambda v: torch.sign(v) * torch.log1p(torch.abs(v))\nfor seed in (4, 5, 6, 7, 8):\n    bins, raws = uneven_bins(seed, 9)\n    g = torch.Generator().manual_seed(100 + seed)\n    y = (torch.rand(6, 5, generator=g, dtype=torch.float64) * 2 - 1) * raws[-1] * 0.999\n    t = twohot_target(y, bins)\n    assert t.shape == (6, 5, len(bins)) and t.dtype == torch.float64, (t.shape, t.dtype)\n    assert torch.allclose(t.sum(-1), torch.ones(6, 5, dtype=torch.float64), atol=1e-12), seed\n    assert torch.all(t >= 0), seed\n    assert torch.allclose((t * bins).sum(-1), symlog(y), atol=1e-10), (seed, \"expected bin != symlog(y)\")\n    nz = (t > 0).sum(-1)\n    assert torch.all(nz <= 2), seed\n    idx = torch.arange(len(bins), dtype=torch.float64)\n    first = torch.where(t > 0, idx, torch.full_like(idx, 1e9)).min(-1).values\n    last = torch.where(t > 0, idx, torch.full_like(idx, -1.0)).max(-1).values\n    assert torch.all(last - first <= 1), (seed, \"non-adjacent bins\")\n"
+        },
+        {
+          "name": "Zero target for even and odd K",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "y = 0 is one-hot on the middle bin for odd K and splits 0.5 / 0.5 between bins K/2 - 1 and K/2 for even K.",
+          "hiddenCode": "\nimport torch\nsymmetric_bins = {fn}.__globals__[\"symmetric_bins\"]\ntwohot_target = {fn}.__globals__[\"twohot_target\"]\nfor K in (3, 5, 255):\n    t = twohot_target(torch.zeros(2), symmetric_bins(K))\n    want = torch.zeros(2, K); want[:, K // 2] = 1.0\n    assert torch.equal(t, want), (K, t.nonzero())\nfor K in (2, 4, 256):\n    t = twohot_target(torch.zeros(2), symmetric_bins(K))\n    want = torch.zeros(2, K); want[:, K // 2 - 1] = 0.5; want[:, K // 2] = 0.5\n    assert torch.allclose(t, want, atol=1e-6), (K, t[0, K // 2 - 2:K // 2 + 2])\n"
+        },
+        {
+          "name": "Targets outside the bin range go to the edge bin",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "Clip below and above to 0..K-1; when they coincide put weight 1 on that bin instead of dividing by a zero gap.",
+          "hiddenCode": "\nimport torch\nsymmetric_bins = {fn}.__globals__[\"symmetric_bins\"]\ntwohot_target = {fn}.__globals__[\"twohot_target\"]\nfor K in (4, 5, 255):\n    bins = symmetric_bins(K, 2.0)\n    y = torch.tensor([7.0, -7.0, 1e30, -1e30, 6.389056, -6.389056])\n    t = twohot_target(y, bins)\n    assert torch.isfinite(t).all(), (K, t)\n    want = torch.zeros(6, K)\n    want[0::2, -1] = 1.0\n    want[1::2, 0] = 1.0\n    assert torch.allclose(t, want, atol=1e-5), (K, t)\n"
+        },
+        {
+          "name": "Seeded per-element loss matches the cross-entropy",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "Return -(target * log_softmax(logits, -1)).sum(-1) for every element, shape (...), without averaging over the batch.",
+          "hiddenCode": "\nimport torch\nsymmetric_bins = {fn}.__globals__[\"symmetric_bins\"]\ntwohot_target = {fn}.__globals__[\"twohot_target\"]\nfor seed, shape, K in ((0, (4,), 255), (1, (2, 3), 6), (2, (5,), 7), (3, (), 9)):\n    g = torch.Generator().manual_seed(seed)\n    bins = symmetric_bins(K, 5.0).double()\n    logits = torch.randn(*shape, K, generator=g, dtype=torch.float64) * 2\n    y = torch.randn(shape, generator=g, dtype=torch.float64) * 30\n    loss = {fn}(logits, y, bins)\n    assert loss.shape == shape and loss.dtype == torch.float64, (loss.shape, loss.dtype)\n    want = -(twohot_target(y, bins) * torch.log_softmax(logits, -1)).sum(-1)\n    assert torch.allclose(loss, want, atol=1e-12), (seed, loss, want)\n    assert torch.all(loss > 0), seed\n"
+        },
+        {
+          "name": "Loss gradient reaches the logits but not y",
+          "visibility": "unshown",
+          "behavior": "gradient.flow",
+          "failureMessage": "Detach y before building the target: the gradient with respect to the logits is softmax(logits) - target, and y gets none.",
+          "hiddenCode": "\nimport torch\nsymmetric_bins = {fn}.__globals__[\"symmetric_bins\"]\ntwohot_target = {fn}.__globals__[\"twohot_target\"]\ng = torch.Generator().manual_seed(9)\nbins = symmetric_bins(11, 4.0).double()\nlogits = torch.randn(3, 4, 11, generator=g, dtype=torch.float64).requires_grad_()\ny = (torch.randn(3, 4, generator=g, dtype=torch.float64) * 5).requires_grad_()\nloss = {fn}(logits, y, bins)\nloss.sum().backward()\nassert y.grad is None or torch.all(y.grad == 0), y.grad\nwant = torch.softmax(logits.detach(), -1) - twohot_target(y.detach(), bins)\nassert torch.allclose(logits.grad, want, atol=1e-12), (logits.grad - want).abs().max()\n"
+        },
+        {
+          "name": "Symmetric probabilities give exactly zero for even and odd K",
+          "visibility": "unshown",
+          "behavior": "numerics.stability",
+          "failureMessage": "Add the product at bin i to the product at bin K-1-i before summing (plus the middle bin for odd K); a plain left-to-right sum is not exactly 0.",
+          "hiddenCode": "\nimport torch\nsymmetric_bins = {fn}.__globals__[\"symmetric_bins\"]\ntwohot_mean = {fn}.__globals__[\"twohot_mean\"]\ng = torch.Generator().manual_seed(5)\nfor K in (4, 5, 41, 254, 255, 256):\n    for dtype in (torch.float32, torch.float64):\n        bins = symmetric_bins(K).to(dtype)\n        for logits in (torch.zeros(2, 3, K, dtype=dtype), torch.full((4, K), 3.7, dtype=dtype)):\n            m = twohot_mean(logits, bins)\n            assert m.dtype == dtype and m.shape == logits.shape[:-1], (m.shape, m.dtype)\n            assert torch.equal(m, torch.zeros_like(m)), (K, dtype, m.abs().max().item())\n        half = torch.randn(6, K // 2, generator=g, dtype=dtype)\n        mid = torch.randn(6, K % 2, generator=g, dtype=dtype)\n        logits = torch.cat([half, mid, half.flip(-1)], -1)\n        m = twohot_mean(logits, bins)\n        assert torch.equal(m, torch.zeros_like(m)), (K, dtype, \"symmetric logits\", m.abs().max().item())\n"
+        },
+        {
+          "name": "Seeded mean is symexp of the expected bin",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "twohot_mean returns symexp(sum(softmax(logits) * bins)) in raw space, not the symlog-space value.",
+          "hiddenCode": "\nimport torch\n\ndef uneven_bins(seed, n_pos, dtype=torch.float64, middle=True):\n    g = torch.Generator().manual_seed(seed)\n    raw = torch.sort(torch.rand(n_pos, generator=g, dtype=dtype) * 50 + 0.01).values\n    raw = torch.unique(raw)\n    pos = torch.sign(raw) * torch.log1p(torch.abs(raw))\n    zero = torch.zeros(1, dtype=dtype) if middle else torch.zeros(0, dtype=dtype)\n    bins = torch.cat([-pos.flip(0), zero, pos])\n    raws = torch.cat([-raw.flip(0), zero, raw])\n    return bins, raws\n\ntwohot_mean = {fn}.__globals__[\"twohot_mean\"]\ntwohot_target = {fn}.__globals__[\"twohot_target\"]\nsymexp = lambda v: torch.sign(v) * torch.expm1(torch.abs(v))\nfor seed in (0, 1, 2, 3, 4):\n    bins, raws = uneven_bins(seed, 5 + seed, middle=seed % 2 == 0)\n    g = torch.Generator().manual_seed(50 + seed)\n    logits = torch.randn(3, 4, len(bins), generator=g, dtype=torch.float64) * 3\n    m = twohot_mean(logits, bins)\n    want = symexp((torch.softmax(logits, -1) * bins).sum(-1))\n    assert m.shape == (3, 4) and torch.allclose(m, want, rtol=1e-10, atol=1e-12), (seed, m, want)\n    y = (torch.rand(7, generator=g, dtype=torch.float64) * 2 - 1) * raws[-1] * 0.9\n    back = twohot_mean(twohot_target(y, bins).log(), bins)\n    assert torch.allclose(back, y, rtol=1e-9, atol=1e-9), (seed, back, y)\nfor K in (5, 6, 9):\n    g = torch.Generator().manual_seed(K)\n    bins = torch.cumsum(torch.rand(K, generator=g, dtype=torch.float64) + 0.1, 0) - 1.0\n    logits = torch.randn(4, K, generator=g, dtype=torch.float64)\n    want = symexp((torch.softmax(logits, -1) * bins).sum(-1))\n    assert torch.allclose(twohot_mean(logits, bins), want, rtol=1e-10, atol=1e-12), (K, \"asymmetric bins\")\n"
+        },
+        {
+          "name": "Output dtypes follow the inputs",
+          "visibility": "unshown",
+          "behavior": "tensor.dtype_device",
+          "failureMessage": "Cast bins to the input dtype: twohot_target follows y, twohot_loss and twohot_mean follow logits.",
+          "hiddenCode": "\nimport torch\nsymmetric_bins = {fn}.__globals__[\"symmetric_bins\"]\ntwohot_target = {fn}.__globals__[\"twohot_target\"]\ntwohot_mean = {fn}.__globals__[\"twohot_mean\"]\nbins = symmetric_bins(7, 3.0)\ny64 = torch.tensor([0.3, -2.0, 15.0], dtype=torch.float64)\nt = twohot_target(y64, bins)\nassert t.dtype == torch.float64, t.dtype\nassert twohot_target(y64.float(), bins.double()).dtype == torch.float32\nl64 = torch.zeros(3, 7, dtype=torch.float64)\nassert {fn}(l64, y64, bins).dtype == torch.float64\nassert {fn}(l64.float(), y64.float(), bins).dtype == torch.float32\nassert twohot_mean(l64, bins).dtype == torch.float64\nassert twohot_mean(l64.float(), bins.double()).dtype == torch.float32\n"
+        },
+        {
+          "name": "Rejects bad bins and mismatched shapes",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Raise ValueError for K < 2 or a non-positive limit in symmetric_bins, bins that are not 1-D with 2+ values, logits whose last dim is not K, or y not shaped like logits[..., 0].",
+          "hiddenCode": "\nimport torch\nsymmetric_bins = {fn}.__globals__[\"symmetric_bins\"]\ntwohot_target = {fn}.__globals__[\"twohot_target\"]\ntwohot_mean = {fn}.__globals__[\"twohot_mean\"]\nbins = torch.linspace(-2.0, 2.0, 5)\nbad = [\n    lambda: symmetric_bins(1),\n    lambda: symmetric_bins(0),\n    lambda: symmetric_bins(5.0),\n    lambda: symmetric_bins(5, 0.0),\n    lambda: symmetric_bins(5, -1.0),\n    lambda: twohot_target(torch.zeros(3), bins[None]),\n    lambda: twohot_target(torch.zeros(3), bins[:1]),\n    lambda: {fn}(torch.zeros(3, 4), torch.zeros(3), bins),\n    lambda: {fn}(torch.zeros(3, 5), torch.zeros(4), bins),\n    lambda: {fn}(torch.zeros(3, 5), torch.zeros(3, 1), bins),\n    lambda: twohot_mean(torch.zeros(3, 6), bins),\n    lambda: twohot_mean(torch.zeros(3, 5), bins.reshape(5, 1)),\n]\nfor i, call in enumerate(bad):\n    try:\n        call()\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"case {i} was accepted\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Where must y be squashed before it is compared with the bins, and how do you find the two bins around it with comparisons rather than division by a bin width? Which neighbour should get the larger weight, the near one or the far one? For the mean, which pairs of terms cancel when the probabilities are symmetric?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Count how many bins are <= symlog(y) and how many are > it to get the two indices, clip both to the valid range, and handle the case where they coincide so you never divide by zero. Each weight is the distance to the other bin over the gap. For the loss, detach y before building the target. For the mean, flip the lower half of the products, add it to the upper half, sum, and add the middle term only when K is odd."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "cross_entropy",
+        "softmax"
+      ],
+      "modelConnections": [
+        "DreamerV3 predicts rewards, critic values and its slow target critic with this head, and normalizes returns separately for the actor.",
+        "The categorical value head in C51 and MuZero's value and reward heads also project a scalar onto a fixed support, and MuZero squashes it with an invertible transform first.",
+        "Classification losses for value functions (Farebrother et al. 2024, 'Stop Regressing') scale better than mean-squared error in large networks; two-hot is their simplest variant."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Gradient scale does not depend on the reward scale, so one learning rate works across very different tasks.",
+          "The symmetric mean is exactly zero at initialization, so a fresh critic does not inject bias into bootstrapped targets."
+        ],
+        "cons": [
+          "The prediction can never leave the bin range; targets beyond it are clipped to the edge bin.",
+          "With noisy returns, symexp of the symlog-space average underestimates the average return in magnitude, a bias that raw-space interpolation avoids."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What problem does symlog solve for DreamerV3's reward and value heads, and why not simply normalize rewards instead?",
+          "hint": "Think about returns that span many orders of magnitude across tasks, and about gradients of a squared error on raw values. Cover what symlog does near zero and far from it, negative values, and why fixed normalizers or running statistics are fragile."
+        },
+        {
+          "stage": "concept",
+          "question": "How does a two-hot encoding turn a continuous target into a categorical one, and what property do its two weights guarantee?",
+          "hint": "Consider which two bins bracket the target and how the mass is split between them. Cover the weights as ratios of distances, what the expected bin position equals afterwards, and in which space the target is compared with the bins."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Walk through building the two-hot target for a value that lies between two bins, exactly on a bin, and outside the bin range. Where can an implementation divide by zero?",
+          "hint": "Walk through the comparisons that give the two bracketing indices, the clipping to the valid range, and the case where both indices land on the same bin. Name where a zero gap would appear and how upstream avoids it."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why does DreamerV3 compute the expected bin with a symmetric sum, and what goes wrong with a plain sum when the output layer is zero-initialized?",
+          "hint": "Think about a zero-initialized output layer giving a uniform softmax, and float32 rounding in a left-to-right sum. Cover how pairing mirrored bins cancels exactly, and why a tiny bias matters for bootstrapped value targets."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What is the gradient of the two-hot cross-entropy with respect to the logits, and why is the target treated as a constant?",
+          "hint": "Start from the softmax cross-entropy derivative. Cover what the target contributes, why gradients should not flow through the target construction into y, and how the gradient scale compares with an MSE on large values."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Interpolating between bins in symlog space versus in raw space between symexp-spaced bins: what does each make exact, and where does each introduce bias?",
+          "hint": "Compare where each scheme puts the linear interpolation, what each decodes exactly for a single target, and what each learns when targets are noisy. Bring in the gap between symexp of an average and an average of raw values."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "A two-hot categorical value head versus mean-squared error on symlog targets: compare gradient scale, multimodality, range limits and compute.",
+          "hint": "Compare gradient magnitude as targets grow, the ability to represent multimodal returns, the hard range of the bins, and the cost of a K-way output layer and softmax per prediction."
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/danijar/dreamerv3",
+          "commit": "e01491fad6434b2245a3b8ca201dd7faedcc458c",
+          "path": "embodied/jax/nets.py",
+          "symbol": "symlog, symexp",
+          "license": "MIT",
+          "adapted": "symlog and symexp with log1p and expm1, transcribed from JAX to torch.",
+          "simplifications": "None beyond the JAX to torch translation."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/danijar/dreamerv3",
+          "commit": "e01491fad6434b2245a3b8ca201dd7faedcc458c",
+          "path": "embodied/jax/outs.py",
+          "symbol": "TwoHot.pred, TwoHot.loss",
+          "license": "MIT",
+          "adapted": "Two-hot target with clipped below/above indices, the cross-entropy loss and the symmetric weighted sum, transcribed from JAX to torch with squash=symlog and unsquash=symexp.",
+          "simplifications": "Upstream forces float32; the exercise keeps the input dtype. The target is returned by its own function. The exercise always squashes with symlog, whereas the current default head passes no squash and symexp-spaced bins, which interpolates in raw space."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/danijar/dreamerv3",
+          "commit": "e01491fad6434b2245a3b8ca201dd7faedcc458c",
+          "path": "embodied/jax/heads.py",
+          "symbol": "Head.symexp_twohot",
+          "license": "MIT",
+          "adapted": "Symmetric bins built so that the mirror of every bin is its exact negative.",
+          "simplifications": "The exercise returns symlog-space positions (no symexp). For even K upstream builds two halves of K/2 points that both end at 0, so it has two zero bins and a wider spacing; the exercise uses linspace(-limit, limit, K) spacing with no zero bin. Odd K agrees with upstream."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/NM512/dreamerv3-torch",
+          "commit": "6ef8646d807cd10ce0c88e10a7e943211e7fc44c",
+          "path": "tools.py",
+          "symbol": "symlog, symexp, DiscDist.mean, DiscDist.log_prob",
+          "license": "MIT",
+          "adapted": "Cross-check for the symlog-space two-hot target and loss in PyTorch.",
+          "simplifications": "The port uses log(|x| + 1) and exp(|x|) - 1, which lose precision near zero; its mean is a plain left-to-right sum that is not exactly zero for uniform logits; its buckets are a fixed linspace(-20, 20, 255); log_prob returns the negative of the loss and expects a trailing singleton dimension."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2301.04104",
+          "section": "Hafner et al. 2023, Mastering Diverse Domains through World Models, arXiv v1: 'Symlog Predictions' (symlog, symexp, two-hot targets over 255 bins) and 'Critic Learning' (zero-initialized output weights)",
+          "note": "Defines symlog/symexp, the two-hot encoding of a continuous target, the 255-bin support and zero initialization of the reward and critic output layers."
+        }
+      ]
+    },
+    {
+      "id": "world_model_cem_step",
+      "title": "World Model CEM Planning Step",
+      "titleZh": "World Model CEM Planning Step",
+      "difficulty": "Medium",
+      "functionName": "cem_refit",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "A planner that uses a world model samples `S` action trajectories from a Gaussian, scores each one by rolling it through the model, and refits the Gaussian to the best samples. Implement that refit step, the core of the cross-entropy method (CEM), in the two variants used by V-JEPA 2-AC and TD-MPC.\n\n**Signature:** `cem_refit(samples, energies, mean, std, topk, momentum_mean, momentum_std, mode=\"vjepa2\", temperature=0.5) -> (new_mean, new_std)`\n\n**Parameters:**\n- `samples` — floating tensor `(S, H, A)`: `S` trajectories of `H` steps with `A` action dims.\n- `energies` — floating tensor `(S,)`, one score per sample. In `\"vjepa2\"` mode it is an energy (lower is better, e.g. the distance of the predicted final state to a goal). In `\"tdmpc\"` mode it is a value (higher is better).\n- `mean`, `std` — floating tensors `(H, A)`: the Gaussian the samples were drawn from.\n- `topk` — integer number of elite samples, `1 <= topk <= S`.\n- `momentum_mean`, `momentum_std` — floats in `[0, 1]`.\n- `mode` — `\"vjepa2\"` or `\"tdmpc\"`.\n- `temperature` — float `>= 0`, used only in `\"tdmpc\"` mode.\n\n**Returns:** a tuple `(new_mean, new_std)` of `(H, A)` tensors with the dtype of `samples`.\n\n**Choosing the elites.**\n- `\"vjepa2\"`: the `topk` samples with the **lowest** energies.\n- `\"tdmpc\"`: the `topk` samples with the **highest** values.\n- Ties are broken by sample index: among equal scores, the lower index ranks first.\n\n**Elite statistics** (per step and action dim, over the elites):\n- `\"vjepa2\"`: the plain mean `mu`, and the **unbiased** standard deviation, which divides by `topk - 1`.\n- `\"tdmpc\"`: weights `w_i = exp(temperature * (v_i - max_v))`, where `max_v` is the largest elite value, normalised to sum to 1. Then\n\n      mu    = sum_i w_i * x_i\n      sigma = sqrt(sum_i w_i * (x_i - mu) ** 2)\n\n**Momentum blend** (both modes):\n\n      new_mean = mu    * (1 - momentum_mean) + mean * momentum_mean\n      new_std  = sigma * (1 - momentum_std)  + std  * momentum_std\n\n**Constraints:**\n- `\"vjepa2\"` needs at least two elites: raise `ValueError` when `topk == 1` in that mode, since the unbiased std of one sample is undefined. `\"tdmpc\"` accepts `topk == 1` and gives that elite weight 1 and `sigma = 0`.\n- Subtract `max_v` before exponentiating, so values in the thousands still give finite weights.\n- Do not modify any input in place.\n- float64 inputs are checked to about 1e-10, float32 inputs to about 1e-5.\n- Raise `ValueError` for an unknown `mode`; for `samples` that is not a 3-D floating tensor; for `energies`, `mean` or `std` with the wrong shape or a dtype different from `samples`; for non-finite energies; for a `topk` that is not a Python `int` in `1..S` (a float such as `2.0` is rejected); for a momentum outside `[0, 1]`; and for a negative `temperature`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**The planning loop.** Start from a Gaussian over action trajectories, for example `mean = 0`, `std = 1`. Each iteration samples `S` trajectories, rolls each through the world model from the current state, scores the outcome, and calls this refit. After a few iterations the planner executes the first action of `mean` and replans at the next step (model predictive control).\n\n**V-JEPA 2-AC.** The world model is an action-conditioned predictor in the latent space of a frozen video encoder. The energy of a trajectory is the L1 distance between the predicted final embedding and the embedding of a goal image: `mean(|z_H - z_goal|)` over the embedding dims. The refit keeps the closest `topk` and averages them uniformly. The released planner uses a high std momentum (0.95), so the search narrows slowly.\n\n**TD-MPC.** The world model is a latent dynamics model with reward and Q heads; a trajectory's value is its discounted predicted reward plus a terminal Q estimate. The refit keeps the `topk` highest values and weights them with a softmax, so better elites pull the mean harder. Subtracting the maximum does not change the normalised weights but keeps `exp` from overflowing. LeRobot's TD-MPC blends the mean with momentum 0.1, replaces the std outright (`momentum_std = 0`) and clamps it to `[0.05, 2.0]`.\n\n**Why momentum.** A refit that jumps straight to the elite statistics can collapse the std after one lucky batch. Blending with the previous Gaussian keeps exploration alive across iterations.",
+      "descriptionZh": "A planner that uses a world model samples `S` action trajectories from a Gaussian, scores each one by rolling it through the model, and refits the Gaussian to the best samples. Implement that refit step, the core of the cross-entropy method (CEM), in the two variants used by V-JEPA 2-AC and TD-MPC.\n\n**Signature:** `cem_refit(samples, energies, mean, std, topk, momentum_mean, momentum_std, mode=\"vjepa2\", temperature=0.5) -> (new_mean, new_std)`\n\n**Parameters:**\n- `samples` — floating tensor `(S, H, A)`: `S` trajectories of `H` steps with `A` action dims.\n- `energies` — floating tensor `(S,)`, one score per sample. In `\"vjepa2\"` mode it is an energy (lower is better, e.g. the distance of the predicted final state to a goal). In `\"tdmpc\"` mode it is a value (higher is better).\n- `mean`, `std` — floating tensors `(H, A)`: the Gaussian the samples were drawn from.\n- `topk` — integer number of elite samples, `1 <= topk <= S`.\n- `momentum_mean`, `momentum_std` — floats in `[0, 1]`.\n- `mode` — `\"vjepa2\"` or `\"tdmpc\"`.\n- `temperature` — float `>= 0`, used only in `\"tdmpc\"` mode.\n\n**Returns:** a tuple `(new_mean, new_std)` of `(H, A)` tensors with the dtype of `samples`.\n\n**Choosing the elites.**\n- `\"vjepa2\"`: the `topk` samples with the **lowest** energies.\n- `\"tdmpc\"`: the `topk` samples with the **highest** values.\n- Ties are broken by sample index: among equal scores, the lower index ranks first.\n\n**Elite statistics** (per step and action dim, over the elites):\n- `\"vjepa2\"`: the plain mean `mu`, and the **unbiased** standard deviation, which divides by `topk - 1`.\n- `\"tdmpc\"`: weights `w_i = exp(temperature * (v_i - max_v))`, where `max_v` is the largest elite value, normalised to sum to 1. Then\n\n      mu    = sum_i w_i * x_i\n      sigma = sqrt(sum_i w_i * (x_i - mu) ** 2)\n\n**Momentum blend** (both modes):\n\n      new_mean = mu    * (1 - momentum_mean) + mean * momentum_mean\n      new_std  = sigma * (1 - momentum_std)  + std  * momentum_std\n\n**Constraints:**\n- `\"vjepa2\"` needs at least two elites: raise `ValueError` when `topk == 1` in that mode, since the unbiased std of one sample is undefined. `\"tdmpc\"` accepts `topk == 1` and gives that elite weight 1 and `sigma = 0`.\n- Subtract `max_v` before exponentiating, so values in the thousands still give finite weights.\n- Do not modify any input in place.\n- float64 inputs are checked to about 1e-10, float32 inputs to about 1e-5.\n- Raise `ValueError` for an unknown `mode`; for `samples` that is not a 3-D floating tensor; for `energies`, `mean` or `std` with the wrong shape or a dtype different from `samples`; for non-finite energies; for a `topk` that is not a Python `int` in `1..S` (a float such as `2.0` is rejected); for a momentum outside `[0, 1]`; and for a negative `temperature`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**The planning loop.** Start from a Gaussian over action trajectories, for example `mean = 0`, `std = 1`. Each iteration samples `S` trajectories, rolls each through the world model from the current state, scores the outcome, and calls this refit. After a few iterations the planner executes the first action of `mean` and replans at the next step (model predictive control).\n\n**V-JEPA 2-AC.** The world model is an action-conditioned predictor in the latent space of a frozen video encoder. The energy of a trajectory is the L1 distance between the predicted final embedding and the embedding of a goal image: `mean(|z_H - z_goal|)` over the embedding dims. The refit keeps the closest `topk` and averages them uniformly. The released planner uses a high std momentum (0.95), so the search narrows slowly.\n\n**TD-MPC.** The world model is a latent dynamics model with reward and Q heads; a trajectory's value is its discounted predicted reward plus a terminal Q estimate. The refit keeps the `topk` highest values and weights them with a softmax, so better elites pull the mean harder. Subtracting the maximum does not change the normalised weights but keeps `exp` from overflowing. LeRobot's TD-MPC blends the mean with momentum 0.1, replaces the std outright (`momentum_std = 0`) and clamps it to `[0.05, 2.0]`.\n\n**Why momentum.** A refit that jumps straight to the elite statistics can collapse the std after one lucky batch. Blending with the previous Gaussian keeps exploration alive across iterations.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "vjepa2: uniform mean and unbiased std of the lowest energies",
+          "code": "\nimport math, torch\nsamples = torch.tensor([[[0.0]], [[2.0]], [[4.0]], [[10.0]]])\nenergies = torch.tensor([0.3, 0.1, 0.2, 5.0])\nmean, std = torch.zeros(1, 1), torch.ones(1, 1)\nnew_mean, new_std = {fn}(samples, energies, mean, std, 2, 0.25, 0.5, \"vjepa2\")\n# elites are samples 1 and 2 (values 2 and 4): mu = 3, unbiased sigma = sqrt(2)\nassert new_mean.shape == (1, 1) and new_std.shape == (1, 1)\nassert torch.allclose(new_mean, torch.tensor([[3.0 * 0.75]])), new_mean\nassert torch.allclose(new_std, torch.tensor([[math.sqrt(2.0) * 0.5 + 0.5]])), new_std\n",
+          "behavior": "routing.selection"
+        },
+        {
+          "name": "tdmpc: softmax-weighted mean and std of the highest values",
+          "code": "\nimport math, torch\nsamples = torch.tensor([[[0.0]], [[4.0]], [[8.0]], [[100.0]]], dtype=torch.float64)\nvalues = torch.tensor([1.0, 3.0, 2.0, -5.0], dtype=torch.float64)\nmean, std = torch.zeros(1, 1, dtype=torch.float64), torch.ones(1, 1, dtype=torch.float64)\nnew_mean, new_std = {fn}(samples, values, mean, std, 2, 0.0, 0.0, \"tdmpc\", temperature=math.log(3.0))\n# elites: value 3 (x = 4) and value 2 (x = 8); weights 1 and 1/3, normalised to 0.75 and 0.25\nassert abs(new_mean.item() - 5.0) < 1e-12, new_mean\nassert abs(new_std.item() - math.sqrt(3.0)) < 1e-12, new_std  # 0.75 * 1 + 0.25 * 9\n",
+          "behavior": "metrics.averaging"
+        },
+        {
+          "name": "Matches the refit formulas on random inputs",
+          "visibility": "unshown",
+          "behavior": "metrics.averaging",
+          "failureMessage": "Rank the scores (ascending energies for vjepa2, descending values for tdmpc), take the first topk, compute the mode's elite mean and std, then blend each with the old value.",
+          "hiddenCode": "\nimport torch\ndef expect(x, e, mean, std, k, mm, ms, mode, temp):\n    order = torch.argsort(e, stable=True, descending=(mode == \"tdmpc\"))[:k]\n    el = x[order]\n    if mode == \"vjepa2\":\n        mu = el.mean(0)\n        sd = ((el - mu) ** 2).sum(0).div(k - 1).sqrt()\n    else:\n        v = e[order]\n        w = torch.exp(temp * (v - v.max()))\n        w = (w / w.sum()).view(-1, 1, 1)\n        mu = (w * el).sum(0)\n        sd = (w * (el - mu) ** 2).sum(0).sqrt()\n    return mu * (1 - mm) + mean * mm, sd * (1 - ms) + std * ms\nfor seed, S, H, A, k, mm, ms, mode, temp in (\n    (0, 32, 4, 3, 6, 0.25, 0.95, \"vjepa2\", 0.5),\n    (1, 20, 2, 5, 3, 0.1, 0.0, \"tdmpc\", 0.5),\n    (2, 50, 3, 2, 10, 0.4, 0.2, \"vjepa2\", 1.0),\n    (3, 16, 5, 1, 4, 0.7, 0.3, \"tdmpc\", 2.5),\n    (4, 9, 1, 4, 2, 0.0, 1.0, \"vjepa2\", 0.5),\n    (5, 40, 3, 3, 7, 0.33, 0.66, \"tdmpc\", 0.05),\n):\n    g = torch.Generator().manual_seed(seed)\n    x = torch.randn(S, H, A, generator=g, dtype=torch.float64)\n    e = torch.randn(S, generator=g, dtype=torch.float64) * 3\n    mean = torch.randn(H, A, generator=g, dtype=torch.float64)\n    std = torch.rand(H, A, generator=g, dtype=torch.float64) + 0.1\n    got_m, got_s = {fn}(x, e, mean, std, k, mm, ms, mode, temperature=temp)\n    want_m, want_s = expect(x, e, mean, std, k, mm, ms, mode, temp)\n    assert got_m.shape == (H, A) and got_s.shape == (H, A), (got_m.shape, got_s.shape)\n    assert torch.allclose(got_m, want_m, atol=1e-10, rtol=0), (seed, got_m, want_m)\n    assert torch.allclose(got_s, want_s, atol=1e-10, rtol=0), (seed, got_s, want_s)\n"
+        },
+        {
+          "name": "vjepa2 keeps low energies, tdmpc keeps high values",
+          "visibility": "unshown",
+          "behavior": "routing.selection",
+          "failureMessage": "In vjepa2 mode keep the topk LOWEST energies; in tdmpc mode keep the topk HIGHEST values.",
+          "hiddenCode": "\nimport torch\nsamples = torch.arange(6, dtype=torch.float64).view(6, 1, 1)\nscores = torch.tensor([5.0, 0.0, 4.0, 1.0, 3.0, 2.0], dtype=torch.float64)\nz, o = torch.zeros(1, 1, dtype=torch.float64), torch.ones(1, 1, dtype=torch.float64)\nm, s = {fn}(samples, scores, z, o, 3, 0.0, 0.0, \"vjepa2\")\nassert abs(m.item() - 3.0) < 1e-12, (\"vjepa2 should keep samples 1, 3, 5\", m)  # (1 + 3 + 5) / 3\nm, s = {fn}(samples, scores, z, o, 3, 0.0, 0.0, \"tdmpc\", temperature=0.0)\nassert abs(m.item() - 2.0) < 1e-12, (\"tdmpc should keep samples 0, 2, 4\", m)  # (0 + 2 + 4) / 3\n"
+        },
+        {
+          "name": "Ties go to the lower sample index",
+          "visibility": "unshown",
+          "behavior": "metrics.ties",
+          "failureMessage": "Rank with a stable order so that, among equal scores, the sample with the lower index is chosen first.",
+          "hiddenCode": "\nimport torch\nsamples = torch.tensor([10.0, 20.0, 30.0, 40.0, 50.0, 60.0], dtype=torch.float64).view(6, 1, 1)\nz, o = torch.zeros(1, 1, dtype=torch.float64), torch.ones(1, 1, dtype=torch.float64)\n# energies: sample 4 is best, then samples 0, 2, 5 tie; topk = 3 must take 4, 0, 2\nenergies = torch.tensor([1.0, 7.0, 1.0, 9.0, 0.5, 1.0], dtype=torch.float64)\nm, _ = {fn}(samples, energies, z, o, 3, 0.0, 0.0, \"vjepa2\")\nassert abs(m.item() - (50.0 + 10.0 + 30.0) / 3) < 1e-12, m\n# values: sample 1 is best, then samples 2, 3, 5 tie; topk = 2 must take 1 and 2\nvalues = torch.tensor([-1.0, 4.0, 2.0, 2.0, -3.0, 2.0], dtype=torch.float64)\nm, _ = {fn}(samples, values, z, o, 2, 0.0, 0.0, \"tdmpc\", temperature=0.0)\nassert abs(m.item() - 25.0) < 1e-12, m\n"
+        },
+        {
+          "name": "Momentum weights the old Gaussian",
+          "visibility": "unshown",
+          "behavior": "state.invariant",
+          "failureMessage": "Blend as new_stat * (1 - momentum) + old_stat * momentum, separately for the mean (momentum_mean) and the std (momentum_std).",
+          "hiddenCode": "\nimport torch\ng = torch.Generator().manual_seed(9)\nx = torch.randn(12, 2, 3, generator=g, dtype=torch.float64)\ne = torch.randn(12, generator=g, dtype=torch.float64)\nmean = torch.full((2, 3), 7.0, dtype=torch.float64)\nstd = torch.full((2, 3), 0.25, dtype=torch.float64)\nfor mode in (\"vjepa2\", \"tdmpc\"):\n    m1, s1 = {fn}(x, e, mean, std, 4, 1.0, 1.0, mode)\n    assert torch.equal(m1, mean) and torch.equal(s1, std), (mode, \"momentum 1 must keep the old Gaussian\")\n    m0, s0 = {fn}(x, e, mean, std, 4, 0.0, 0.0, mode)\n    m, s = {fn}(x, e, mean, std, 4, 0.2, 0.9, mode)\n    assert torch.allclose(m, 0.8 * m0 + 0.2 * mean, atol=1e-12), mode\n    assert torch.allclose(s, 0.1 * s0 + 0.9 * std, atol=1e-12), mode\n"
+        },
+        {
+          "name": "Weights stay finite for large values",
+          "visibility": "unshown",
+          "behavior": "numerics.stability",
+          "failureMessage": "Compute the weights as exp(temperature * (v - max_v)) over the elite values, so large values do not overflow to inf or NaN.",
+          "hiddenCode": "\nimport torch\nsamples = torch.tensor([1.0, 3.0, 5.0, 7.0], dtype=torch.float64).view(4, 1, 1)\nvalues = torch.tensor([2000.0, 2001.0, 1999.0, -50.0], dtype=torch.float64)\nz, o = torch.zeros(1, 1, dtype=torch.float64), torch.ones(1, 1, dtype=torch.float64)\nm, s = {fn}(samples, values, z, o, 3, 0.0, 0.0, \"tdmpc\", temperature=1.0)\nw = torch.exp(torch.tensor([0.0, -1.0, -2.0], dtype=torch.float64))\nw = w / w.sum()\nx = torch.tensor([3.0, 1.0, 5.0], dtype=torch.float64)\nmu = (w * x).sum()\nassert torch.isfinite(m).all() and torch.isfinite(s).all(), (m, s)\nassert abs(m.item() - mu.item()) < 1e-10, (m, mu)\nassert abs(s.item() - (w * (x - mu) ** 2).sum().sqrt().item()) < 1e-10, s\nx32 = samples.float()\nm32, s32 = {fn}(x32, values.float() * 10, z.float(), o.float(), 3, 0.0, 0.0, \"tdmpc\", temperature=0.5)\nassert torch.isfinite(m32).all() and torch.isfinite(s32).all(), (m32, s32)\n"
+        },
+        {
+          "name": "tdmpc std is the biased weighted std",
+          "visibility": "unshown",
+          "behavior": "metrics.averaging",
+          "failureMessage": "In tdmpc mode sigma = sqrt(sum_i w_i * (x_i - mu)^2) with normalised weights; do not divide by topk - 1.",
+          "hiddenCode": "\nimport torch\nsamples = torch.tensor([0.0, 2.0, 4.0, 6.0], dtype=torch.float64).view(4, 1, 1)\nvalues = torch.ones(4, dtype=torch.float64)\nz, o = torch.zeros(1, 1, dtype=torch.float64), torch.ones(1, 1, dtype=torch.float64)\nm, s = {fn}(samples, values, z, o, 4, 0.0, 0.0, \"tdmpc\", temperature=0.5)\nassert abs(m.item() - 3.0) < 1e-12, m\nassert abs(s.item() - 5.0 ** 0.5) < 1e-12, s  # population variance of 0, 2, 4, 6 is 5\n"
+        },
+        {
+          "name": "vjepa2 std is unbiased and ignores the energies' magnitudes",
+          "visibility": "unshown",
+          "behavior": "metrics.averaging",
+          "failureMessage": "In vjepa2 mode average the elites uniformly and use the unbiased std (divide by topk - 1); the energies only choose the elites.",
+          "hiddenCode": "\nimport torch\nsamples = torch.tensor([0.0, 2.0, 4.0, 6.0, 100.0], dtype=torch.float64).view(5, 1, 1)\nenergies = torch.tensor([0.0, 1.0, 50.0, 2.0, 99.0], dtype=torch.float64)\nz, o = torch.zeros(1, 1, dtype=torch.float64), torch.ones(1, 1, dtype=torch.float64)\nm, s = {fn}(samples, energies, z, o, 4, 0.0, 0.0, \"vjepa2\")\nassert abs(m.item() - 3.0) < 1e-12, m\nassert abs(s.item() - (20.0 / 3.0) ** 0.5) < 1e-12, s\n"
+        },
+        {
+          "name": "topk = 1 and topk = S",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "tdmpc with topk 1 returns the best sample with std 0; vjepa2 with topk 1 raises ValueError; topk = S uses every sample.",
+          "hiddenCode": "\nimport torch\ng = torch.Generator().manual_seed(4)\nx = torch.randn(7, 3, 2, generator=g, dtype=torch.float64)\nv = torch.randn(7, generator=g, dtype=torch.float64)\nz, o = torch.zeros(3, 2, dtype=torch.float64), torch.ones(3, 2, dtype=torch.float64)\nm, s = {fn}(x, v, z, o, 1, 0.0, 0.0, \"tdmpc\")\nassert torch.equal(m, x[int(v.argmax())]) and torch.equal(s, torch.zeros(3, 2, dtype=torch.float64)), (m, s)\ntry:\n    {fn}(x, v, z, o, 1, 0.0, 0.0, \"vjepa2\")\nexcept ValueError:\n    pass\nelse:\n    raise AssertionError(\"vjepa2 with topk = 1 must raise ValueError\")\nm, s = {fn}(x, v, z, o, 7, 0.0, 0.0, \"vjepa2\")\nassert torch.allclose(m, x.mean(0), atol=1e-12) and torch.allclose(s, x.std(0), atol=1e-12)\n"
+        },
+        {
+          "name": "CEM with a toy linear world model reaches the goal",
+          "visibility": "unshown",
+          "behavior": "routing.selection",
+          "failureMessage": "Repeated refits must move the Gaussian toward low energy (vjepa2) or high value (tdmpc); check the selection direction and the momentum blend.",
+          "hiddenCode": "\nimport torch\ng = torch.Generator().manual_seed(0)\nD, H, A = 4, 3, 2\nWz = torch.eye(D, dtype=torch.float64) * 0.9 + 0.05 * torch.randn(D, D, generator=g, dtype=torch.float64)\nWa = torch.randn(D, A, generator=g, dtype=torch.float64)\nz0 = torch.randn(D, generator=g, dtype=torch.float64)\ndef rollout(acts):  # (S, H, A) -> final latent (S, D)\n    z = z0.expand(acts.shape[0], D)\n    for h in range(H):\n        z = z @ Wz.T + acts[:, h] @ Wa.T\n    return z\ngoal = rollout(0.6 * torch.randn(1, H, A, generator=g, dtype=torch.float64))[0]\nenergy = lambda acts: (rollout(acts) - goal).abs().mean(-1)  # L1 distance to the goal embedding\nfor mode, k, mm, ms in ((\"vjepa2\", 8, 0.25, 0.3), (\"tdmpc\", 8, 0.1, 0.0)):\n    mean, std = torch.zeros(H, A, dtype=torch.float64), torch.ones(H, A, dtype=torch.float64)\n    start = energy(mean[None]).item()\n    for _ in range(50):\n        samples = mean + std * torch.randn(64, H, A, generator=g, dtype=torch.float64)\n        e = energy(samples)\n        mean, std = {fn}(samples, e if mode == \"vjepa2\" else -e, mean, std, k, mm, ms, mode, temperature=5.0)\n    final = energy(mean[None]).item()\n    assert final < 0.5 * start, (mode, start, final)\n"
+        },
+        {
+          "name": "Keeps dtype and does not modify inputs",
+          "visibility": "unshown",
+          "behavior": "tensor.dtype_device",
+          "failureMessage": "Return tensors in the dtype of samples and never write into samples, energies, mean or std.",
+          "hiddenCode": "\nimport torch\ng = torch.Generator().manual_seed(2)\nfor dtype in (torch.float32, torch.float64):\n    for mode in (\"vjepa2\", \"tdmpc\"):\n        x = torch.randn(10, 2, 3, generator=g).to(dtype)\n        e = torch.randn(10, generator=g).to(dtype)\n        mean = torch.randn(2, 3, generator=g).to(dtype)\n        std = torch.rand(2, 3, generator=g).to(dtype)\n        copies = [t.clone() for t in (x, e, mean, std)]\n        m, s = {fn}(x, e, mean, std, 3, 0.3, 0.6, mode)\n        assert m.dtype == dtype and s.dtype == dtype, (mode, m.dtype, s.dtype)\n        for t, c in zip((x, e, mean, std), copies):\n            assert torch.equal(t, c), (mode, \"an input was modified in place\")\n"
+        },
+        {
+          "name": "Rejects bad arguments",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Raise ValueError for an unknown mode, wrong shapes or dtypes, non-finite energies, topk outside 1..S (or 1 in vjepa2 mode), momentum outside [0, 1], or a negative temperature.",
+          "hiddenCode": "\nimport torch\nx = torch.zeros(5, 2, 3)\ne = torch.arange(5.0)\nm, s = torch.zeros(2, 3), torch.ones(2, 3)\ngood = dict(samples=x, energies=e, mean=m, std=s, topk=2, momentum_mean=0.2, momentum_std=0.5, mode=\"vjepa2\", temperature=0.5)\n{fn}(**good)\nbad = [\n    dict(mode=\"mppi\"),\n    dict(samples=torch.zeros(5, 6)),\n    dict(samples=torch.zeros(5, 2, 3, dtype=torch.long)),\n    dict(energies=torch.arange(4.0)),\n    dict(energies=torch.arange(5.0, dtype=torch.float64)),\n    dict(energies=torch.tensor([0.0, 1.0, float(\"nan\"), 2.0, 3.0])),\n    dict(energies=torch.tensor([0.0, 1.0, float(\"inf\"), 2.0, 3.0])),\n    dict(mean=torch.zeros(2, 2)),\n    dict(std=torch.ones(3, 3)),\n    dict(std=torch.ones(2, 3, dtype=torch.float64)),\n    dict(topk=0),\n    dict(topk=6),\n    dict(topk=2.0),\n    dict(topk=1),\n    dict(momentum_mean=1.5),\n    dict(momentum_std=-0.1),\n    dict(mode=\"tdmpc\", temperature=-1.0),\n]\nfor change in bad:\n    try:\n        {fn}(**{**good, **change})\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"accepted {change}\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "Which direction is better in each mode, and how do you take the first topk samples in that order while keeping lower indices first among ties? Which divisor makes a standard deviation unbiased, and why does that rule out one elite? In the weighted variant, why does subtracting the largest elite value leave the normalised weights unchanged?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Validate the arguments first. Rank the scores with a stable sort, ascending for energies and descending for values, and keep the first topk indices. Gather those elites. In vjepa2 mode take the plain mean and the std with correction 1; in tdmpc mode build the shifted exponential weights from the elite values only, normalise them, then take the weighted mean and the square root of the weighted squared deviations. Finally blend each statistic with its old value. Pitfalls: momentum weights the old value, not the new one; torch.topk does not promise an order among ties; std must not share a code path that divides by topk - 1 in tdmpc mode."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "softmax",
+        "topk_sampling",
+        "rssm_kl_balance",
+        "jepa_block_masks_and_loss"
+      ],
+      "modelConnections": [
+        "V-JEPA 2-AC (Assran et al. 2025) plans robot arm actions by CEM over a latent world model, scoring each trajectory by the L1 distance to a goal-image embedding.",
+        "TD-MPC and TD-MPC2 (Hansen et al.) plan with MPPI-style CEM over a learned latent model, weighting elites by a softmax over predicted returns; LeRobot ships it as TDMPCPolicy.",
+        "PlaNet and PETS plan with the same CEM refit and a uniform elite average."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Gradient-free, so it works with any world model and any scoring function, and every sample in an iteration is scored in parallel."
+        ],
+        "cons": [
+          "Sample cost grows quickly with horizon times action dims, and a Gaussian proposal cannot represent several distinct good plans at once."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "How does the cross-entropy method turn a world model into a planner, and what does one refit step do?",
+          "hint": "Walk through one planning iteration: what is sampled, what the world model predicts, how each sample gets a score, and which statistics the refit carries forward. Then say which action is executed and when the planner replans."
+        },
+        {
+          "stage": "concept",
+          "question": "Why does V-JEPA 2-AC minimise an energy while TD-MPC maximises a value, and what does each score measure?",
+          "hint": "Contrast what each world model predicts: an embedding compared with a goal image versus rewards plus a terminal value estimate. Cover what the goal supplies in each case and why that fixes the direction of the elite selection."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Why does TD-MPC subtract the maximum elite value before exponentiating, and why does that not change the weights?",
+          "hint": "Think about the range of floating-point exp and the size of predicted returns. Cover what the shift does to every weight, why it cancels in the normalisation, and what the largest weight becomes after the shift."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "What goes wrong with an unbiased std when only one elite is kept, and how would you handle it in a planner?",
+          "hint": "Consider the divisor of an unbiased estimate with one sample and what that value does to the next sampling round. Cover options such as rejecting it, a floor on the std, or a biased estimate, and what each does to exploration."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do the momentum values on the mean and the std change how fast CEM narrows its search, and what happens at the extremes?",
+          "hint": "Treat each momentum as an exponential moving average over iterations. Cover how the std momentum controls how fast the search narrows, why mean and std may need different values, and what momentum 0 and 1 each reduce to."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Uniform elite averaging versus softmax weighting by value: robustness to noisy scores versus speed of convergence?",
+          "hint": "Compare how each update reacts to one sample whose score is inflated by model error, and how fast each concentrates on the best region. Mention the role of the temperature and how it moves between the two behaviours."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "CEM planning at test time versus a learned policy that outputs actions directly: compute, adaptability to new goals and model errors?",
+          "hint": "Compare the cost per action (many rollouts per step versus one forward pass), how each handles a new goal at test time, and how each is affected by world-model errors that an optimiser can exploit."
+        }
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "url": "https://github.com/facebookresearch/vjepa2/blob/204698b45b3712590f06245fbfba32d3be539812/notebooks/utils/mpc_utils.py",
+          "commit": "204698b45b3712590f06245fbfba32d3be539812",
+          "path": "notebooks/utils/mpc_utils.py",
+          "symbol": "cem (line 28), select_topk_action_traj and the refit lines 127-150",
+          "license": "MIT",
+          "adapted": "The vjepa2 mode: top-k lowest objective, unweighted mean, Tensor.std (unbiased), and the momentum blend new * (1 - m) + old * m for both mean and std.",
+          "simplifications": "Divergences: upstream uses separate momenta for the gripper dimension and a 7-dim action whose rotation dims are fixed at zero; the exercise uses one momentum pair for all dims. Upstream torch.topk leaves the order of tied samples unspecified; the exercise breaks ties by lower index. Upstream topk = 1 produces a NaN std; the exercise raises ValueError. Sampling, clipping and the world-model rollout stay outside the function, which receives the energies."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/huggingface/lerobot/blob/75cd2ba0ce9ff47686bb2bd7b7f65840606c02ee/src/lerobot/policies/tdmpc/modeling_tdmpc.py",
+          "commit": "75cd2ba0ce9ff47686bb2bd7b7f65840606c02ee",
+          "path": "src/lerobot/policies/tdmpc/modeling_tdmpc.py",
+          "symbol": "TDMPCPolicy.plan (line 167), elite selection and gaussian refit lines 225-251",
+          "license": "Apache-2.0",
+          "adapted": "The tdmpc mode: top-k highest value, softmax weights exp(temperature * (v - max v)) over the elites, weighted mean and biased weighted std, and the mean EMA momentum * old + (1 - momentum) * new.",
+          "simplifications": "Divergences: upstream replaces the std outright and clamps it to [min_std, max_std]; the exercise blends it with momentum_std (0 reproduces the replacement) and does not clamp. Upstream maps NaN values to 0; the exercise rejects non-finite scores. Upstream plans a batch of environments at once with layout (horizon, n, batch, action_dim); the exercise plans one with layout (S, H, A). Tie order follows lower index instead of torch.topk."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2506.09985",
+          "section": "Assran et al. 2025, V-JEPA 2, Section 4 (planning with V-JEPA 2-AC: energy minimisation with the cross-entropy method)",
+          "note": "Defines the goal-conditioned energy as the L1 distance between predicted and goal embeddings and optimises it with CEM."
+        },
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2203.04955",
+          "section": "Hansen et al. 2022, TD-MPC, Section 3 (Planning) and Algorithm 1",
+          "note": "Elite selection by estimated return and the return-weighted update of the sampling distribution."
+        }
+      ]
+    },
+    {
+      "id": "st_transformer_attention",
+      "title": "Genie Spatiotemporal Attention",
+      "titleZh": "Genie Spatiotemporal Attention",
+      "difficulty": "Hard",
+      "functionName": "st_attention",
+      "hint": "",
+      "hintZh": "",
+      "descriptionEn": "A video world model sees `T` frames of `N` patch tokens each. Full self-attention over all `T * N` tokens costs `(T * N)^2`. Genie's ST-transformer factorizes it: a spatial layer attends within each frame, then a temporal layer attends across frames at each patch position, with a causal mask. Implement that attention pair and the boolean masks that describe it on the flattened sequence.\n\n**Signatures:** define both functions at the top level of your code.\n- `st_attention(x, Wq, Wk, Wv, Wo, n_heads) -> Tensor`\n- `st_mask(T, N) -> (spatial, temporal)`\n\n**Parameters:**\n- `x` — floating tensor `(B, T, N, D)`: batch, frames, patches per frame, channels.\n- `Wq`, `Wk`, `Wv`, `Wo` — tensors of shape `(2, D, D)` with the dtype of `x`. Index 0 holds the spatial layer's weights and index 1 the temporal layer's. The two layers never share weights.\n- `n_heads` — positive integer that divides `D`. Each head has `d = D // n_heads` channels.\n\n**One attention layer** with weights `(Wq, Wk, Wv, Wo)` on a group of `L` tokens `z` of shape `(L, D)`:\n\n    q, k, v = z @ Wq, z @ Wk, z @ Wv          # split channels into heads: head i is channels [i*d, (i+1)*d)\n    scores  = q_head @ k_head.T / sqrt(d)     # per head, (L, L)\n    out     = concat_heads(softmax(scores) @ v_head) @ Wo\n\nThere are no biases, no normalization and no positional embedding.\n\n**The ST pair:**\n- Spatial: for every `(b, t)`, one layer with index-0 weights over the `N` tokens `x[b, t]`. No mask: every patch sees every patch of its own frame. `h = x + spatial(x)`.\n- Temporal: for every `(b, n)`, one layer with index-1 weights over the `T` tokens `h[b, :, n]`, with a causal mask: the query at frame `t` sees frames `0..t` only. `y = h + temporal(h)`.\n- Return `y`, shape `(B, T, N, D)`, dtype of `x`.\n\n**Masks.** Flatten frame-major: token `t * N + n` is patch `n` of frame `t`, the order of `x.reshape(B, T * N, D)`. `st_mask` returns two bool tensors of shape `(T * N, T * N)`, `True` where query `i` may attend to key `j`:\n- `spatial[i, j]` — `i` and `j` are in the same frame.\n- `temporal[i, j]` — `i` and `j` are the same patch position and the frame of `j` is at most the frame of `i`.\n\nOrdinary attention over the flattened sequence, with the scores at `False` set to `-inf`, using `spatial` for the first layer and `temporal` for the second (each with its residual), gives exactly the output of `st_attention`.\n\n**Constraints:**\n- No output at frame `t` depends on any input at a frame after `t`.\n- `T = 1` and `N = 1` are valid. With `T = 1` the temporal layer returns `h @ Wv[1] @ Wo[1]`; with `N = 1` the spatial layer returns `x @ Wv[0] @ Wo[0]`.\n- float64 inputs are checked to 1e-10 and float32 inputs to 1e-4.\n- Do not modify any input in place.\n- `st_attention` raises `ValueError` if `x` is not a 4-D floating tensor, if a weight is not `(2, D, D)` with the dtype of `x`, or if `n_heads` is not a positive integer dividing `D`.\n- `st_mask` raises `ValueError` unless `T` and `N` are integers `>= 1`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why factorize.** For `T = 16` frames of `16 x 16` patches, full attention compares 4096 tokens with 4096 tokens. The spatial layer compares 256 with 256 per frame and the temporal layer 16 with 16 per patch, so the dominant cost grows linearly with the number of frames instead of quadratically. Two layers still let information travel from any patch of an earlier frame to any patch of a later frame: across the frame boundary along the patch's own position, then within the frame.\n\n**Why the temporal mask is causal.** Genie's latent action model, video tokenizer and dynamics model all use the ST-transformer. The causal temporal mask lets one forward pass over a whole clip produce a prediction for every next frame, the same trick as a decoder-only language model, and lets a frame be generated from the past without seeing the future.\n\n**What the paper leaves out.** The Genie paper describes the block (spatial layer, temporal layer, then one feed-forward layer) but does not release code. This exercise covers the two attention layers with their residuals; the feed-forward layer, normalization and positional embeddings are left out because they do not change which tokens can see which. The unofficial open-genie reimplementation adds rotary embeddings and a pre-LayerNorm to each layer.",
+      "descriptionZh": "A video world model sees `T` frames of `N` patch tokens each. Full self-attention over all `T * N` tokens costs `(T * N)^2`. Genie's ST-transformer factorizes it: a spatial layer attends within each frame, then a temporal layer attends across frames at each patch position, with a causal mask. Implement that attention pair and the boolean masks that describe it on the flattened sequence.\n\n**Signatures:** define both functions at the top level of your code.\n- `st_attention(x, Wq, Wk, Wv, Wo, n_heads) -> Tensor`\n- `st_mask(T, N) -> (spatial, temporal)`\n\n**Parameters:**\n- `x` — floating tensor `(B, T, N, D)`: batch, frames, patches per frame, channels.\n- `Wq`, `Wk`, `Wv`, `Wo` — tensors of shape `(2, D, D)` with the dtype of `x`. Index 0 holds the spatial layer's weights and index 1 the temporal layer's. The two layers never share weights.\n- `n_heads` — positive integer that divides `D`. Each head has `d = D // n_heads` channels.\n\n**One attention layer** with weights `(Wq, Wk, Wv, Wo)` on a group of `L` tokens `z` of shape `(L, D)`:\n\n    q, k, v = z @ Wq, z @ Wk, z @ Wv          # split channels into heads: head i is channels [i*d, (i+1)*d)\n    scores  = q_head @ k_head.T / sqrt(d)     # per head, (L, L)\n    out     = concat_heads(softmax(scores) @ v_head) @ Wo\n\nThere are no biases, no normalization and no positional embedding.\n\n**The ST pair:**\n- Spatial: for every `(b, t)`, one layer with index-0 weights over the `N` tokens `x[b, t]`. No mask: every patch sees every patch of its own frame. `h = x + spatial(x)`.\n- Temporal: for every `(b, n)`, one layer with index-1 weights over the `T` tokens `h[b, :, n]`, with a causal mask: the query at frame `t` sees frames `0..t` only. `y = h + temporal(h)`.\n- Return `y`, shape `(B, T, N, D)`, dtype of `x`.\n\n**Masks.** Flatten frame-major: token `t * N + n` is patch `n` of frame `t`, the order of `x.reshape(B, T * N, D)`. `st_mask` returns two bool tensors of shape `(T * N, T * N)`, `True` where query `i` may attend to key `j`:\n- `spatial[i, j]` — `i` and `j` are in the same frame.\n- `temporal[i, j]` — `i` and `j` are the same patch position and the frame of `j` is at most the frame of `i`.\n\nOrdinary attention over the flattened sequence, with the scores at `False` set to `-inf`, using `spatial` for the first layer and `temporal` for the second (each with its residual), gives exactly the output of `st_attention`.\n\n**Constraints:**\n- No output at frame `t` depends on any input at a frame after `t`.\n- `T = 1` and `N = 1` are valid. With `T = 1` the temporal layer returns `h @ Wv[1] @ Wo[1]`; with `N = 1` the spatial layer returns `x @ Wv[0] @ Wo[0]`.\n- float64 inputs are checked to 1e-10 and float32 inputs to 1e-4.\n- Do not modify any input in place.\n- `st_attention` raises `ValueError` if `x` is not a 4-D floating tensor, if a weight is not `(2, D, D)` with the dtype of `x`, or if `n_heads` is not a positive integer dividing `D`.\n- `st_mask` raises `ValueError` unless `T` and `N` are integers `>= 1`.\n\n────────────────────────────────\n\n**Background — context only. Everything above this line is the requirement.**\n\n**Why factorize.** For `T = 16` frames of `16 x 16` patches, full attention compares 4096 tokens with 4096 tokens. The spatial layer compares 256 with 256 per frame and the temporal layer 16 with 16 per patch, so the dominant cost grows linearly with the number of frames instead of quadratically. Two layers still let information travel from any patch of an earlier frame to any patch of a later frame: across the frame boundary along the patch's own position, then within the frame.\n\n**Why the temporal mask is causal.** Genie's latent action model, video tokenizer and dynamics model all use the ST-transformer. The causal temporal mask lets one forward pass over a whole clip produce a prediction for every next frame, the same trick as a decoder-only language model, and lets a frame be generated from the past without seeing the future.\n\n**What the paper leaves out.** The Genie paper describes the block (spatial layer, temporal layer, then one feed-forward layer) but does not release code. This exercise covers the two attention layers with their residuals; the feed-forward layer, normalization and positional embeddings are left out because they do not change which tokens can see which. The unofficial open-genie reimplementation adds rotary embeddings and a pre-LayerNorm to each layer.",
+      "version": 1,
+      "tests": [
+        {
+          "name": "st_mask on two frames of two patches",
+          "code": "\nimport torch\nst_mask = {fn}.__globals__.get(\"st_mask\")\nassert callable(st_mask), \"define st_mask next to st_attention\"\nspatial, temporal = st_mask(2, 2)\nassert spatial.dtype == torch.bool and spatial.shape == (4, 4), (spatial.dtype, spatial.shape)\n# token order: (frame 0, patch 0), (frame 0, patch 1), (frame 1, patch 0), (frame 1, patch 1)\nT_, F_ = True, False\nassert spatial.tolist() == [[T_, T_, F_, F_], [T_, T_, F_, F_], [F_, F_, T_, T_], [F_, F_, T_, T_]], spatial\nassert temporal.tolist() == [[T_, F_, F_, F_], [F_, T_, F_, F_], [T_, F_, T_, F_], [F_, T_, F_, T_]], temporal\n",
+          "behavior": "attention.masking"
+        },
+        {
+          "name": "Factorized attention equals masked full attention",
+          "code": "\nimport math, torch\n\ndef masked_mha(x, Wq, Wk, Wv, Wo, n_heads, allowed):\n    B, S, D = x.shape\n    d = D // n_heads\n    q = (x @ Wq).view(B, S, n_heads, d).transpose(1, 2)\n    k = (x @ Wk).view(B, S, n_heads, d).transpose(1, 2)\n    v = (x @ Wv).view(B, S, n_heads, d).transpose(1, 2)\n    s = (q @ k.transpose(-2, -1)) / math.sqrt(d)\n    s = s.masked_fill(~allowed, float(\"-inf\"))\n    out = torch.softmax(s, dim=-1) @ v\n    return out.transpose(1, 2).reshape(B, S, D) @ Wo\n\ndef masked_st(x, Wq, Wk, Wv, Wo, n_heads, spatial, temporal):\n    B, T, N, D = x.shape\n    flat = x.reshape(B, T * N, D)\n    h = flat + masked_mha(flat, Wq[0], Wk[0], Wv[0], Wo[0], n_heads, spatial)\n    y = h + masked_mha(h, Wq[1], Wk[1], Wv[1], Wo[1], n_heads, temporal)\n    return y.reshape(B, T, N, D)\n\ndef own_masks(T, N):\n    idx = torch.arange(T * N)\n    t, n = idx // N, idx % N\n    return t[:, None] == t[None, :], (n[:, None] == n[None, :]) & (t[None, :] <= t[:, None])\n\ndef weights(D, seed, dtype=torch.float64):\n    g = torch.Generator().manual_seed(seed)\n    return [torch.randn(2, D, D, generator=g, dtype=dtype) / math.sqrt(D) for _ in range(4)]\n\ndef video(B, T, N, D, seed, dtype=torch.float64):\n    g = torch.Generator().manual_seed(1000 + seed)\n    return torch.randn(B, T, N, D, generator=g, dtype=dtype)\n\nst_mask = {fn}.__globals__.get(\"st_mask\")\nassert callable(st_mask), \"define st_mask next to st_attention\"\nx = video(2, 3, 4, 8, seed=0)\nWq, Wk, Wv, Wo = weights(8, seed=0)\nout = {fn}(x, Wq, Wk, Wv, Wo, 2)\nassert out.shape == (2, 3, 4, 8) and out.dtype == torch.float64, (out.shape, out.dtype)\nspatial, temporal = st_mask(3, 4)\nwant = masked_st(x, Wq, Wk, Wv, Wo, 2, spatial, temporal)\nassert torch.allclose(out, want, atol=1e-10, rtol=0), (out - want).abs().max()\n",
+          "behavior": "attention.masking"
+        },
+        {
+          "name": "Matches masked full attention across shapes and head counts",
+          "visibility": "unshown",
+          "behavior": "attention.masking",
+          "failureMessage": "Run spatial attention per frame with the index-0 weights, then causal temporal attention per patch with the index-1 weights, each plus its residual, scaling scores by 1/sqrt(D // n_heads).",
+          "hiddenCode": "\nimport math, torch\n\ndef masked_mha(x, Wq, Wk, Wv, Wo, n_heads, allowed):\n    B, S, D = x.shape\n    d = D // n_heads\n    q = (x @ Wq).view(B, S, n_heads, d).transpose(1, 2)\n    k = (x @ Wk).view(B, S, n_heads, d).transpose(1, 2)\n    v = (x @ Wv).view(B, S, n_heads, d).transpose(1, 2)\n    s = (q @ k.transpose(-2, -1)) / math.sqrt(d)\n    s = s.masked_fill(~allowed, float(\"-inf\"))\n    out = torch.softmax(s, dim=-1) @ v\n    return out.transpose(1, 2).reshape(B, S, D) @ Wo\n\ndef masked_st(x, Wq, Wk, Wv, Wo, n_heads, spatial, temporal):\n    B, T, N, D = x.shape\n    flat = x.reshape(B, T * N, D)\n    h = flat + masked_mha(flat, Wq[0], Wk[0], Wv[0], Wo[0], n_heads, spatial)\n    y = h + masked_mha(h, Wq[1], Wk[1], Wv[1], Wo[1], n_heads, temporal)\n    return y.reshape(B, T, N, D)\n\ndef own_masks(T, N):\n    idx = torch.arange(T * N)\n    t, n = idx // N, idx % N\n    return t[:, None] == t[None, :], (n[:, None] == n[None, :]) & (t[None, :] <= t[:, None])\n\ndef weights(D, seed, dtype=torch.float64):\n    g = torch.Generator().manual_seed(seed)\n    return [torch.randn(2, D, D, generator=g, dtype=dtype) / math.sqrt(D) for _ in range(4)]\n\ndef video(B, T, N, D, seed, dtype=torch.float64):\n    g = torch.Generator().manual_seed(1000 + seed)\n    return torch.randn(B, T, N, D, generator=g, dtype=dtype)\n\nfor seed, (B, T, N, D, H) in enumerate([(1, 4, 3, 8, 1), (2, 5, 4, 8, 4), (3, 3, 6, 12, 3), (2, 6, 2, 16, 2), (1, 2, 9, 6, 6)]):\n    x = video(B, T, N, D, seed)\n    W = weights(D, seed)\n    out = {fn}(x, *W, H)\n    assert out.shape == (B, T, N, D), out.shape\n    want = masked_st(x, *W, H, *own_masks(T, N))\n    assert torch.allclose(out, want, atol=1e-10, rtol=0), (seed, (out - want).abs().max())\n"
+        },
+        {
+          "name": "st_mask is exact for any T and N",
+          "visibility": "unshown",
+          "behavior": "attention.masking",
+          "failureMessage": "Flatten frame-major (token t * N + n); spatial allows the same frame, temporal allows the same patch at the same or an earlier frame, diagonal included.",
+          "hiddenCode": "\nimport math, torch\n\ndef masked_mha(x, Wq, Wk, Wv, Wo, n_heads, allowed):\n    B, S, D = x.shape\n    d = D // n_heads\n    q = (x @ Wq).view(B, S, n_heads, d).transpose(1, 2)\n    k = (x @ Wk).view(B, S, n_heads, d).transpose(1, 2)\n    v = (x @ Wv).view(B, S, n_heads, d).transpose(1, 2)\n    s = (q @ k.transpose(-2, -1)) / math.sqrt(d)\n    s = s.masked_fill(~allowed, float(\"-inf\"))\n    out = torch.softmax(s, dim=-1) @ v\n    return out.transpose(1, 2).reshape(B, S, D) @ Wo\n\ndef masked_st(x, Wq, Wk, Wv, Wo, n_heads, spatial, temporal):\n    B, T, N, D = x.shape\n    flat = x.reshape(B, T * N, D)\n    h = flat + masked_mha(flat, Wq[0], Wk[0], Wv[0], Wo[0], n_heads, spatial)\n    y = h + masked_mha(h, Wq[1], Wk[1], Wv[1], Wo[1], n_heads, temporal)\n    return y.reshape(B, T, N, D)\n\ndef own_masks(T, N):\n    idx = torch.arange(T * N)\n    t, n = idx // N, idx % N\n    return t[:, None] == t[None, :], (n[:, None] == n[None, :]) & (t[None, :] <= t[:, None])\n\ndef weights(D, seed, dtype=torch.float64):\n    g = torch.Generator().manual_seed(seed)\n    return [torch.randn(2, D, D, generator=g, dtype=dtype) / math.sqrt(D) for _ in range(4)]\n\ndef video(B, T, N, D, seed, dtype=torch.float64):\n    g = torch.Generator().manual_seed(1000 + seed)\n    return torch.randn(B, T, N, D, generator=g, dtype=dtype)\n\nst_mask = {fn}.__globals__[\"st_mask\"]\nfor T, N in ((1, 1), (1, 5), (4, 1), (3, 5), (5, 2)):\n    spatial, temporal = st_mask(T, N)\n    want_s, want_t = own_masks(T, N)\n    assert spatial.dtype == torch.bool and temporal.dtype == torch.bool, (spatial.dtype, temporal.dtype)\n    assert spatial.shape == temporal.shape == (T * N, T * N), (spatial.shape, temporal.shape)\n    assert torch.equal(spatial, want_s), (T, N, spatial)\n    assert torch.equal(temporal, want_t), (T, N, temporal)\n"
+        },
+        {
+          "name": "Earlier frames ignore future frames",
+          "visibility": "unshown",
+          "behavior": "attention.masking",
+          "failureMessage": "Mask the temporal scores so that the query at frame t only sees frames 0..t; never attend across frames in the spatial layer.",
+          "hiddenCode": "\nimport math, torch\n\ndef masked_mha(x, Wq, Wk, Wv, Wo, n_heads, allowed):\n    B, S, D = x.shape\n    d = D // n_heads\n    q = (x @ Wq).view(B, S, n_heads, d).transpose(1, 2)\n    k = (x @ Wk).view(B, S, n_heads, d).transpose(1, 2)\n    v = (x @ Wv).view(B, S, n_heads, d).transpose(1, 2)\n    s = (q @ k.transpose(-2, -1)) / math.sqrt(d)\n    s = s.masked_fill(~allowed, float(\"-inf\"))\n    out = torch.softmax(s, dim=-1) @ v\n    return out.transpose(1, 2).reshape(B, S, D) @ Wo\n\ndef masked_st(x, Wq, Wk, Wv, Wo, n_heads, spatial, temporal):\n    B, T, N, D = x.shape\n    flat = x.reshape(B, T * N, D)\n    h = flat + masked_mha(flat, Wq[0], Wk[0], Wv[0], Wo[0], n_heads, spatial)\n    y = h + masked_mha(h, Wq[1], Wk[1], Wv[1], Wo[1], n_heads, temporal)\n    return y.reshape(B, T, N, D)\n\ndef own_masks(T, N):\n    idx = torch.arange(T * N)\n    t, n = idx // N, idx % N\n    return t[:, None] == t[None, :], (n[:, None] == n[None, :]) & (t[None, :] <= t[:, None])\n\ndef weights(D, seed, dtype=torch.float64):\n    g = torch.Generator().manual_seed(seed)\n    return [torch.randn(2, D, D, generator=g, dtype=dtype) / math.sqrt(D) for _ in range(4)]\n\ndef video(B, T, N, D, seed, dtype=torch.float64):\n    g = torch.Generator().manual_seed(1000 + seed)\n    return torch.randn(B, T, N, D, generator=g, dtype=dtype)\n\nB, T, N, D, H = 2, 5, 3, 8, 2\nx = video(B, T, N, D, seed=3)\nW = weights(D, seed=3)\nbase = {fn}(x, *W, H)\nfor t0 in (1, 3, 4):\n    y = x.clone()\n    y[:, t0:] = y[:, t0:] * -3.0 + 2.0\n    out = {fn}(y, *W, H)\n    assert torch.allclose(out[:, :t0], base[:, :t0], atol=1e-12, rtol=0), (t0, (out[:, :t0] - base[:, :t0]).abs().max())\n    assert (out[:, t0:] - base[:, t0:]).abs().amax(dim=-1).min() > 1e-6, \"changed frames must change their outputs\"\n"
+        },
+        {
+          "name": "Spatial attention sees every patch of its frame",
+          "visibility": "unshown",
+          "behavior": "attention.masking",
+          "failureMessage": "The spatial layer is bidirectional: every patch attends to every patch of the same frame, including later patch indices.",
+          "hiddenCode": "\nimport math, torch\n\ndef masked_mha(x, Wq, Wk, Wv, Wo, n_heads, allowed):\n    B, S, D = x.shape\n    d = D // n_heads\n    q = (x @ Wq).view(B, S, n_heads, d).transpose(1, 2)\n    k = (x @ Wk).view(B, S, n_heads, d).transpose(1, 2)\n    v = (x @ Wv).view(B, S, n_heads, d).transpose(1, 2)\n    s = (q @ k.transpose(-2, -1)) / math.sqrt(d)\n    s = s.masked_fill(~allowed, float(\"-inf\"))\n    out = torch.softmax(s, dim=-1) @ v\n    return out.transpose(1, 2).reshape(B, S, D) @ Wo\n\ndef masked_st(x, Wq, Wk, Wv, Wo, n_heads, spatial, temporal):\n    B, T, N, D = x.shape\n    flat = x.reshape(B, T * N, D)\n    h = flat + masked_mha(flat, Wq[0], Wk[0], Wv[0], Wo[0], n_heads, spatial)\n    y = h + masked_mha(h, Wq[1], Wk[1], Wv[1], Wo[1], n_heads, temporal)\n    return y.reshape(B, T, N, D)\n\ndef own_masks(T, N):\n    idx = torch.arange(T * N)\n    t, n = idx // N, idx % N\n    return t[:, None] == t[None, :], (n[:, None] == n[None, :]) & (t[None, :] <= t[:, None])\n\ndef weights(D, seed, dtype=torch.float64):\n    g = torch.Generator().manual_seed(seed)\n    return [torch.randn(2, D, D, generator=g, dtype=dtype) / math.sqrt(D) for _ in range(4)]\n\ndef video(B, T, N, D, seed, dtype=torch.float64):\n    g = torch.Generator().manual_seed(1000 + seed)\n    return torch.randn(B, T, N, D, generator=g, dtype=dtype)\n\nB, T, N, D, H = 2, 3, 5, 8, 2\nx = video(B, T, N, D, seed=4)\nW = weights(D, seed=4)\nbase = {fn}(x, *W, H)\ny = x.clone()\ny[0, 0, N - 1] += 4.0  # the last patch of the first frame\nout = {fn}(y, *W, H)\nassert (out[0, 0, 0] - base[0, 0, 0]).abs().max() > 1e-6, \"patch 0 must see patch N - 1 of its frame\"\nassert torch.allclose(out[1], base[1], atol=1e-12, rtol=0), \"batch items must not mix\"\n"
+        },
+        {
+          "name": "One frame: the temporal layer is its value path",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "With T = 1 each patch attends only to itself in time, so the temporal layer returns h @ Wv[1] @ Wo[1]; keep both residuals.",
+          "hiddenCode": "\nimport math, torch\n\ndef masked_mha(x, Wq, Wk, Wv, Wo, n_heads, allowed):\n    B, S, D = x.shape\n    d = D // n_heads\n    q = (x @ Wq).view(B, S, n_heads, d).transpose(1, 2)\n    k = (x @ Wk).view(B, S, n_heads, d).transpose(1, 2)\n    v = (x @ Wv).view(B, S, n_heads, d).transpose(1, 2)\n    s = (q @ k.transpose(-2, -1)) / math.sqrt(d)\n    s = s.masked_fill(~allowed, float(\"-inf\"))\n    out = torch.softmax(s, dim=-1) @ v\n    return out.transpose(1, 2).reshape(B, S, D) @ Wo\n\ndef masked_st(x, Wq, Wk, Wv, Wo, n_heads, spatial, temporal):\n    B, T, N, D = x.shape\n    flat = x.reshape(B, T * N, D)\n    h = flat + masked_mha(flat, Wq[0], Wk[0], Wv[0], Wo[0], n_heads, spatial)\n    y = h + masked_mha(h, Wq[1], Wk[1], Wv[1], Wo[1], n_heads, temporal)\n    return y.reshape(B, T, N, D)\n\ndef own_masks(T, N):\n    idx = torch.arange(T * N)\n    t, n = idx // N, idx % N\n    return t[:, None] == t[None, :], (n[:, None] == n[None, :]) & (t[None, :] <= t[:, None])\n\ndef weights(D, seed, dtype=torch.float64):\n    g = torch.Generator().manual_seed(seed)\n    return [torch.randn(2, D, D, generator=g, dtype=dtype) / math.sqrt(D) for _ in range(4)]\n\ndef video(B, T, N, D, seed, dtype=torch.float64):\n    g = torch.Generator().manual_seed(1000 + seed)\n    return torch.randn(B, T, N, D, generator=g, dtype=dtype)\n\nB, N, D, H = 3, 4, 8, 4\nx = video(B, 1, N, D, seed=5)\nWq, Wk, Wv, Wo = weights(D, seed=5)\nflat = x.reshape(B, N, D)\nh = flat + masked_mha(flat, Wq[0], Wk[0], Wv[0], Wo[0], H, torch.ones(N, N, dtype=torch.bool))\nwant = (h + h @ Wv[1] @ Wo[1]).reshape(B, 1, N, D)\nout = {fn}(x, Wq, Wk, Wv, Wo, H)\nassert torch.allclose(out, want, atol=1e-10, rtol=0), (out - want).abs().max()\n"
+        },
+        {
+          "name": "One patch: the spatial layer is its value path",
+          "visibility": "unshown",
+          "behavior": "edge.empty_or_boundary",
+          "failureMessage": "With N = 1 each frame has one token, so the spatial layer returns x @ Wv[0] @ Wo[0]; the temporal layer stays causal.",
+          "hiddenCode": "\nimport math, torch\n\ndef masked_mha(x, Wq, Wk, Wv, Wo, n_heads, allowed):\n    B, S, D = x.shape\n    d = D // n_heads\n    q = (x @ Wq).view(B, S, n_heads, d).transpose(1, 2)\n    k = (x @ Wk).view(B, S, n_heads, d).transpose(1, 2)\n    v = (x @ Wv).view(B, S, n_heads, d).transpose(1, 2)\n    s = (q @ k.transpose(-2, -1)) / math.sqrt(d)\n    s = s.masked_fill(~allowed, float(\"-inf\"))\n    out = torch.softmax(s, dim=-1) @ v\n    return out.transpose(1, 2).reshape(B, S, D) @ Wo\n\ndef masked_st(x, Wq, Wk, Wv, Wo, n_heads, spatial, temporal):\n    B, T, N, D = x.shape\n    flat = x.reshape(B, T * N, D)\n    h = flat + masked_mha(flat, Wq[0], Wk[0], Wv[0], Wo[0], n_heads, spatial)\n    y = h + masked_mha(h, Wq[1], Wk[1], Wv[1], Wo[1], n_heads, temporal)\n    return y.reshape(B, T, N, D)\n\ndef own_masks(T, N):\n    idx = torch.arange(T * N)\n    t, n = idx // N, idx % N\n    return t[:, None] == t[None, :], (n[:, None] == n[None, :]) & (t[None, :] <= t[:, None])\n\ndef weights(D, seed, dtype=torch.float64):\n    g = torch.Generator().manual_seed(seed)\n    return [torch.randn(2, D, D, generator=g, dtype=dtype) / math.sqrt(D) for _ in range(4)]\n\ndef video(B, T, N, D, seed, dtype=torch.float64):\n    g = torch.Generator().manual_seed(1000 + seed)\n    return torch.randn(B, T, N, D, generator=g, dtype=dtype)\n\nB, T, D, H = 2, 6, 8, 2\nx = video(B, T, 1, D, seed=6)\nWq, Wk, Wv, Wo = weights(D, seed=6)\nflat = x.reshape(B, T, D)\nh = flat + flat @ Wv[0] @ Wo[0]\ncausal = torch.ones(T, T, dtype=torch.bool).tril()\nwant = (h + masked_mha(h, Wq[1], Wk[1], Wv[1], Wo[1], H, causal)).reshape(B, T, 1, D)\nout = {fn}(x, Wq, Wk, Wv, Wo, H)\nassert torch.allclose(out, want, atol=1e-10, rtol=0), (out - want).abs().max()\n"
+        },
+        {
+          "name": "Keeps dtype and does not mutate inputs",
+          "visibility": "unshown",
+          "behavior": "tensor.dtype_device",
+          "failureMessage": "Return the dtype of x (float32 stays float32, float64 stays float64) and never modify x or the weights in place.",
+          "hiddenCode": "\nimport math, torch\n\ndef masked_mha(x, Wq, Wk, Wv, Wo, n_heads, allowed):\n    B, S, D = x.shape\n    d = D // n_heads\n    q = (x @ Wq).view(B, S, n_heads, d).transpose(1, 2)\n    k = (x @ Wk).view(B, S, n_heads, d).transpose(1, 2)\n    v = (x @ Wv).view(B, S, n_heads, d).transpose(1, 2)\n    s = (q @ k.transpose(-2, -1)) / math.sqrt(d)\n    s = s.masked_fill(~allowed, float(\"-inf\"))\n    out = torch.softmax(s, dim=-1) @ v\n    return out.transpose(1, 2).reshape(B, S, D) @ Wo\n\ndef masked_st(x, Wq, Wk, Wv, Wo, n_heads, spatial, temporal):\n    B, T, N, D = x.shape\n    flat = x.reshape(B, T * N, D)\n    h = flat + masked_mha(flat, Wq[0], Wk[0], Wv[0], Wo[0], n_heads, spatial)\n    y = h + masked_mha(h, Wq[1], Wk[1], Wv[1], Wo[1], n_heads, temporal)\n    return y.reshape(B, T, N, D)\n\ndef own_masks(T, N):\n    idx = torch.arange(T * N)\n    t, n = idx // N, idx % N\n    return t[:, None] == t[None, :], (n[:, None] == n[None, :]) & (t[None, :] <= t[:, None])\n\ndef weights(D, seed, dtype=torch.float64):\n    g = torch.Generator().manual_seed(seed)\n    return [torch.randn(2, D, D, generator=g, dtype=dtype) / math.sqrt(D) for _ in range(4)]\n\ndef video(B, T, N, D, seed, dtype=torch.float64):\n    g = torch.Generator().manual_seed(1000 + seed)\n    return torch.randn(B, T, N, D, generator=g, dtype=dtype)\n\nx = video(2, 3, 4, 8, seed=7)\nW = weights(8, seed=7)\ncopies = [x.clone()] + [w.clone() for w in W]\nout64 = {fn}(x, *W, 2)\nassert out64.dtype == torch.float64, out64.dtype\nfor a, b in zip([x] + W, copies):\n    assert torch.equal(a, b), \"st_attention modified an input\"\nout32 = {fn}(x.float(), *[w.float() for w in W], 2)\nassert out32.dtype == torch.float32, out32.dtype\nwant = masked_st(x, *W, 2, *own_masks(3, 4))\nassert torch.allclose(out32.double(), want, atol=1e-4, rtol=0), (out32.double() - want).abs().max()\n"
+        },
+        {
+          "name": "Rejects bad shapes and arguments",
+          "visibility": "unshown",
+          "behavior": "contract.signature",
+          "failureMessage": "Raise ValueError for a non 4-D or non-floating x, a weight that is not (2, D, D) in the dtype of x, an n_heads that does not divide D, or a T or N below 1.",
+          "hiddenCode": "\nimport math, torch\n\ndef masked_mha(x, Wq, Wk, Wv, Wo, n_heads, allowed):\n    B, S, D = x.shape\n    d = D // n_heads\n    q = (x @ Wq).view(B, S, n_heads, d).transpose(1, 2)\n    k = (x @ Wk).view(B, S, n_heads, d).transpose(1, 2)\n    v = (x @ Wv).view(B, S, n_heads, d).transpose(1, 2)\n    s = (q @ k.transpose(-2, -1)) / math.sqrt(d)\n    s = s.masked_fill(~allowed, float(\"-inf\"))\n    out = torch.softmax(s, dim=-1) @ v\n    return out.transpose(1, 2).reshape(B, S, D) @ Wo\n\ndef masked_st(x, Wq, Wk, Wv, Wo, n_heads, spatial, temporal):\n    B, T, N, D = x.shape\n    flat = x.reshape(B, T * N, D)\n    h = flat + masked_mha(flat, Wq[0], Wk[0], Wv[0], Wo[0], n_heads, spatial)\n    y = h + masked_mha(h, Wq[1], Wk[1], Wv[1], Wo[1], n_heads, temporal)\n    return y.reshape(B, T, N, D)\n\ndef own_masks(T, N):\n    idx = torch.arange(T * N)\n    t, n = idx // N, idx % N\n    return t[:, None] == t[None, :], (n[:, None] == n[None, :]) & (t[None, :] <= t[:, None])\n\ndef weights(D, seed, dtype=torch.float64):\n    g = torch.Generator().manual_seed(seed)\n    return [torch.randn(2, D, D, generator=g, dtype=dtype) / math.sqrt(D) for _ in range(4)]\n\ndef video(B, T, N, D, seed, dtype=torch.float64):\n    g = torch.Generator().manual_seed(1000 + seed)\n    return torch.randn(B, T, N, D, generator=g, dtype=dtype)\n\nst_mask = {fn}.__globals__[\"st_mask\"]\nx = video(1, 2, 3, 8, seed=8)\nW = weights(8, seed=8)\ndef rejects(*args):\n    try:\n        {fn}(*args)\n    except ValueError:\n        return True\n    return False\nassert rejects(x[0], *W, 2), \"accepted a 3-D x\"\nassert rejects(x.long(), *[w.long() for w in W], 2), \"accepted an integer x\"\nassert rejects(x, W[0][0], *W[1:], 2), \"accepted a (D, D) Wq\"\nassert rejects(x, W[0], W[1], W[2], torch.zeros(2, 8, 9, dtype=torch.float64), 2), \"accepted a (2, D, D + 1) Wo\"\nassert rejects(x, W[0], W[1], W[2].float(), W[3], 2), \"accepted a weight in another dtype\"\nfor h in (3, 0, -2, 2.0):\n    assert rejects(x, *W, h), f\"accepted n_heads={h!r}\"\nfor T, N in ((0, 2), (2, 0), (1.5, 2), (2, -1)):\n    try:\n        st_mask(T, N)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f\"st_mask accepted T={T!r}, N={N!r}\")\n"
+        }
+      ],
+      "hints": [
+        {
+          "level": 1,
+          "kind": "questions",
+          "content": "If you fold the batch and frame axes together, what shape does the spatial layer see, and which axis does it attend over? Which axes do you need to swap and fold so that the temporal layer attends over frames for one patch position? In the flattened order t * N + n, how do you recover t and n from a token index?"
+        },
+        {
+          "level": 2,
+          "kind": "analysis",
+          "content": "Write one helper that runs multi-head attention over the middle axis of an (S, L, D) tensor with an optional causal mask, then call it twice: on x reshaped to (B*T, N, D) with the index-0 weights, and on the residual output with T and N swapped and folded to (B*N, T, D) with the index-1 weights. Undo the swap before adding the second residual. For the masks, compare token frame and patch indices with broadcasting. Pitfalls: a causal mask that also hides the diagonal, folding T and N in the wrong order, and scaling by sqrt(D) instead of sqrt(d)."
+        }
+      ],
+      "advisoryPrerequisites": [
+        "mha",
+        "causal_attention",
+        "jepa_block_masks_and_loss"
+      ],
+      "modelConnections": [
+        "Genie (Bruce et al. 2024) builds its latent action model, video tokenizer (ST-ViViT) and MaskGIT dynamics model from ST-transformer blocks with causal temporal attention.",
+        "The factorization follows Xu et al. 2020's spatial-temporal transformer and mirrors ViViT's factorized self-attention; TimeSformer calls the same pattern divided space-time attention.",
+        "The unofficial open-genie SpaceTimeAttention runs spatial attention with causal=False, then temporal attention with causal=True, each with its own weights and a residual."
+      ],
+      "proConAnalysis": {
+        "pros": [
+          "Cost per block is about T * N^2 + N * T^2 instead of (T * N)^2, so long clips fit in memory.",
+          "The causal temporal mask gives next-frame predictions for every frame in one pass, like a language model."
+        ],
+        "cons": [
+          "A token in one layer only sees its own frame or its own patch position, so mixing across both needs a stack of blocks.",
+          "Two attention layers per block double the projection parameters compared with one full-attention layer."
+        ]
+      },
+      "interviewQuestions": [
+        {
+          "stage": "concept",
+          "question": "What does a spatial layer attend over in an ST-transformer, what does a temporal layer attend over, and why does the factorization save memory?",
+          "hint": "Name the token group each layer sees (one frame, one patch position across frames). Compare the size of the attention matrices against full attention over T * N tokens and say which term dominates."
+        },
+        {
+          "stage": "concept",
+          "question": "Why is Genie's temporal attention causal while its spatial attention is bidirectional?",
+          "hint": "Think about what the model generates frame by frame and what it may know at frame t. Cover one-pass next-frame training as in a decoder-only LM, and why patches of the same frame can see each other."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "Write the boolean masks that make ordinary attention over the flattened T * N sequence equal to the spatial layer and to the temporal layer.",
+          "hint": "Fix a flattening order first, then recover frame and patch from a token index. Describe each mask as a condition on the frame and patch of query and key, and say whether the diagonal is included."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "How do you reshape a (B, T, N, D) tensor so that a standard attention routine runs the temporal layer, and what goes wrong if you fold the axes in the wrong order?",
+          "hint": "Cover which axis must end up as the sequence axis and which axes fold into the batch. Explain why a transpose is needed before the reshape and what a reshape without it silently mixes."
+        },
+        {
+          "stage": "deep_dive",
+          "question": "After one spatial layer and one temporal layer, which input tokens can influence the output at frame t, patch n? What changes if the temporal layer runs first?",
+          "hint": "Trace the information path through both layers and the residuals: which frames and which patch positions are reachable. Then redo the trace with the order swapped and compare."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Factorized space-time attention versus full attention over all T * N tokens: what is lost in expressiveness, and when does the cost saving matter?",
+          "hint": "Weigh direct pairwise interactions across frame and patch against the depth needed to recover them. Bring in token counts for real video clips and where memory, not compute, is the limit."
+        },
+        {
+          "stage": "tradeoffs",
+          "question": "Separate weights for the spatial and temporal layers versus one shared set: what does each choice cost and buy?",
+          "hint": "Consider whether spatial and temporal relations want the same query-key geometry. Cover parameter count, what the paper and open-genie do, and how positional embeddings interact with the choice."
+        }
+      ],
+      "sources": [
+        {
+          "kind": "paper",
+          "url": "https://arxiv.org/abs/2402.15391",
+          "section": "Bruce et al. 2024, Genie: Generative Interactive Environments, Section 2 Methodology, ST-transformer paragraph and Figure 3",
+          "note": "The ORACLE for this exercise is the paper plus an unofficial reimplementation; Genie has no official code. The paper specifies a spatial layer over the H x W tokens of one time step, then a temporal layer over the T time steps of the same token with a causal mask, then one feed-forward layer."
+        },
+        {
+          "kind": "code",
+          "url": "https://github.com/myscience/open-genie/blob/732b9f9b746f18fff1a0fb22f83638224f2f7cc6/genie/module/attention.py",
+          "commit": "732b9f9b746f18fff1a0fb22f83638224f2f7cc6",
+          "path": "genie/module/attention.py",
+          "symbol": "SpaceTimeAttention (with Attention, Adapter, SpatialAttention, TemporalAttention)",
+          "license": "MIT",
+          "adapted": "UNOFFICIAL reimplementation, used as a cross-check of the paper-derived contract: separate spatial (causal=False) and temporal (causal=True) attention modules, each with its own projections, applied in that order with a residual after each.",
+          "simplifications": "einops rewritten as torch reshapes. Left out: rotary embeddings, the pre-LayerNorm in each attention layer, the Conv3d feed-forward block and the space_skip/ffn_skip Conv3d skips, cross-attention conditioning, dropout, and the in_channels/out_channels attributes; the spatial module accepts only 5-D input. Projections are explicit (2, D, D) weights; upstream silently uses nn.Identity for q/k/v and output when the width equals n_head * d_head. Divergence: upstream's default scale is n_head * d_head ** -0.5, which is n_head / sqrt(d_head); the exercise uses 1 / sqrt(d_head), as the oracle test pins."
+        }
+      ]
     }
   ]
 }

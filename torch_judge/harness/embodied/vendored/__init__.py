@@ -18,4 +18,10 @@ Licenses of vendored material:
   * lerobot_act_temporal_ensembler.py  — Apache License 2.0, the HuggingFace Team
   * lerobot_flow_matching.py           — Apache License 2.0, the HuggingFace Team
   * lerobot_rtc.py                     — Apache License 2.0, the HuggingFace Team
+  * dreamerv3_twohot.py                — MIT License, Danijar Hafner
+  * dreamerv3_rssm_kl.py               — MIT License, Danijar Hafner (via NM512/dreamerv3-torch)
+  * vjepa2_masks_and_loss.py           — MIT License, Meta Platforms, Inc. and affiliates
+  * open_genie_space_time_attention.py — MIT License, Phil Wang (myscience/open-genie, unofficial Genie)
+  * vjepa2_tdmpc_cem.py                — MIT License, Meta Platforms, Inc. and affiliates;
+                                         Apache License 2.0, the HuggingFace Team (TD-MPC)
 """
