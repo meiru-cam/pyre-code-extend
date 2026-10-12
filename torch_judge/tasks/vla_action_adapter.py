@@ -72,6 +72,7 @@ TASK = {
 **Constraints:**
 - A gripper value of exactly 0.5 gives `g = 0`, and binarizing keeps it at 0. It never becomes +1 or -1.
 - Take the sign after mapping to `[-1, 1]`, never of the raw `[0, 1]` value.
+- Evaluate the unnormalize formula in the order written, so `a = -1` returns exactly `q01`; the gripper's `sign(0)` case depends on it.
 - Do not clip anything. Model outputs outside `[-1, 1]` unnormalize to values outside `[q01, q99]`.
 - Never compute statistics from `actions`; use the given `q01` and `q99`.
 - Do not modify any input tensor.
@@ -86,9 +87,9 @@ TASK = {
 
 **Unnormalize.** openpi uses quantile normalization for every model type except pi0, which uses z-scores. Its quantile inverse is the formula above. When the stats are narrower than the model output, the extra padded dims pass through unchanged and are sliced off later by the robot's output transform (`LiberoOutputs` keeps `[..., :7]`). The `1e-6` matches the one in the forward normalization, `(x - q01) / (q99 - q01 + 1e-6) * 2 - 1`, so a round trip returns the original action up to float rounding.
 
-**Delta to absolute.** Some openpi configs train on joint deltas relative to the current state and convert back with `AbsoluteActions`. That transform adds the state to the masked dims of every step in the chunk. A mask such as `make_bool_mask(6, -1)` covers six joints and leaves the gripper absolute. The state is the one at prediction time, so later steps in the chunk are offsets from that same state, not from each other.
+**Delta to absolute.** Some openpi configs train on joint deltas relative to the current state and convert back with `AbsoluteActions`. That transform adds the state to the masked dims of every step in the chunk. ALOHA's `make_bool_mask(6, -1, 6, -1)` covers each arm's six joints and leaves both grippers absolute; DROID uses `make_bool_mask(7, -1)`. The state is the one at prediction time, so later steps in the chunk are offsets from that same state, not from each other.
 
-**The gripper.** SimpleVLA-RL's docstring explains that the RLDS data loader aligns the gripper as 0 = close, 1 = open, while the environments it targets expect -1 = open, +1 = close. Its LIBERO rollout converts every action with `normalize_gripper_action(a, binarize=True)` and then `invert_gripper_action`. Binarizing uses `np.sign`, so an output of exactly 0.5 becomes 0, a command that is neither open nor close. Flipping commutes with sign, `sign(-g) = -sign(g)`, so it does not matter whether you flip before or after binarizing.
+**The gripper.** SimpleVLA-RL's docstring explains that the RLDS data loader aligns the gripper as 0 = close, 1 = open, while the environments it targets expect -1 = open, +1 = close. Its LIBERO rollout converts every action with `normalize_gripper_action(a, binarize=True)` and then `invert_gripper_action`. Binarizing uses `np.sign`, so an output of exactly 0.5 becomes 0, a command that is neither open nor close.
 
 **Where this chain comes from.** The steps chain two codebases. openpi's output transforms do the first three, and SimpleVLA-RL's LIBERO rollout does the gripper step. openpi's own LIBERO example sends the continuous gripper value unchanged. Neither project clips the action in these steps.""",
     "advisory_prerequisites": ["vla_action_bins", "pi0_flow_matching_chunk"],
@@ -343,7 +344,7 @@ def adapt_actions(actions, q01, q99, state, delta_mask, binarize_gripper=True, i
     "interview_questions": interview(
         concept=[
             "Why can a VLA's raw output not be sent straight to the robot, and what does each step of the adapter undo?",
-            "What does a delta mask such as make_bool_mask(6, -1) mean, and why is the gripper usually left absolute?",
+            "What does a delta mask such as make_bool_mask(6, -1, 6, -1) mean, and why is the gripper usually left absolute?",
         ],
         deep_dive=[
             "In a chunk of H delta actions, is each step relative to the previous step or to the state at prediction time? How does that show up in the broadcast?",

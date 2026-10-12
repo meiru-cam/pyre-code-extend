@@ -3,7 +3,7 @@
 Upstream:   https://github.com/Physical-Intelligence/openpi
 Commit:     215abfb217dbac7d5f1273282331b9b1866c0479
 Files:      src/openpi/transforms.py, src/openpi/policies/libero_policy.py
-Symbols:    Unnormalize._unnormalize_quantile (L175-181), AbsoluteActions.__call__ (L226-238),
+Symbols:    Unnormalize._unnormalize_quantile (L175-181), AbsoluteActions.__call__ (L226-244 (__call__ at L234-244)),
             pad_to_dim (L423-430), make_bool_mask (L433-452), LiberoOutputs (L87-100)
 License:    Apache License 2.0, Physical Intelligence. Licensed under the Apache
             License, Version 2.0; you may obtain a copy at

@@ -131,7 +131,7 @@ TASK = {
         {"level": 2, "kind": "analysis", "content": "Keep four (num_envs,) buffers: float32 return, integer length, bool success_once and fail_once. In step, validate shapes and dtypes, update the buffers, OR in the flags, compute effective terminations and dones, clone the buffers into the episode dict and add the _at_end copies only when terminations are ignored. Then, if auto_reset, call reset with the indices where dones is true. reset builds a mask from the indices and zeroes the buffers there."},
     ],
     "model_connections": [
-        "ManiSkillVectorEnv(record_metrics=True) keeps exactly these buffers and returns them in infos['episode'], cloned into infos['final_info'] before a partial reset.",
+        "ManiSkillVectorEnv(record_metrics=True) keeps success_once, fail_once and the return as buffers, takes the length from elapsed_steps, and returns them in infos['episode'], cloned into infos['final_info'] before a partial reset.",
         "ManiSkill's PPO baseline averages every key of final_info['episode'] and logs it as train/ and eval/ scalars; the training log masks it to the finished environments with _final_info.",
         "RLinf's LIBERO env records the same success_once, return, episode_len and reward keys, with success taken from terminations.",
     ],

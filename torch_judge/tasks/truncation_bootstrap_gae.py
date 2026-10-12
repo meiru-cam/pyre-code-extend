@@ -113,7 +113,7 @@ The environments auto-reset: after an episode ends at row `t`, `values[t + 1]` i
         "ManiSkill's PPO baseline computes V(final_observation) for every env that finished on a step and adds it as final_values[t] in its GAE loop.",
         "Gymnasium's vector envs default to next-step autoreset; in same-step mode the true last observation is returned in info['final_obs'], the input this exercise's final_values is computed from.",
         "RLinf reduces per-step rewards to one reward per action chunk for its chunk_level reward type and runs GAE over chunks.",
-        "gae_advantage is the single-flag special case: with no truncations the two estimators agree.",
+        "gae_advantage is the single-flag special case: with no truncations the two estimators compute the same numbers, though gae_advantage is batch-first (B, T) with values (B, T + 1) while this exercise is time-first (T, B) with a separate next_value.",
     ],
     "pro_con_analysis": {
         "pros": [
@@ -148,7 +148,7 @@ The environments auto-reset: after an episode ends at row `t`, `values[t + 1]` i
             "symbol": "preprocess_embodied_advantages_inputs",
             "license": "Apache-2.0",
             "adapted": "The chunk_level reduction: sum rewards along the chunk axis and run GAE with one row per chunk.",
-            "simplifications": "Upstream sums every reward in the chunk and relies on the environment to zero rewards after an episode ends; the exercise multiplies by an explicit valid_mask. "
+            "simplifications": "Upstream sums every reward slot in the chunk with no mask; the exercise multiplies by an explicit valid_mask. "
                                "Done flags arrive already folded to chunk level instead of being max-reduced, and terminated and truncated stay separate.",
         },
         {

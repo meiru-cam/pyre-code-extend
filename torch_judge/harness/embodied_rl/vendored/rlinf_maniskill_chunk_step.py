@@ -1,4 +1,4 @@
-"""Vendored action-chunk execution oracles from RLinf and ManiSkill.
+"""Vendored action-chunk execution oracles: RLinf's LIBERO chunk_step plus ManiSkill's ActionRepeatWrapper.
 
 Upstream:   https://github.com/RLinf/RLinf
 Commit:     0e9438dee0088be7673a1fb4789018aea168db1a

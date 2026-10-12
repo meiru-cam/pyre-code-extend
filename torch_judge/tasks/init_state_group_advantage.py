@@ -83,7 +83,7 @@ TASK = {
 
 **Why drop uniform groups.** When every rollout in a group succeeds, or every one fails, each advantage is zero and the group adds no gradient. SimpleVLA-RL (Section 3.3) excludes such groups during dynamic sampling and keeps sampling until the batch holds only mixed-outcome groups.
 
-**Why env steps, not chunks.** The env worker stops in the middle of a chunk as soon as the episode is done, so the remaining actions of that chunk were generated but never executed. SimpleVLA-RL's mask is `arange(S) < finish_step * action_token_len`, which keeps exactly the executed actions.
+**Why env steps, not chunks.** SimpleVLA-RL's LIBERO env worker stops in the middle of a chunk as soon as the episode is done (its RoboTwin wrapper counts whole chunks instead), so the remaining actions of that chunk were generated but never executed. SimpleVLA-RL's mask is `arange(S) < finish_step * action_token_len`, which keeps exactly the executed actions.
 
 **Why the sample standard deviation and the singleton rule.** They are what SimpleVLA-RL's `compute_grpo_outcome_advantage` does: it calls `torch.std`, whose default is unbiased, and gives a group of one a mean of 0 and a standard deviation of 1. The `group_relative_advantage` exercise uses the population standard deviation; the two differ by a factor of `sqrt((k - 1) / k)`.""",
     "advisory_prerequisites": ["group_relative_advantage", "dapo_dynamic_sampling", "response_token_mask"],
@@ -142,7 +142,7 @@ TASK = {
         {
             "kind": "paper",
             "url": "https://arxiv.org/abs/2509.09674",
-            "section": "SimpleVLA-RL, Section 2.3 (GRPO, Eq. 8 and 12), Section 3.2 (binary outcome reward), Section 3.3 (dynamic sampling)",
+            "section": "SimpleVLA-RL, Section 2.3 (GRPO, Eq. 8), Section 3.4 (Eq. 11 and 12), Section 3.2 (binary outcome reward), Section 3.3 (dynamic sampling)",
             "note": "Groups of trajectories from one initial state, 0/1 trajectory reward propagated to action tokens, and exclusion of all-success and all-failure groups.",
         },
         {
@@ -360,7 +360,7 @@ def robot_group_advantage(success, task_ids, init_state_ids, finish_steps, token
         deep_dive=[
             "An episode ends after the third action of an eight-action chunk. Which of that chunk's tokens should carry advantage, and why?",
             "How does the sample standard deviation change GRPO advantages compared with the population one, and what does SimpleVLA-RL do for a group of one?",
-            "Why must dropped groups also be removed from the token mask, even though their GRPO advantages are already zero?",
+            "Why must dropped groups also be removed from the token mask, even though a uniform group's GRPO advantages are already zero?",
         ],
         tradeoffs=[
             "Several rollouts from one initial state versus one rollout from each of many initial states: what do you gain and lose in variance and coverage?",

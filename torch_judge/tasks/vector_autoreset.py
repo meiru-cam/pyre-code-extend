@@ -156,7 +156,7 @@ TASK = {
 
 **SameStep.** This was the behavior of Gymnasium 0.29, where the keys were `final_observation` and `final_info`. Every call does useful work, but for a reset env the returned observation is the start of a new episode, not the successor of the action. Bootstrapping a truncated episode needs the value of the true last observation, which only `info["final_obs"]` holds.
 
-**ManiSkill's variant.** `ManiSkillVectorEnv` hard-codes SameStep and keeps the old names: `info["final_observation"]` holds a clone of the whole batched observation, and `_final_observation`, `_final_info` and `_elapsed_steps` are all set to the done mask. Its PPO baseline evaluates the value of `final_observation[done_mask]` for those envs.
+**ManiSkill's variant.** `ManiSkillVectorEnv` hard-codes SameStep when `auto_reset=True`, the default, and keeps the old names: `info["final_observation"]` holds a clone of the whole batched observation, and `_final_observation`, `_final_info` and `_elapsed_steps` are all set to the done mask. Its PPO baseline evaluates the value of `final_observation[done_mask]` for those envs.
 
 **Gymnasium details left out.** Gymnasium also has a `"Disabled"` mode (the caller resets envs through `reset(options={"reset_mask": ...})`). Its info batching stores numbers in zero-filled numpy arrays typed by the first value instead of lists with `None`, and keeps `final_obs` as an object array.""",
     "advisory_prerequisites": ["rl_eval_loop", "gae_advantage", "point_reach_env"],

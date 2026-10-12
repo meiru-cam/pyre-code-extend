@@ -79,4 +79,4 @@ def test_truncation_bootstrap_gae_metadata():
     assert not any(key.endswith("_zh") for key in task), "new exercises are English only"
     visible = [t for t in task["tests"] if t.get("visibility", "visible") == "visible"]
     assert 1 <= len(visible) <= 3
-    assert task["advisory_prerequisites"] == ["gae_advantage"]
+    assert task["advisory_prerequisites"] == ["gae_advantage", "vector_autoreset", "chunk_step_executor"]

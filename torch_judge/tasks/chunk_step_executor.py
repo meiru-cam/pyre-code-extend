@@ -132,7 +132,7 @@ Raise `ValueError` when `chunk` is not a 3-D floating-point tensor, or when `B` 
 
 **Three upstream choices.**
 - ManiSkill's `ActionRepeatWrapper` repeats one action up to `repeat` times. After the first step it updates the observation, flags and infos, and adds the reward, only for envs that are not done, and it breaks out of the loop once every env is done. The returned observation is the true last one.
-- RLinf's LIBERO `chunk_step` executes all `H` actions with auto-reset off. It returns the raw per-slot rewards and records a prefix `valid_action_mask` from the count of executed actions. It folds termination and truncation onto the chunk's last index with `any` over the whole chunk, then auto-resets done envs after the chunk. RLinf's ManiSkill `chunk_step` folds the flags the same way but records no mask.
+- RLinf's LIBERO `chunk_step` executes all `H` actions with auto-reset off. It returns the raw per-slot rewards and records a prefix `valid_action_mask` from the count of executed actions. In auto-reset mode (or with terminations ignored) it resets done envs and then folds termination and truncation onto the chunk's last index with `any` over the whole chunk; otherwise it returns the flags per slot. RLinf's ManiSkill `chunk_step` folds the flags the same way but records no mask.
 - DSRL's `ActionChunkWrapper` (single env) steps all actions, sums every reward, takes the maximum of the done flags and returns the last observation. If the environment keeps paying reward after the end, that sum includes it. Its repository has no license, so it is cited here and not vendored.
 
 This exercise takes ManiSkill's rule for the observation and the flags (both from the ending step) and RLinf's per-action mask.
@@ -169,7 +169,7 @@ This exercise takes ManiSkill's rule for the observation and the flags (both fro
             "symbol": "LiberoEnv.chunk_step",
             "license": "Apache-2.0",
             "adapted": "Stepping a (B, H, D) chunk slot by slot on the full batch, the executed-action count that includes the ending action, and the prefix valid mask.",
-            "simplifications": "Flags come from each env's ending step instead of any() over all H slots, and final_obs is the ending-step observation instead of the last slot's; "
+            "simplifications": "Flags come from each env's ending step instead of any() over all H slots, and final_obs is the ending-step observation, while upstream returns obs_list, whose last entry is the reset observation under auto-reset; "
                                "rewards outside the mask are zeroed instead of returned raw; "
                                "the loop stops once every env has ended instead of always running H steps; "
                                "auto-reset, eval-count masks, rendering control, infos and the per-slot obs list are dropped.",
@@ -404,7 +404,7 @@ def chunk_step(env_step, chunk):
         ],
         deep_dive=[
             "A batched GPU simulator cannot pause one env. What does it return for an env whose episode ended mid-chunk, and how do you keep that out of training data?",
-            "RLinf folds termination with any() over the whole chunk, while ManiSkill's ActionRepeatWrapper keeps the flags of the ending step. When do the two disagree?",
+            "In auto-reset mode RLinf folds termination with any() over the whole chunk, while ManiSkill's ActionRepeatWrapper keeps the flags of the ending step. When do the two disagree?",
             "Which observation should a value function bootstrap from when an env is truncated at slot 2 of an 8-action chunk, and why not the observation after slot 7?",
         ],
         tradeoffs=[
