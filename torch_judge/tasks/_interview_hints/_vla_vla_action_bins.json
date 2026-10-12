@@ -1,0 +1,11 @@
+{
+  "vla_action_bins": {
+    "Why do RT-1, RT-2 and OpenVLA turn each continuous action dimension into a discrete token?": "Think about reusing the language model's softmax head and cross-entropy loss unchanged. Cover what a token per dimension buys (multimodal distributions, shared vocabulary) and what it costs per control step.",
+    "Why normalize actions with the 1st and 99th percentiles instead of the min and max?": "Consider what a single outlier does to a min/max range when the bin count is fixed. Cover bin resolution, clipping of the tails, and how dimensions that never move are handled.",
+    "With 256 bin edges from linspace(-1, 1, 256), how many intervals are there, what does np.digitize return for a value of exactly +1, and how does OpenVLA decode it?": "Count edges versus intervals and recall that digitize returns an index in 1..n_bins. Walk through subtracting 1 and clipping to n_bins - 2 before indexing the centers.",
+    "Why does OpenVLA place action tokens at the end of the Llama vocabulary, and how do you map a bin to a token id and back?": "Think about which BPE tokens are least used and what overwriting them costs. Write the forward map id = vocab_size - bin and its inverse, and say how ids outside that range are handled.",
+    "Compare the reconstruction error of OpenVLA's center decoding with RT-1's floor-and-left-edge decoding for a value spread uniformly inside a bin.": "Compare where each scheme puts the decoded value inside a bin of width w. Cover the bias and the maximum absolute error of each, and what happens at the top of the range.",
+    "Per-dimension uniform bins versus a learned action tokenizer such as FAST or VQ: what changes in sequence length, resolution and smoothness?": "Compare tokens per chunk, how correlation across time and dimensions is exploited, and what high-frequency control does to per-step binning. Mention decoding robustness to invalid tokens.",
+    "Discrete action tokens with cross-entropy versus a continuous action head trained with regression or flow matching: what do you gain and lose?": "Weigh multimodality, ordinal structure between bins, precision, inference latency per action, and how much of the pretrained VLM head is reused."
+  }
+}
