@@ -56,6 +56,17 @@
       "prerequisites": []
     },
     {
+      "id": "latent-reasoning",
+      "titleEn": "Latent Reasoning",
+      "titleZh": "隐式推理",
+      "descriptionEn": "Reasoning that spends compute without writing tokens: pause-token training, Coconut's curriculum and continuous thoughts fed back as input, Huginn's recurrent-depth unrolling with truncated backprop, and per-token adaptive exit.",
+      "descriptionZh": "不写出 token 也能花算力的推理：pause token 训练、Coconut 的课程与把连续思维回填为输入、Huginn 的循环深度展开与截断反传，以及逐 token 的自适应退出。",
+      "icon": "Brain",
+      "problems": ["pause_token_training_mask", "coconut_stage_sample", "coconut_latent_forward", "recurrent_depth_unroll", "latent_exit_criteria"],
+      "group": "architectures",
+      "prerequisites": ["transformer-internals"]
+    },
+    {
       "id": "moe-training",
       "titleEn": "MoE Architecture and Training",
       "titleZh": "MoE Architecture and Training",

@@ -242,5 +242,10 @@
   "rssm_kl_balance": "def rssm_kl_loss(post_logits, prior_logits, free_nats=1.0, beta_dyn=1.0, beta_rep=0.1, unimix=0.01):\n    pass",
   "jepa_block_masks_and_loss": "class JEPA:\n\n    def make_masks(self, grid, blocks, max_keep=None):\n        pass\n\n    def jepa_loss(self, pred, target_feats, tgt_idx, loss_exp=1.0):\n        pass\n\n    def ema_update(self, target_params, online_params, m):\n        pass\n\n    def momentum(self, step, total_steps, start, end):\n        pass",
   "st_transformer_attention": "def st_mask(T, N):\n    pass\n\n\ndef st_attention(x, Wq, Wk, Wv, Wo, n_heads):\n    pass",
-  "world_model_cem_step": "def cem_refit(samples, energies, mean, std, topk, momentum_mean, momentum_std, mode=\"vjepa2\", temperature=0.5):\n    pass"
+  "world_model_cem_step": "def cem_refit(samples, energies, mean, std, topk, momentum_mean, momentum_std, mode=\"vjepa2\", temperature=0.5):\n    pass",
+  "pause_token_training_mask": "def insert_pauses(prefix_ids, target_ids, pause_id, n_pause):\n    pass",
+  "coconut_stage_sample": "def build_stage_sample(question_ids, step_ids, answer_ids, stage, c_thought, max_latent_stage,\n                       pad_latent_to_max, special_ids, no_special_marker=False):\n    pass",
+  "coconut_latent_forward": "def coconut_forward(model, embed, input_ids, latent_id):\n    pass",
+  "recurrent_depth_unroll": "def recurrent_forward(e, s0, adapter, core, n_no_grad, k_grad):\n    pass\n\n\ndef split_iterations(p, mean_backprop_depth):\n    pass",
+  "latent_exit_criteria": "def first_exit_step(logits_per_step, latents_per_step, criterion, threshold=\"auto\"):\n    pass"
 }
