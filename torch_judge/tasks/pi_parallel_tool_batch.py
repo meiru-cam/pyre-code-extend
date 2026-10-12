@@ -58,16 +58,20 @@ An error outcome has `content = [{"type": "text", "text": ...}]`. Each outcome b
     ],
     "tests": [
         {"name": "Runs concurrently and returns results in call order", "behavior": "scheduler.concurrency", "code": r"""
-import asyncio, time
+import asyncio
 async def main():
+    b_done = asyncio.Event()
     async def slow(args):
-        await asyncio.sleep(args["t"]); return {"content": [{"type": "text", "text": str(args["t"])}]}
+        if args["t"] == 0.2:
+            # a finishes only after b has, so a batch that runs one call at a time never finishes a
+            await asyncio.wait_for(b_done.wait(), timeout=5)
+        else:
+            await asyncio.sleep(args["t"]); b_done.set()
+        return {"content": [{"type": "text", "text": str(args["t"])}]}
     tools = {"sleep": {"execute": slow}}
     calls = [{"id": "a", "name": "sleep", "arguments": {"t": 0.2}}, {"id": "b", "name": "sleep", "arguments": {"t": 0.05}}]
     events = []
-    start = time.perf_counter()
     out = await {fn}(calls, tools, emit=events.append)
-    assert time.perf_counter() - start < 0.35
     assert [m["tool_call_id"] for m in out["messages"]] == ["a", "b"] and out["terminate"] is False, out
     assert out["messages"][1] == {"role": "toolResult", "tool_call_id": "b", "tool_name": "sleep", "content": [{"type": "text", "text": "0.05"}], "is_error": False}
     assert events == [{"type": "start", "id": "a"}, {"type": "start", "id": "b"}, {"type": "end", "id": "b"}, {"type": "end", "id": "a"}], events

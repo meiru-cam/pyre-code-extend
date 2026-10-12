@@ -4,7 +4,7 @@ from ._interview import interview
 
 # A key-by-key oracle written straight from the rules; only fit for small coordinates.
 _ORACLE = r"""
-import builtins, collections, itertools, random, time
+import builtins, collections, itertools, math, random
 
 def slow_rebalance(limit, shards, fill_holes=True):
     kept = []
@@ -222,15 +222,37 @@ assert result == [("x", -10**9, 10**9)], result
 result = [tuple(s) for s in {fn}().rebalance(2, [("x", -10**9, 10**9), ("y", 0, 10**9), ("z", 5, 10)])]
 assert result == [("x", -10**9, 10**9), ("y", 0, 10**9)], result
 """},
-        {"name": "Part 3: 20,000 wide shards", "part": 3, "visibility": "unshown", "behavior": "performance.complexity",
-         "failure_message": "20,000 shards took far more than ten times as long as 2,000, or the result broke the limit or left a key uncovered; use a heap of at most limit free keys instead of comparing against every kept shard.",
+        {"name": "Part 3: 5,000 wide shards", "part": 3, "visibility": "unshown", "behavior": "performance.complexity",
+         "failure_message": "On 5,000 shards, rebalance compared or shifted the coordinates far more than n log n times, or the result broke the limit or left a key uncovered; use a heap of at most limit free keys instead of comparing against every kept shard.",
          "code": _ORACLE + r"""
+class Coord(int):
+    # A coordinate that counts every comparison and shift made on it, and on values derived from it.
+    ops, budget = 0, None
+    def _tick():
+        Coord.ops += 1
+        if Coord.budget is not None and Coord.ops > Coord.budget:
+            Coord.budget = None
+            raise AssertionError("rebalance compared or shifted the coordinates far more than n log n times")
+    def _wrap(value):
+        return value if value is NotImplemented else Coord(value)
+    def __eq__(self, other): Coord._tick(); return int.__eq__(self, other)
+    def __ne__(self, other): Coord._tick(); return int.__ne__(self, other)
+    def __lt__(self, other): Coord._tick(); return int.__lt__(self, other)
+    def __le__(self, other): Coord._tick(); return int.__le__(self, other)
+    def __gt__(self, other): Coord._tick(); return int.__gt__(self, other)
+    def __ge__(self, other): Coord._tick(); return int.__ge__(self, other)
+    def __add__(self, other): Coord._tick(); return Coord._wrap(int.__add__(self, other))
+    def __radd__(self, other): Coord._tick(); return Coord._wrap(int.__radd__(self, other))
+    def __sub__(self, other): Coord._tick(); return Coord._wrap(int.__sub__(self, other))
+    def __rsub__(self, other): Coord._tick(); return Coord._wrap(int.__rsub__(self, other))
+    __hash__ = int.__hash__
+
 def workload(n, seed):
     rng = random.Random(seed)
     shards = []
     for i in range(n):
         lo = rng.randint(-10**9, 10**9)
-        shards.append((f"s{i}", lo, lo + rng.randint(0, 10**6)))
+        shards.append((f"s{i}", Coord(lo), Coord(lo + rng.randint(0, 10**6))))
     return shards
 
 def check(limit, shards, result):
@@ -246,18 +268,14 @@ def check(limit, shards, result):
     for sid, start, end in result:
         assert start >= starts[sid][1] and end >= starts[sid][2]
 
-def best_of_three(limit, shards):
-    best = float("inf")
-    for _ in range(3):
-        begin = time.perf_counter()
-        result = as_tuples({fn}().rebalance(limit, shards))
-        best = min(best, time.perf_counter() - begin)
-    check(limit, shards, result)
-    return best
-
-small, big = workload(2000, 1), workload(20000, 2)
-ratio = best_of_three(3, big) / best_of_three(3, small)
-assert ratio < 40, f"10x the shards took {ratio:.0f}x as long"
+n = 5000
+shards = workload(n, 2)
+# Sorting costs about 2 n log2(n) counted operations and the heap a few per shard; a scan of the
+# kept shards costs about n^2 / 2, so it runs past the budget long before it finishes.
+Coord.ops, Coord.budget = 0, int(30 * n * math.log2(n))
+result = as_tuples({fn}().rebalance(3, shards))
+Coord.budget = None
+check(3, shards, result)
 """},
         {"name": "Part 4: the worked example", "part": 4, "behavior": "routing.selection", "code": _ROUTING + r"""
 keys = range(40000)
