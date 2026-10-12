@@ -262,23 +262,34 @@ for seed in range(100):
         assert profiler.match_suffix(query) == (expected or "UNKNOWN"), (seed, traces, query)
 """},
         {"name": "Part 3: queries do not scan every trace", "part": 3, "visibility": "unshown", "behavior": "performance.complexity",
-         "failure_message": "match_suffix on 20,000 known traces was much slower than on 20; index the traces by their innermost frames.",
+         "failure_message": "match_suffix on 20,000 known traces compared or hashed far more known frames than the query holds; index the traces by their innermost frames.",
          "code": r"""
-import time
-def index(n):
-    return {fn}(known_traces=[(f"t{i}", ["main", f"f{i}", "crash"]) for i in range(n)])
-small, big = index(20), index(20000)
-assert big.match_suffix(["f7", "crash"]) == ["t7"]
-def best(profiler):
-    out = float("inf")
-    for _ in range(3):
-        start = time.perf_counter()
-        for i in range(500):
-            profiler.match_suffix([f"f{i % 20}", "crash"])
-        out = min(out, time.perf_counter() - start)
-    return out
-ratio = best(big) / best(small)
-assert ratio < 20, f"queries on 20,000 traces took {ratio:.0f}x as long"
+class Frame(str):
+    # A frame of a known trace that counts every comparison and hash made on it.
+    ops = 0
+    def __eq__(self, other):
+        Frame.ops += 1
+        return str.__eq__(self, other)
+    def __ne__(self, other):
+        Frame.ops += 1
+        return str.__ne__(self, other)
+    def __lt__(self, other):
+        Frame.ops += 1
+        return str.__lt__(self, other)
+    def __gt__(self, other):
+        Frame.ops += 1
+        return str.__gt__(self, other)
+    def __hash__(self):
+        Frame.ops += 1
+        return str.__hash__(self)
+
+profiler = {fn}(known_traces=[(f"t{i}", [Frame("main"), Frame(f"f{i}"), Frame("crash")]) for i in range(20000)])
+assert profiler.match_suffix(["f7", "crash"]) == ["t7"]
+Frame.ops = 0
+for i in range(50):
+    assert profiler.match_suffix([f"f{i * 397}", "crash"]) == [f"t{i * 397}"]
+# a lookup touches a few known frames per query frame; a scan touches at least one per trace, 20,000 per query
+assert Frame.ops <= 50 * 50, f"50 queries on 20,000 traces made {Frame.ops} comparisons or hashes of known frames"
 """},
     ],
     "solution": r'''# Adapted from Schuture/Anthropic-Interview-Notes (code under the MIT License).

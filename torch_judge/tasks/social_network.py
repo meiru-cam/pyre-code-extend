@@ -5,7 +5,7 @@ from ._interview import interview
 # A slow model written straight from the statement: every snapshot is a deep copy, and every
 # query scans it. It shares no code with the reference.
 _HELPERS = r"""
-import random, time
+import random
 from collections import Counter
 
 def raises_value_error(fn, *args):
@@ -69,13 +69,30 @@ def mirrored(rng, steps, users, unfollows):
     pairs.append((net.create_snapshot(), model.create_snapshot()))
     return pairs
 
-def best_of_three(fn):
-    best = float("inf")
-    for _ in range(3):
-        start = time.perf_counter()
-        fn()
-        best = min(best, time.perf_counter() - start)
-    return best
+class Name(str):
+    # A user id that counts every hash and comparison made on it. Past the budget it fails the
+    # call at once, so a scan of the whole graph stops early instead of running to the end.
+    ops, budget = 0, None
+    def _tick():
+        Name.ops += 1
+        if Name.budget is not None and Name.ops > Name.budget:
+            Name.budget = None
+            raise AssertionError("the call hashed or compared far more user ids than its answer holds")
+    def __hash__(self):
+        Name._tick()
+        return str.__hash__(self)
+    def __eq__(self, other):
+        Name._tick()
+        return str.__eq__(self, other)
+    def __ne__(self, other):
+        Name._tick()
+        return str.__ne__(self, other)
+    def __lt__(self, other):
+        Name._tick()
+        return str.__lt__(self, other)
+    def __gt__(self, other):
+        Name._tick()
+        return str.__gt__(self, other)
 """
 
 TASK = {
@@ -262,22 +279,25 @@ for seed in range(60):
                 assert raises_value_error(snap.get_followers, u)
 """},
         {"name": "Part 2: lists cost the size of their answer", "part": 2, "visibility": "unshown", "behavior": "performance.complexity",
-         "failure_message": "get_followers on a 20,000-user snapshot was much slower than on a 20-user one; keep a reverse index instead of scanning every user.",
+         "failure_message": "get_followers or get_following on a 20,000-user snapshot hashed or compared far more user ids than the two names it returns; keep a reverse index instead of scanning every user.",
          "code": _HELPERS + r"""
-def ring(n):
-    net = {fn}()
-    for i in range(n):
-        net.add_user(f"u{i}")
-    for i in range(n):
-        net.follow(f"u{i}", f"u{(i + 1) % n}")
-        net.follow(f"u{i}", f"u{(i + 2) % n}")
-    return net.create_snapshot()
-small, big = ring(20), ring(20000)
-assert big.get_followers("u5") == ["u3", "u4"]
-def lists(snap):
-    return lambda: [(snap.get_followers(f"u{i % 20}"), snap.get_following(f"u{i % 20}")) for i in range(1000)]
-ratio = best_of_three(lists(big)) / best_of_three(lists(small))
-assert ratio < 20, f"lists on the big snapshot took {ratio:.0f}x as long"
+n = 20000
+users = [Name(f"u{i}") for i in range(n)]
+net = {fn}()
+for u in users:
+    net.add_user(u)
+for i in range(n):
+    net.follow(users[i], users[(i + 1) % n])
+    net.follow(users[i], users[(i + 2) % n])
+snap = net.create_snapshot()
+assert snap.get_followers("u5") == ["u3", "u4"]
+picks = [i * 397 for i in range(50)]
+# Each call needs a few dozen hashes and comparisons for a two-name answer; a scan needs 20,000.
+Name.ops, Name.budget = 0, 100 * 2 * len(picks)
+got = [(snap.get_followers(Name(f"u{i}")), snap.get_following(Name(f"u{i}"))) for i in picks]
+Name.budget = None
+want = [(sorted([f"u{(i - 1) % n}", f"u{(i - 2) % n}"]), sorted([f"u{(i + 1) % n}", f"u{(i + 2) % n}"])) for i in picks]
+assert got == want, (got, want)
 """},
         {"name": "Part 3: the worked example", "part": 3, "behavior": "state.invariant", "code": r"""
 net = {fn}()
@@ -349,22 +369,22 @@ for seed in range(80):
                 assert snap.is_following(u, v) == model.is_following(u, v), (seed, u, v)
 """},
         {"name": "Part 4: snapshots do not copy the graph", "part": 4, "visibility": "unshown", "behavior": "performance.complexity",
-         "failure_message": "create_snapshot on a network with 40,000 follows was much slower than on one with ten; record when follows start and end instead of copying.",
+         "failure_message": "create_snapshot on a network with 40,000 follows hashed or compared the user ids; record when follows start and end instead of copying.",
          "code": _HELPERS + r"""
-def network(n):
-    net = {fn}()
-    for i in range(n):
-        net.add_user(f"u{i}")
-    for i in range(n):
-        net.follow(f"u{i}", f"u{(i + 1) % n}")
-        net.follow(f"u{i}", f"u{(i + 7) % n}")
-    return net
-small, big = network(5), network(20000)
-assert big.create_snapshot().get_following("u0") == ["u1", "u7"]
-def snapshots(net):
-    return lambda: [net.create_snapshot() for _ in range(300)]
-ratio = best_of_three(snapshots(big)) / best_of_three(snapshots(small))
-assert ratio < 20, f"snapshots of the big network took {ratio:.0f}x as long"
+n = 20000
+users = [Name(f"u{i}") for i in range(n)]
+net = {fn}()
+for u in users:
+    net.add_user(u)
+for i in range(n):
+    net.follow(users[i], users[(i + 1) % n])
+    net.follow(users[i], users[(i + 7) % n])
+assert net.create_snapshot().get_following("u0") == ["u1", "u7"]
+# Taking a snapshot need not touch a single user id; a copy hashes every one of the 20,000.
+Name.ops, Name.budget = 0, 20 * 300
+snapshots = [net.create_snapshot() for _ in range(300)]
+Name.budget = None
+assert snapshots[-1].get_following("u3") == ["u10", "u4"]
 """},
     ],
     "solution": r'''# Adapted from Schuture/OpenAI-Interview-Notes (code under the MIT License).

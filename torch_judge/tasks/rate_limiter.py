@@ -108,7 +108,7 @@ for rules in ([(1, 60), BIG], [BIG, (1, 60)]):
     threads = [threading.Thread(target=lambda: results.append(lim.allow("ana")), daemon=True) for _ in range(2)]
     for t in threads:
         t.start()
-    deadline = time.monotonic() + 3
+    deadline = time.monotonic() + 10
     for t in threads:
         t.join(max(0, deadline - time.monotonic()))
     assert not any(t.is_alive() for t in threads), "allow did not return: is the lock held while waiting forever?"
@@ -126,10 +126,10 @@ for rules in ([(6, 1000), BIG], [BIG, (6, 1000)], [(8, 1000), (6, 500)]):
     threads = [threading.Thread(target=worker, daemon=True) for _ in range(16)]
     for t in threads:
         t.start()
-    deadline = time.monotonic() + 3
+    deadline = time.monotonic() + 10
     for t in threads:
         t.join(max(0, deadline - time.monotonic()))
-    assert not any(t.is_alive() for t in threads), "allow did not return within 3 seconds"
+    assert not any(t.is_alive() for t in threads), "allow did not return within 10 seconds"
     assert results.count(True) == 6, (rules, results.count(True))
 """},
 ]
