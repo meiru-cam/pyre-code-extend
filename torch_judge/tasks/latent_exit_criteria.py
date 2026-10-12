@@ -55,11 +55,11 @@ TASK = {
     "model_connections": [
         "Huginn-0125 (Geiping et al. 2025) exposes entropy-diff, latent-diff, kl and argmax-stability as `criterion` in generate_with_adaptive_compute.",
         "Early-exit transformers (CALM, Depth-Adaptive Transformer) need trained exit heads; a recurrent-depth model can exit zero-shot because every iteration feeds the same coda.",
-        "The same convergence tests appear in Universal Transformers' ACT halting and in PonderNet, which learn the halting probability instead of thresholding a difference.",
+        "Universal Transformers' ACT halting and PonderNet solve the same problem by learning a halting probability instead of thresholding a difference.",
     ],
     "pro_con_analysis": {
         "pros": ["Saves compute on easy tokens with no retraining, and each criterion is a cheap comparison of consecutive steps."],
-        "cons": ["Thresholds are tuned per model, logit criteria need a coda call every step, and batched decoding wastes compute because the KV cache holds the deepest step of the batch."],
+        "cons": ["Thresholds are tuned per model, logit criteria need a coda call every step, and in batched decoding early exits look better than they are, because the batch still runs to its deepest member and the KV cache holds that step."],
     },
     "sources": [
         {
