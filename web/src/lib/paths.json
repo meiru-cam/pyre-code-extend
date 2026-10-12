@@ -78,6 +78,17 @@
       "prerequisites": []
     },
     {
+      "id": "embodied-ai",
+      "titleEn": "Embodied AI: VLA & World Models",
+      "titleZh": "具身智能：VLA 与世界模型",
+      "descriptionEn": "The action side of vision-language-action models, from LeRobot, openpi and OpenVLA: turning actions into tokens with uniform bins and FAST, ACT temporal ensembling, pi0 flow-matching action chunks, and real-time chunking guidance.",
+      "descriptionZh": "视觉-语言-动作模型的动作端，取材自 LeRobot、openpi 和 OpenVLA：用均匀分箱和 FAST 把动作变成 token、ACT 时序集成、pi0 flow matching 动作块，以及实时分块引导。",
+      "icon": "Bot",
+      "problems": ["vla_action_bins", "fast_dct_action_tokens", "act_temporal_ensemble", "pi0_flow_matching_chunk", "rtc_prefix_guidance"],
+      "group": "architectures",
+      "prerequisites": ["vision-transformer"]
+    },
+    {
       "id": "graph-neural-networks",
       "titleEn": "Graph Neural Networks",
       "titleZh": "图神经网络",

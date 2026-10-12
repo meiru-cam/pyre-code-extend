@@ -37,6 +37,7 @@ dev = [
     "twine",
     "pytest",
     "pytest-xdist",
+    "scipy",
 ]
 
 [tool.setuptools.packages.find]
