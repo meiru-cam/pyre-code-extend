@@ -1,0 +1,11 @@
+{
+  "coconut_latent_forward": {
+    "What is a continuous thought in Coconut, and where does its input embedding come from?": "Contrast it with a sampled language token. Cover which layer's state is reused, which position it is read from, and that it skips the vocabulary projection and sampling entirely.",
+    "Why does a sequence with n latent tokens need n + 1 forward passes instead of one?": "Think about the dependency chain between consecutive thoughts under causal attention. Cover what each pass produces, why thoughts cannot be filled in parallel, and what the extra final pass is for.",
+    "Why is the thought at a latent position taken from the hidden state one position earlier rather than at the latent position itself?": "Relate it to next-token prediction: which position's state is the model's prediction of what comes at the latent slot. Cover what the latent's own position would contain before it is filled.",
+    "How does Coconut's KV-cached loop decide which positions to compute in each pass, and what does it assume about where latents sit in a batch?": "Walk through next_compute_range and hidden_states_offset. Cover the prefix pass, the one-position steps, the final range to the end, and why the collator pads so latents line up.",
+    "What goes wrong in training if the fed-back hidden states are detached, and how would you detect it with a test?": "Think about which parameters lose a gradient path and what the thoughts then learn. Cover a gradient comparison against a reference, and a case where a parameter is only reachable through a thought.",
+    "Full recomputation on every pass versus reusing a KV cache: cost, simplicity and constraints on the batch layout?": "Compare attention cost per pass, memory, and code paths. Cover what the cache forces on latent positions across a batch, and when the simpler loop is the better teaching or debugging tool.",
+    "Continuous thoughts versus language chain of thought versus pause tokens: what does each buy and cost at training and inference time?": "Compare information carried per position, sequential passes, interpretability and supervision needs. Cover the multi-stage curriculum Coconut needs and why pause tokens need none."
+  }
+}
