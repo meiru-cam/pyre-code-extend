@@ -4,7 +4,7 @@ from ._interview import interview
 
 # A slow model written straight from the statement: one flag per address, scanned on every call.
 _HELPERS = r"""
-import random, time
+import random
 
 class ByteMap:
     def __init__(self, capacity):
@@ -53,13 +53,24 @@ def fragmented(make, n):
         allocator.free(address, 1)
     return allocator
 
-def best_of_three(fn):
-    best = float("inf")
-    for _ in range(3):
-        start = time.perf_counter()
-        fn()
-        best = min(best, time.perf_counter() - start)
-    return best
+class Tally(int):
+    # A size or address that counts every comparison or subtraction made on it, so walking the free blocks shows up as work.
+    ops = 0
+    budget = None
+    __hash__ = int.__hash__
+
+def _counting(name):
+    base = getattr(int, name)
+    def op(self, other):
+        Tally.ops += 1
+        if Tally.budget is not None and Tally.ops > Tally.budget:
+            Tally.budget = None
+            raise AssertionError("too many comparisons")
+        return base(self, other)
+    return op
+
+for _name in ("__lt__", "__le__", "__gt__", "__ge__", "__eq__", "__ne__", "__sub__", "__rsub__"):
+    setattr(Tally, _name, _counting(_name))
 """
 
 TASK = {
@@ -216,18 +227,19 @@ assert big.allocate(10**7 - 1) == 0
 assert blocks(big) == [(10**7 - 1, 1)]
 """},
         {"name": "Part 2: allocate and free do not scan the free blocks", "part": 2, "visibility": "unshown", "behavior": "performance.complexity",
-         "failure_message": "Allocating and freeing past 20,000 small free blocks was much slower than past 200; find the first fit and the neighbours with a tree search, not a walk.",
+         "failure_message": "Allocating and freeing past 20,000 small free blocks compared the size or address far more often than a tree search needs; find the first fit and the neighbours with a tree search, not a walk.",
          "code": _HELPERS + r"""
-def churn(allocator, n):
-    def run():
-        for _ in range(300):
-            address = allocator.allocate(5)
-            assert address == 2 * n
-            allocator.free(address, 5)
-    return run
-small, big = fragmented({fn}, 200), fragmented({fn}, 20000)
-ratio = best_of_three(churn(big, 20000)) / best_of_three(churn(small, 200))
-assert ratio < 15, f"allocate past 20,000 free blocks took {ratio:.0f}x as long as past 200"
+big = fragmented({fn}, 20000)
+budget = 300 * 1000  # a balanced tree needs a few hundred comparisons per call pair; a walk needs 20,000
+Tally.ops, Tally.budget = 0, budget
+try:
+    for _ in range(300):
+        address = big.allocate(Tally(5))
+        assert address == 40000
+        big.free(Tally(address), Tally(5))
+finally:
+    ops, Tally.budget = Tally.ops, None
+assert ops <= budget, f"{ops} comparisons for 300 allocate and free pairs past 20,000 free blocks"
 assert len(blocks(big)) == 20001
 """},
         {"name": "Part 2: long random runs match a byte map", "part": 2, "visibility": "unshown", "behavior": "state.invariant",

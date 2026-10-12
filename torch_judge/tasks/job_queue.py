@@ -290,19 +290,54 @@ for seed in range(300):
     replay({fn}, random_ops(random.Random(100 + seed), 70, 2), 2, seed)
 """},
     {"name": "Part 2: many open leases", "part": 2, "visibility": "unshown", "behavior": "performance.complexity",
-     "failure_message": "With 30,000 open leases, 60,000 further calls took too long: keep leases in a heap by deadline so each call only looks at the ones that have expired.",
+     "failure_message": "With 30,000 open leases, the calls compared deadlines far more often than a few times each: keep leases in a heap by deadline so each call only looks at the ones that have expired.",
      "code": _MODEL + r"""
-clock = Clock()
+class Tick(int):
+    # A clock reading that counts every ordering comparison made on it, and stays a Tick through + and -.
+    compared = 0
+    budget = None
+    def _count(self):
+        Tick.compared += 1
+        if Tick.budget is not None and Tick.compared > Tick.budget:
+            Tick.budget = None
+            raise AssertionError(f"more than {Tick.compared - 1} deadline comparisons")
+    def __lt__(self, other):
+        self._count()
+        return int.__lt__(self, other)
+    def __le__(self, other):
+        self._count()
+        return int.__le__(self, other)
+    def __gt__(self, other):
+        self._count()
+        return int.__gt__(self, other)
+    def __ge__(self, other):
+        self._count()
+        return int.__ge__(self, other)
+    def __add__(self, other):
+        return Tick(int(self) + other)
+    __radd__ = __add__
+    def __sub__(self, other):
+        return Tick(int(self) - other)
+    def __rsub__(self, other):
+        return Tick(other - int(self))
+    __hash__ = int.__hash__
+
+class TickClock(Clock):
+    def now(self):
+        return Tick(self.t)
+
+calls = 30000 + 30000 + 60000
+Tick.compared, Tick.budget = 0, 20 * calls  # a heap needs a few per call; a scan needs thousands
+clock = TickClock()
 q = {fn}(clock, 10**6)
 for i in range(30000):
     q.submit(f"t{i}", i)
 for i in range(30000):
     q.reserve("w")
-start = time.perf_counter()
 for i in range(60000):
     assert q.reserve("w") is None
-elapsed = time.perf_counter() - start
-assert elapsed < 4.0, f"{elapsed:.2f}s for 60,000 calls with 30,000 open leases"
+compared, Tick.budget = Tick.compared, None
+assert compared <= 20 * calls, f"{compared} deadline comparisons over {calls} calls"
 clock.advance(10**6 + 1)
 assert q.reserve("w")[0] == "t0"
 """},
@@ -400,7 +435,7 @@ The requirement arrives in parts. Each part keeps every earlier behavior, so one
 
 **Where it is used:** Amazon SQS visibility timeouts, Celery and RQ acknowledgements, Kubernetes job retries, and dead-letter queues in every message broker.
 
-Adapted from the fault-tolerant work queue question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, on one class renamed from `WorkQueue` to `JobQueue`. A reservation is a tuple instead of a named tuple, the source's size limits are dropped, Part 2 adds a speed check with 30,000 open leases, and the clock, lease and retry budget arrive as optional constructor arguments so that earlier parts keep working. The test clock is any object with `now()`.""",
+Adapted from the fault-tolerant work queue question in Schuture/OpenAI-Interview-Notes (CC BY-NC 4.0), reworded, on one class renamed from `WorkQueue` to `JobQueue`. A reservation is a tuple instead of a named tuple, the source's size limits are dropped, Part 2 adds a check that 30,000 open leases stay cheap, and the clock, lease and retry budget arrive as optional constructor arguments so that earlier parts keep working. The test clock is any object with `now()`.""",
     "parts": [
         {
             "title": "Reserve, complete and fail",

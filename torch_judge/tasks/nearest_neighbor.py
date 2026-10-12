@@ -4,7 +4,7 @@ from ._interview import interview
 
 # Exact distances from a slow model, used only where the nearest point is clear.
 _HELPERS = r"""
-import time, tracemalloc
+import tracemalloc
 
 def model_predict(Xt, y, Q):
     d = ((Q[:, None, :] - Xt[None, :, :]) ** 2).sum(axis=2)
@@ -117,20 +117,17 @@ same = np.array([[2.0, 2.0], [2.0, 2.0], [5.0, 5.0]])
 assert list(np.asarray(c.predict(same, np.array([7, 8, 9]), np.array([[2.0, 2.0]])))) == [7], "duplicates: the smallest index wins"
 """},
         {"name": "Part 1: large inputs, no (m, n, d) array", "part": 1, "visibility": "unshown", "behavior": "performance.complexity",
-         "failure_message": "With n = m = 2000 and d = 50, prediction was too slow or allocated far more than an (m, n) matrix; expand |q - x|^2 = |q|^2 - 2 q.x + |x|^2 and use one matrix product.",
+         "failure_message": "With n = m = 2000 and d = 50, prediction allocated far more than an (m, n) matrix; expand |q - x|^2 = |q|^2 - 2 q.x + |x|^2 and use one matrix product.",
          "code": _HELPERS + r"""
 rng = np.random.default_rng(1)
 Xt, Q = rng.normal(size=(2000, 50)), rng.normal(size=(2000, 50))
 y = rng.integers(0, 10, 2000)
 c = {fn}()
 tracemalloc.start()
-t0 = time.perf_counter()
 got = np.asarray(c.predict(Xt, y, Q))
-elapsed = time.perf_counter() - t0
 peak = tracemalloc.get_traced_memory()[1]
 tracemalloc.stop()
 assert peak < 200_000_000, f"peak memory {peak / 1e6:.0f} MB; an (m, n) float matrix is 32 MB"
-assert elapsed < 4.0, f"took {elapsed:.1f}s"
 dist = (Q ** 2).sum(1)[:, None] - 2 * Q @ Xt.T + (Xt ** 2).sum(1)[None, :]
 ok = clear_rows(dist)
 assert (got[ok] == y[np.argmin(dist, axis=1)][ok]).all()

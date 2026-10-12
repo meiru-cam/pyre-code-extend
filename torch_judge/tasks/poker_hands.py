@@ -4,7 +4,7 @@ from ._interview import interview
 
 # An independent ranking written from the statement, plus deck and hand generators.
 _CARDS = r"""
-import random, time
+import random
 from collections import Counter
 
 RANK = {r: i for i, r in enumerate("23456789TJQKA")}
@@ -88,6 +88,68 @@ def play(table, deck, strategies):
         lines.append(table.deal_card())
         assert len(lines) <= 3 * len(strategies), "is_over() never became True"
     return lines, table.check_result()
+"""
+
+# Measures work by counting instead of timing, so a loaded grader cannot fail a correct answer.
+_WORK = r"""
+import builtins
+
+class Work:
+    # Counts work without a clock: every card read, every element that max, min, sorted and sum
+    # consume, and every element a deck's pop or slice moves. Past the budget it raises, so a
+    # quadratic answer stops early instead of running for minutes.
+    current = None
+    def __init__(self, budget):
+        self.budget, self.done = budget, 0
+    def add(self, n):
+        self.done += n
+        if self.done > self.budget:
+            raise AssertionError(f"more than {self.budget} units of work")
+    def _wrap(self, original):
+        def counted(*args, **kwargs):
+            if len(args) == 1:
+                args = (list(args[0]),)
+                self.add(len(args[0]))
+            else:
+                self.add(len(args))
+            return original(*args, **kwargs)
+        return counted
+    def run(self, call):
+        names = ("max", "min", "sorted", "sum")
+        saved = {name: getattr(builtins, name) for name in names}
+        for name in names:
+            setattr(builtins, name, self._wrap(saved[name]))
+        Work.current = self
+        try:
+            return call()
+        finally:
+            Work.current = None
+            for name, original in saved.items():
+                setattr(builtins, name, original)
+
+def _charge(n):
+    if Work.current is not None:
+        Work.current.add(n)
+
+class Card(str):
+    # A card that charges for every read of its rank or suit.
+    def __getitem__(self, index):
+        _charge(1)
+        return str.__getitem__(self, index)
+    def __iter__(self):
+        _charge(len(self))
+        return str.__iter__(self)
+
+class Deck(list):
+    # A deck that charges for the elements pop and slicing move, so deck.pop(0) shows up as O(n) work.
+    def pop(self, index=-1):
+        _charge(len(self) - index % len(self) if self else 1)
+        return list.pop(self, index)
+    def __getitem__(self, index):
+        part = list.__getitem__(self, index)
+        if isinstance(index, slice):
+            _charge(len(part))
+        return part
 """
 
 TASK = {
@@ -230,22 +292,16 @@ assert table.rank_players([["9C", "9D", "4H"], ["9S", "9H", "4D"], ["9C", "9S", 
 assert table.rank_players([["2C", "3D", "5H"], ["2S", "3H", "4D"]]) == [0]
 """},
         {"name": "Part 1: many players", "part": 1, "visibility": "unshown", "behavior": "performance.complexity",
-         "failure_message": "Ranking 40,000 hands took far more than ten times as long as 4,000; compute one key per hand and take the max instead of comparing hands in pairs.",
-         "code": _CARDS + r"""
-def timed(n):
-    rng = random.Random(n)
-    hands = [random_hand(rng, False) for _ in range(n)]
-    table = {fn}()
-    best = float("inf")
-    for _ in range(3):
-        start = time.perf_counter()
-        result = table.rank_players(hands)
-        best = min(best, time.perf_counter() - start)
-    assert result == winners(hands)
-    return best
-
-ratio = timed(40000) / timed(4000)
-assert ratio < 30, f"10x the players took {ratio:.0f}x as long"
+         "failure_message": "Ranking 10,000 hands read the cards or scanned the hands far more than once per hand; compute one key per hand and take the max instead of comparing hands in pairs.",
+         "code": _CARDS + _WORK + r"""
+n = 10000
+rng = random.Random(n)
+plain = [random_hand(rng, False) for _ in range(n)]
+hands = [[Card(card) for card in hand] for hand in plain]
+table = {fn}()
+work = Work(50 * n)  # one key per hand reads each card a few times; comparing hands in pairs reads them n times
+result = work.run(lambda: table.rank_players(hands))
+assert result == winners(plain)
 """},
         {"name": "Part 2: the worked example", "part": 2, "behavior": "state.invariant", "code": r"""
 table = {fn}()
@@ -326,25 +382,23 @@ three = "2H 2D 2C 3H 3D 3C 9S 9H 9D 4S 4H 4D".split()
 assert play(table, three, [never_, always, never_, never_])[1] == simulate(three, [never_, always, never_, never_])[1]
 """},
         {"name": "Part 3: a round with many players", "part": 3, "visibility": "unshown", "behavior": "performance.complexity",
-         "failure_message": "Dealing a round for 30,000 players took far more than ten times as long as for 3,000; each deal_card call must do constant work.",
-         "code": _ROUND + r"""
-def timed(n):
-    rng = random.Random(n)
-    deck = [DECK[i % 52] for i in range(3 * n)]
-    strategies = [rng.choice([never, unless_pair]) for _ in range(n)]
-    table = {fn}()
-    start = time.perf_counter()
+         "failure_message": "Dealing a round for 10,000 players moved or scanned far more than a few items per deal_card call; each call must do constant work, without popping from the front of the deck or rescanning the players.",
+         "code": _ROUND + _WORK + r"""
+n = 10000
+rng = random.Random(n)
+deck = Deck(Card(DECK[i % 52]) for i in range(3 * n))
+strategies = [rng.choice([never, unless_pair]) for _ in range(n)]
+table = {fn}()
+work = Work(20 * 3 * n)  # a deal reads a card or two; popping the deck's front or rescanning moves n
+def play_round():
     table.start_round(deck, strategies)
     count = 0
     while not table.is_over():
         table.deal_card()
         count += 1
     table.check_result()
-    assert count == 3 * n
-    return time.perf_counter() - start
-
-ratio = min(timed(30000) for _ in range(2)) / min(timed(3000) for _ in range(2))
-assert ratio < 30, f"10x the players took {ratio:.0f}x as long"
+    return count
+assert work.run(play_round) == 3 * n
 """},
     ],
     "solution": r'''# Adapted from Schuture/OpenAI-Interview-Notes (code under the MIT License).
