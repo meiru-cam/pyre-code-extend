@@ -17,9 +17,9 @@
     "dev": "concurrently --names \"backend,frontend\" --prefix-colors \"yellow,cyan\" \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "node scripts/run-python.js -m uvicorn grading_service.main:app --reload --reload-exclude .git --reload-exclude .venv --port 8000 --log-level info",
     "dev:frontend": "cd web && npm run dev",
-    "ci": "npm run -s ci:web && npm run -s ci:py",
+    "ci": "node scripts/run-python.js scripts/ci.py",
+    "ci:full": "node scripts/run-python.js scripts/ci.py --full",
     "ci:web": "cd web && npx tsc --noEmit -p . && npx vitest run",
-    "ci:py": "node scripts/run-python.js -m pytest -q -x",
     "deploy": "bash scripts/deploy.sh"
   },
   "devDependencies": {
