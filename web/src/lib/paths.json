@@ -7,7 +7,20 @@
       "descriptionEn": "Classic machine-learning interview staples: losses, regularization, optimizers and evaluation metrics, each implemented and explained from first principles.",
       "descriptionZh": "Classic machine-learning interview staples: losses, regularization, optimizers and evaluation metrics, each implemented and explained from first principles.",
       "icon": "BarChart3",
-      "problems": ["linear_regression", "binary_cross_entropy", "cross_entropy", "focal_loss", "weight_regularization", "dropout", "sgd_momentum", "adam", "muon_newton_schulz", "manual_backprop_mlp", "precision_recall_f1", "roc_auc"],
+      "problems": [
+        "linear_regression",
+        "binary_cross_entropy",
+        "cross_entropy",
+        "focal_loss",
+        "weight_regularization",
+        "dropout",
+        "sgd_momentum",
+        "adam",
+        "muon_newton_schulz",
+        "manual_backprop_mlp",
+        "precision_recall_f1",
+        "roc_auc"
+      ],
       "group": "foundations",
       "prerequisites": []
     },
@@ -18,7 +31,20 @@
       "descriptionEn": "Build every component of a Transformer from scratch — activations, normalization, attention, and the full GPT-2 block.",
       "descriptionZh": "从零构建 Transformer 的每个组件——激活函数、归一化、注意力机制到完整的 GPT-2 Block。",
       "icon": "Layers",
-      "problems": ["relu", "gelu", "swiglu", "layernorm", "batchnorm", "rmsnorm", "linear", "softmax", "attention", "mha", "mlp", "gpt2_block"],
+      "problems": [
+        "relu",
+        "gelu",
+        "swiglu",
+        "layernorm",
+        "batchnorm",
+        "rmsnorm",
+        "linear",
+        "softmax",
+        "attention",
+        "mha",
+        "mlp",
+        "gpt2_block"
+      ],
       "group": "foundations",
       "prerequisites": []
     },
@@ -29,7 +55,25 @@
       "descriptionEn": "Every attention variant and position encoding, from scaled dot-product, RoPE and ALiBi to Flash Attention, then the frontier-model pieces: QK normalization, hybrid local/global masking, MLA and a configurable GQA block.",
       "descriptionZh": "从缩放点积、RoPE、ALiBi 到 Flash Attention 的各种注意力与位置编码，再到前沿模型的组件：QK 归一化、局部/全局混合掩码、MLA 和可配置的 GQA 注意力块。",
       "icon": "Eye",
-      "problems": ["sinusoidal_pe", "rope", "alibi", "ntk_rope", "softmax", "attention", "causal_attention", "mha", "cross_attention", "gqa", "sliding_window", "linear_attention", "flash_attention", "qk_norm", "hybrid_attention_schedule", "mla", "frontier_attention_block"],
+      "problems": [
+        "sinusoidal_pe",
+        "rope",
+        "alibi",
+        "ntk_rope",
+        "softmax",
+        "attention",
+        "causal_attention",
+        "mha",
+        "cross_attention",
+        "gqa",
+        "sliding_window",
+        "linear_attention",
+        "flash_attention",
+        "qk_norm",
+        "hybrid_attention_schedule",
+        "mla",
+        "frontier_attention_block"
+      ],
       "group": "foundations",
       "prerequisites": []
     },
@@ -40,7 +84,23 @@
       "descriptionEn": "Build and train a complete GPT — from embeddings and transformer blocks to Adam, cosine LR, and mixed precision.",
       "descriptionZh": "构建并训练完整的 GPT——从 Embedding 和 Transformer Block 到 Adam、余弦学习率和混合精度。",
       "icon": "Brain",
-      "problems": ["sinusoidal_pe", "embedding", "layernorm", "attention", "mha", "mlp", "gpt2_block", "cross_entropy", "label_smoothing", "weight_init", "adam", "cosine_lr", "gradient_clipping", "gradient_accumulation", "mixed_precision"],
+      "problems": [
+        "sinusoidal_pe",
+        "embedding",
+        "layernorm",
+        "attention",
+        "mha",
+        "mlp",
+        "gpt2_block",
+        "cross_entropy",
+        "label_smoothing",
+        "weight_init",
+        "adam",
+        "cosine_lr",
+        "gradient_clipping",
+        "gradient_accumulation",
+        "mixed_precision"
+      ],
       "group": "foundations",
       "prerequisites": []
     },
@@ -51,7 +111,15 @@
       "descriptionEn": "Implement the cutting-edge attention and routing mechanisms powering DeepSeek, Meta, and Microsoft's latest models.",
       "descriptionZh": "实现驱动 DeepSeek、Meta 和微软最新模型的前沿注意力与路由机制。",
       "icon": "Sparkles",
-      "problems": ["mha", "gqa", "diff_attention", "mla", "moe", "moe_load_balance", "multi_token_prediction"],
+      "problems": [
+        "mha",
+        "gqa",
+        "diff_attention",
+        "mla",
+        "moe",
+        "moe_load_balance",
+        "multi_token_prediction"
+      ],
       "group": "architectures",
       "prerequisites": []
     },
@@ -62,9 +130,17 @@
       "descriptionEn": "Reasoning that spends compute without writing tokens: pause-token training, Coconut's curriculum and continuous thoughts fed back as input, Huginn's recurrent-depth unrolling with truncated backprop, and per-token adaptive exit.",
       "descriptionZh": "不写出 token 也能花算力的推理：pause token 训练、Coconut 的课程与把连续思维回填为输入、Huginn 的循环深度展开与截断反传，以及逐 token 的自适应退出。",
       "icon": "Brain",
-      "problems": ["pause_token_training_mask", "coconut_stage_sample", "coconut_latent_forward", "recurrent_depth_unroll", "latent_exit_criteria"],
+      "problems": [
+        "pause_token_training_mask",
+        "coconut_stage_sample",
+        "coconut_latent_forward",
+        "recurrent_depth_unroll",
+        "latent_exit_criteria"
+      ],
       "group": "architectures",
-      "prerequisites": ["transformer-internals"]
+      "prerequisites": [
+        "transformer-internals"
+      ]
     },
     {
       "id": "moe-training",
@@ -73,9 +149,21 @@
       "descriptionEn": "Implement token-choice routing, capacity-aware sparse dispatch, and a complete TinyMoE training step; connect utilization and stability tradeoffs to pinned DeepSeek, Kimi, GLM, and Qwen code.",
       "descriptionZh": "Implement token-choice routing, capacity-aware sparse dispatch, and a complete TinyMoE training step; connect utilization and stability tradeoffs to pinned DeepSeek, Kimi, GLM, and Qwen code.",
       "icon": "Network",
-      "problems": ["moe", "dense_vs_sparse_ffn", "moe_load_balance", "moe_topk_router", "moe_noisy_routing", "moe_router_zloss", "moe_capacity_dispatch", "moe_shared_experts", "tiny_moe_train_step"],
+      "problems": [
+        "moe",
+        "dense_vs_sparse_ffn",
+        "moe_load_balance",
+        "moe_topk_router",
+        "moe_noisy_routing",
+        "moe_router_zloss",
+        "moe_capacity_dispatch",
+        "moe_shared_experts",
+        "tiny_moe_train_step"
+      ],
       "group": "architectures",
-      "prerequisites": ["transformer-internals"]
+      "prerequisites": [
+        "transformer-internals"
+      ]
     },
     {
       "id": "vision-transformer",
@@ -84,7 +172,19 @@
       "descriptionEn": "Build a ViT from convolutions and patch embeddings up to the full block, then the diffusion algorithms behind Stable Diffusion 3, Flux and DiT: noise schedules, DDIM, flow matching and adaLN-Zero.",
       "descriptionZh": "从卷积、patch 嵌入一路构建完整的 ViT Block，再实现 Stable Diffusion 3、Flux 和 DiT 背后的扩散算法：噪声调度、DDIM、flow matching 和 adaLN-Zero。",
       "icon": "Microscope",
-      "problems": ["conv2d", "max_pool2d", "depthwise_conv", "vit_patch", "attention", "mha", "vit_block", "noise_schedule", "ddim_step", "flow_matching", "adaln_zero"],
+      "problems": [
+        "conv2d",
+        "max_pool2d",
+        "depthwise_conv",
+        "vit_patch",
+        "attention",
+        "mha",
+        "vit_block",
+        "noise_schedule",
+        "ddim_step",
+        "flow_matching",
+        "adaln_zero"
+      ],
       "group": "architectures",
       "prerequisites": []
     },
@@ -95,9 +195,44 @@
       "descriptionEn": "The action side of vision-language-action models, from LeRobot, openpi and OpenVLA: action tokens with uniform bins and FAST, ACT temporal ensembling, pi0 flow-matching chunks and real-time chunking. Then world models: DreamerV3 two-hot heads and RSSM KL balancing, V-JEPA 2 latent prediction, Genie spatiotemporal attention, and CEM planning.",
       "descriptionZh": "视觉-语言-动作模型的动作端，取材自 LeRobot、openpi 和 OpenVLA：均匀分箱与 FAST 动作 token、ACT 时序集成、pi0 flow matching 动作块和实时分块。然后是世界模型：DreamerV3 的 two-hot 头与 RSSM KL balancing、V-JEPA 2 latent 预测、Genie 时空注意力和 CEM 规划。",
       "icon": "Bot",
-      "problems": ["vla_action_bins", "fast_dct_action_tokens", "act_temporal_ensemble", "pi0_flow_matching_chunk", "rtc_prefix_guidance", "symlog_twohot", "rssm_kl_balance", "jepa_block_masks_and_loss", "st_transformer_attention", "world_model_cem_step"],
+      "problems": [
+        "vla_action_bins",
+        "fast_dct_action_tokens",
+        "act_temporal_ensemble",
+        "pi0_flow_matching_chunk",
+        "rtc_prefix_guidance",
+        "symlog_twohot",
+        "rssm_kl_balance",
+        "jepa_block_masks_and_loss",
+        "st_transformer_attention",
+        "world_model_cem_step"
+      ],
       "group": "architectures",
-      "prerequisites": ["vision-transformer"]
+      "prerequisites": [
+        "vision-transformer"
+      ]
+    },
+    {
+      "id": "embodied-frontier",
+      "titleEn": "Embodied AI II: Frontier VLAs & Generative World Models",
+      "titleZh": "具身智能进阶：前沿 VLA 与生成式世界模型",
+      "descriptionEn": "Techniques behind current VLAs and video world models: OpenVLA-OFT parallel action decoding, latent actions learned from video, pi0.5 knowledge insulation, pi*0.6 RECAP advantage conditioning, FSQ tokenizers, diffusion forcing schedules, Dreamer 4 shortcut forcing and Self-Forcing rollouts.",
+      "descriptionZh": "当前 VLA 与视频世界模型背后的技术：OpenVLA-OFT 并行动作解码、从视频学到的 latent action、pi0.5 的知识隔离、pi*0.6 的 RECAP 优势条件化、FSQ tokenizer、diffusion forcing 噪声调度、Dreamer 4 的 shortcut forcing 和 Self-Forcing rollout。",
+      "icon": "Sparkles",
+      "problems": [
+        "oft_parallel_action_decoding",
+        "latent_action_quantizer",
+        "knowledge_insulation_attention",
+        "recap_advantage_conditioning",
+        "fsq_quantizer",
+        "diffusion_forcing_schedule",
+        "shortcut_forcing_loss",
+        "self_forcing_rollout"
+      ],
+      "group": "architectures",
+      "prerequisites": [
+        "embodied-ai"
+      ]
     },
     {
       "id": "graph-neural-networks",
@@ -106,7 +241,16 @@
       "descriptionEn": "Master GNN fundamentals — from basic graph convolution to attention, message passing, and graph-level tasks.",
       "descriptionZh": "掌握图神经网络基础——从图卷积到注意力、消息传递和图级任务。",
       "icon": "Network",
-      "problems": ["gcn_layer", "graph_readout", "gat_layer", "gin_layer", "mpnn_layer", "link_prediction", "graphsage_layer", "gae"],
+      "problems": [
+        "gcn_layer",
+        "graph_readout",
+        "gat_layer",
+        "gin_layer",
+        "mpnn_layer",
+        "link_prediction",
+        "graphsage_layer",
+        "gae"
+      ],
       "group": "architectures",
       "prerequisites": []
     },
@@ -117,9 +261,51 @@
       "descriptionEn": "Build REINFORCE, GRPO, and DAPO foundations, then complete agentic and asynchronous rollouts. Audit RL data, perplexity, confidence, embedding diversity, and gradient orthogonality before implementing KD, sampled-token OPD, and privileged-context OPSD.",
       "descriptionZh": "从 REINFORCE、GRPO、DAPO 到 agentic 异步 rollout；再练习数据审计、困惑度、置信度、两种正交性，以及 KD、OPD 和 OPSD 蒸馏。",
       "icon": "Trophy",
-      "problems": ["per_token_logprobs", "group_relative_advantage", "rloo_advantage", "k3_kl_penalty", "response_token_mask", "rlvr_format_reward", "reinforce_discounted_returns", "reinforce_policy_loss", "grpo_token_loss", "loss_aggregation_modes", "ppo_clipped_policy_loss", "ppo_value_loss", "gae_advantage", "gspo_sequence_ratio", "dapo_dynamic_sampling", "dapo_clip_higher_loss", "vineppo_mc_value", "rollout_batch_assembly", "verl_dataproto_filter_chunk", "grpo_train_step", "agentic_rollout_loop", "agent_rollout_truncation", "rl_eval_loop", "pass_at_k", "async_agent_rollout", "agent_env_adapter", "slime_custom_generate_hook", "rollout_train_boundary", "fully_async_rollout_buffer", "rollout_weight_sync_staleness", "truncated_importance_sampling", "rl_data_audit", "masked_perplexity", "confidence_calibration", "embedding_diversity_selection", "gradient_orthogonality_audit", "masked_kd_kl", "opd_sampled_kl_advantage", "opsd_privileged_context_kl"],
+      "problems": [
+        "per_token_logprobs",
+        "group_relative_advantage",
+        "rloo_advantage",
+        "k3_kl_penalty",
+        "response_token_mask",
+        "rlvr_format_reward",
+        "reinforce_discounted_returns",
+        "reinforce_policy_loss",
+        "grpo_token_loss",
+        "loss_aggregation_modes",
+        "ppo_clipped_policy_loss",
+        "ppo_value_loss",
+        "gae_advantage",
+        "gspo_sequence_ratio",
+        "dapo_dynamic_sampling",
+        "dapo_clip_higher_loss",
+        "vineppo_mc_value",
+        "rollout_batch_assembly",
+        "verl_dataproto_filter_chunk",
+        "grpo_train_step",
+        "agentic_rollout_loop",
+        "agent_rollout_truncation",
+        "rl_eval_loop",
+        "pass_at_k",
+        "async_agent_rollout",
+        "agent_env_adapter",
+        "slime_custom_generate_hook",
+        "rollout_train_boundary",
+        "fully_async_rollout_buffer",
+        "rollout_weight_sync_staleness",
+        "truncated_importance_sampling",
+        "rl_data_audit",
+        "masked_perplexity",
+        "confidence_calibration",
+        "embedding_diversity_selection",
+        "gradient_orthogonality_audit",
+        "masked_kd_kl",
+        "opd_sampled_kl_advantage",
+        "opsd_privileged_context_kl"
+      ],
       "group": "training",
-      "prerequisites": ["transformer-internals"]
+      "prerequisites": [
+        "transformer-internals"
+      ]
     },
     {
       "id": "alignment-agents",
@@ -128,7 +314,15 @@
       "descriptionEn": "Implement the loss functions and search algorithms behind modern AI alignment — from reward modeling to PPO and MCTS.",
       "descriptionZh": "实现现代 AI 对齐背后的损失函数和搜索算法——从奖励建模到 PPO 和 MCTS。",
       "icon": "Target",
-      "problems": ["cross_entropy", "reward_model", "dpo_loss", "simpo_ipo_loss", "grpo_loss", "ppo_loss", "mcts_search"],
+      "problems": [
+        "cross_entropy",
+        "reward_model",
+        "dpo_loss",
+        "simpo_ipo_loss",
+        "grpo_loss",
+        "ppo_loss",
+        "mcts_search"
+      ],
       "group": "training",
       "prerequisites": []
     },
@@ -139,9 +333,17 @@
       "descriptionEn": "Adapt a frozen model by training a tiny fraction of its parameters. LoRA and its merge path for zero-latency serving, DoRA's magnitude and direction split, QLoRA on a quantized base, and prefix tuning's trainable per-layer key/value prefix.",
       "descriptionZh": "Adapt a frozen model by training a tiny fraction of its parameters. LoRA and its merge path for zero-latency serving, DoRA's magnitude and direction split, QLoRA on a quantized base, and prefix tuning's trainable per-layer key/value prefix.",
       "icon": "Layers",
-      "problems": ["lora", "lora_merge", "dora", "qlora", "prefix_tuning"],
+      "problems": [
+        "lora",
+        "lora_merge",
+        "dora",
+        "qlora",
+        "prefix_tuning"
+      ],
       "group": "training",
-      "prerequisites": ["transformer-internals"]
+      "prerequisites": [
+        "transformer-internals"
+      ]
     },
     {
       "id": "inference-distributed",
@@ -150,9 +352,22 @@
       "descriptionEn": "Speed up inference with KV cache, quantization, and decoding strategies. Scale training with tensor parallelism, FSDP, and ring attention.",
       "descriptionZh": "通过 KV Cache、量化和解码策略加速推理。用张量并行、FSDP 和环形注意力扩展训练规模。",
       "icon": "Zap",
-      "problems": ["kv_cache", "int8_quantization", "topk_sampling", "logits_processors", "beam_search", "speculative_decoding", "mixed_precision", "tensor_parallel", "fsdp_step", "ring_attention"],
+      "problems": [
+        "kv_cache",
+        "int8_quantization",
+        "topk_sampling",
+        "logits_processors",
+        "beam_search",
+        "speculative_decoding",
+        "mixed_precision",
+        "tensor_parallel",
+        "fsdp_step",
+        "ring_attention"
+      ],
       "group": "systems",
-      "prerequisites": ["transformer-internals"]
+      "prerequisites": [
+        "transformer-internals"
+      ]
     },
     {
       "id": "training-inference-efficiency",
@@ -161,9 +376,27 @@
       "descriptionEn": "Where the time and memory go in LLM training and serving, and the standard fixes: precision, recomputation, packing, fused losses, sharding and parallelism for training; KV caching, paging, quantization and speculative decoding for inference.",
       "descriptionZh": "Where the time and memory go in LLM training and serving, and the standard fixes: precision, recomputation, packing, fused losses, sharding and parallelism for training; KV caching, paging, quantization and speculative decoding for inference.",
       "icon": "Zap",
-      "problems": ["mixed_precision", "gradient_accumulation", "activation_checkpointing", "packed_sequence_mask", "chunked_cross_entropy", "flash_attention", "lora", "qlora", "fsdp_step", "tensor_parallel", "kv_cache", "gqa", "paged_attention", "int8_quantization", "speculative_decoding"],
+      "problems": [
+        "mixed_precision",
+        "gradient_accumulation",
+        "activation_checkpointing",
+        "packed_sequence_mask",
+        "chunked_cross_entropy",
+        "flash_attention",
+        "lora",
+        "qlora",
+        "fsdp_step",
+        "tensor_parallel",
+        "kv_cache",
+        "gqa",
+        "paged_attention",
+        "int8_quantization",
+        "speculative_decoding"
+      ],
       "group": "systems",
-      "prerequisites": ["train-gpt-from-scratch"]
+      "prerequisites": [
+        "train-gpt-from-scratch"
+      ]
     },
     {
       "id": "streaming-llm",
@@ -172,9 +405,27 @@
       "descriptionEn": "Streaming LLMs end to end. Token streams: SSE decoding, delta accumulation, streamed tool calls, incremental detokenization, stop strings and backpressure. Endless generation: attention sinks, sink-cache re-rotation and H2O eviction. Real-time interaction: full-duplex micro-turn sessions (Thinking Machines), embodied action streams (SIMA 2) and posed-frame context for world models (RTFM).",
       "descriptionZh": "Streaming LLMs end to end. Token streams: SSE decoding, delta accumulation, streamed tool calls, incremental detokenization, stop strings and backpressure. Endless generation: attention sinks, sink-cache re-rotation and H2O eviction. Real-time interaction: full-duplex micro-turn sessions (Thinking Machines), embodied action streams (SIMA 2) and posed-frame context for world models (RTFM).",
       "icon": "Zap",
-      "problems": ["sse_decoder", "chat_stream_accumulator", "tool_call_stream_parser", "pi_streaming_json", "incremental_detokenize", "stop_string_holdback", "request_output_collector", "kv_cache", "sliding_window", "attention_sink_cache", "sink_cache_rerotation", "h2o_kv_eviction", "duplex_streaming_session", "embodied_action_stream", "posed_frame_context"],
+      "problems": [
+        "sse_decoder",
+        "chat_stream_accumulator",
+        "tool_call_stream_parser",
+        "pi_streaming_json",
+        "incremental_detokenize",
+        "stop_string_holdback",
+        "request_output_collector",
+        "kv_cache",
+        "sliding_window",
+        "attention_sink_cache",
+        "sink_cache_rerotation",
+        "h2o_kv_eviction",
+        "duplex_streaming_session",
+        "embodied_action_stream",
+        "posed_frame_context"
+      ],
       "group": "systems",
-      "prerequisites": ["inference-distributed"]
+      "prerequisites": [
+        "inference-distributed"
+      ]
     },
     {
       "id": "agent-runtime-system-design",
@@ -183,7 +434,17 @@
       "descriptionEn": "Implement a validated tool API, a budgeted retrying agent loop, and resumable supervisor-worker orchestration with deterministic failure injection, backpressure, idempotency, checkpoints, and pinned OpenClaw, Hermes, and Microsoft Agent Framework code connections. Then guard it: policy composition, capability-bound human approval, and a provenance-aware guarded runtime.",
       "descriptionZh": "Implement a validated tool API, a budgeted retrying agent loop, and resumable supervisor-worker orchestration with deterministic failure injection, backpressure, idempotency, checkpoints, and pinned OpenClaw, Hermes, and Microsoft Agent Framework code connections. 最后为它加上护栏：策略组合、按能力绑定的人工审批，以及可追溯来源的受保护运行时。",
       "icon": "Workflow",
-      "problems": ["tool_registry", "budgeted_agent_loop", "supervisor_orchestration", "context_compaction", "tool_call_dag", "tool_call_stream_parser", "policy_engine", "approval_gate", "guarded_runtime"],
+      "problems": [
+        "tool_registry",
+        "budgeted_agent_loop",
+        "supervisor_orchestration",
+        "context_compaction",
+        "tool_call_dag",
+        "tool_call_stream_parser",
+        "policy_engine",
+        "approval_gate",
+        "guarded_runtime"
+      ],
       "group": "agents",
       "prerequisites": []
     },
@@ -194,9 +455,24 @@
       "descriptionEn": "Mechanisms from DeepSeek's plugin-first agent harness: an event bus with five dispatch modes, the guarded tool pipeline and cooperative timeouts, advisory loop guards, crash recovery and replay of an append-only session log, tool-output pruning, and cache-aware system prompt updates.",
       "descriptionZh": "Mechanisms from DeepSeek's plugin-first agent harness: an event bus with five dispatch modes, the guarded tool pipeline and cooperative timeouts, advisory loop guards, crash recovery and replay of an append-only session log, tool-output pruning, and cache-aware system prompt updates.",
       "icon": "Network",
-      "problems": ["tool_registry", "dsh_event_bus", "dsh_tool_admission", "dsh_tool_dispatch", "dsh_tool_timeout", "dsh_tool_pipeline", "dsh_repeat_tool_reminder", "dsh_open_turn_closers", "dsh_fold_surface", "dsh_tool_result_pruner", "dsh_system_prompt_reconcile", "context_compaction"],
+      "problems": [
+        "tool_registry",
+        "dsh_event_bus",
+        "dsh_tool_admission",
+        "dsh_tool_dispatch",
+        "dsh_tool_timeout",
+        "dsh_tool_pipeline",
+        "dsh_repeat_tool_reminder",
+        "dsh_open_turn_closers",
+        "dsh_fold_surface",
+        "dsh_tool_result_pruner",
+        "dsh_system_prompt_reconcile",
+        "context_compaction"
+      ],
       "group": "agents",
-      "prerequisites": ["agent-runtime-system-design"]
+      "prerequisites": [
+        "agent-runtime-system-design"
+      ]
     },
     {
       "id": "pi-agent",
@@ -205,9 +481,20 @@
       "descriptionEn": "Mechanisms from the Pi coding agent: the agent loop with steering and follow-ups, parallel tool batches, streaming tool arguments, cross-provider transcript handoff, the fuzzy multi-edit tool, per-file mutation queues, output truncation and compaction cut points.",
       "descriptionZh": "Mechanisms from the Pi coding agent: the agent loop with steering and follow-ups, parallel tool batches, streaming tool arguments, cross-provider transcript handoff, the fuzzy multi-edit tool, per-file mutation queues, output truncation and compaction cut points.",
       "icon": "Workflow",
-      "problems": ["pi_agent_loop", "pi_parallel_tool_batch", "pi_streaming_json", "pi_transform_messages", "pi_multi_edit", "pi_file_mutation_queue", "pi_truncate_output", "pi_compaction_cut_point"],
+      "problems": [
+        "pi_agent_loop",
+        "pi_parallel_tool_batch",
+        "pi_streaming_json",
+        "pi_transform_messages",
+        "pi_multi_edit",
+        "pi_file_mutation_queue",
+        "pi_truncate_output",
+        "pi_compaction_cut_point"
+      ],
       "group": "agents",
-      "prerequisites": ["agent-runtime-system-design"]
+      "prerequisites": [
+        "agent-runtime-system-design"
+      ]
     }
   ]
 }
