@@ -141,3 +141,25 @@ def test_fast_submissions_are_unaffected():
         _case("two", "assert {fn}() + 1 == 3\n"),
     ))
     assert response.allPassed, response
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "import sys\ndef f():\n    sys.settrace(lambda *a: None)\n",
+        "from sys import setprofile\ndef f():\n    setprofile(None)\n",
+        "import threading\ndef f():\n    threading.settrace(None)\n",
+    ],
+)
+def test_a_submission_that_installs_a_trace_hook_is_rejected_before_it_runs(code):
+    response = gs._execute_tests(code, _task(_case("only")), capture_output=False)
+    assert response.total == 0 and "is not allowed" in response.error, response.error
+
+
+def test_a_hook_installed_indirectly_is_removed_after_the_case():
+    import sys
+
+    code = "import sys\ndef f():\n    getattr(sys, 'set' + 'profile')(lambda *a: None)\n"
+    response = gs._execute_tests(code, _task(_case("installs"), _case("after")), capture_output=False)
+    assert response.passed == 2, [r.error for r in response.results]
+    assert sys.getprofile() is None

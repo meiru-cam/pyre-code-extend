@@ -188,6 +188,12 @@ class GradeResponse(BaseModel):
     error: str | None = None
 
 
+# Hooks that outlive the call that installs them. On Python 3.11 a trace hook left on the
+# grading thread makes the interpreter spin once a deadline has been armed and disarmed,
+# so every later case times out.
+_TRACE_HOOKS = frozenset({"settrace", "setprofile", "settrace_all_threads", "setprofile_all_threads"})
+
+
 def _validate_code(code: str) -> str | None:
     """Return an error message if code contains disallowed top-level statements."""
     import ast
@@ -205,6 +211,18 @@ def _validate_code(code: str) -> str | None:
     for node in tree.body:
         if not isinstance(node, allowed):
             return f"Only definitions and assignments are allowed at the top level (found: {type(node).__name__})"
+    for node in ast.walk(tree):
+        name = (
+            node.attr if isinstance(node, ast.Attribute)
+            else node.name if isinstance(node, ast.alias)
+            else node.id if isinstance(node, ast.Name)
+            else None
+        )
+        if name in _TRACE_HOOKS:
+            return (
+                f"`{name}` is not allowed: a trace or profile hook stays installed after your "
+                "function returns and stalls the grader. Remove it before submitting."
+            )
     return None
 
 
@@ -266,6 +284,21 @@ def _deadline(seconds: float):
                 break
             except GradingTimeout:
                 continue
+
+
+def _exec_submission(compiled: Any, namespace: dict[str, Any]) -> None:
+    """Run submitted code, then remove any trace or profile hook it installed.
+
+    _validate_code rejects the direct calls; this catches a hook installed indirectly,
+    so that it at least does not stay on the thread for the grader's own code.
+    """
+    try:
+        exec(compiled, namespace)
+    finally:
+        sys.settrace(None)
+        sys.setprofile(None)
+        threading.settrace(None)
+        threading.setprofile(None)
 
 
 def _timeout_message(seconds: float) -> str:
@@ -334,7 +367,7 @@ def _execute_tests(code: str, task: dict, test_indices: list[int] | None = None,
     timeout = CASE_TIMEOUT_SECONDS
     try:
         with _deadline(timeout):
-            exec(compile(code, SOLUTION_FILENAME, "exec"), user_ns)
+            _exec_submission(compile(code, SOLUTION_FILENAME, "exec"), user_ns)
     except SyntaxError as e:
         return GradeResponse(passed=0, total=0, allPassed=False, results=[], totalTimeMs=0.0, error=f"Syntax error: {e}")
     except GradingTimeout:
@@ -412,7 +445,7 @@ def _execute_tests(code: str, task: dict, test_indices: list[int] | None = None,
                 try:
                     start = time.perf_counter()
                     with _deadline(timeout):
-                        exec(compiled_test, test_ns)
+                        _exec_submission(compiled_test, test_ns)
                     exec_time_ms = (time.perf_counter() - start) * 1000
                     output = captured.getvalue() or None
                     results.append(_finalize_result(
@@ -475,7 +508,7 @@ def _execute_tests(code: str, task: dict, test_indices: list[int] | None = None,
             start = time.perf_counter()
             try:
                 with _deadline(timeout):
-                    exec(compiled_test, test_ns)
+                    _exec_submission(compiled_test, test_ns)
                 exec_time_ms = (time.perf_counter() - start) * 1000
                 results.append(_finalize_result(
                     TestResult(
