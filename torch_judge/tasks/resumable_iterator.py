@@ -4,7 +4,7 @@ from ._interview import interview
 
 # A model that lists every (index tuple, item) up front, and random data and calls to compare against it.
 _MODEL = r"""
-import json, random, time
+import json, random
 
 def flatten(items, depth, prefix=()):
     if depth == 1:
@@ -170,19 +170,39 @@ for seed in range(300):
     compare({fn}, nested(rng, 2, 4, 0.4), 2, rng, 40, seed)
 """},
     {"name": "Part 2: long runs of empty rows", "part": 2, "visibility": "unshown", "behavior": "performance.complexity",
-     "failure_message": "Walking 100,000 rows, most of them empty, with get_state after every item took too long: keep the position and move forward from it, never rescan from the first row.",
+     "failure_message": "Walking 100,000 rows, most of them empty, with get_state after every item read the rows far more often than once each: keep the position and move forward from it, never rescan from the first row.",
      "code": r"""
-import time
-rows = [[i] if i % 4 == 0 else [] for i in range(100000)]
-start = time.perf_counter()
+class Counted(list):
+    # A list that counts every index, length and iteration step taken on it. Past the budget it
+    # fails the call at once, so a quadratic walk stops early instead of running to the end.
+    ops, budget = 0, None
+    def _tick():
+        Counted.ops += 1
+        if Counted.budget is not None and Counted.ops > Counted.budget:
+            Counted.budget = None
+            raise AssertionError("the walk read the lists far more often than they hold entries")
+    def __getitem__(self, index):
+        Counted._tick()
+        return list.__getitem__(self, index)
+    def __len__(self):
+        Counted._tick()
+        return list.__len__(self)
+    def __iter__(self):
+        for x in list.__iter__(self):
+            Counted._tick()
+            yield x
+
+n = 100000
+rows = Counted([[i] if i % 4 == 0 else [] for i in range(n)])
+# Walking forward reads each row a few times; rescanning from the first row reads about n^2 / 8.
+Counted.ops, Counted.budget = 0, 20 * n
 it = {fn}(rows, 2)
 total = 0
 for x in it:
     total += x
     it.get_state()
-elapsed = time.perf_counter() - start
-assert total == sum(range(0, 100000, 4)) and it.get_state() == (100000, 0)
-assert elapsed < 2.0, f"{elapsed:.2f}s for 100,000 rows"
+Counted.budget = None
+assert total == sum(range(0, n, 4)) and it.get_state() == (n, 0)
 """},
     {"name": "Part 3: the worked example", "part": 3, "behavior": "edge.empty_or_boundary", "code": r"""
 data = [[], [[], [[2, 4]]], [[], [[8]]]]
@@ -203,14 +223,34 @@ for seed in range(300):
     compare({fn}, nested(rng, depth, 3, 0.3), depth, rng, 40, seed)
 """},
     {"name": "Part 3: very deep data", "part": 3, "visibility": "unshown", "behavior": "performance.complexity",
-     "failure_message": "Data nested 3,000 levels deep failed or was too slow: walk levels with a loop and keep the lists along the current position instead of recursing.",
+     "failure_message": "Data nested 3,000 levels deep failed, or a call read the lists far more often than once per level: walk levels with a loop and keep the lists along the current position instead of recursing.",
      "code": r"""
-import time
+class Counted(list):
+    # A list that counts every index, length and iteration step taken on it. Past the budget it
+    # fails the call at once, so a quadratic walk stops early instead of running to the end.
+    ops, budget = 0, None
+    def _tick():
+        Counted.ops += 1
+        if Counted.budget is not None and Counted.ops > Counted.budget:
+            Counted.budget = None
+            raise AssertionError("the walk read the lists far more often than they hold entries")
+    def __getitem__(self, index):
+        Counted._tick()
+        return list.__getitem__(self, index)
+    def __len__(self):
+        Counted._tick()
+        return list.__len__(self)
+    def __iter__(self):
+        for x in list.__iter__(self):
+            Counted._tick()
+            yield x
+
 depth = 3000
-data = ["leaf"]
+data = Counted(["leaf"])
 for _ in range(depth - 1):
-    data = [[], data, []]
-start = time.perf_counter()
+    data = Counted([Counted([]), data, Counted([])])
+# The constructor, get_state, next and set_state each need a few reads per level; 43 calls are made.
+Counted.ops, Counted.budget = 0, 20 * depth * 43
 it = {fn}(data, depth)
 state = it.get_state()
 assert len(state) == depth and state[:3] == (1, 1, 1) and state[-1] == 0
@@ -219,7 +259,7 @@ assert it.get_state() == (3,) + (0,) * (depth - 1)
 for _ in range(20):
     it.set_state(state)
     assert next(it) == "leaf"
-assert time.perf_counter() - start < 3.0
+Counted.budget = None
 """},
 ]
 

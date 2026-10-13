@@ -47,21 +47,19 @@ TASK = {
     ],
     "tests": [
         {"name": "Same file serializes, different files overlap", "behavior": "scheduler.concurrency", "code": r"""
-import asyncio, os, tempfile, time
+import asyncio, os, tempfile
 async def main():
     q = {fn}()
     d = tempfile.mkdtemp()
     a, b = os.path.join(d, "a.txt"), os.path.join(d, "b.txt")
     log = []
     async def work(tag):
-        log.append(tag + "+"); await asyncio.sleep(0.1); log.append(tag + "-"); return tag
-    start = time.perf_counter()
+        log.append(tag + "+"); await asyncio.sleep(0.05); log.append(tag + "-"); return tag
     res = await asyncio.wait_for(asyncio.gather(q.run(a, lambda: work("a1")), q.run(a, lambda: work("a2")), q.run(b, lambda: work("b1"))), timeout=5)
-    elapsed = time.perf_counter() - start
     assert res == ["a1", "a2", "b1"], res
     assert log.index("a1-") < log.index("a2+"), log
+    # b1 starting before a1 ends proves the two keys overlap, without timing anything
     assert log.index("b1+") < log.index("a1-"), log
-    assert elapsed < 0.3, elapsed
     assert q.active_keys() == set()
 asyncio.run(main())
 """},
@@ -139,9 +137,9 @@ async def main():
     q = {fn}()
     path = os.path.join(tempfile.mkdtemp(), "x")
     log = []
-    first_started = asyncio.Event()
+    first_started, release_first = asyncio.Event(), asyncio.Event()
     async def first():
-        log.append("first+"); first_started.set(); await asyncio.sleep(0.1); log.append("first-")
+        log.append("first+"); first_started.set(); await release_first.wait(); log.append("first-")
     async def second():
         log.append("second ran")
     async def third():
@@ -155,7 +153,8 @@ async def main():
     t2.cancel()
     await asyncio.sleep(0.01)
     assert "third+" not in log, log
-    await asyncio.wait_for(asyncio.gather(t1, t3), timeout=1.0)
+    release_first.set()
+    await asyncio.wait_for(asyncio.gather(t1, t3), timeout=5)
     assert log == ["first+", "first-", "third+"], log
     assert t2.cancelled()
     await asyncio.sleep(0.01)

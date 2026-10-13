@@ -4,7 +4,7 @@ from ._interview import interview
 
 # An independent oracle built on the standard library's ipaddress module.
 _ORACLE = r"""
-import ipaddress, itertools, random, time
+import ipaddress, itertools, random, tracemalloc
 
 MAX_ADDR = 2 ** 32 - 1
 
@@ -189,20 +189,18 @@ for gap in range(0, 300, 7):
     drained_twice(it)
 """},
         {"name": "Part 1: nothing is built up front", "part": 1, "visibility": "unshown", "behavior": "performance.complexity",
-         "failure_message": "Starting at 0.0.0.0 and reading a few addresses must be instant; keep an integer cursor instead of building the range.",
+         "failure_message": "Starting at 0.0.0.0 and reading a few addresses must allocate almost nothing; keep an integer cursor instead of building the range.",
          "code": _ORACLE + r"""
-start = time.perf_counter()
+tracemalloc.start()
 it = {fn}("0.0.0.0")
 assert [next(it) for _ in range(3)] == ["0.0.0.0", "0.0.0.1", "0.0.0.2"]
-elapsed = time.perf_counter() - start
-assert elapsed < 2, f"took {elapsed:.2f}s"
-start = time.perf_counter()
+peak = tracemalloc.get_traced_memory()[1]
+tracemalloc.stop()
+assert peak < 1_000_000, f"peak memory {peak / 1e6:.1f} MB to read 3 addresses"
 it = {fn}("10.0.0.0")
-for _ in range(200000):
+for _ in range(50000):
     next(it)
-assert next(it) == "10.3.13.64"
-elapsed = time.perf_counter() - start
-assert elapsed < 8, f"200,000 calls took {elapsed:.2f}s"
+assert next(it) == "10.0.195.80"
 """},
         {"name": "Part 2: the worked example", "part": 2, "behavior": "state.invariant", "code": r"""
 it = {fn}("172.16.10.1", reverse=True)

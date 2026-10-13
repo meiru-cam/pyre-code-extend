@@ -4,7 +4,7 @@ from ._interview import interview
 
 # A per-tick brute force written from the rules, independent of the event-driven reference.
 _HELPERS = r"""
-import random, time
+import random
 
 def raises(kind, call):
     try:
@@ -68,6 +68,38 @@ def check(got, want, label):
     else:
         result = got()
         assert result == want, (label, result, want)
+"""
+
+# An int that counts the work done on it, for the speed cases: every hash, comparison and
+# sum on a tool id or duration. An event-driven heap schedule touches each call O(log N)
+# times; rescanning lists or stepping through set-aside calls touches each one per event.
+_COUNTED = r"""
+class Op(int):
+    counting, used, budget = False, 0, 0
+    def _tally(self):
+        if Op.counting:
+            Op.used += 1
+            if Op.used > Op.budget:
+                Op.counting = False
+                raise AssertionError(f"more than {Op.budget} operations on tool ids and durations")
+    def __hash__(self): self._tally(); return int.__hash__(self)
+    def __eq__(self, other): self._tally(); return int.__eq__(self, other)
+    def __ne__(self, other): self._tally(); return int.__ne__(self, other)
+    def __lt__(self, other): self._tally(); return int.__lt__(self, other)
+    def __le__(self, other): self._tally(); return int.__le__(self, other)
+    def __gt__(self, other): self._tally(); return int.__gt__(self, other)
+    def __ge__(self, other): self._tally(); return int.__ge__(self, other)
+    def __add__(self, other): self._tally(); return int.__add__(self, other)
+    def __radd__(self, other): self._tally(); return int.__radd__(self, other)
+    def __sub__(self, other): self._tally(); return int.__sub__(self, other)
+    def __rsub__(self, other): self._tally(); return int.__rsub__(self, other)
+
+def counted(run, budget):
+    Op.used, Op.budget, Op.counting = 0, budget, True
+    try:
+        return run()
+    finally:
+        Op.counting = False
 """
 
 TESTS = [
@@ -137,25 +169,22 @@ for trial in range(300):
     check(lambda: s.run_shared(agents, capacity), brute(agents, capacity), (trial, agents, capacity))
 """},
     {"name": "Part 3: many calls and long durations", "part": 3, "visibility": "unshown", "behavior": "performance.complexity",
-     "failure_message": "About 40,000 calls with durations up to 10**9 took too long: jump to the next finish time instead of stepping time, and keep ready and running calls in heaps rather than rescanning lists.",
-     "code": r"""
-import random, time
+     "failure_message": "About 40,000 calls with durations up to 10**9 took far too much work: jump to the next finish time instead of stepping time, and keep ready and running calls in heaps rather than rescanning lists.",
+     "code": _COUNTED + r"""
+import random
 rng = random.Random(24)
 agents = []
-for a in range(400):
+for a in range(40):
     calls = []
-    for tool in range(100):
-        deps = [tool - 1] if tool % 4 else []
-        calls.append((tool, rng.randint(1, 10**9), deps))
+    for tool in range(1000):
+        deps = [Op(tool - 1)] if tool % 4 else []
+        calls.append((Op(tool), Op(rng.randint(1, 10**9)), deps))
     rng.shuffle(calls)
     agents.append(calls)
 s = {fn}()
-start = time.perf_counter()
-starts, makespan = s.run_shared(agents, 64)
-elapsed = time.perf_counter() - start
+starts, makespan = counted(lambda: s.run_shared(agents, 64), 40000 * 100)
 assert len(starts) == 40000 and len({(a, t) for _, a, t in starts}) == 40000
 assert starts == sorted(starts)
-assert elapsed < 6.0, f"{elapsed:.2f}s for 40,000 calls"
 """},
     {"name": "Part 4: the worked example", "part": 4, "behavior": "contract.signature", "code": r"""
 s = {fn}()
@@ -180,19 +209,16 @@ for trial in range(40):
     assert s.run_capped(agents, [big] * len(agents), 3) == s.run_shared(agents, 3)
 """},
     {"name": "Part 4: many agents held at their cap", "part": 4, "visibility": "unshown", "behavior": "performance.complexity",
-     "failure_message": "Many ready calls whose agents sit at their own cap took too long: skip a capped agent as a whole rather than setting aside and re-queuing its calls one by one.",
-     "code": r"""
-import random, time
+     "failure_message": "Many ready calls whose agents sit at their own cap took far too much work: skip a capped agent as a whole rather than setting aside and re-queuing its calls one by one.",
+     "code": _COUNTED + r"""
+import random
 rng = random.Random(26)
-agents = [[(tool, rng.randint(1, 10**6), []) for tool in range(150)] for _ in range(250)]
+agents = [[(Op(tool), Op(rng.randint(1, 10**6)), []) for tool in range(75)] for _ in range(250)]
 s = {fn}()
-start = time.perf_counter()
-starts, makespan = s.run_capped(agents, [1] * 250, 200)
-elapsed = time.perf_counter() - start
-assert len(starts) == 37500
+starts, makespan = counted(lambda: s.run_capped(agents, [1] * 250, 200), 18750 * 80)
+assert len(starts) == 18750
 first = {a: t for t, a, tool in starts if tool == 0}
 assert all(first[a] == 0 for a in range(200)) and all(first[a] > 0 for a in range(200, 250))
-assert elapsed < 6.0, f"{elapsed:.2f}s for 37,500 calls"
 """},
 ]
 

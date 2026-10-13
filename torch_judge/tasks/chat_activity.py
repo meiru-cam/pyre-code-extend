@@ -4,7 +4,7 @@ from ._interview import interview
 
 # A slow model written straight from the statement: it keeps every accepted event and scans them all.
 _MODEL = r"""
-import random, time, tracemalloc
+import random, tracemalloc
 
 class Model:
     def __init__(self, window):
@@ -195,21 +195,25 @@ assert tracker.recent_count("user19999", "chat0") == 1 and tracker.recent_count(
 assert late - early < 1_000_000, f"memory grew by {(late - early) / 1e6:.1f} MB over 18,000 more events"
 """},
         {"name": "Part 1: counting does not walk the events", "part": 1, "visibility": "unshown", "behavior": "performance.complexity",
-         "failure_message": "With many events of one chat inside the window, recent_count took time proportional to them; keep a count per chat instead of scanning.",
+         "failure_message": "With many events of one chat inside the window, recent_count compared the chat's name against its stored events one by one; keep a count per chat instead of scanning.",
          "code": _MODEL + r"""
-def run(n):
-    tracker = {fn}(10 ** 9)
-    start = time.perf_counter()
-    for i in range(n):
-        tracker.record_event("hot", "chat", i)
-        assert tracker.recent_count("hot", "chat") == i + 1
-    return time.perf_counter() - start
+class Name(str):
+    # A user or chat name that counts the equality checks made on it; past the budget it raises.
+    compared, budget = 0, 0
+    def __eq__(self, other):
+        Name.compared += 1
+        if Name.compared > Name.budget:
+            raise AssertionError(f"more than {Name.budget} name comparisons for {n} events")
+        return str.__eq__(self, other)
+    __hash__ = str.__hash__
 
-def best(n):
-    return min(run(n) for _ in range(3))
-
-ratio = best(30000) / best(3000)
-assert ratio < 40, f"10x the events took {ratio:.0f}x as long"
+n = 3000
+Name.budget = 50 * n  # a dict lookup compares a few names; a scan compares every stored event
+tracker = {fn}(10 ** 9)
+for i in range(n):
+    # Fresh but equal names on every call, so an identity check cannot skip the comparison.
+    tracker.record_event(Name("hot"), Name("chat"), i)
+    assert tracker.recent_count(Name("hot"), Name("chat")) == i + 1
 """},
         {"name": "Part 2: the worked example", "part": 2, "behavior": "state.invariant", "code": r"""
 t = {fn}(8)

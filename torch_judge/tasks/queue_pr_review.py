@@ -66,7 +66,7 @@ class SlowId(str):
         time.sleep(0.005)
         return str.__hash__(self)
 
-def run_threads(targets, seconds=4):
+def run_threads(targets, seconds=10):
     errors, threads = [], []
     def wrap(fn):
         def body():

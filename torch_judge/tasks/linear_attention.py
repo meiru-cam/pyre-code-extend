@@ -42,18 +42,32 @@ assert Q.grad is not None and K.grad is not None and V.grad is not None, 'Missin
 """,
         },
         {
-            "name": "Runs fast on long sequences (linear complexity)",
+            "name": "Linear complexity on long sequences",
             "code": """
-import torch, time
+import torch
+from torch.overrides import TorchFunctionMode
+from torch.utils.flop_counter import FlopCounterMode
+
+class OutputSize(TorchFunctionMode):
+    # Adds up the elements of every tensor a torch call returns, to count elementwise work.
+    def __init__(self):
+        super().__init__()
+        self.elements = 0
+    def __torch_function__(self, func, types, args=(), kwargs=None):
+        out = func(*args, **(kwargs or {}))
+        for t in (out if isinstance(out, (tuple, list)) else (out,)):
+            if isinstance(t, torch.Tensor):
+                self.elements += t.numel()
+        return out
+
 torch.manual_seed(0)
-Q = torch.randn(1, 2048, 64)
-K = torch.randn(1, 2048, 64)
-V = torch.randn(1, 2048, 64)
-t0 = time.perf_counter()
-for _ in range(10):
+S, D = 4096, 16
+Q, K, V = torch.randn(1, S, D), torch.randn(1, S, D), torch.randn(1, S, D)
+with FlopCounterMode(display=False) as flops, OutputSize() as size:
     {fn}(Q, K, V)
-elapsed = time.perf_counter() - t0
-assert elapsed < 5.0, f'Too slow: {elapsed:.2f}s — should be O(S*D^2) not O(S^2*D)'
+work = flops.get_total_flops() + size.elements
+# phi(K)^T @ V costs about S*D^2; any S x S score matrix, at once or row by row, costs S^2*D, 256x more here.
+assert work <= 32 * S * D * D, f'{work} operations for S={S}, D={D}: should be O(S*D^2) not O(S^2*D)'
 """,
         },
         {

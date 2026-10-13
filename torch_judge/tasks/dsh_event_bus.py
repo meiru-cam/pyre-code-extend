@@ -157,17 +157,23 @@ async def main():
 asyncio.run(main())
 """},
         {"name": "Parallel runs concurrently and groups every failure", "visibility": "unshown", "behavior": "scheduler.concurrency", "failure_message": "parallel must start all listeners together, wait for all of them, and raise one ExceptionGroup containing every failure.", "code": r"""
-import asyncio, time
+import asyncio
 async def main():
     bus = {fn}()
-    finished = []
+    started, finished = [], []
     async def sleeper(tag):
-        await asyncio.sleep(0.2); finished.append(tag)
+        started.append(tag)
+        for _ in range(100):  # event-loop turns, not time: concurrent listeners all start within a few
+            if len(started) == 3:
+                break
+            await asyncio.sleep(0)
+        assert len(started) == 3, f"listener {tag} ran while the others had not started: {started}"
+        await asyncio.sleep(0)
+        finished.append(tag)
     for tag in "abc":
         bus.on("fan", lambda _, tag=tag: sleeper(tag))
-    start = time.perf_counter()
     assert await bus.parallel("fan", None) is None
-    assert time.perf_counter() - start < 0.5 and sorted(finished) == ["a", "b", "c"], finished
+    assert sorted(finished) == ["a", "b", "c"], finished
     done = []
     async def boom(msg):
         await asyncio.sleep(0.01); raise ValueError(msg)

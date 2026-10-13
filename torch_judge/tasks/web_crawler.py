@@ -18,14 +18,38 @@ class Parser:
             self.inflight += 1
             self.peak = max(self.peak, self.inflight)
         try:
-            if self.delay:
-                time.sleep(self.delay)
+            self.wait(url)
             if url in self.fail:
                 raise ConnectionError(f"cannot load {url}")
             return list(self.graph.get(url, []))
         finally:
             with self.lock:
                 self.inflight -= 1
+    def wait(self, url):
+        if self.delay:
+            time.sleep(self.delay)
+
+class GatedParser(Parser):
+    # Every page but the start holds its call until `release` is set, so a crawl that
+    # runs calls one at a time stalls there. The 5 s timeout only guards against a hang.
+    def __init__(self, graph, start):
+        super().__init__(graph)
+        self.start, self.release, self.gave_up = start, threading.Event(), False
+    def wait(self, url):
+        if url != self.start and not self.release.wait(5):
+            self.gave_up = True
+            self.release.set()
+
+class OverlapParser(GatedParser):
+    # Releases the held calls once `need` of them are running together.
+    def __init__(self, graph, start, need):
+        super().__init__(graph, start)
+        self.need = need
+    def wait(self, url):
+        with self.lock:
+            if self.inflight >= self.need:
+                self.release.set()
+        super().wait(url)
 
 def model_crawl(start, graph, fail=()):
     norm = lambda u: u.split("#", 1)[0]
@@ -199,16 +223,13 @@ finally:
     sys.setswitchinterval(old)
 """},
         {"name": "Part 2: calls overlap", "part": 2, "visibility": "unshown", "behavior": "performance.complexity",
-         "failure_message": "Forty pages that each take 100 ms were not fetched in parallel; submit every new page to the pool instead of waiting for each one.",
+         "failure_message": "Forty pages were not fetched in parallel: max_workers calls to get_urls never ran together. Submit every new page to the pool instead of waiting for each one.",
          "code": _HELPERS + r"""
 start, graph = star(40)
-p = Parser(graph, delay=0.1)
-t0 = time.perf_counter()
+p = OverlapParser(graph, start, need=8)
 got = {fn}().crawl_concurrent(start, p, max_workers=8)
-elapsed = time.perf_counter() - t0
 assert len(got) == 41 and p.peak <= 8
-assert elapsed < 2.0, f"took {elapsed:.2f}s; one page at a time takes about 4s"
-assert p.peak >= 2, "no two calls ever ran together"
+assert not p.gave_up and p.peak == 8, f"at most {p.peak} calls ran together with max_workers=8"
 """},
         {"name": "Part 3: the worked example", "part": 3, "behavior": "scheduler.concurrency", "code": _HELPERS + r"""
 p = Parser(EXAMPLE, fail=EXAMPLE_FAIL)
@@ -233,26 +254,24 @@ for trial in range(40):
     assert p.peak <= limit, f"{p.peak} calls ran together with concurrency={limit}"
 
 async def with_heartbeat(parser, start, limit):
-    ticks, done = [], False
+    # Runs on the event loop: it can release the held calls only if the loop is free while
+    # they run, and only once `limit` of them are running together.
     async def beat():
-        while not done:
-            ticks.append(time.perf_counter())
-            await asyncio.sleep(0.01)
+        while parser.inflight < limit and not parser.release.is_set():
+            await asyncio.sleep(0.001)
+        parser.release.set()
     task = asyncio.create_task(beat())
-    t0 = time.perf_counter()
     result = await c.crawl_async(start, parser, concurrency=limit)
-    elapsed = time.perf_counter() - t0
-    done = True
+    parser.release.set()
     await task
-    gaps = [b - a for a, b in zip(ticks, ticks[1:])]
-    return result, elapsed, max(gaps) if gaps else elapsed
+    return result
 
 start, graph = star(12)
-p = Parser(graph, delay=0.5)
-result, elapsed, worst_gap = asyncio.run(with_heartbeat(p, start, 6))
-assert len(result) == 13 and p.peak <= 6
-assert elapsed < 3.5, f"took {elapsed:.2f}s; one page at a time takes about 6.5s"
-assert worst_gap < 0.3, f"the event loop was blocked for {worst_gap * 1000:.0f} ms while get_urls ran"
+p = GatedParser(graph, start)
+result = asyncio.run(with_heartbeat(p, start, 4))
+assert len(result) == 13 and p.peak <= 4
+assert not p.gave_up, "the held calls were never released: get_urls blocked the event loop, or fewer than 4 calls ran together"
+assert p.peak == 4, f"at most {p.peak} calls ran together with concurrency=4"
 """},
     ],
     "solution": r'''# Adapted from Schuture/Anthropic-Interview-Notes (code under the MIT License).
