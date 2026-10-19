@@ -13,6 +13,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@elevenlabs/react": "1.16.0",
     "@monaco-editor/react": "^4.7.0",
     "@radix-ui/react-collapsible": "^1.0.3",
     "@radix-ui/react-dialog": "^1.0.5",

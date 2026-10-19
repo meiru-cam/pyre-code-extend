@@ -47,6 +47,10 @@ The stage at the start of every exercise where the learner answers the opening a
 A browser-wide toggle that opens every exercise as if the interview gate were passed, without recording a skip. The interview questions stay available, collapsed and optional.
 _Avoid_: Prerequisite lock, quiz
 
+**Voice interview**:
+An optional spoken session in the workspace with an external voice interviewer. The interviewer asks the interview questions aloud and the learner's spoken answers fill the same answers the interview gate checks, so speaking can pass the gate. After the gate opens, the learner codes while talking, and the interviewer asks Tradeoffs questions after Submit. The learner consents once per session; until the session ends, their microphone audio, editor contents and Run and Submit results go to the provider. The transcript is transient; only the interview answers persist. It does not affect solved status.
+_Avoid_: Interview mode, voice gate
+
 **Interview hint**:
 A one- or two-sentence nudge attached to one interview question, shown only when the learner opens it. It names the angle and the pieces to cover and may state a key fact or formula outright; the explanation, the reasoning between the pieces and the trade-offs stay with the learner. It does not affect the interview gate. Hints live in `torch_judge/tasks/_interview_hints/`, keyed by task id and exact question text.
 _Avoid_: Answer key, solution hint

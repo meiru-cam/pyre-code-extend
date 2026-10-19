@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import * as Tabs from '@radix-ui/react-tabs';
 import { Menu, ChevronLeft, ChevronRight, Sun, Moon, Zap } from 'lucide-react';
 import { SplitPane, VerticalSplitPane } from '@/components/ui/SplitPane';
@@ -38,6 +39,12 @@ import {
   type InterviewRecord,
 } from '@/lib/interviewAnswer';
 import { InterviewLockedNotice } from '@/components/workspace/InterviewPanel';
+
+// The voice SDK touches browser audio APIs, so it never renders on the server.
+const VoiceInterview = dynamic(
+  () => import('@/components/workspace/VoiceInterview').then((m) => m.VoiceInterview),
+  { ssr: false },
+);
 
 function FlameGlyph() {
   return (
@@ -442,6 +449,15 @@ function WorkspacePageNew() {
             </button>
           </div>
         )}
+
+        <VoiceInterview
+          key={id}
+          problem={problem}
+          questions={interviewQuestionsFor(problem)}
+          record={interviewRecord}
+          onRecordChange={handleInterviewChange}
+          editorOpen={interviewUnlocked}
+        />
 
         <button
           onClick={togglePracticeMode}
