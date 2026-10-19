@@ -6,8 +6,46 @@ const ANSWER_KEY_PREFIX = 'pyre-code-interview-answer:v2:';
 /** Shortest trimmed answer accepted per gated question, so a keystroke cannot unlock. */
 export const MIN_ANSWER_LENGTH = 20;
 
-/** Answering every question in these stages unlocks help; tradeoffs come after coding. */
+/** Questions in these stages can gate help; tradeoffs come after coding. */
 export const GATED_STAGES: readonly InterviewStage[] = ['concept', 'deep_dive'];
+
+/**
+ * How much interview the gate asks for, browser-wide. `learn` has no gate and opens the
+ * explanations first; the others require that many gated questions, `hard` all of them.
+ */
+export type InterviewLevel = 'learn' | 'easy' | 'medium' | 'hard';
+
+export const INTERVIEW_LEVELS: readonly InterviewLevel[] = ['learn', 'easy', 'medium', 'hard'];
+
+export const DEFAULT_INTERVIEW_LEVEL: InterviewLevel = 'easy';
+
+const REQUIRED_QUESTION_COUNT: Record<InterviewLevel, number> = {
+  learn: 0,
+  easy: 2,
+  medium: 4,
+  hard: Infinity,
+};
+
+/**
+ * Indices of the gated questions a level requires, in question order. Opening and deep-dive
+ * questions are taken in turn, so even easy asks one of each.
+ */
+export function requiredQuestionIndices(
+  questions: readonly InterviewQuestion[],
+  level: InterviewLevel,
+): number[] {
+  const byStage = GATED_STAGES.map((stage) => questions
+    .map((question, index) => ({ question, index }))
+    .filter(({ question }) => question.stage === stage)
+    .map(({ index }) => index));
+  const interleaved: number[] = [];
+  for (let round = 0; byStage.some((indices) => round < indices.length); round += 1) {
+    for (const indices of byStage) {
+      if (round < indices.length) interleaved.push(indices[round]);
+    }
+  }
+  return interleaved.slice(0, REQUIRED_QUESTION_COUNT[level]).sort((a, b) => a - b);
+}
 
 export const INTERVIEW_STAGE_LABELS: Record<InterviewStage, string> = {
   concept: 'Opening',
@@ -52,6 +90,8 @@ export interface InterviewRecord {
   /** One answer per question, by index into the task's question list. */
   answers: string[];
   updatedAt: string;
+  /** The level the answers were locked in at; records from before levels count as hard. */
+  level?: InterviewLevel;
 }
 
 const STATUSES: readonly InterviewStatus[] = ['draft', 'answered', 'skipped'];
@@ -65,18 +105,14 @@ export function emptyInterviewRecord(questions: readonly InterviewQuestion[]): I
   return { status: 'draft', answers: questions.map(() => ''), updatedAt: '' };
 }
 
-/** Indices of gated questions whose answer is still too short. */
+/** Indices of questions the level requires whose answer is still too short. */
 export function missingGatedAnswers(
   questions: readonly InterviewQuestion[],
   answers: readonly string[],
+  level: InterviewLevel = 'hard',
 ): number[] {
-  return questions
-    .map((question, index) => ({ question, index }))
-    .filter(({ question, index }) => (
-      GATED_STAGES.includes(question.stage)
-      && (answers[index] ?? '').trim().length < MIN_ANSWER_LENGTH
-    ))
-    .map(({ index }) => index);
+  return requiredQuestionIndices(questions, level)
+    .filter((index) => (answers[index] ?? '').trim().length < MIN_ANSWER_LENGTH);
 }
 
 function answerKey(taskId: string, contractVersion: number) {
@@ -97,6 +133,7 @@ export function loadInterviewRecord(
       status?: unknown;
       answers?: unknown;
       updatedAt?: unknown;
+      level?: unknown;
     };
     if (
       parsed.schemaVersion !== ANSWER_SCHEMA_VERSION
@@ -110,13 +147,18 @@ export function loadInterviewRecord(
     const stored = parsed.answers as string[];
     const answers = questions.map((_, index) => stored[index] ?? '');
     const status = parsed.status as InterviewStatus;
+    const level = INTERVIEW_LEVELS.includes(parsed.level as InterviewLevel)
+      ? parsed.level as InterviewLevel
+      : undefined;
     return {
-      // An answer that no longer covers the gated questions goes back to draft.
-      status: status === 'answered' && missingGatedAnswers(questions, answers).length > 0
+      // An answer that no longer covers the questions its level required goes back to draft.
+      // Changing the level later never relocks an exercise already answered.
+      status: status === 'answered' && missingGatedAnswers(questions, answers, level).length > 0
         ? 'draft'
         : status,
       answers,
       updatedAt: typeof parsed.updatedAt === 'string' ? parsed.updatedAt : '',
+      ...(level ? { level } : {}),
     };
   } catch {
     return null;
@@ -139,23 +181,28 @@ export function saveInterviewRecord(
   }
 }
 
-const PRACTICE_MODE_KEY = 'pyre-practice-mode';
+const INTERVIEW_LEVEL_KEY = 'pyre-interview-level';
+/** Practice mode was the on/off predecessor of learn; an old "on" carries over. */
+const LEGACY_PRACTICE_MODE_KEY = 'pyre-practice-mode';
 
-/** Practice mode opens every exercise without the interview gate and records no skip. */
-export function loadPracticeMode(): boolean {
-  if (typeof window === 'undefined') return false;
+export function loadInterviewLevel(): InterviewLevel {
+  if (typeof window === 'undefined') return DEFAULT_INTERVIEW_LEVEL;
   try {
-    return window.localStorage.getItem(PRACTICE_MODE_KEY) === '1';
+    const stored = window.localStorage.getItem(INTERVIEW_LEVEL_KEY);
+    if (INTERVIEW_LEVELS.includes(stored as InterviewLevel)) return stored as InterviewLevel;
+    return window.localStorage.getItem(LEGACY_PRACTICE_MODE_KEY) === '1'
+      ? 'learn'
+      : DEFAULT_INTERVIEW_LEVEL;
   } catch {
-    return false;
+    return DEFAULT_INTERVIEW_LEVEL;
   }
 }
 
-export function savePracticeMode(on: boolean) {
+export function saveInterviewLevel(level: InterviewLevel) {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(PRACTICE_MODE_KEY, on ? '1' : '0');
+    window.localStorage.setItem(INTERVIEW_LEVEL_KEY, level);
   } catch {
-    // Storage is best-effort; the toggle still applies for this session.
+    // Storage is best-effort; the level still applies for this session.
   }
 }

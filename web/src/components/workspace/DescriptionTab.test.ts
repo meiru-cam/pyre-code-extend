@@ -84,7 +84,7 @@ describe('DescriptionTab interview gate', () => {
 
   it('hides hints and reference tradeoffs until the learner answers', () => {
     renderWithGate('draft');
-    expect(screen.getByText('Interview first')).toBeTruthy();
+    expect(screen.getByText(/^Interview first/)).toBeTruthy();
     expect(screen.queryByText('hint 1 · Guiding questions')).toBeNull();
     expect(screen.queryByText('Reference pro')).toBeNull();
     expect((screen.getByText('Lock in answers') as HTMLButtonElement).disabled).toBe(true);
@@ -119,6 +119,59 @@ describe('DescriptionTab interview gate', () => {
     expect(screen.getByText('hint 1 · Guiding questions')).toBeTruthy();
     expect(screen.getByText('Reference pro')).toBeTruthy();
     expect(screen.getByText('Interview')).toBeTruthy();
+  });
+});
+
+describe('DescriptionTab interview levels', () => {
+  afterEach(cleanup);
+
+  const fiveQuestions: Problem = {
+    ...problem,
+    proConAnalysis: { pros: ['Reference pro'], cons: [] },
+    interviewQuestions: [
+      { stage: 'concept', question: 'Opening one?' },
+      { stage: 'concept', question: 'Opening two?' },
+      { stage: 'deep_dive', question: 'Deep one?' },
+      { stage: 'deep_dive', question: 'Deep two?' },
+      { stage: 'deep_dive', question: 'Deep three?' },
+      { stage: 'tradeoffs', question: 'Tradeoff?' },
+    ],
+  };
+  const long = 'An answer comfortably past the minimum.';
+
+  it('asks easy for one opening and one deep dive, the rest folded as optional', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(React.createElement(DescriptionTab, {
+      problem: fiveQuestions,
+      interview: {
+        record: { status: 'draft', answers: [long, '', long, '', '', ''], updatedAt: '' },
+        onChange,
+        level: 'easy',
+      },
+    }));
+
+    expect(screen.getByText('Interview first · 2 questions')).toBeTruthy();
+    expect(screen.getByText('More questions (optional) · 3')).toBeTruthy();
+    await user.click(screen.getByText('Lock in answers'));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ status: 'answered', level: 'easy' }));
+  });
+
+  it('opens learn with hints and reference material already showing', () => {
+    render(React.createElement(DescriptionTab, {
+      problem: fiveQuestions,
+      interview: {
+        record: { status: 'draft', answers: ['', '', '', '', '', ''], updatedAt: '' },
+        onChange: vi.fn(),
+        level: 'learn',
+      },
+    }));
+
+    expect(screen.queryByText(/^Interview first/)).toBeNull();
+    expect(screen.getByText('Question-only nudge')).toBeTruthy();
+    expect(screen.getByText('Deeper analysis')).toBeTruthy();
+    expect(screen.getByText('Reference pro')).toBeTruthy();
+    expect(screen.getByText('Optional · Learn')).toBeTruthy();
   });
 });
 

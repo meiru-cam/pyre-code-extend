@@ -5,7 +5,7 @@ import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import * as Tabs from '@radix-ui/react-tabs';
-import { Menu, ChevronLeft, ChevronRight, Sun, Moon, Zap } from 'lucide-react';
+import { Menu, ChevronLeft, ChevronRight, Sun, Moon } from 'lucide-react';
 import { SplitPane, VerticalSplitPane } from '@/components/ui/SplitPane';
 import { ProblemDrawer } from '@/components/layout/ProblemDrawer';
 import { FeedbackModal } from '@/components/workspace/FeedbackModal';
@@ -29,15 +29,19 @@ import {
   unlockedAfter,
 } from '@/lib/parts';
 import {
+  DEFAULT_INTERVIEW_LEVEL,
+  INTERVIEW_LEVELS,
   emptyInterviewRecord,
   interviewQuestionsFor,
   isInterviewUnlocked,
+  loadInterviewLevel,
   loadInterviewRecord,
-  loadPracticeMode,
+  saveInterviewLevel,
   saveInterviewRecord,
-  savePracticeMode,
+  type InterviewLevel,
   type InterviewRecord,
 } from '@/lib/interviewAnswer';
+import type { TranslationKey } from '@/lib/i18n';
 import { InterviewLockedNotice } from '@/components/workspace/InterviewPanel';
 
 // The voice SDK touches browser audio APIs, so it never renders on the server.
@@ -45,6 +49,20 @@ const VoiceInterview = dynamic(
   () => import('@/components/workspace/VoiceInterview').then((m) => m.VoiceInterview),
   { ssr: false },
 );
+
+const LEVEL_LABEL_KEYS: Record<InterviewLevel, TranslationKey> = {
+  learn: 'levelLearn',
+  easy: 'levelEasy',
+  medium: 'levelMedium',
+  hard: 'levelHard',
+};
+
+const LEVEL_TITLE_KEYS: Record<InterviewLevel, TranslationKey> = {
+  learn: 'levelLearnTitle',
+  easy: 'levelEasyTitle',
+  medium: 'levelMediumTitle',
+  hard: 'levelHardTitle',
+};
 
 function FlameGlyph() {
   return (
@@ -88,17 +106,17 @@ function WorkspacePageNew() {
   const [interviewRecord, setInterviewRecord] = useState<InterviewRecord | null>(null);
   // Multi-part exercises reveal one part at a time; 0 means the exercise has no parts.
   const [unlockedPart, setUnlockedPart] = useState(0);
-  const [practiceMode, setPracticeMode] = useState(false);
-  const interviewUnlocked = practiceMode || isInterviewUnlocked(interviewRecord);
+  const [interviewLevel, setInterviewLevel] = useState<InterviewLevel>(DEFAULT_INTERVIEW_LEVEL);
+  const interviewUnlocked = interviewLevel === 'learn' || isInterviewUnlocked(interviewRecord);
   const codeReadyRef = useRef(false);
 
   useEffect(() => {
-    setPracticeMode(loadPracticeMode());
+    setInterviewLevel(loadInterviewLevel());
   }, []);
 
-  const togglePracticeMode = () => {
-    savePracticeMode(!practiceMode);
-    setPracticeMode(!practiceMode);
+  const changeInterviewLevel = (level: InterviewLevel) => {
+    saveInterviewLevel(level);
+    setInterviewLevel(level);
   };
 
   useEffect(() => {
@@ -310,7 +328,7 @@ function WorkspacePageNew() {
           <DescriptionTab
             problem={problem}
             implementationStatus={progress[id]?.status ?? 'todo'}
-            interview={{ record: interviewRecord, onChange: handleInterviewChange, practiceMode }}
+            interview={{ record: interviewRecord, onChange: handleInterviewChange, level: interviewLevel }}
             unlockedPart={shownPart}
           />
         </Tabs.Content>
@@ -459,18 +477,29 @@ function WorkspacePageNew() {
           editorOpen={interviewUnlocked}
         />
 
-        <button
-          onClick={togglePracticeMode}
-          aria-pressed={practiceMode}
-          title={t('practiceModeTitle')}
-          className="h-[30px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] cursor-pointer hover:border-line-strong transition-[color,border-color] duration-150"
-          style={practiceMode
-            ? { border: '1px solid var(--accent-line)', background: 'var(--accent-wash)', color: 'var(--accent)' }
-            : { border: '1px solid var(--line)', background: 'var(--bg-elev)', color: 'var(--text-2)' }}
+        <div
+          role="radiogroup"
+          aria-label={t('interviewLevel')}
+          title={t('interviewLevelTitle')}
+          className="h-[30px] p-[2px] inline-flex items-center gap-[2px] rounded-lg"
+          style={{ border: '1px solid var(--line)', background: 'var(--bg-elev)' }}
         >
-          <Zap className="w-3.5 h-3.5" />
-          {t('practiceMode')}
-        </button>
+          {INTERVIEW_LEVELS.map((option) => (
+            <button
+              key={option}
+              role="radio"
+              aria-checked={interviewLevel === option}
+              onClick={() => changeInterviewLevel(option)}
+              title={t(LEVEL_TITLE_KEYS[option])}
+              className="h-full px-2.5 rounded-[6px] text-[12.5px] cursor-pointer transition-[background,color] duration-150"
+              style={interviewLevel === option
+                ? { background: 'var(--accent-wash)', color: 'var(--accent)' }
+                : { color: 'var(--text-2)' }}
+            >
+              {t(LEVEL_LABEL_KEYS[option])}
+            </button>
+          ))}
+        </div>
 
         <button
           onClick={toggleTheme}

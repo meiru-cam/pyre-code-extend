@@ -9,6 +9,8 @@ import {
   MIN_ANSWER_LENGTH,
   isInterviewUnlocked,
   missingGatedAnswers,
+  requiredQuestionIndices,
+  type InterviewLevel,
   type InterviewRecord,
 } from '@/lib/interviewAnswer';
 import type { InterviewQuestion, InterviewStage } from '@/lib/types';
@@ -19,33 +21,38 @@ interface InterviewPanelProps {
   onChange: (record: InterviewRecord) => void;
   /** False hides the tradeoffs stage, e.g. while a multi-part exercise still has locked parts. */
   showTradeoffs?: boolean;
-  /** Practice mode opens help without answers; the questions stay available, collapsed. */
-  practiceMode?: boolean;
+  /** Decides which questions the gate requires; learn has no gate and opens every hint. */
+  level?: InterviewLevel;
 }
 
 const STAGE_ORDER: readonly InterviewStage[] = ['concept', 'deep_dive', 'tradeoffs'];
 
 export function InterviewPanel({
-  questions, record, onChange, showTradeoffs = true, practiceMode = false,
+  questions, record, onChange, showTradeoffs = true, level = 'hard',
 }: InterviewPanelProps) {
+  const learn = level === 'learn';
   const answered = isInterviewUnlocked(record);
-  const unlocked = answered || practiceMode;
-  const missing = missingGatedAnswers(questions, record.answers);
-  // Tradeoff questions follow the code, as they would in an interview.
-  const stages = unlocked && showTradeoffs ? STAGE_ORDER : GATED_STAGES;
+  const unlocked = answered || learn;
+  const required = requiredQuestionIndices(questions, level);
+  const missing = missingGatedAnswers(questions, record.answers, level);
 
   const update = (answers: string[], status = record.status) => {
-    onChange({ status, answers, updatedAt: new Date().toISOString() });
+    onChange({
+      status,
+      answers,
+      updatedAt: new Date().toISOString(),
+      ...(status === 'answered' ? { level } : record.level ? { level: record.level } : {}),
+    });
   };
   const updateAnswer = (index: number, value: string) => {
     update(record.answers.map((answer, i) => (i === index ? value : answer)));
   };
 
-  const questionsView = (
+  const questionsView = (indices: readonly number[], stages: readonly InterviewStage[]) => (
     <div className="space-y-5">
       {stages.map((stage) => {
-        const entries = questions
-          .map((question, index) => ({ question, index }))
+        const entries = indices
+          .map((index) => ({ question: questions[index], index }))
           .filter(({ question }) => question.stage === stage);
         if (entries.length === 0) return null;
         return (
@@ -60,7 +67,7 @@ export function InterviewPanel({
                 <div key={index} className="space-y-1.5">
                   <span className="block text-sm leading-relaxed text-text">{question.question}</span>
                   {question.hint && (
-                    <details className="group text-[13px] leading-relaxed text-text-2">
+                    <details open={learn} className="group text-[13px] leading-relaxed text-text-2">
                       <summary className="inline-flex cursor-pointer select-none items-center gap-1 text-accent">
                         <Lightbulb className="h-3.5 w-3.5" />
                         <span className="group-open:hidden">Show hint</span>
@@ -95,9 +102,11 @@ export function InterviewPanel({
   );
 
   if (unlocked) {
+    // Tradeoff questions follow the code, as they would in an interview.
+    const stages = showTradeoffs ? STAGE_ORDER : GATED_STAGES;
     return (
       <details
-        open={answered}
+        open={answered || learn}
         className="rounded-lg p-3.5"
         style={{ border: '1px solid var(--line)', background: 'var(--bg-elev)' }}
       >
@@ -105,18 +114,25 @@ export function InterviewPanel({
           <MessageSquareQuote className="h-4 w-4" />
           Interview
           <span className="mono ml-auto text-[10.5px] uppercase tracking-[0.1em] text-text-2">
-            {!answered ? 'Optional · Practice mode' : record.status === 'answered' ? 'Answered' : 'Skipped'}
+            {!answered ? 'Optional · Learn' : record.status === 'answered' ? 'Answered' : 'Skipped'}
           </span>
         </summary>
         <p className="mt-2 mb-4 text-[13px] text-text-2">
-          {showTradeoffs
-            ? 'Tradeoff questions are open now. Compare with the reference pros and cons below. Edits save automatically.'
-            : 'Tradeoff questions open once every part is unlocked. Edits save automatically.'}
+          {learn && !answered
+            ? 'Questions to think through while you read and code; each hint names what to cover. Answers are optional and save automatically.'
+            : showTradeoffs
+              ? 'Tradeoff questions are open now. Compare with the reference pros and cons below. Edits save automatically.'
+              : 'Tradeoff questions open once every part is unlocked. Edits save automatically.'}
         </p>
-        {questionsView}
+        {questionsView(questions.map((_, index) => index), stages)}
       </details>
     );
   }
+
+  const optional = questions
+    .map((question, index) => ({ question, index }))
+    .filter(({ question, index }) => GATED_STAGES.includes(question.stage) && !required.includes(index))
+    .map(({ index }) => index);
 
   return (
     <section
@@ -128,12 +144,22 @@ export function InterviewPanel({
     >
       <div className="flex items-center gap-2">
         <Lock className="h-4 w-4 text-accent" />
-        <h2 className="text-sm font-semibold text-text">Interview first</h2>
+        <h2 className="text-sm font-semibold text-text">
+          Interview first · {required.length} {required.length === 1 ? 'question' : 'questions'}
+        </h2>
       </div>
       <p className="text-[13px] leading-relaxed text-text-2">
-        Answer the opening and deep-dive questions out loud or in writing; each question has a hint if you are stuck. Coding hints, reference pros and cons, the solution, AI help and the editor unlock after that.
+        Answer out loud or in writing; each question has a hint if you are stuck. Coding hints, reference pros and cons, the solution, AI help and the editor unlock after that.
       </p>
-      {questionsView}
+      {questionsView(required, GATED_STAGES)}
+      {optional.length > 0 && (
+        <details className="rounded-lg px-3 py-2" style={{ border: '1px solid var(--line)' }}>
+          <summary className="cursor-pointer select-none text-[13px] text-text-2">
+            More questions (optional) · {optional.length}
+          </summary>
+          <div className="mt-3">{questionsView(optional, GATED_STAGES)}</div>
+        </details>
+      )}
       <div className="flex items-center gap-2">
         <Button
           size="sm"
