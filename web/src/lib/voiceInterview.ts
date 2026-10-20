@@ -21,6 +21,9 @@ export const MAX_SNAPSHOT_CHARS = 12_000;
 /** Quiet time in the editor before the current code is sent. */
 export const SNAPSHOT_IDLE_MS = 3_000;
 
+/** Turns kept in the on-screen transcript. */
+export const MAX_TRANSCRIPT_LINES = 200;
+
 const MAX_DESCRIPTION_CHARS = 6_000;
 const MAX_FAILURES_LISTED = 5;
 
@@ -62,15 +65,21 @@ export function buildVoiceInterviewSession(
       ? '1. The opening questions are already done. Skip to step 2.'
       : `1. Ask questions ${required.join(', ')} one at a time, in index order; skip the other Opening and Deep dive questions. Let the candidate finish; ask one short follow-up if the answer is thin.`,
     `2. After the candidate finishes answering any question, call the \`${RECORD_ANSWER_TOOL}\` tool with that question_index. Its result tells you whether the answer counted and whether the editor is open. If it says the answer is too short, ask the candidate to say more, then call the tool again.`,
-    '3. Once the editor is open, the candidate codes. You receive their code and Run results as context updates. Stay mostly quiet: say little while they make progress, ask "why" about a choice, an edge case or a tensor shape when they go silent or a test fails.',
+    '3. Once the editor is open, the candidate codes. You receive their code and Run results as context updates. Stay mostly quiet: say little while they make progress, ask "why" about a choice, an edge case or a tensor shape after they finish a thought aloud or a test fails.',
     '4. Only after you are told the candidate has submitted, ask the Tradeoffs questions one at a time and record each answer the same way. If they say they are done before that, ask them to press Submit. After the last answer, thank them and say they can press End.',
     '',
+    'Silence means the candidate is thinking or typing. Never ask whether they are still there; wait.',
     'Rules: never dictate code or the full solution; give at most a nudge when the candidate is stuck for a while. Keep every turn under three sentences. Speak the language the candidate speaks.',
   ].join('\n');
   const firstMessage = gateOpen
     ? `Hi. Let's work through ${problem.title}. Talk me through your approach as you code.`
     : `Hi. Let's work through ${problem.title}. ${questions[required[0] ?? 0]?.question ?? 'Tell me how you would approach it.'}`;
   return { prompt, firstMessage };
+}
+
+/** A turn as shown on screen: voice-style tags such as "[calm]" are spoken cues, not text. */
+export function transcriptText(message: string): string {
+  return message.replace(/\[[a-z][a-z ]*\]\s*/gi, '').replace(/\s+/g, ' ').trim();
 }
 
 /** Spoken learner turns since the last recorded answer. */
@@ -126,6 +135,8 @@ export function recordSpokenAnswer(
   const lockedLevel = committing ? level : record.level;
   const next: InterviewRecord = {
     status, answers, updatedAt: now.toISOString(), ...(lockedLevel ? { level: lockedLevel } : {}),
+    // A voice mark from an earlier session keeps the gate open.
+    ...(record.voice ? { voice: true as const } : {}),
   };
 
   const gated = requiredQuestionIndices(questions, level).includes(index);

@@ -92,13 +92,15 @@ export interface InterviewRecord {
   updatedAt: string;
   /** The level the answers were locked in at; records from before levels count as hard. */
   level?: InterviewLevel;
+  /** A voice interview was held on this exercise; it counts as the interview, typed answers or not. */
+  voice?: true;
 }
 
 const STATUSES: readonly InterviewStatus[] = ['draft', 'answered', 'skipped'];
 
 /** Hints, reference tradeoffs, solution, AI help and the editor open only after this. */
 export function isInterviewUnlocked(record: InterviewRecord | null): boolean {
-  return record?.status === 'answered' || record?.status === 'skipped';
+  return record?.status === 'answered' || record?.status === 'skipped' || record?.voice === true;
 }
 
 export function emptyInterviewRecord(questions: readonly InterviewQuestion[]): InterviewRecord {
@@ -134,6 +136,7 @@ export function loadInterviewRecord(
       answers?: unknown;
       updatedAt?: unknown;
       level?: unknown;
+      voice?: unknown;
     };
     if (
       parsed.schemaVersion !== ANSWER_SCHEMA_VERSION
@@ -159,6 +162,7 @@ export function loadInterviewRecord(
       answers,
       updatedAt: typeof parsed.updatedAt === 'string' ? parsed.updatedAt : '',
       ...(level ? { level } : {}),
+      ...(parsed.voice === true ? { voice: true as const } : {}),
     };
   } catch {
     return null;

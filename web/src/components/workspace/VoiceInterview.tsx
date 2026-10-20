@@ -2,13 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { ConversationProvider, useConversation } from '@elevenlabs/react';
-import { Mic, PhoneOff } from 'lucide-react';
+import { ChevronDown, ChevronUp, Mic, PhoneOff, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/Button';
 import { useLocale } from '@/context/LocaleContext';
 import type { InterviewLevel, InterviewRecord } from '@/lib/interviewAnswer';
 import type { InterviewQuestion, Problem } from '@/lib/types';
 import {
+  MAX_TRANSCRIPT_LINES,
   RECORD_ANSWER_TOOL,
   SNAPSHOT_IDLE_MS,
   TranscriptBuffer,
@@ -16,6 +17,7 @@ import {
   codeSnapshotUpdate,
   recordSpokenAnswer,
   resultUpdate,
+  transcriptText,
 } from '@/lib/voiceInterview';
 import { useProblemStore } from '@/store/problemStore';
 
@@ -58,7 +60,11 @@ function VoiceInterviewControl({
   const [consentOpen, setConsentOpen] = useState(false);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [lastLine, setLastLine] = useState<Line | null>(null);
+  // The whole conversation stays readable, so a hint is still there after the next turn.
+  const [lines, setLines] = useState<Line[]>([]);
+  const [transcriptOpen, setTranscriptOpen] = useState(true);
+  const transcriptListRef = useRef<HTMLDivElement | null>(null);
+  const followRef = useRef(true);
 
   // Client tools and callbacks outlive renders, so they read the latest values through refs.
   const bufferRef = useRef(new TranscriptBuffer());
@@ -72,14 +78,46 @@ function VoiceInterviewControl({
 
   const conversation = useConversation({
     onMessage: ({ role, message }) => {
-      if (role === 'user' && answeringRef.current) bufferRef.current.push(message);
-      setLastLine({ role, text: message });
+      if (role === 'user') {
+        // A transcript of silence ("...") is not speaking.
+        if (/[\p{L}\p{N}]/u.test(message)) spokeRef.current = true;
+        if (answeringRef.current) bufferRef.current.push(message);
+      }
+      // Only the agent's lines carry voice-style tags; the learner may say "x[i]".
+      const text = role === 'agent' ? transcriptText(message) : message.trim();
+      if (text) setLines((prev) => [...prev, { role, text }].slice(-MAX_TRANSCRIPT_LINES));
     },
     // Provider error text is never shown; it can carry upstream details.
     onError: () => setError(t('voiceStartFailed')),
   });
   const live = conversation.status === 'connected';
   const conversationRef = useRef(conversation);
+
+  // A held voice interview counts as the interview. Marked when it ends, not when it starts,
+  // so the editor stays closed while the opening questions are still being asked, and only
+  // once the learner has spoken, so connecting and hanging up is not an interview.
+  const liveRef = useRef(false);
+  const spokeRef = useRef(false);
+  const markVoiceInterview = () => {
+    if (recordRef.current.voice || !spokeRef.current) return;
+    const next = {
+      ...recordRef.current,
+      voice: true as const,
+      // Stamp the level like Start coding does, so changing it later does not change what was asked.
+      level: recordRef.current.level ?? levelRef.current,
+      updatedAt: new Date().toISOString(),
+    };
+    recordRef.current = next;
+    onRecordChangeRef.current(next);
+  };
+  useEffect(() => {
+    if (liveRef.current && !live) markVoiceInterview();
+    liveRef.current = live;
+  }, [live]);
+  // Leaving the exercise mid-session ends it too.
+  useEffect(() => () => {
+    if (liveRef.current) markVoiceInterview();
+  }, []);
 
   useEffect(() => {
     recordRef.current = record;
@@ -124,6 +162,10 @@ function VoiceInterviewControl({
       bufferRef.current.clear();
       answeringRef.current = !editorOpen;
       lastSnapshotRef.current = null;
+      setLines([]);
+      followRef.current = true;
+      spokeRef.current = false;
+      setTranscriptOpen(true);
       // Connection failures after this point arrive through onError, not as a rejection.
       conversation.startSession({
         signedUrl: data.signedUrl,
@@ -181,6 +223,12 @@ function VoiceInterviewControl({
     answeringRef.current = !editorOpen;
   }, [editorOpen]);
 
+  // Follow the conversation as it grows, unless the learner scrolled up to reread something.
+  useEffect(() => {
+    const list = transcriptListRef.current;
+    if (list && followRef.current) list.scrollTop = list.scrollHeight;
+  }, [lines, transcriptOpen]);
+
   const liveStyle = { border: '1px solid var(--accent-line)', background: 'var(--accent-wash)', color: 'var(--accent)' };
   const idleStyle = { border: '1px solid var(--line)', background: 'var(--bg-elev)', color: 'var(--text-2)' };
 
@@ -233,15 +281,53 @@ function VoiceInterviewControl({
         </p>
       )}
 
-      {live && lastLine && (
+      {lines.length > 0 && (
         <div
-          className="fixed bottom-4 left-4 z-30 max-w-[420px] rounded-lg px-3 py-2 text-[13px] leading-relaxed shadow-lg"
+          className="fixed bottom-4 left-4 z-30 flex w-[400px] max-w-[calc(100vw-2rem)] flex-col rounded-lg shadow-lg"
           style={{ border: '1px solid var(--line)', background: 'var(--bg-elev)' }}
         >
-          <span className="mono mr-1.5 text-[10.5px] uppercase tracking-[0.1em] text-text-2">
-            {lastLine.role === 'agent' ? t('voiceInterviewer') : t('voiceYou')}
-          </span>
-          <span className="text-text">{lastLine.text}</span>
+          <div className="flex items-center gap-2 px-3 py-1.5" style={{ borderBottom: transcriptOpen ? '1px solid var(--line)' : undefined }}>
+            <span className="mono text-[10.5px] uppercase tracking-[0.1em] text-text-2">{t('voiceTranscript')}</span>
+            <button
+              onClick={() => {
+                // Reopening shows the latest lines.
+                followRef.current = true;
+                setTranscriptOpen((open) => !open);
+              }}
+              aria-label={transcriptOpen ? t('voiceTranscriptCollapse') : t('voiceTranscriptExpand')}
+              className="ml-auto inline-flex h-6 w-6 items-center justify-center rounded text-text-2 hover:text-text"
+            >
+              {transcriptOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
+            </button>
+            {!live && (
+              <button
+                onClick={() => setLines([])}
+                aria-label={t('voiceTranscriptClose')}
+                className="inline-flex h-6 w-6 items-center justify-center rounded text-text-2 hover:text-text"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          {transcriptOpen && (
+            <div
+              ref={transcriptListRef}
+              onScroll={(event) => {
+                const list = event.currentTarget;
+                followRef.current = list.scrollHeight - list.scrollTop - list.clientHeight < 40;
+              }}
+              className="max-h-[40vh] space-y-2 overflow-y-auto px-3 py-2 text-[13px] leading-relaxed"
+            >
+              {lines.map((line, index) => (
+                <p key={index} className={line.role === 'agent' ? 'text-text' : 'text-text-2'}>
+                  <span className="mono mr-1.5 text-[10.5px] uppercase tracking-[0.1em] text-text-2">
+                    {line.role === 'agent' ? t('voiceInterviewer') : t('voiceYou')}
+                  </span>
+                  {line.text}
+                </p>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

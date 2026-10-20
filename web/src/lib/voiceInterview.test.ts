@@ -10,6 +10,7 @@ import {
   codeSnapshotUpdate,
   recordSpokenAnswer,
   resultUpdate,
+  transcriptText,
 } from '@/lib/voiceInterview';
 
 const questions: InterviewQuestion[] = [
@@ -41,6 +42,14 @@ describe('buildVoiceInterviewSession', () => {
     const { prompt, firstMessage } = buildVoiceInterviewSession(problem, questions, true);
     expect(prompt).toContain('already done');
     expect(firstMessage).not.toContain('What is QK norm for?');
+  });
+});
+
+describe('transcriptText', () => {
+  it('drops voice-style tags and keeps the words', () => {
+    expect(transcriptText('[calm] Good start.  [warmly] Go on.')).toBe('Good start. Go on.');
+    expect(transcriptText('x[0] stays')).toBe('x[0] stays');
+    expect(transcriptText('[calm] ')).toBe('');
   });
 });
 
@@ -127,6 +136,13 @@ describe('recordSpokenAnswer', () => {
     const answered: InterviewRecord = { status: 'answered', answers: [LONG, LONG, ''], updatedAt: '' };
     const outcome = recordSpokenAnswer(questions, answered, 2, 'Soft-capping is cheaper.', now);
     expect(outcome.record.status).toBe('answered');
+    expect(outcome.record.answers[2]).toBe('Soft-capping is cheaper.');
+  });
+
+  it('keeps a voice mark from an earlier session, so the gate stays open', () => {
+    const voiced: InterviewRecord = { status: 'draft', answers: ['', '', ''], updatedAt: '', voice: true };
+    const outcome = recordSpokenAnswer(questions, voiced, 2, 'Soft-capping is cheaper.', now);
+    expect(outcome.record.voice).toBe(true);
     expect(outcome.record.answers[2]).toBe('Soft-capping is cheaper.');
   });
 

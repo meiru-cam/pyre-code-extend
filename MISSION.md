@@ -17,7 +17,7 @@ Enable learners with basic PyTorch knowledge to move from recognizing modern AI 
 
 - Require only basic PyTorch knowledge and no GPU.
 - Keep prerequisites advisory: recommend preparation and readiness checks without locking content.
-- Open every exercise with an interview gate: help, the solution and the editor unlock once the learner answers the opening and deep-dive questions their interview level requires (two at Easy, four at Medium, all at Hard), or records a skip. Learn mode is the level with no gate: explanations open first and the questions are optional. This is the one deliberate lock; it gates help inside an exercise, never access to a path or an exercise.
+- Open every exercise with an interview gate: help, the solution and the editor unlock once the learner answers the opening and deep-dive questions their interview level requires (two at Easy, four at Medium, all at Hard), records a skip, or holds an optional voice interview in which they speak. Learn mode is the level with no gate: explanations open first and the questions are optional. This is the one deliberate lock; it gates help inside an exercise, never access to a path or an exercise.
 - Combine visible examples with unshown evaluator cases and behavior-level failure diagnostics.
 - Keep exercises fully usable offline without model-provider API keys.
 - Use independently revealed Level 1 question hints and Level 2 analytical hints.
