@@ -167,11 +167,11 @@ function VoiceInterviewControl({ problem, questions, record, onRecordChange, edi
     });
   }, [live]);
 
-  // Talk while coding is not an answer to anything; stop collecting it when the gate opens.
+  // Talk while coding is not an answer to anything; stop collecting it when the gate opens,
+  // and collect again if it closes, e.g. when practice mode is turned off.
   useEffect(() => {
-    if (!editorOpen) return;
     bufferRef.current.clear();
-    answeringRef.current = false;
+    answeringRef.current = !editorOpen;
   }, [editorOpen]);
 
   const liveStyle = { border: '1px solid var(--accent-line)', background: 'var(--accent-wash)', color: 'var(--accent)' };
