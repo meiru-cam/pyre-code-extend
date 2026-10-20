@@ -74,8 +74,10 @@ This is the one deliberate exception to "no automatic code sharing" in
    until then. Tradeoff answers are recorded with the same tool.
 6. Leaving the exercise while the session is still loading cancels the start,
    so no session runs without an End button.
-7. When a connected session ends (End, or leaving the exercise), the record
-   gets `voice: true`. A voice interview counts as the interview: the gate
+7. When a connected session in which the learner spoke at least once ends
+   (End, or leaving the exercise), the record gets `voice: true` and its level
+   is stamped, as **Start coding** does. Connecting and hanging up without a
+   word marks nothing. Recording a spoken answer later keeps the mark. A voice interview counts as the interview: the gate
    stays open, and the panel folds the typed questions away under "Voice
    interview" as optional. It is marked at the end, not the start, so the
    editor stays closed while the opening questions are asked.

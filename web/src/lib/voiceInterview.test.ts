@@ -139,6 +139,13 @@ describe('recordSpokenAnswer', () => {
     expect(outcome.record.answers[2]).toBe('Soft-capping is cheaper.');
   });
 
+  it('keeps a voice mark from an earlier session, so the gate stays open', () => {
+    const voiced: InterviewRecord = { status: 'draft', answers: ['', '', ''], updatedAt: '', voice: true };
+    const outcome = recordSpokenAnswer(questions, voiced, 2, 'Soft-capping is cheaper.', now);
+    expect(outcome.record.voice).toBe(true);
+    expect(outcome.record.answers[2]).toBe('Soft-capping is cheaper.');
+  });
+
   it('keeps a skip as a skip', () => {
     const skipped: InterviewRecord = { status: 'skipped', answers: ['', '', ''], updatedAt: '' };
     expect(recordSpokenAnswer(questions, skipped, 0, LONG, now).record.status).toBe('skipped');

@@ -63,7 +63,8 @@ function VoiceInterviewControl({
   // The whole conversation stays readable, so a hint is still there after the next turn.
   const [lines, setLines] = useState<Line[]>([]);
   const [transcriptOpen, setTranscriptOpen] = useState(true);
-  const transcriptEndRef = useRef<HTMLDivElement | null>(null);
+  const transcriptListRef = useRef<HTMLDivElement | null>(null);
+  const followRef = useRef(true);
 
   // Client tools and callbacks outlive renders, so they read the latest values through refs.
   const bufferRef = useRef(new TranscriptBuffer());
@@ -77,8 +78,12 @@ function VoiceInterviewControl({
 
   const conversation = useConversation({
     onMessage: ({ role, message }) => {
-      if (role === 'user' && answeringRef.current) bufferRef.current.push(message);
-      const text = transcriptText(message);
+      if (role === 'user') {
+        spokeRef.current = true;
+        if (answeringRef.current) bufferRef.current.push(message);
+      }
+      // Only the agent's lines carry voice-style tags; the learner may say "x[i]".
+      const text = role === 'agent' ? transcriptText(message) : message.trim();
       if (text) setLines((prev) => [...prev, { role, text }].slice(-MAX_TRANSCRIPT_LINES));
     },
     // Provider error text is never shown; it can carry upstream details.
@@ -88,11 +93,19 @@ function VoiceInterviewControl({
   const conversationRef = useRef(conversation);
 
   // A held voice interview counts as the interview. Marked when it ends, not when it starts,
-  // so the editor stays closed while the opening questions are still being asked.
+  // so the editor stays closed while the opening questions are still being asked, and only
+  // once the learner has spoken, so connecting and hanging up is not an interview.
   const liveRef = useRef(false);
+  const spokeRef = useRef(false);
   const markVoiceInterview = () => {
-    if (recordRef.current.voice) return;
-    const next = { ...recordRef.current, voice: true as const, updatedAt: new Date().toISOString() };
+    if (recordRef.current.voice || !spokeRef.current) return;
+    const next = {
+      ...recordRef.current,
+      voice: true as const,
+      // Stamp the level like Start coding does, so changing it later does not change what was asked.
+      level: recordRef.current.level ?? levelRef.current,
+      updatedAt: new Date().toISOString(),
+    };
     recordRef.current = next;
     onRecordChangeRef.current(next);
   };
@@ -149,6 +162,8 @@ function VoiceInterviewControl({
       answeringRef.current = !editorOpen;
       lastSnapshotRef.current = null;
       setLines([]);
+      followRef.current = true;
+      spokeRef.current = false;
       setTranscriptOpen(true);
       // Connection failures after this point arrive through onError, not as a rejection.
       conversation.startSession({
@@ -207,9 +222,10 @@ function VoiceInterviewControl({
     answeringRef.current = !editorOpen;
   }, [editorOpen]);
 
-  // Follow the conversation as it grows.
+  // Follow the conversation as it grows, unless the learner scrolled up to reread something.
   useEffect(() => {
-    transcriptEndRef.current?.scrollIntoView({ block: 'end' });
+    const list = transcriptListRef.current;
+    if (list && followRef.current) list.scrollTop = list.scrollHeight;
   }, [lines, transcriptOpen]);
 
   const liveStyle = { border: '1px solid var(--accent-line)', background: 'var(--accent-wash)', color: 'var(--accent)' };
@@ -289,7 +305,14 @@ function VoiceInterviewControl({
             )}
           </div>
           {transcriptOpen && (
-            <div className="max-h-[40vh] space-y-2 overflow-y-auto px-3 py-2 text-[13px] leading-relaxed">
+            <div
+              ref={transcriptListRef}
+              onScroll={(event) => {
+                const list = event.currentTarget;
+                followRef.current = list.scrollHeight - list.scrollTop - list.clientHeight < 40;
+              }}
+              className="max-h-[40vh] space-y-2 overflow-y-auto px-3 py-2 text-[13px] leading-relaxed"
+            >
               {lines.map((line, index) => (
                 <p key={index} className={line.role === 'agent' ? 'text-text' : 'text-text-2'}>
                   <span className="mono mr-1.5 text-[10.5px] uppercase tracking-[0.1em] text-text-2">
@@ -298,7 +321,6 @@ function VoiceInterviewControl({
                   {line.text}
                 </p>
               ))}
-              <div ref={transcriptEndRef} />
             </div>
           )}
         </div>
