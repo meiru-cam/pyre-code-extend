@@ -92,7 +92,7 @@ export function DescriptionTab({
   unlockedPart = 0,
 }: DescriptionTabProps) {
   const learn = interview?.level === 'learn';
-  const [hintToggled, setHintOpen] = useState<boolean | null>(null);
+  const [hintToggled, setHintToggled] = useState<boolean | null>(null);
   const hintOpen = hintToggled ?? learn;
   const [openLevels, setOpenLevels] = useState<Record<number, boolean>>({});
   const { locale, t } = useLocale();
@@ -212,7 +212,7 @@ export function DescriptionTab({
       ) : hint ? (
         <div>
           <button
-            onClick={() => setHintOpen(!hintOpen)}
+            onClick={() => setHintToggled(!hintOpen)}
             className="flex items-center gap-2 text-sm text-text-2 hover:text-accent transition-colors"
           >
             <Lightbulb className="w-4 h-4" />

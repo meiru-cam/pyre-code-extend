@@ -97,6 +97,13 @@ describe('recordSpokenAnswer', () => {
       expect(outcome.message).toContain('editor is open');
     });
 
+    it('never commits a spoken answer in learn, which has no gate', () => {
+      const outcome = recordSpokenAnswer(five, emptyInterviewRecord(five), 4, LONG, now, 'learn');
+      expect(outcome.record.status).toBe('draft');
+      expect(outcome.record.answers[4]).toBe(LONG);
+      expect(outcome.record.level).toBeUndefined();
+    });
+
     it('does not treat a question outside the level as gated', () => {
       const outcome = recordSpokenAnswer(five, emptyInterviewRecord(five), 1, 'Short.', now, 'easy');
       expect(outcome.message).not.toContain('too short');

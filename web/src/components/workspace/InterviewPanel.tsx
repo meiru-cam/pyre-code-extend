@@ -36,7 +36,11 @@ export function InterviewPanel({
   const required = requiredQuestionIndices(questions, level);
   const missing = missingGatedAnswers(questions, record.answers, level);
   // Once unlocked, the questions the learner was asked are the ones from the level they locked in at.
-  const asked = requiredQuestionIndices(questions, record.level ?? level);
+  // An answer from before levels existed covered every question, so it counts as hard.
+  const asked = requiredQuestionIndices(
+    questions,
+    record.level ?? (record.status === 'answered' ? 'hard' : level),
+  );
   const optionalAfter = (askedIndices: readonly number[]) => questions
     .map((question, index) => ({ question, index }))
     .filter(({ question, index }) => GATED_STAGES.includes(question.stage) && !askedIndices.includes(index))
@@ -55,7 +59,9 @@ export function InterviewPanel({
       status,
       answers,
       updatedAt: new Date().toISOString(),
-      ...(status === 'answered' ? { level } : record.level ? { level: record.level } : {}),
+      // The level is stamped once, when the learner starts coding; later edits keep it, so
+      // changing the level afterwards never relocks the exercise.
+      ...(status !== record.status ? { level } : record.level ? { level: record.level } : {}),
     });
   };
   const updateAnswer = (index: number, value: string) => {
@@ -138,7 +144,7 @@ export function InterviewPanel({
               ? 'Tradeoff questions are open now. Compare with the reference pros and cons below. Edits save automatically.'
               : 'Tradeoff questions open once every part is unlocked. Edits save automatically.'}
         </p>
-        {learn && !answered ? (
+        {learn ? (
           questionsView(questions.map((_, index) => index), stages)
         ) : (
           <div className="space-y-5">

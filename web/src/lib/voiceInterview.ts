@@ -120,7 +120,8 @@ export function recordSpokenAnswer(
   const answer = [existing.trim(), spoken.trim()].filter(Boolean).join('\n');
   const answers = record.answers.map((value, i) => (i === index ? answer : value));
   const missing = missingGatedAnswers(questions, answers, level);
-  const committing = record.status === 'draft' && missing.length === 0;
+  // Learn has no gate, so speaking there never commits the record.
+  const committing = record.status === 'draft' && level !== 'learn' && missing.length === 0;
   const status = committing ? 'answered' : record.status;
   const lockedLevel = committing ? level : record.level;
   const next: InterviewRecord = {

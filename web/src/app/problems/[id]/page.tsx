@@ -50,18 +50,11 @@ const VoiceInterview = dynamic(
   { ssr: false },
 );
 
-const LEVEL_LABEL_KEYS: Record<InterviewLevel, TranslationKey> = {
-  learn: 'levelLearn',
-  easy: 'levelEasy',
-  medium: 'levelMedium',
-  hard: 'levelHard',
-};
-
-const LEVEL_TITLE_KEYS: Record<InterviewLevel, TranslationKey> = {
-  learn: 'levelLearnTitle',
-  easy: 'levelEasyTitle',
-  medium: 'levelMediumTitle',
-  hard: 'levelHardTitle',
+const LEVEL_KEYS: Record<InterviewLevel, { label: TranslationKey; title: TranslationKey }> = {
+  learn: { label: 'levelLearn', title: 'levelLearnTitle' },
+  easy: { label: 'levelEasy', title: 'levelEasyTitle' },
+  medium: { label: 'levelMedium', title: 'levelMediumTitle' },
+  hard: { label: 'levelHard', title: 'levelHardTitle' },
 };
 
 function FlameGlyph() {
@@ -491,13 +484,13 @@ function WorkspacePageNew() {
               role="radio"
               aria-checked={interviewLevel === option}
               onClick={() => changeInterviewLevel(option)}
-              title={t(LEVEL_TITLE_KEYS[option])}
+              title={t(LEVEL_KEYS[option].title)}
               className="h-full px-2.5 rounded-[6px] text-[12.5px] cursor-pointer transition-[background,color] duration-150"
               style={interviewLevel === option
                 ? { background: 'var(--accent-wash)', color: 'var(--accent)' }
                 : { color: 'var(--text-2)' }}
             >
-              {t(LEVEL_LABEL_KEYS[option])}
+              {t(LEVEL_KEYS[option].label)}
             </button>
           ))}
         </div>

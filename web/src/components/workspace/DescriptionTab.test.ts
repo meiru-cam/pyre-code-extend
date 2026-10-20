@@ -180,6 +180,47 @@ describe('DescriptionTab interview levels', () => {
     expect(container.textContent).toContain('Answered');
   });
 
+  it('keeps the locked-in level when an answer is edited at another level', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(React.createElement(DescriptionTab, {
+      problem: fiveQuestions,
+      interview: {
+        record: { status: 'answered', answers: [long, '', long, '', '', ''], updatedAt: '', level: 'easy' },
+        onChange,
+        level: 'hard',
+      },
+    }));
+    await user.type(screen.getByLabelText('Opening one?'), '!');
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'answered', level: 'easy' }));
+  });
+
+  it('shows every question for an answer from before levels existed', () => {
+    render(React.createElement(DescriptionTab, {
+      problem: fiveQuestions,
+      interview: {
+        record: { status: 'answered', answers: [long, long, long, long, long, ''], updatedAt: '' },
+        onChange: vi.fn(),
+        level: 'easy',
+      },
+    }));
+    expect(screen.queryByText(/More questions \(optional\)/)).toBeNull();
+    expect(screen.getByText('Deep three?')).toBeTruthy();
+  });
+
+  it('lists every question in learn even after a skip', () => {
+    render(React.createElement(DescriptionTab, {
+      problem: fiveQuestions,
+      interview: {
+        record: { status: 'skipped', answers: ['', '', '', '', '', ''], updatedAt: '' },
+        onChange: vi.fn(),
+        level: 'learn',
+      },
+    }));
+    expect(screen.queryByText(/More questions \(optional\)/)).toBeNull();
+    expect(screen.getByText('Opening two?')).toBeTruthy();
+  });
+
   it('opens learn with hints and reference material already showing', () => {
     render(React.createElement(DescriptionTab, {
       problem: fiveQuestions,
