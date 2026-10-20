@@ -8,7 +8,10 @@ import {
 import { scanForExternalAiSecrets } from '@/lib/secretBoundary';
 import type { InterviewQuestion, Problem, SubmissionResult } from '@/lib/types';
 
-/** Client tool the agent calls once the learner has finished answering one question. */
+/**
+ * Client tool the agent calls once the learner has finished answering one question.
+ * scripts/create-voice-agent.js registers the same name with the agent; change both together.
+ */
 export const RECORD_ANSWER_TOOL = 'record_answer';
 
 /** Longest code snapshot sent to the interviewer; longer code is cut with a marker. */
@@ -57,7 +60,7 @@ export function buildVoiceInterviewSession(
       : '1. Ask the Opening and Deep dive questions one at a time, in index order. Let the candidate finish; ask one short follow-up if the answer is thin.',
     `2. After the candidate finishes answering any question, call the \`${RECORD_ANSWER_TOOL}\` tool with that question_index. Its result tells you whether the answer counted and whether the editor is open. If it says the answer is too short, ask the candidate to say more, then call the tool again.`,
     '3. Once the editor is open, the candidate codes. You receive their code and Run results as context updates. Stay mostly quiet: say little while they make progress, ask "why" about a choice, an edge case or a tensor shape when they go silent or a test fails.',
-    '4. When the candidate submits or says they are done, ask the Tradeoffs questions one at a time and record each answer the same way. Then give two or three sentences of feedback and end.',
+    '4. Only after you are told the candidate has submitted, ask the Tradeoffs questions one at a time and record each answer the same way. If they say they are done before that, ask them to press Submit. After the last answer, thank them and say they can press End.',
     '',
     'Rules: never dictate code or the full solution; give at most a nudge when the candidate is stuck for a while. Keep every turn under three sentences. Speak the language the candidate speaks.',
   ].join('\n');
@@ -146,15 +149,23 @@ export function codeSnapshotUpdate(code: string, lastSent: string | null): strin
 /** Short context update for a Run or Submit result. */
 export function resultUpdate(result: SubmissionResult, kind: 'run' | 'submit'): string {
   const label = kind === 'submit' ? 'Submitted' : 'Ran tests';
-  if (result.error) return `${label}: error before tests ran: ${result.error.slice(0, 300)}`;
+  const next = kind === 'submit' ? ['The candidate has submitted; move on to the Tradeoffs questions.'] : [];
   const failures = (result.results ?? []).filter((test) => !test.passed);
-  const lines = [`${label}: ${result.passed}/${result.total} passed.`];
-  for (const test of failures.slice(0, MAX_FAILURES_LISTED)) {
-    const where = test.errorLine ? ` (line ${test.errorLine})` : '';
-    const why = (test.behavior ?? test.error ?? '').split('\n')[0].slice(0, 200);
-    lines.push(`- ${test.name} failed${where}${why ? `: ${why}` : ''}`);
+  const lines = result.error
+    ? [`${label}: error before tests ran: ${result.error.slice(0, 300)}`]
+    : [`${label}: ${result.passed}/${result.total} passed.`];
+  if (!result.error) {
+    for (const test of failures.slice(0, MAX_FAILURES_LISTED)) {
+      const where = test.errorLine ? ` (line ${test.errorLine})` : '';
+      const why = (test.behavior ?? test.error ?? '').split('\n')[0].slice(0, 200);
+      lines.push(`- ${test.name} failed${where}${why ? `: ${why}` : ''}`);
+    }
+    if (failures.length > MAX_FAILURES_LISTED) lines.push(`- and ${failures.length - MAX_FAILURES_LISTED} more`);
   }
-  if (failures.length > MAX_FAILURES_LISTED) lines.push(`- and ${failures.length - MAX_FAILURES_LISTED} more`);
-  if (kind === 'submit') lines.push('The candidate has submitted; move on to the Tradeoffs questions.');
-  return lines.join('\n');
+  // Error text can echo the learner's code, so it passes the same secret check as a snapshot.
+  if (scanForExternalAiSecrets(lines).blocked) {
+    const counts = result.error ? 'error before tests ran' : `${result.passed}/${result.total} passed`;
+    return [`${label}: ${counts}. Details withheld: they appear to contain a credential.`, ...next].join('\n');
+  }
+  return [...lines, ...next].join('\n');
 }

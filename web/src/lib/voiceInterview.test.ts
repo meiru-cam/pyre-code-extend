@@ -153,4 +153,12 @@ describe('resultUpdate', () => {
   it('reports an error that stopped the tests', () => {
     expect(resultUpdate({ ...result, error: 'SyntaxError' }, 'run')).toContain('SyntaxError');
   });
+
+  it('withholds error text that echoes a credential but keeps the counts', () => {
+    const leaky = { ...result, error: `NameError near api_key = "${'k'.repeat(30)}"` };
+    const text = resultUpdate(leaky, 'submit');
+    expect(text).toContain('withheld');
+    expect(text).not.toContain('kkkk');
+    expect(text).toContain('Tradeoffs');
+  });
 });

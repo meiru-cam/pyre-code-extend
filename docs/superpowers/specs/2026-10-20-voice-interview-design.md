@@ -36,8 +36,11 @@ This is the one deliberate exception to "no automatic code sharing" in
   - a code snapshot after `SNAPSHOT_IDLE_MS` (3 s) of editor quiet, only when
     the code has changed, at most `MAX_SNAPSHOT_CHARS` characters;
   - the editor contents and a short result summary after each Run or Submit.
-- Code is run through `scanForExternalAiSecrets` before it is sent. A matching
-  snapshot is replaced by a "withheld" notice.
+- Code and Run/Submit error text are run through `scanForExternalAiSecrets`
+  before they are sent. A matching snapshot is replaced by a "withheld"
+  notice; a matching result keeps only its pass counts.
+- Provider error text is never shown in the UI; any connection error shows
+  "The voice interview could not start."
 - **End**, leaving the exercise, or closing the tab ends the session, and
   nothing more is sent.
 - The ElevenLabs API key stays on the server. The browser receives only a
@@ -61,19 +64,25 @@ This is the one deliberate exception to "no automatic code sharing" in
    `answered`, just as **Lock in answers** does, and the editor unlocks. The
    tool result tells the agent what happened ("too short", "still open: 1",
    "editor is open"), so the gate rules stay in the browser.
-4. Coding phase: the buffer is cleared when the editor opens, so coding talk is
-   never stored as an answer. Code snapshots and Run summaries arrive as
-   contextual updates, which do not interrupt the agent.
-5. Wrap-up: Submit sends the result plus "move on to the Tradeoffs questions"
-   and clears the buffer. Tradeoff answers are recorded with the same tool.
+4. Coding phase: when the editor opens, the buffer is cleared and stops
+   collecting, so coding talk is never stored as an answer. Code snapshots and
+   Run summaries arrive as contextual updates, which do not interrupt the
+   agent.
+5. Wrap-up: Submit sends the result plus "move on to the Tradeoffs questions",
+   clears the buffer and starts collecting again. The prompt holds Tradeoffs
+   until then. Tradeoff answers are recorded with the same tool.
+6. Leaving the exercise while the session is still loading cancels the start,
+   so no session runs without an End button.
 
 ## Agent setup (one time)
 
 Put `ELEVENLABS_API_KEY=...` in `web/.env` and run `npm run voice:agent`.
 `scripts/create-voice-agent.js` creates the `record_answer` client tool and a
 private agent with prompt and first-message overrides enabled, then writes
-`ELEVENLABS_AGENT_ID` to `web/.env`. It refuses to replace an existing agent ID
-unless you pass `-- --force`. Restart the web server afterward.
+`ELEVENLABS_AGENT_ID` and the key it used to `web/.env` (or the file given with
+`-- --env <path>`), so a key passed only through the environment also lands
+where the app reads it. It refuses to replace an existing agent ID unless you
+pass `-- --force`. Restart the web server afterward.
 
 The same setup by hand in the dashboard:
 

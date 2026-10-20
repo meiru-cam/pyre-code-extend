@@ -9,13 +9,17 @@ const path = require('path');
 
 const API = 'https://api.elevenlabs.io/v1/convai';
 const envFlag = process.argv.indexOf('--env');
-const envPath = envFlag !== -1 && process.argv[envFlag + 1]
-  ? path.resolve(process.argv[envFlag + 1])
-  : path.resolve(__dirname, '..', 'web', '.env');
+const envArg = envFlag === -1 ? null : process.argv[envFlag + 1];
+if (envFlag !== -1 && (!envArg || envArg.startsWith('--'))) {
+  console.error('--env needs a path, for example --env ../pyre-code/web/.env');
+  process.exit(1);
+}
+const envPath = envArg ? path.resolve(envArg) : path.resolve(__dirname, '..', 'web', '.env');
 
 // The real prompt and first message are sent per exercise by the app as overrides.
 const PLACEHOLDER_PROMPT = 'You are a calm, senior ML engineer running a live coding interview.';
 
+// The name must match RECORD_ANSWER_TOOL in web/src/lib/voiceInterview.ts.
 const RECORD_ANSWER_TOOL = {
   type: 'client',
   name: 'record_answer',
@@ -68,12 +72,12 @@ async function main() {
   let envText = readEnvFile();
   const apiKey = process.env.ELEVENLABS_API_KEY?.trim() || envValue(envText, 'ELEVENLABS_API_KEY');
   if (!apiKey) {
-    console.error('Set ELEVENLABS_API_KEY in web/.env or the environment first.');
+    console.error(`Set ELEVENLABS_API_KEY in ${envPath} or the environment first.`);
     process.exit(1);
   }
   const existing = envValue(envText, 'ELEVENLABS_AGENT_ID');
   if (existing && !force) {
-    console.error(`web/.env already has ELEVENLABS_AGENT_ID=${existing}. Pass --force to create a new agent.`);
+    console.error(`${envPath} already has ELEVENLABS_AGENT_ID=${existing}. Pass --force to create a new agent.`);
     process.exit(1);
   }
 
@@ -100,7 +104,7 @@ async function main() {
   envText = setEnvValue(envText, 'ELEVENLABS_API_KEY', apiKey);
   envText = setEnvValue(envText, 'ELEVENLABS_AGENT_ID', agent.agent_id);
   fs.writeFileSync(envPath, envText);
-  console.log(`Created agent ${agent.agent_id} with tool ${tool.id}; wrote both values to web/.env.`);
+  console.log(`Created agent ${agent.agent_id} with tool ${tool.id}; wrote ELEVENLABS_API_KEY and ELEVENLABS_AGENT_ID to ${envPath}.`);
   console.log('Restart the web server so it reads the new values.');
 }
 

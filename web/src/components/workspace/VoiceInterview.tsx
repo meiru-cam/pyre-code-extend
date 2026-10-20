@@ -58,23 +58,41 @@ function VoiceInterviewControl({ problem, questions, record, onRecordChange, edi
 
   // Client tools and callbacks outlive renders, so they read the latest values through refs.
   const bufferRef = useRef(new TranscriptBuffer());
+  // Speech counts toward an answer only before the editor opens and after Submit.
+  const answeringRef = useRef(!editorOpen);
   const recordRef = useRef(record);
   const onRecordChangeRef = useRef(onRecordChange);
-  recordRef.current = record;
-  onRecordChangeRef.current = onRecordChange;
   const lastSnapshotRef = useRef<string | null>(null);
+  const mountedRef = useRef(true);
 
   const conversation = useConversation({
     onMessage: ({ role, message }) => {
-      if (role === 'user') bufferRef.current.push(message);
+      if (role === 'user' && answeringRef.current) bufferRef.current.push(message);
       setLastLine({ role, text: message });
     },
-    onError: (message) => setError(typeof message === 'string' ? message : t('voiceStartFailed')),
+    // Provider error text is never shown; it can carry upstream details.
+    onError: () => setError(t('voiceStartFailed')),
   });
   const live = conversation.status === 'connected';
   const conversationRef = useRef(conversation);
-  conversationRef.current = conversation;
-  const sendContextualUpdate = (text: string) => conversationRef.current.sendContextualUpdate(text);
+
+  useEffect(() => {
+    recordRef.current = record;
+    onRecordChangeRef.current = onRecordChange;
+    conversationRef.current = conversation;
+  });
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  const sendSnapshot = (code: string) => {
+    const update = codeSnapshotUpdate(code, lastSnapshotRef.current);
+    if (!update) return;
+    lastSnapshotRef.current = code;
+    conversationRef.current.sendContextualUpdate(update);
+  };
 
   const start = async () => {
     setConsentOpen(false);
@@ -94,9 +112,13 @@ function VoiceInterviewControl({ problem, questions, record, onRecordChange, edi
         setError(data.error ?? t('voiceStartFailed'));
         return;
       }
+      // The learner left the exercise while this was loading; a session now would have no End button.
+      if (!mountedRef.current) return;
       const session = buildVoiceInterviewSession(problem, questions, editorOpen);
       bufferRef.current.clear();
+      answeringRef.current = !editorOpen;
       lastSnapshotRef.current = null;
+      // Connection failures after this point arrive through onError, not as a rejection.
       conversation.startSession({
         signedUrl: data.signedUrl,
         overrides: { agent: { prompt: { prompt: session.prompt }, firstMessage: session.firstMessage } },
@@ -118,21 +140,11 @@ function VoiceInterviewControl({ problem, questions, record, onRecordChange, edi
     }
   };
 
-  // End the conversation when the learner leaves the exercise.
-  useEffect(() => () => {
-    if (conversationRef.current.status === 'connected') conversationRef.current.endSession();
-  }, []);
-
   // Code: one snapshot after the editor goes quiet, only once the editor is open.
   const currentCode = useProblemStore((s) => s.currentCode);
   useEffect(() => {
     if (!live || !editorOpen) return;
-    const timer = setTimeout(() => {
-      const update = codeSnapshotUpdate(currentCode, lastSnapshotRef.current);
-      if (!update) return;
-      lastSnapshotRef.current = currentCode;
-      sendContextualUpdate(update);
-    }, SNAPSHOT_IDLE_MS);
+    const timer = setTimeout(() => sendSnapshot(currentCode), SNAPSHOT_IDLE_MS);
     return () => clearTimeout(timer);
   }, [live, editorOpen, currentCode]);
 
@@ -145,23 +157,24 @@ function VoiceInterviewControl({ problem, questions, record, onRecordChange, edi
         && state.runResult !== state.submissionResult;
       const result = submitted ? state.submissionResult : ran ? state.runResult : null;
       if (!result) return;
-      const snapshot = codeSnapshotUpdate(state.currentCode, lastSnapshotRef.current);
-      if (snapshot) {
-        lastSnapshotRef.current = state.currentCode;
-        sendContextualUpdate(snapshot);
-      }
+      sendSnapshot(state.currentCode);
       // Tradeoff answers start fresh rather than with talk from the coding phase.
-      if (submitted) bufferRef.current.clear();
-      sendContextualUpdate(resultUpdate(result, submitted ? 'submit' : 'run'));
+      if (submitted) {
+        bufferRef.current.clear();
+        answeringRef.current = true;
+      }
+      conversationRef.current.sendContextualUpdate(resultUpdate(result, submitted ? 'submit' : 'run'));
     });
   }, [live]);
 
-  // Talk while coding is not an answer to anything; drop it when the gate opens.
+  // Talk while coding is not an answer to anything; stop collecting it when the gate opens.
   useEffect(() => {
-    if (editorOpen) bufferRef.current.clear();
+    if (!editorOpen) return;
+    bufferRef.current.clear();
+    answeringRef.current = false;
   }, [editorOpen]);
 
-  const pillStyle = { border: '1px solid var(--accent-line)', background: 'var(--accent-wash)', color: 'var(--accent)' };
+  const liveStyle = { border: '1px solid var(--accent-line)', background: 'var(--accent-wash)', color: 'var(--accent)' };
   const idleStyle = { border: '1px solid var(--line)', background: 'var(--bg-elev)', color: 'var(--text-2)' };
 
   return (
@@ -171,7 +184,7 @@ function VoiceInterviewControl({ problem, questions, record, onRecordChange, edi
           onClick={() => conversation.endSession()}
           title={t('voiceEnd')}
           className="h-[30px] px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] cursor-pointer transition-[color,border-color] duration-150"
-          style={pillStyle}
+          style={liveStyle}
         >
           <span className={`w-1.5 h-1.5 rounded-full bg-accent ${conversation.isSpeaking ? 'animate-pulse' : ''}`} />
           {conversation.isSpeaking ? t('voiceSpeaking') : t('voiceListening')}
