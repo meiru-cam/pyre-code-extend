@@ -87,13 +87,13 @@ describe('DescriptionTab interview gate', () => {
     expect(screen.getByText(/^Interview first/)).toBeTruthy();
     expect(screen.queryByText('hint 1 · Guiding questions')).toBeNull();
     expect(screen.queryByText('Reference pro')).toBeNull();
-    expect((screen.getByText('Start coding') as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText('Unanswered questions are recorded as skipped.')).toBeTruthy();
   });
 
-  it('records a skip explicitly', async () => {
+  it('records starting without the answers as a skip', async () => {
     const user = userEvent.setup();
     const onChange = renderWithGate('draft');
-    await user.click(screen.getByText('Skip (recorded)'));
+    await user.click(screen.getByText('Start coding'));
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ status: 'skipped' }));
   });
 

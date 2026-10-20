@@ -171,21 +171,21 @@ export function InterviewPanel({
         </h2>
       </div>
       <p className="text-[13px] leading-relaxed text-text-2">
-        Answer out loud or in writing; each question has a hint if you are stuck. Coding hints, reference pros and cons, the solution, AI help and the editor unlock after that.
+        Answer out loud or in writing; each question has a hint if you are stuck. Coding hints, reference pros and cons, the solution, AI help and the editor unlock when you start coding.
       </p>
       {questionsView(required, GATED_STAGES)}
       {optionalFold(optionalAfter(required))}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
+        {/* One way in: with the required answers it counts as answered, without them as a skip. */}
         <Button
           size="sm"
-          disabled={missing.length > 0}
-          onClick={() => update(record.answers, 'answered')}
+          onClick={() => update(record.answers, missing.length === 0 ? 'answered' : 'skipped')}
         >
           Start coding
         </Button>
-        <Button size="sm" variant="ghost" onClick={() => update(record.answers, 'skipped')}>
-          Skip (recorded)
-        </Button>
+        {missing.length > 0 && (
+          <span className="text-xs text-text-2">Unanswered questions are recorded as skipped.</span>
+        )}
       </div>
     </section>
   );
@@ -196,7 +196,7 @@ export function InterviewLockedNotice() {
     <div className="flex h-full min-h-[160px] flex-col items-center justify-center gap-2 p-6 text-center">
       <Lock className="h-5 w-5 text-text-2" />
       <p className="text-sm text-text-2">Locked until you answer the interview questions.</p>
-      <p className="text-[13px] text-text-2">Open the Description tab to answer or skip.</p>
+      <p className="text-[13px] text-text-2">Open the Description tab and press Start coding.</p>
     </div>
   );
 }
