@@ -10,6 +10,7 @@ import {
   codeSnapshotUpdate,
   recordSpokenAnswer,
   resultUpdate,
+  transcriptText,
 } from '@/lib/voiceInterview';
 
 const questions: InterviewQuestion[] = [
@@ -41,6 +42,14 @@ describe('buildVoiceInterviewSession', () => {
     const { prompt, firstMessage } = buildVoiceInterviewSession(problem, questions, true);
     expect(prompt).toContain('already done');
     expect(firstMessage).not.toContain('What is QK norm for?');
+  });
+});
+
+describe('transcriptText', () => {
+  it('drops voice-style tags and keeps the words', () => {
+    expect(transcriptText('[calm] Good start.  [warmly] Go on.')).toBe('Good start. Go on.');
+    expect(transcriptText('x[0] stays')).toBe('x[0] stays');
+    expect(transcriptText('[calm] ')).toBe('');
   });
 });
 

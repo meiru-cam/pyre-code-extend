@@ -89,6 +89,8 @@ async function main() {
         first_message: 'Hi. Let us start the interview.',
         prompt: { prompt: PLACEHOLDER_PROMPT, tool_ids: [tool.id] },
       },
+      // Candidates go quiet to think or type; the default 7 s sends "still there?" mid-thought.
+      turn: { turn_timeout: 60, turn_eagerness: 'patient' },
     },
     platform_settings: {
       overrides: {

@@ -21,6 +21,9 @@ export const MAX_SNAPSHOT_CHARS = 12_000;
 /** Quiet time in the editor before the current code is sent. */
 export const SNAPSHOT_IDLE_MS = 3_000;
 
+/** Turns kept in the on-screen transcript. */
+export const MAX_TRANSCRIPT_LINES = 200;
+
 const MAX_DESCRIPTION_CHARS = 6_000;
 const MAX_FAILURES_LISTED = 5;
 
@@ -65,12 +68,18 @@ export function buildVoiceInterviewSession(
     '3. Once the editor is open, the candidate codes. You receive their code and Run results as context updates. Stay mostly quiet: say little while they make progress, ask "why" about a choice, an edge case or a tensor shape when they go silent or a test fails.',
     '4. Only after you are told the candidate has submitted, ask the Tradeoffs questions one at a time and record each answer the same way. If they say they are done before that, ask them to press Submit. After the last answer, thank them and say they can press End.',
     '',
+    'Silence means the candidate is thinking or typing. Never ask whether they are still there; wait.',
     'Rules: never dictate code or the full solution; give at most a nudge when the candidate is stuck for a while. Keep every turn under three sentences. Speak the language the candidate speaks.',
   ].join('\n');
   const firstMessage = gateOpen
     ? `Hi. Let's work through ${problem.title}. Talk me through your approach as you code.`
     : `Hi. Let's work through ${problem.title}. ${questions[required[0] ?? 0]?.question ?? 'Tell me how you would approach it.'}`;
   return { prompt, firstMessage };
+}
+
+/** A turn as shown on screen: voice-style tags such as "[calm]" are spoken cues, not text. */
+export function transcriptText(message: string): string {
+  return message.replace(/\[[a-z][a-z ]*\]\s*/gi, '').replace(/\s+/g, ' ').trim();
 }
 
 /** Spoken learner turns since the last recorded answer. */
