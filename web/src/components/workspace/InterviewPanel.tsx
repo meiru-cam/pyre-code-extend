@@ -62,6 +62,7 @@ export function InterviewPanel({
       // The level is stamped once, when the learner starts coding; later edits keep it, so
       // changing the level afterwards never relocks the exercise.
       ...(status !== record.status ? { level } : record.level ? { level: record.level } : {}),
+      ...(record.voice ? { voice: true as const } : {}),
     });
   };
   const updateAnswer = (index: number, value: string) => {
@@ -126,7 +127,8 @@ export function InterviewPanel({
     const stages = showTradeoffs ? STAGE_ORDER : GATED_STAGES;
     return (
       <details
-        open={answered || learn}
+        // A voice interview already covered the questions; keep the typed ones out of the way.
+        open={(answered || learn) && !record.voice}
         className="rounded-lg p-3.5"
         style={{ border: '1px solid var(--line)', background: 'var(--bg-elev)' }}
       >
@@ -134,11 +136,15 @@ export function InterviewPanel({
           <MessageSquareQuote className="h-4 w-4" />
           Interview
           <span className="mono ml-auto text-[10.5px] uppercase tracking-[0.1em] text-text-2">
-            {!answered ? 'Optional · Learn' : record.status === 'answered' ? 'Answered' : 'Skipped'}
+            {record.voice
+              ? 'Voice interview'
+              : !answered ? 'Optional · Learn' : record.status === 'answered' ? 'Answered' : 'Skipped'}
           </span>
         </summary>
         <p className="mt-2 mb-4 text-[13px] text-text-2">
-          {learn && !answered
+          {record.voice
+            ? 'Done in a voice interview. Spoken answers are filled in below; typing more is optional.'
+            : learn && !answered
             ? 'Questions to think through while you read and code; each hint names what to cover. Answers are optional and save automatically.'
             : showTradeoffs
               ? 'Tradeoff questions are open now. Compare with the reference pros and cons below. Edits save automatically.'

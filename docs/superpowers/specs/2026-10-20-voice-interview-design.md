@@ -74,6 +74,20 @@ This is the one deliberate exception to "no automatic code sharing" in
    until then. Tradeoff answers are recorded with the same tool.
 6. Leaving the exercise while the session is still loading cancels the start,
    so no session runs without an End button.
+7. When a connected session ends (End, or leaving the exercise), the record
+   gets `voice: true`. A voice interview counts as the interview: the gate
+   stays open, and the panel folds the typed questions away under "Voice
+   interview" as optional. It is marked at the end, not the start, so the
+   editor stays closed while the opening questions are asked.
+
+## Transcript and silence
+
+- The whole conversation shows in a scrollable, collapsible panel that stays
+  after End until closed, so a hint is still readable after the next turn.
+  Voice-style tags such as `[calm]` are stripped. Nothing is stored.
+- The agent's `turn.turn_timeout` is 60 s with `turn_eagerness: patient`
+  (the default is 7 s, which interrupted thinking with "still there?"). The
+  prompt also says silence is thinking time.
 
 ## Agent setup (one time)
 

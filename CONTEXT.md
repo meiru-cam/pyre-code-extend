@@ -52,7 +52,7 @@ The interview level with no gate: every exercise opens with its hints, interview
 _Avoid_: Practice mode, prerequisite lock, quiz
 
 **Voice interview**:
-An optional spoken session in the workspace with an external voice interviewer. The interviewer asks the interview questions aloud and the learner's spoken answers fill the same answers the interview gate checks, so speaking can pass the gate. After the gate opens, the learner codes while talking, and the interviewer asks Tradeoffs questions after Submit. The learner consents once per session; until the session ends, their microphone audio, editor contents and Run and Submit results go to the provider. The transcript is transient; only the interview answers persist. It does not affect solved status.
+An optional spoken session in the workspace with an external voice interviewer. The interviewer asks the interview questions aloud and the learner's spoken answers fill the same answers the interview gate checks, so speaking can pass the gate. After the gate opens, the learner codes while talking, and the interviewer asks Tradeoffs questions after Submit. The learner consents once per session; until the session ends, their microphone audio, editor contents and Run and Submit results go to the provider. The transcript is transient: it stays on screen until closed but is never stored; only the interview answers persist. A held voice interview counts as the interview for that exercise, so the typed questions fold away as optional. It does not affect solved status.
 _Avoid_: Interview mode, voice gate
 
 **Interview hint**:

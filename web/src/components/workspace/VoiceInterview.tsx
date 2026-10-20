@@ -87,6 +87,24 @@ function VoiceInterviewControl({
   const live = conversation.status === 'connected';
   const conversationRef = useRef(conversation);
 
+  // A held voice interview counts as the interview. Marked when it ends, not when it starts,
+  // so the editor stays closed while the opening questions are still being asked.
+  const liveRef = useRef(false);
+  const markVoiceInterview = () => {
+    if (recordRef.current.voice) return;
+    const next = { ...recordRef.current, voice: true as const, updatedAt: new Date().toISOString() };
+    recordRef.current = next;
+    onRecordChangeRef.current(next);
+  };
+  useEffect(() => {
+    if (liveRef.current && !live) markVoiceInterview();
+    liveRef.current = live;
+  }, [live]);
+  // Leaving the exercise mid-session ends it too.
+  useEffect(() => () => {
+    if (liveRef.current) markVoiceInterview();
+  }, []);
+
   useEffect(() => {
     recordRef.current = record;
     onRecordChangeRef.current = onRecordChange;

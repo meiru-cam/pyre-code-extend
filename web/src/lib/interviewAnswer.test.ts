@@ -43,6 +43,18 @@ describe('interview answers', () => {
     expect(isInterviewUnlocked({ status: 'skipped', answers: [], updatedAt: '' })).toBe(true);
   });
 
+  it('unlocks a draft once a voice interview was held, and keeps the mark through storage', () => {
+    const voiced = { status: 'draft' as const, answers: ['', '', ''], updatedAt: 'now', voice: true as const };
+    expect(isInterviewUnlocked(voiced)).toBe(true);
+    saveInterviewRecord('dropout', 1, voiced);
+    expect(loadInterviewRecord('dropout', 1, questions)).toEqual(voiced);
+    window.localStorage.setItem(
+      'pyre-code-interview-answer:v2:dropout:2',
+      JSON.stringify({ schemaVersion: 2, status: 'draft', answers: [], updatedAt: '', voice: 'yes' }),
+    );
+    expect(loadInterviewRecord('dropout', 2, questions)?.voice).toBeUndefined();
+  });
+
   it('gates on opening and deep-dive answers but not tradeoffs', () => {
     expect(missingGatedAnswers(questions, [long, long, ''])).toEqual([]);
     expect(missingGatedAnswers(questions, ['short', '   ', long])).toEqual([0, 1]);
