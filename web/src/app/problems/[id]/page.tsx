@@ -475,6 +475,7 @@ function WorkspacePageNew() {
           record={interviewRecord}
           onRecordChange={handleInterviewChange}
           editorOpen={interviewUnlocked}
+          level={interviewLevel}
         />
 
         <div

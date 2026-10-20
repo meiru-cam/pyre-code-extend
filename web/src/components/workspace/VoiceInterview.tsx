@@ -6,7 +6,7 @@ import { Mic, PhoneOff } from 'lucide-react';
 
 import { Button } from '@/components/ui/Button';
 import { useLocale } from '@/context/LocaleContext';
-import type { InterviewRecord } from '@/lib/interviewAnswer';
+import type { InterviewLevel, InterviewRecord } from '@/lib/interviewAnswer';
 import type { InterviewQuestion, Problem } from '@/lib/types';
 import {
   RECORD_ANSWER_TOOL,
@@ -24,8 +24,10 @@ interface VoiceInterviewProps {
   questions: readonly InterviewQuestion[];
   record: InterviewRecord;
   onRecordChange: (record: InterviewRecord) => void;
-  /** True once the editor is open, from the gate or practice mode. */
+  /** True once the editor is open, from the gate or learn mode. */
   editorOpen: boolean;
+  /** Decides which questions the interviewer asks before the editor opens. */
+  level: InterviewLevel;
 }
 
 /** Topbar control for a spoken interview. Renders nothing unless the server is configured. */
@@ -49,7 +51,9 @@ export function VoiceInterview(props: VoiceInterviewProps) {
 
 type Line = { role: 'user' | 'agent'; text: string };
 
-function VoiceInterviewControl({ problem, questions, record, onRecordChange, editorOpen }: VoiceInterviewProps) {
+function VoiceInterviewControl({
+  problem, questions, record, onRecordChange, editorOpen, level,
+}: VoiceInterviewProps) {
   const { t } = useLocale();
   const [consentOpen, setConsentOpen] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -62,6 +66,7 @@ function VoiceInterviewControl({ problem, questions, record, onRecordChange, edi
   const answeringRef = useRef(!editorOpen);
   const recordRef = useRef(record);
   const onRecordChangeRef = useRef(onRecordChange);
+  const levelRef = useRef(level);
   const lastSnapshotRef = useRef<string | null>(null);
   const mountedRef = useRef(true);
 
@@ -79,6 +84,7 @@ function VoiceInterviewControl({ problem, questions, record, onRecordChange, edi
   useEffect(() => {
     recordRef.current = record;
     onRecordChangeRef.current = onRecordChange;
+    levelRef.current = level;
     conversationRef.current = conversation;
   });
 
@@ -114,7 +120,7 @@ function VoiceInterviewControl({ problem, questions, record, onRecordChange, edi
       }
       // The learner left the exercise while this was loading; a session now would have no End button.
       if (!mountedRef.current) return;
-      const session = buildVoiceInterviewSession(problem, questions, editorOpen);
+      const session = buildVoiceInterviewSession(problem, questions, editorOpen, level);
       bufferRef.current.clear();
       answeringRef.current = !editorOpen;
       lastSnapshotRef.current = null;
@@ -126,6 +132,7 @@ function VoiceInterviewControl({ problem, questions, record, onRecordChange, edi
           [RECORD_ANSWER_TOOL]: ({ question_index }: { question_index?: unknown }) => {
             const outcome = recordSpokenAnswer(
               questions, recordRef.current, question_index, bufferRef.current.take(),
+              new Date(), levelRef.current,
             );
             recordRef.current = outcome.record;
             onRecordChangeRef.current(outcome.record);
@@ -168,7 +175,7 @@ function VoiceInterviewControl({ problem, questions, record, onRecordChange, edi
   }, [live]);
 
   // Talk while coding is not an answer to anything; stop collecting it when the gate opens,
-  // and collect again if it closes, e.g. when practice mode is turned off.
+  // and collect again if it closes, e.g. when the learner leaves learn mode.
   useEffect(() => {
     bufferRef.current.clear();
     answeringRef.current = !editorOpen;
