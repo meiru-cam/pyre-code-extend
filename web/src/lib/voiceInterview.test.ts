@@ -102,6 +102,7 @@ describe('recordSpokenAnswer', () => {
       expect(outcome.record.status).toBe('draft');
       expect(outcome.record.answers[4]).toBe(LONG);
       expect(outcome.record.level).toBeUndefined();
+      expect(outcome.message).toBe('Answer 4 recorded.');
     });
 
     it('does not treat a question outside the level as gated', () => {

@@ -132,10 +132,10 @@ export function recordSpokenAnswer(
   if (gated && answer.length < MIN_ANSWER_LENGTH) {
     return { record: next, message: `Answer ${index} is too short to count. Ask the candidate to say more.` };
   }
-  if (status !== 'draft') {
+  if (status !== 'draft' || level === 'learn') {
     return {
       record: next,
-      message: record.status === 'draft'
+      message: committing
         ? `Answer ${index} recorded. The editor is open now; let the candidate start coding.`
         : `Answer ${index} recorded.`,
     };
