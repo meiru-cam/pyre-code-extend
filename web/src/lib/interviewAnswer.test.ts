@@ -7,11 +7,12 @@ import {
   emptyInterviewRecord,
   interviewQuestionsFor,
   isInterviewUnlocked,
+  loadInterviewLevel,
   loadInterviewRecord,
-  loadPracticeMode,
   missingGatedAnswers,
+  requiredQuestionIndices,
+  saveInterviewLevel,
   saveInterviewRecord,
-  savePracticeMode,
 } from '@/lib/interviewAnswer';
 import type { InterviewQuestion, Problem } from '@/lib/types';
 
@@ -73,19 +74,61 @@ describe('interview answers', () => {
   });
 });
 
-describe('practice mode', () => {
+describe('interview levels', () => {
   beforeEach(() => window.localStorage.clear());
 
-  it('is off until turned on, and remembers the choice', () => {
-    expect(loadPracticeMode()).toBe(false);
-    savePracticeMode(true);
-    expect(loadPracticeMode()).toBe(true);
-    savePracticeMode(false);
-    expect(loadPracticeMode()).toBe(false);
+  // Two openings, three deep dives and a tradeoff, like most authored exercises.
+  const five: InterviewQuestion[] = [
+    { stage: 'concept', question: 'c0' },
+    { stage: 'concept', question: 'c1' },
+    { stage: 'deep_dive', question: 'd0' },
+    { stage: 'deep_dive', question: 'd1' },
+    { stage: 'deep_dive', question: 'd2' },
+    { stage: 'tradeoffs', question: 't0' },
+  ];
+
+  it('takes opening and deep-dive questions in turn', () => {
+    expect(requiredQuestionIndices(five, 'learn')).toEqual([]);
+    expect(requiredQuestionIndices(five, 'easy')).toEqual([0, 2]);
+    expect(requiredQuestionIndices(five, 'medium')).toEqual([0, 1, 2, 3]);
+    expect(requiredQuestionIndices(five, 'hard')).toEqual([0, 1, 2, 3, 4]);
   });
 
-  it('records no interview skip', () => {
-    savePracticeMode(true);
+  it('never requires more questions than are gated', () => {
+    expect(requiredQuestionIndices(questions, 'medium')).toEqual([0, 1]);
+  });
+
+  it('gates only on the questions the level requires', () => {
+    const answers = [long, '', long, '', '', ''];
+    expect(missingGatedAnswers(five, answers, 'easy')).toEqual([]);
+    expect(missingGatedAnswers(five, answers, 'medium')).toEqual([1, 3]);
+    expect(missingGatedAnswers(five, answers)).toEqual([1, 3, 4]);
+  });
+
+  it('keeps an exercise answered at easy unlocked after the level rises', () => {
+    saveInterviewRecord('t', 1, {
+      status: 'answered', answers: [long, '', long, '', '', ''], updatedAt: '', level: 'easy',
+    });
+    const loaded = loadInterviewRecord('t', 1, five);
+    expect(loaded?.status).toBe('answered');
+    expect(loaded?.level).toBe('easy');
+  });
+
+  it('defaults to easy and remembers the choice', () => {
+    expect(loadInterviewLevel()).toBe('easy');
+    saveInterviewLevel('hard');
+    expect(loadInterviewLevel()).toBe('hard');
+  });
+
+  it('carries an old practice mode "on" over as learn', () => {
+    window.localStorage.setItem('pyre-practice-mode', '1');
+    expect(loadInterviewLevel()).toBe('learn');
+    window.localStorage.setItem('pyre-practice-mode', '0');
+    expect(loadInterviewLevel()).toBe('easy');
+  });
+
+  it('records no interview skip in learn', () => {
+    saveInterviewLevel('learn');
     expect(loadInterviewRecord('t', 1, questions)).toBeNull();
   });
 });

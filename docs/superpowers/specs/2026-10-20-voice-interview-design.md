@@ -60,8 +60,9 @@ This is the one deliberate exception to "no automatic code sharing" in
    the learner's final transcript turns. When the agent calls the client tool
    `record_answer({ question_index })`, the buffered speech is appended to that
    answer in the existing `InterviewRecord`, under the same localStorage key.
-   Once every gated answer reaches `MIN_ANSWER_LENGTH`, the record becomes
-   `answered`, just as **Lock in answers** does, and the editor unlocks. The
+   The agent asks only the questions the interview level requires. Once each
+   of them reaches `MIN_ANSWER_LENGTH`, the record becomes `answered` at that
+   level, just as **Start coding** does, and the editor unlocks. The
    tool result tells the agent what happened ("too short", "still open: 1",
    "editor is open"), so the gate rules stay in the browser.
 4. Coding phase: when the editor opens, the buffer is cleared and stops

@@ -1,8 +1,9 @@
 import {
-  GATED_STAGES,
   INTERVIEW_STAGE_LABELS,
   MIN_ANSWER_LENGTH,
   missingGatedAnswers,
+  requiredQuestionIndices,
+  type InterviewLevel,
   type InterviewRecord,
 } from '@/lib/interviewAnswer';
 import { scanForExternalAiSecrets } from '@/lib/secretBoundary';
@@ -39,7 +40,9 @@ export function buildVoiceInterviewSession(
   problem: Problem,
   questions: readonly InterviewQuestion[],
   gateOpen: boolean,
+  level: InterviewLevel = 'hard',
 ): VoiceInterviewSession {
+  const required = requiredQuestionIndices(questions, level);
   const description = problem.descriptionEn.length > MAX_DESCRIPTION_CHARS
     ? `${problem.descriptionEn.slice(0, MAX_DESCRIPTION_CHARS)}\n[description truncated]`
     : problem.descriptionEn;
@@ -57,7 +60,7 @@ export function buildVoiceInterviewSession(
     'How the interview runs:',
     gateOpen
       ? '1. The opening questions are already done. Skip to step 2.'
-      : '1. Ask the Opening and Deep dive questions one at a time, in index order. Let the candidate finish; ask one short follow-up if the answer is thin.',
+      : `1. Ask questions ${required.join(', ')} one at a time, in index order; skip the other Opening and Deep dive questions. Let the candidate finish; ask one short follow-up if the answer is thin.`,
     `2. After the candidate finishes answering any question, call the \`${RECORD_ANSWER_TOOL}\` tool with that question_index. Its result tells you whether the answer counted and whether the editor is open. If it says the answer is too short, ask the candidate to say more, then call the tool again.`,
     '3. Once the editor is open, the candidate codes. You receive their code and Run results as context updates. Stay mostly quiet: say little while they make progress, ask "why" about a choice, an edge case or a tensor shape when they go silent or a test fails.',
     '4. Only after you are told the candidate has submitted, ask the Tradeoffs questions one at a time and record each answer the same way. If they say they are done before that, ask them to press Submit. After the last answer, thank them and say they can press End.',
@@ -66,7 +69,7 @@ export function buildVoiceInterviewSession(
   ].join('\n');
   const firstMessage = gateOpen
     ? `Hi. Let's work through ${problem.title}. Talk me through your approach as you code.`
-    : `Hi. Let's work through ${problem.title}. ${questions[0]?.question ?? 'Tell me how you would approach it.'}`;
+    : `Hi. Let's work through ${problem.title}. ${questions[required[0] ?? 0]?.question ?? 'Tell me how you would approach it.'}`;
   return { prompt, firstMessage };
 }
 
@@ -98,8 +101,8 @@ export interface RecordAnswerOutcome {
 }
 
 /**
- * Adds spoken text to one answer. When every gated answer is long enough the record is
- * committed as answered, the same as pressing "Lock in answers".
+ * Adds spoken text to one answer. When every answer the level requires is long enough the
+ * record is committed as answered, the same as pressing "Start coding" with them filled in.
  */
 export function recordSpokenAnswer(
   questions: readonly InterviewQuestion[],
@@ -107,6 +110,7 @@ export function recordSpokenAnswer(
   questionIndex: unknown,
   spoken: string,
   now = new Date(),
+  level: InterviewLevel = 'hard',
 ): RecordAnswerOutcome {
   const index = typeof questionIndex === 'number' ? questionIndex : Number(questionIndex);
   if (!Number.isInteger(index) || index < 0 || index >= questions.length) {
@@ -115,18 +119,23 @@ export function recordSpokenAnswer(
   const existing = record.answers[index] ?? '';
   const answer = [existing.trim(), spoken.trim()].filter(Boolean).join('\n');
   const answers = record.answers.map((value, i) => (i === index ? answer : value));
-  const missing = missingGatedAnswers(questions, answers);
-  const status = record.status === 'draft' && missing.length === 0 ? 'answered' : record.status;
-  const next: InterviewRecord = { status, answers, updatedAt: now.toISOString() };
+  const missing = missingGatedAnswers(questions, answers, level);
+  // Learn has no gate, so speaking there never commits the record.
+  const committing = record.status === 'draft' && level !== 'learn' && missing.length === 0;
+  const status = committing ? 'answered' : record.status;
+  const lockedLevel = committing ? level : record.level;
+  const next: InterviewRecord = {
+    status, answers, updatedAt: now.toISOString(), ...(lockedLevel ? { level: lockedLevel } : {}),
+  };
 
-  const gated = GATED_STAGES.includes(questions[index].stage);
+  const gated = requiredQuestionIndices(questions, level).includes(index);
   if (gated && answer.length < MIN_ANSWER_LENGTH) {
     return { record: next, message: `Answer ${index} is too short to count. Ask the candidate to say more.` };
   }
-  if (status !== 'draft') {
+  if (status !== 'draft' || level === 'learn') {
     return {
       record: next,
-      message: record.status === 'draft'
+      message: committing
         ? `Answer ${index} recorded. The editor is open now; let the candidate start coding.`
         : `Answer ${index} recorded.`,
     };

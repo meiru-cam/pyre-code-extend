@@ -84,16 +84,16 @@ describe('DescriptionTab interview gate', () => {
 
   it('hides hints and reference tradeoffs until the learner answers', () => {
     renderWithGate('draft');
-    expect(screen.getByText('Interview first')).toBeTruthy();
+    expect(screen.getByText(/^Interview first/)).toBeTruthy();
     expect(screen.queryByText('hint 1 · Guiding questions')).toBeNull();
     expect(screen.queryByText('Reference pro')).toBeNull();
-    expect((screen.getByText('Lock in answers') as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText('Unanswered questions are recorded as skipped.')).toBeTruthy();
   });
 
-  it('records a skip explicitly', async () => {
+  it('records starting without the answers as a skip', async () => {
     const user = userEvent.setup();
     const onChange = renderWithGate('draft');
-    await user.click(screen.getByText('Skip (recorded)'));
+    await user.click(screen.getByText('Start coding'));
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ status: 'skipped' }));
   });
 
@@ -119,6 +119,123 @@ describe('DescriptionTab interview gate', () => {
     expect(screen.getByText('hint 1 · Guiding questions')).toBeTruthy();
     expect(screen.getByText('Reference pro')).toBeTruthy();
     expect(screen.getByText('Interview')).toBeTruthy();
+  });
+});
+
+describe('DescriptionTab interview levels', () => {
+  afterEach(cleanup);
+
+  const fiveQuestions: Problem = {
+    ...problem,
+    proConAnalysis: { pros: ['Reference pro'], cons: [] },
+    interviewQuestions: [
+      { stage: 'concept', question: 'Opening one?' },
+      { stage: 'concept', question: 'Opening two?' },
+      { stage: 'deep_dive', question: 'Deep one?' },
+      { stage: 'deep_dive', question: 'Deep two?' },
+      { stage: 'deep_dive', question: 'Deep three?' },
+      { stage: 'tradeoffs', question: 'Tradeoff?' },
+    ],
+  };
+  const long = 'An answer comfortably past the minimum.';
+
+  it('asks easy for one opening and one deep dive, the rest folded as optional', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(React.createElement(DescriptionTab, {
+      problem: fiveQuestions,
+      interview: {
+        record: { status: 'draft', answers: [long, '', long, '', '', ''], updatedAt: '' },
+        onChange,
+        level: 'easy',
+      },
+    }));
+
+    expect(screen.getByText('Interview first · 2 questions')).toBeTruthy();
+    expect(screen.getByText('More questions (optional) · 3')).toBeTruthy();
+    await user.click(screen.getByText('Start coding'));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ status: 'answered', level: 'easy' }));
+  });
+
+  it('keeps the unasked questions folded after starting to code at easy', () => {
+    const { container } = render(React.createElement(DescriptionTab, {
+      problem: fiveQuestions,
+      interview: {
+        record: {
+          status: 'answered', answers: [long, '', long, '', '', ''], updatedAt: '', level: 'easy',
+        },
+        onChange: vi.fn(),
+        level: 'easy',
+      },
+    }));
+
+    const fold = screen.getByText('More questions (optional) · 3').closest('details')!;
+    expect(fold.open).toBe(false);
+    for (const unasked of ['Opening two?', 'Deep two?', 'Deep three?']) {
+      expect(fold.contains(screen.getByText(unasked))).toBe(true);
+    }
+    for (const shown of ['Opening one?', 'Deep one?', 'Tradeoff?']) {
+      expect(fold.contains(screen.getByText(shown))).toBe(false);
+    }
+    expect(container.textContent).toContain('Answered');
+  });
+
+  it('keeps the locked-in level when an answer is edited at another level', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(React.createElement(DescriptionTab, {
+      problem: fiveQuestions,
+      interview: {
+        record: { status: 'answered', answers: [long, '', long, '', '', ''], updatedAt: '', level: 'easy' },
+        onChange,
+        level: 'hard',
+      },
+    }));
+    await user.type(screen.getByLabelText('Opening one?'), '!');
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'answered', level: 'easy' }));
+  });
+
+  it('shows every question for an answer from before levels existed', () => {
+    render(React.createElement(DescriptionTab, {
+      problem: fiveQuestions,
+      interview: {
+        record: { status: 'answered', answers: [long, long, long, long, long, ''], updatedAt: '' },
+        onChange: vi.fn(),
+        level: 'easy',
+      },
+    }));
+    expect(screen.queryByText(/More questions \(optional\)/)).toBeNull();
+    expect(screen.getByText('Deep three?')).toBeTruthy();
+  });
+
+  it('lists every question in learn even after a skip', () => {
+    render(React.createElement(DescriptionTab, {
+      problem: fiveQuestions,
+      interview: {
+        record: { status: 'skipped', answers: ['', '', '', '', '', ''], updatedAt: '' },
+        onChange: vi.fn(),
+        level: 'learn',
+      },
+    }));
+    expect(screen.queryByText(/More questions \(optional\)/)).toBeNull();
+    expect(screen.getByText('Opening two?')).toBeTruthy();
+  });
+
+  it('opens learn with hints and reference material already showing', () => {
+    render(React.createElement(DescriptionTab, {
+      problem: fiveQuestions,
+      interview: {
+        record: { status: 'draft', answers: ['', '', '', '', '', ''], updatedAt: '' },
+        onChange: vi.fn(),
+        level: 'learn',
+      },
+    }));
+
+    expect(screen.queryByText(/^Interview first/)).toBeNull();
+    expect(screen.getByText('Question-only nudge')).toBeTruthy();
+    expect(screen.getByText('Deeper analysis')).toBeTruthy();
+    expect(screen.getByText('Reference pro')).toBeTruthy();
+    expect(screen.getByText('Optional · Learn')).toBeTruthy();
   });
 });
 

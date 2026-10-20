@@ -41,11 +41,15 @@ A recommended earlier exercise or capability that helps a learner succeed but ne
 _Avoid_: Gate, required unlock
 
 **Interview gate**:
-The stage at the start of every exercise where the learner answers the opening and deep-dive interview questions, or records a skip, before hints, the solution, AI help and the editor unlock. It gates help inside an exercise, never access to one.
+The stage at the start of every exercise where the learner answers the opening and deep-dive interview questions the interview level requires, or records a skip, before hints, the solution, AI help and the editor unlock. It gates help inside an exercise, never access to one. The other opening and deep-dive questions stay available as optional.
 
-**Practice mode**:
-A browser-wide toggle that opens every exercise as if the interview gate were passed, without recording a skip. The interview questions stay available, collapsed and optional.
-_Avoid_: Prerequisite lock, quiz
+**Interview level**:
+A browser-wide setting for how much the interview gate asks: Easy requires two questions, Medium four and Hard every opening and deep-dive question, taking opening and deep-dive questions in turn. An exercise answered at one level stays unlocked when the level changes. Defaults to Easy.
+_Avoid_: Difficulty (that is the exercise's own rating)
+
+**Learn mode**:
+The interview level with no gate: every exercise opens with its hints, interview hints and reference pros and cons already showing, the editor open and the interview questions optional. It records no skip. The reference solution stays on its own tab. It replaced Practice mode.
+_Avoid_: Practice mode, prerequisite lock, quiz
 
 **Voice interview**:
 An optional spoken session in the workspace with an external voice interviewer. The interviewer asks the interview questions aloud and the learner's spoken answers fill the same answers the interview gate checks, so speaking can pass the gate. After the gate opens, the learner codes while talking, and the interviewer asks Tradeoffs questions after Submit. The learner consents once per session; until the session ends, their microphone audio, editor contents and Run and Submit results go to the provider. The transcript is transient; only the interview answers persist. It does not affect solved status.

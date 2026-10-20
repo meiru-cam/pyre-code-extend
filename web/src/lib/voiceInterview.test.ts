@@ -74,6 +74,43 @@ describe('recordSpokenAnswer', () => {
     expect(outcome.message).toContain('editor is open');
   });
 
+  describe('with interview levels', () => {
+    const five: InterviewQuestion[] = [
+      { stage: 'concept', question: 'Opening one?' },
+      { stage: 'concept', question: 'Opening two?' },
+      { stage: 'deep_dive', question: 'Deep one?' },
+      { stage: 'deep_dive', question: 'Deep two?' },
+      { stage: 'tradeoffs', question: 'Tradeoff?' },
+    ];
+
+    it('tells the interviewer to ask only the questions easy requires', () => {
+      const { prompt, firstMessage } = buildVoiceInterviewSession(problem, five, false, 'easy');
+      expect(prompt).toContain('Ask questions 0, 2 one at a time');
+      expect(firstMessage).toContain('Opening one?');
+    });
+
+    it('opens the editor once the easy questions are answered and records the level', () => {
+      const first = recordSpokenAnswer(five, emptyInterviewRecord(five), 0, LONG, now, 'easy').record;
+      const outcome = recordSpokenAnswer(five, first, 2, LONG, now, 'easy');
+      expect(outcome.record.status).toBe('answered');
+      expect(outcome.record.level).toBe('easy');
+      expect(outcome.message).toContain('editor is open');
+    });
+
+    it('never commits a spoken answer in learn, which has no gate', () => {
+      const outcome = recordSpokenAnswer(five, emptyInterviewRecord(five), 4, LONG, now, 'learn');
+      expect(outcome.record.status).toBe('draft');
+      expect(outcome.record.answers[4]).toBe(LONG);
+      expect(outcome.record.level).toBeUndefined();
+      expect(outcome.message).toBe('Answer 4 recorded.');
+    });
+
+    it('does not treat a question outside the level as gated', () => {
+      const outcome = recordSpokenAnswer(five, emptyInterviewRecord(five), 1, 'Short.', now, 'easy');
+      expect(outcome.message).not.toContain('too short');
+    });
+  });
+
   it('asks for more when a gated answer is too short', () => {
     const outcome = recordSpokenAnswer(questions, draft(), 0, 'Stability.', now);
     expect(outcome.record.status).toBe('draft');

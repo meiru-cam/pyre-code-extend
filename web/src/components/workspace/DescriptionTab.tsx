@@ -12,6 +12,7 @@ import { InterviewPanel } from './InterviewPanel';
 import {
   interviewQuestionsFor,
   isInterviewUnlocked,
+  type InterviewLevel,
   type InterviewRecord,
 } from '@/lib/interviewAnswer';
 
@@ -77,8 +78,8 @@ interface DescriptionTabProps {
   interview?: {
     record: InterviewRecord;
     onChange: (record: InterviewRecord) => void;
-    /** Practice mode skips the gate without recording a skip. */
-    practiceMode?: boolean;
+    /** Learn skips the gate without recording a skip and opens every explanation. */
+    level?: InterviewLevel;
   };
   /** Multi-part exercises only: how many parts the learner has unlocked; 0 means no parts. */
   unlockedPart?: number;
@@ -90,7 +91,9 @@ export function DescriptionTab({
   interview,
   unlockedPart = 0,
 }: DescriptionTabProps) {
-  const [hintOpen, setHintOpen] = useState(false);
+  const learn = interview?.level === 'learn';
+  const [hintToggled, setHintToggled] = useState<boolean | null>(null);
+  const hintOpen = hintToggled ?? learn;
   const [openLevels, setOpenLevels] = useState<Record<number, boolean>>({});
   const { locale, t } = useLocale();
 
@@ -100,7 +103,7 @@ export function DescriptionTab({
   const [requirement, background] = problem.parts ? splitAtDivider(description) : [description, ''];
   const hint = locale === 'zh' && problem.hintZh ? problem.hintZh : problem.hint;
   const hintLevels = getHintLevels(problem);
-  const helpUnlocked = !interview || interview.practiceMode || isInterviewUnlocked(interview.record);
+  const helpUnlocked = !interview || learn || isInterviewUnlocked(interview.record);
 
   return (
     <div className="px-7 py-6 space-y-6">
@@ -153,7 +156,7 @@ export function DescriptionTab({
           questions={interviewQuestionsFor(problem)}
           record={interview.record}
           onChange={interview.onChange}
-          practiceMode={interview.practiceMode}
+          level={interview.level}
           // Tradeoff questions may name later parts, so they wait until every part is open.
           showTradeoffs={!problem.parts || shownParts >= problem.parts.length}
         />
@@ -171,13 +174,13 @@ export function DescriptionTab({
         <div className="space-y-3">
           {hintLevels.map((level) => {
             const label = level.kind === 'questions' ? 'Guiding questions' : 'Analysis';
-            const open = !!openLevels[level.level];
+            const open = openLevels[level.level] ?? learn;
             return (
               <div key={level.level}>
                 <button
                   onClick={() => setOpenLevels((previous) => ({
                     ...previous,
-                    [level.level]: !previous[level.level],
+                    [level.level]: !(previous[level.level] ?? learn),
                   }))}
                   className="flex items-center gap-2 text-sm text-text-2 hover:text-accent transition-colors"
                 >
@@ -209,7 +212,7 @@ export function DescriptionTab({
       ) : hint ? (
         <div>
           <button
-            onClick={() => setHintOpen(!hintOpen)}
+            onClick={() => setHintToggled(!hintOpen)}
             className="flex items-center gap-2 text-sm text-text-2 hover:text-accent transition-colors"
           >
             <Lightbulb className="w-4 h-4" />
