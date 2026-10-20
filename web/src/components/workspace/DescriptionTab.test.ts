@@ -87,7 +87,7 @@ describe('DescriptionTab interview gate', () => {
     expect(screen.getByText(/^Interview first/)).toBeTruthy();
     expect(screen.queryByText('hint 1 · Guiding questions')).toBeNull();
     expect(screen.queryByText('Reference pro')).toBeNull();
-    expect((screen.getByText('Lock in answers') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByText('Start coding') as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('records a skip explicitly', async () => {
@@ -153,11 +153,11 @@ describe('DescriptionTab interview levels', () => {
 
     expect(screen.getByText('Interview first · 2 questions')).toBeTruthy();
     expect(screen.getByText('More questions (optional) · 3')).toBeTruthy();
-    await user.click(screen.getByText('Lock in answers'));
+    await user.click(screen.getByText('Start coding'));
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ status: 'answered', level: 'easy' }));
   });
 
-  it('keeps the unasked questions folded after locking in at easy', () => {
+  it('keeps the unasked questions folded after starting to code at easy', () => {
     const { container } = render(React.createElement(DescriptionTab, {
       problem: fiveQuestions,
       interview: {

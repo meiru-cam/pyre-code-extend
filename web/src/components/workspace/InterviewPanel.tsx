@@ -181,7 +181,7 @@ export function InterviewPanel({
           disabled={missing.length > 0}
           onClick={() => update(record.answers, 'answered')}
         >
-          Lock in answers
+          Start coding
         </Button>
         <Button size="sm" variant="ghost" onClick={() => update(record.answers, 'skipped')}>
           Skip (recorded)
