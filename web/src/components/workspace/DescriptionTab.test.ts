@@ -157,6 +157,29 @@ describe('DescriptionTab interview levels', () => {
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ status: 'answered', level: 'easy' }));
   });
 
+  it('keeps the unasked questions folded after locking in at easy', () => {
+    const { container } = render(React.createElement(DescriptionTab, {
+      problem: fiveQuestions,
+      interview: {
+        record: {
+          status: 'answered', answers: [long, '', long, '', '', ''], updatedAt: '', level: 'easy',
+        },
+        onChange: vi.fn(),
+        level: 'easy',
+      },
+    }));
+
+    const fold = screen.getByText('More questions (optional) · 3').closest('details')!;
+    expect(fold.open).toBe(false);
+    for (const unasked of ['Opening two?', 'Deep two?', 'Deep three?']) {
+      expect(fold.contains(screen.getByText(unasked))).toBe(true);
+    }
+    for (const shown of ['Opening one?', 'Deep one?', 'Tradeoff?']) {
+      expect(fold.contains(screen.getByText(shown))).toBe(false);
+    }
+    expect(container.textContent).toContain('Answered');
+  });
+
   it('opens learn with hints and reference material already showing', () => {
     render(React.createElement(DescriptionTab, {
       problem: fiveQuestions,

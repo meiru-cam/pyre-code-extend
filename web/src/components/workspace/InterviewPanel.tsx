@@ -35,6 +35,20 @@ export function InterviewPanel({
   const unlocked = answered || learn;
   const required = requiredQuestionIndices(questions, level);
   const missing = missingGatedAnswers(questions, record.answers, level);
+  // Once unlocked, the questions the learner was asked are the ones from the level they locked in at.
+  const asked = requiredQuestionIndices(questions, record.level ?? level);
+  const optionalAfter = (askedIndices: readonly number[]) => questions
+    .map((question, index) => ({ question, index }))
+    .filter(({ question, index }) => GATED_STAGES.includes(question.stage) && !askedIndices.includes(index))
+    .map(({ index }) => index);
+  const optionalFold = (indices: readonly number[]) => indices.length > 0 && (
+    <details className="rounded-lg px-3 py-2" style={{ border: '1px solid var(--line)' }}>
+      <summary className="cursor-pointer select-none text-[13px] text-text-2">
+        More questions (optional) · {indices.length}
+      </summary>
+      <div className="mt-3">{questionsView(indices, GATED_STAGES)}</div>
+    </details>
+  );
 
   const update = (answers: string[], status = record.status) => {
     onChange({
@@ -124,15 +138,23 @@ export function InterviewPanel({
               ? 'Tradeoff questions are open now. Compare with the reference pros and cons below. Edits save automatically.'
               : 'Tradeoff questions open once every part is unlocked. Edits save automatically.'}
         </p>
-        {questionsView(questions.map((_, index) => index), stages)}
+        {learn && !answered ? (
+          questionsView(questions.map((_, index) => index), stages)
+        ) : (
+          <div className="space-y-5">
+            {questionsView(
+              questions
+                .map((question, index) => ({ question, index }))
+                .filter(({ question, index }) => asked.includes(index) || question.stage === 'tradeoffs')
+                .map(({ index }) => index),
+              stages,
+            )}
+            {optionalFold(optionalAfter(asked))}
+          </div>
+        )}
       </details>
     );
   }
-
-  const optional = questions
-    .map((question, index) => ({ question, index }))
-    .filter(({ question, index }) => GATED_STAGES.includes(question.stage) && !required.includes(index))
-    .map(({ index }) => index);
 
   return (
     <section
@@ -152,14 +174,7 @@ export function InterviewPanel({
         Answer out loud or in writing; each question has a hint if you are stuck. Coding hints, reference pros and cons, the solution, AI help and the editor unlock after that.
       </p>
       {questionsView(required, GATED_STAGES)}
-      {optional.length > 0 && (
-        <details className="rounded-lg px-3 py-2" style={{ border: '1px solid var(--line)' }}>
-          <summary className="cursor-pointer select-none text-[13px] text-text-2">
-            More questions (optional) · {optional.length}
-          </summary>
-          <div className="mt-3">{questionsView(optional, GATED_STAGES)}</div>
-        </details>
-      )}
+      {optionalFold(optionalAfter(required))}
       <div className="flex items-center gap-2">
         <Button
           size="sm"
