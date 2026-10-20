@@ -2,13 +2,16 @@
 
 // Creates the ElevenLabs agent the voice interview talks to, then writes its ID to web/.env.
 // Needs only ELEVENLABS_API_KEY, from the environment or web/.env.
-// Usage: npm run voice:agent [-- --force]
+// Usage: npm run voice:agent [-- --force] [-- --env /path/to/web/.env]
 
 const fs = require('fs');
 const path = require('path');
 
 const API = 'https://api.elevenlabs.io/v1/convai';
-const envPath = path.resolve(__dirname, '..', 'web', '.env');
+const envFlag = process.argv.indexOf('--env');
+const envPath = envFlag !== -1 && process.argv[envFlag + 1]
+  ? path.resolve(process.argv[envFlag + 1])
+  : path.resolve(__dirname, '..', 'web', '.env');
 
 // The real prompt and first message are sent per exercise by the app as overrides.
 const PLACEHOLDER_PROMPT = 'You are a calm, senior ML engineer running a live coding interview.';
