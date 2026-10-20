@@ -20,7 +20,8 @@
     "ci": "node scripts/run-python.js scripts/ci.py",
     "ci:full": "node scripts/run-python.js scripts/ci.py --full",
     "ci:web": "cd web && npx tsc --noEmit -p . && npx vitest run",
-    "deploy": "bash scripts/deploy.sh"
+    "deploy": "bash scripts/deploy.sh",
+    "voice:agent": "node scripts/create-voice-agent.js"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

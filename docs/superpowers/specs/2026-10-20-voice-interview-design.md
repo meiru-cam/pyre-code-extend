@@ -67,7 +67,15 @@ This is the one deliberate exception to "no automatic code sharing" in
 5. Wrap-up: Submit sends the result plus "move on to the Tradeoffs questions"
    and clears the buffer. Tradeoff answers are recorded with the same tool.
 
-## Agent setup (one time, ElevenLabs dashboard)
+## Agent setup (one time)
+
+Put `ELEVENLABS_API_KEY=...` in `web/.env` and run `npm run voice:agent`.
+`scripts/create-voice-agent.js` creates the `record_answer` client tool and a
+private agent with prompt and first-message overrides enabled, then writes
+`ELEVENLABS_AGENT_ID` to `web/.env`. It refuses to replace an existing agent ID
+unless you pass `-- --force`. Restart the web server afterward.
+
+The same setup by hand in the dashboard:
 
 1. Create an agent. Any voice. The LLM is your choice.
 2. **Security**: enable overrides for **System prompt** and **First message**.
