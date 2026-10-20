@@ -79,7 +79,8 @@ function VoiceInterviewControl({
   const conversation = useConversation({
     onMessage: ({ role, message }) => {
       if (role === 'user') {
-        spokeRef.current = true;
+        // A transcript of silence ("...") is not speaking.
+        if (/[\p{L}\p{N}]/u.test(message)) spokeRef.current = true;
         if (answeringRef.current) bufferRef.current.push(message);
       }
       // Only the agent's lines carry voice-style tags; the learner may say "x[i]".
@@ -288,7 +289,11 @@ function VoiceInterviewControl({
           <div className="flex items-center gap-2 px-3 py-1.5" style={{ borderBottom: transcriptOpen ? '1px solid var(--line)' : undefined }}>
             <span className="mono text-[10.5px] uppercase tracking-[0.1em] text-text-2">{t('voiceTranscript')}</span>
             <button
-              onClick={() => setTranscriptOpen((open) => !open)}
+              onClick={() => {
+                // Reopening shows the latest lines.
+                followRef.current = true;
+                setTranscriptOpen((open) => !open);
+              }}
               aria-label={transcriptOpen ? t('voiceTranscriptCollapse') : t('voiceTranscriptExpand')}
               className="ml-auto inline-flex h-6 w-6 items-center justify-center rounded text-text-2 hover:text-text"
             >
