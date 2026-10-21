@@ -157,6 +157,26 @@ describe('DescriptionTab interview levels', () => {
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ status: 'answered', level: 'easy' }));
   });
 
+  it('folds the interview questions by default, before and after starting to code', () => {
+    const locked = render(React.createElement(DescriptionTab, {
+      problem: fiveQuestions,
+      interview: { record: { status: 'draft', answers: [], updatedAt: '' }, onChange: vi.fn(), level: 'easy' },
+    }));
+    expect(screen.getByText('Opening one?').closest('details')!.open).toBe(false);
+    expect(screen.getByText('Start coding')).toBeTruthy();
+    locked.unmount();
+
+    render(React.createElement(DescriptionTab, {
+      problem: fiveQuestions,
+      interview: {
+        record: { status: 'answered', answers: [long, '', long, '', '', ''], updatedAt: '', level: 'easy' },
+        onChange: vi.fn(),
+        level: 'easy',
+      },
+    }));
+    expect(screen.getByText('Opening one?').closest('details')!.open).toBe(false);
+  });
+
   it('keeps the unasked questions folded after starting to code at easy', () => {
     const { container } = render(React.createElement(DescriptionTab, {
       problem: fiveQuestions,

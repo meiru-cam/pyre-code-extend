@@ -126,9 +126,8 @@ export function InterviewPanel({
     // Tradeoff questions follow the code, as they would in an interview.
     const stages = showTradeoffs ? STAGE_ORDER : GATED_STAGES;
     return (
+      // Folded by default; the questions open on request.
       <details
-        // A voice interview already covered the questions; keep the typed ones out of the way.
-        open={(answered || learn) && !record.voice}
         className="rounded-lg p-3.5"
         style={{ border: '1px solid var(--line)', background: 'var(--bg-elev)' }}
       >
@@ -185,8 +184,17 @@ export function InterviewPanel({
       <p className="text-[13px] leading-relaxed text-text-2">
         Answer out loud or in writing; each question has a hint if you are stuck. Coding hints, reference pros and cons, the solution, AI help and the editor unlock when you start coding.
       </p>
-      {questionsView(required, GATED_STAGES)}
-      {optionalFold(optionalAfter(required))}
+      {/* Folded by default, so Start coding is one click away without reading every question first. */}
+      <details className="group space-y-4">
+        <summary className="cursor-pointer select-none text-[13px] text-accent">
+          <span className="group-open:hidden">Show questions · {required.length}</span>
+          <span className="hidden group-open:inline">Hide questions</span>
+        </summary>
+        <div className="mt-4 space-y-4">
+          {questionsView(required, GATED_STAGES)}
+          {optionalFold(optionalAfter(required))}
+        </div>
+      </details>
       <div className="flex items-center gap-3">
         {/* One way in: with the required answers it counts as answered, without them as a skip. */}
         <Button
